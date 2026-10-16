@@ -62,12 +62,12 @@ async def evaluate_geofences_and_notify(
 
         # Check for state transitions
         if not state.is_inside and is_inside_now:
-            # Child ENTERED safe zone
+            # Child ENTERED kerakli joy
             event_type = "entered"
             message_text = (
-                f"✅ **XAVFSIZ HUDUDGA KIRDI**\n\n"
+                f"✅ **KERAKLI JOYGA YETIB BORDI**\n\n"
                 f"👤 Farzandingiz: **{child_name}**\n"
-                f"📍 Hudud: **{fence.name}**\n"
+                f"📍 Joy: **{fence.name}**\n"
                 f"🕒 Vaqt: **{now_str}**\n"
                 f"📏 Masofa: markazdan {int(dist)} m"
             )
@@ -92,12 +92,12 @@ async def evaluate_geofences_and_notify(
                         print(f"[Geofence Alert Error] Failed to notify parent {parent.id}: {e}")
 
         elif state.is_inside and not is_inside_now:
-            # Child EXITED safe zone
+            # Child EXITED kerakli joy
             event_type = "exited"
             message_text = (
-                f"⚠️ **XAVFSIZ HUDUDDAN CHIQDI**\n\n"
+                f"⚠️ **KERAKLI JOYDAN CHIQDI**\n\n"
                 f"👤 Farzandingiz: **{child_name}**\n"
-                f"📍 Hudud: **{fence.name}**\n"
+                f"📍 Joy: **{fence.name}**\n"
                 f"🕒 Vaqt: **{now_str}**\n"
                 f"📏 Masofa: markazdan {int(dist)} m"
             )

@@ -303,9 +303,9 @@ async def check_and_update_battery_alert(
     battery_level: int
 ) -> bool:
     """
-    Returns True if an alert should be sent to the parent (level <= 15% and not already alerted recently).
+    Returns True if an alert should be sent to the parent (level <= 20% and not already alerted recently).
     """
-    if battery_level > 15:
+    if battery_level > 20:
         return False
 
     result = await session.execute(

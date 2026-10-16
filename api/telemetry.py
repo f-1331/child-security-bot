@@ -59,9 +59,9 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         source="api_telemetry"
     )
 
-    # 2. Battery Alert Check (< 15%)
+    # 2. Battery Alert Check (< 20%)
     battery_alert_triggered = False
-    if payload.battery_level is not None and payload.battery_level <= 15 and not payload.is_charging:
+    if payload.battery_level is not None and payload.battery_level <= 20 and not payload.is_charging:
         should_alert = await crud.check_and_update_battery_alert(
             session=session,
             child_id=payload.child_id,

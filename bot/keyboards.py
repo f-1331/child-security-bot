@@ -1,3 +1,4 @@
+from typing import Optional
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -31,33 +32,26 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Includes Telegram WebApp button pointing to the Leaflet map dashboard.
+    Native Telegram-centric: Instant Location, Kerakli joylar, Telemetry, and Tasks.
     """
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}"
-
-    # Telegram strictly enforces HTTPS for WebAppInfo; for HTTP use standard button
-    if webapp_url.startswith("https://"):
-        map_btn = KeyboardButton(
-            text="🗺 Xaritada ko'rish (Web App)",
-            web_app=WebAppInfo(url=webapp_url)
-        )
-    else:
-        map_btn = KeyboardButton(
-            text="🗺 Xaritada ko'rish (Web App)"
-        )
-
     keyboard = [
-        [map_btn],
+        [
+            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
+        ],
+        [
+            KeyboardButton(text="📍 Kerakli joylar"),
+            KeyboardButton(text="🔋 Batareya va Holat")
+        ],
         [
             KeyboardButton(text="👶 Farzandlarim"),
             KeyboardButton(text="➕ Farzand ulash (Kodi)")
         ],
         [
-            KeyboardButton(text="🛡 Xavfsiz hududlar"),
-            KeyboardButton(text="📋 Vazifalar va Tangalar")
+            KeyboardButton(text="📋 Vazifalar va Tangalar"),
+            KeyboardButton(text="📊 Bugungi hisobot")
         ],
         [
-            KeyboardButton(text="🔄 Yangilash / Status"),
+            KeyboardButton(text="📞 Oila kontaktlari"),
             KeyboardButton(text="ℹ️ Yordam")
         ]
     ]
@@ -72,7 +66,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
 def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
-    Includes instant SOS button, Check-in, Request Location, and Tasks.
+    Includes instant SOS, Check-in, Request Location, and Emergency Call.
     """
     keyboard = [
         [
@@ -80,10 +74,11 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="✅ Yetib keldim (Check-in)")
         ],
         [
-            KeyboardButton(text="📍 Joylashuvni yuborish", request_location=True),
-            KeyboardButton(text="📋 Vazifalarim va Tangalar")
+            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True),
+            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq")
         ],
         [
+            KeyboardButton(text="📋 Vazifalarim va Tangalar"),
             KeyboardButton(text="ℹ️ Yordam")
         ]
     ]
@@ -116,32 +111,30 @@ def get_pairing_share_keyboard(bot_username: str, pairing_code: str) -> InlineKe
     )
 
 
-def get_child_details_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
+def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
     """Action buttons for a specific child."""
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}&child_id={child_id}"
-    
-    if webapp_url.startswith("https://"):
-        view_btn = InlineKeyboardButton(
-            text="🗺 Xaritada jonli ko'rish",
-            web_app=WebAppInfo(url=webapp_url)
-        )
-    else:
-        view_btn = InlineKeyboardButton(
-            text="🗺 Xaritada ko'rish (Havola)",
-            url=webapp_url
-        )
-
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [view_btn],
+            [
+                InlineKeyboardButton(
+                    text="📍 Hozirgi joylashuvini ko'rish",
+                    callback_data=f"locate_child:{child_id}"
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="➕ Yangi vazifa yuklash",
                     callback_data=f"create_task:{child_id}"
                 ),
                 InlineKeyboardButton(
-                    text="🛡 Safe Zone qo'shish",
+                    text="📍 Kerakli joy qo'shish",
                     callback_data=f"add_zone:{child_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔋 Telefon holati (Batareya)",
+                    callback_data=f"battery_child:{child_id}"
                 )
             ],
             [
@@ -154,13 +147,59 @@ def get_child_details_keyboard(child_id: int, parent_id: int) -> InlineKeyboardM
     )
 
 
+def get_location_actions_keyboard(lat: float, lon: float, child_id: int) -> InlineKeyboardMarkup:
+    """Interactive navigation buttons sent with child's native location pin."""
+    google_maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+    yandex_maps_url = f"https://yandex.com/maps/?pt={lon},{lat}&z=16&l=map"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🗺 Google Maps", url=google_maps_url),
+                InlineKeyboardButton(text="🗺 Yandex Maps", url=yandex_maps_url),
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Joylashuvni yangilash", callback_data=f"locate_child:{child_id}")
+            ]
+        ]
+    )
+
+
+def get_child_sos_call_keyboard(parent_phone: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Emergency keyboard for child when SOS is pressed."""
+    buttons = []
+    if parent_phone:
+        clean_phone = parent_phone.replace(" ", "").replace("-", "")
+        buttons.append([
+            InlineKeyboardButton(text="📞 Oyingizga / Dadasiga qo'ng'iroq", url=f"tel:{clean_phone}")
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="✅ Xavf bartaraf bo'ldi (Bekor qilish)", callback_data="child_cancel_sos")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_sos_alert_parent_keyboard(child_id: int, lat: Optional[float] = None, lon: Optional[float] = None) -> InlineKeyboardMarkup:
+    """Action buttons sent to parent during an SOS emergency."""
+    buttons = []
+    if lat is not None and lon is not None:
+        google_maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+        buttons.append([
+            InlineKeyboardButton(text="🚨 Xaritada ko'rish (Google Maps)", url=google_maps_url)
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="✅ SOS signalini to'xtatish", callback_data=f"resolve_sos:{child_id}")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def get_task_approval_keyboard(task_id: int, reward_coins: int) -> InlineKeyboardMarkup:
     """Parent keyboard to approve or reject a task completed by child."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"✅ Tasdiqlash (+{reward_coins} tanga)",
+                    text=f"✅ Tasdiqlash (+{reward_coins:,} tanga)",
                     callback_data=f"approve_task:{task_id}"
                 ),
                 InlineKeyboardButton(
@@ -186,36 +225,8 @@ def get_child_task_action_keyboard(task_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def get_sos_alert_parent_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
-    """Action buttons sent to parent during an SOS emergency."""
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}&child_id={child_id}"
-    
-    if webapp_url.startswith("https://"):
-        view_btn = InlineKeyboardButton(
-            text="🗺 Jonli xaritada ko'rish",
-            web_app=WebAppInfo(url=webapp_url)
-        )
-    else:
-        view_btn = InlineKeyboardButton(
-            text="🗺 Jonli xarita (Havola)",
-            url=webapp_url
-        )
-
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [view_btn],
-            [
-                InlineKeyboardButton(
-                    text="✅ SOS signalini to'xtatish",
-                    callback_data=f"resolve_sos:{child_id}"
-                )
-            ]
-        ]
-    )
-
-
-def get_geofences_menu_keyboard(fences: list) -> InlineKeyboardMarkup:
-    """List existing geofences with delete options and an add button."""
+def get_kerakli_joylar_menu_keyboard(fences: list) -> InlineKeyboardMarkup:
+    """List existing Kerakli joylar with delete options and an add button."""
     buttons = []
     for fence in fences:
         buttons.append([
@@ -230,7 +241,7 @@ def get_geofences_menu_keyboard(fences: list) -> InlineKeyboardMarkup:
         ])
     buttons.append([
         InlineKeyboardButton(
-            text="➕ Yangi xavfsiz hudud qo'shish",
+            text="➕ Yangi kerakli joy qo'shish",
             callback_data="add_new_geofence"
         )
     ])
@@ -238,12 +249,12 @@ def get_geofences_menu_keyboard(fences: list) -> InlineKeyboardMarkup:
 
 
 def get_radius_selection_keyboard() -> InlineKeyboardMarkup:
-    """Radius selection for safe zone creation."""
+    """Radius selection for Kerakli joy creation."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="100 metr", callback_data="radius:100"),
-                InlineKeyboardButton(text="200 metr", callback_data="radius:200"),
+                InlineKeyboardButton(text="200 metr (Tavsiya)", callback_data="radius:200"),
             ],
             [
                 InlineKeyboardButton(text="500 metr", callback_data="radius:500"),
