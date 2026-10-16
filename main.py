@@ -84,7 +84,7 @@ async def health_check():
 
 async def start_uvicorn(server: uvicorn.Server):
     """Run uvicorn server inside asyncio loop."""
-    logger.info(f"Starting FastAPI WebApp server on http://{settings.API_HOST}:{settings.API_PORT}")
+    logger.info(f"Starting FastAPI WebApp server on http://{settings.API_HOST}:{settings.PORT_NUMBER}")
     await server.serve()
 
 
@@ -114,7 +114,7 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host=settings.API_HOST,
-        port=settings.API_PORT,
+        port=settings.PORT_NUMBER,
         log_level="info" if settings.DEBUG else "warning",
         access_log=False
     )
