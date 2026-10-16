@@ -1,26 +1,42 @@
-// Smart Parental Control - Mini App Client Logic
+// Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
 let tg = window.Telegram?.WebApp;
 if (tg) {
   try {
     tg.ready();
     tg.expand();
+    if (tg.setHeaderColor) tg.setHeaderColor("#090d16");
+    if (tg.setBackgroundColor) tg.setBackgroundColor("#090d16");
   } catch (e) {
-    console.warn("Telegram WebApp not fully supported or running in browser", e);
+    console.warn("Telegram WebApp initialization error:", e);
   }
 }
 
-// Global state
+// Global application state
 let parentId = null;
 let currentChildId = null;
 let childrenList = [];
+let isDemoMode = false;
+
+// Map & Layers
 let map = null;
+let streetTileLayer = null;
+let satelliteTileLayer = null;
+let satelliteLabelsLayer = null;
+let isSatellite = false;
+
 let childMarker = null;
 let geofenceLayers = [];
 let routePolyline = null;
 let previewCircle = null;
+let replayMarker = null;
 let isRouteVisible = true;
+let isReplaying = false;
+let replayTimer = null;
 let pollInterval = null;
+
+// Address cache to avoid spamming Nominatim
+const addressCache = new Map();
 
 // Default initial coordinates (Tashkent, Uzbekistan)
 const DEFAULT_LAT = 41.2995;
@@ -36,73 +52,112 @@ document.addEventListener("DOMContentLoaded", () => {
   initMap();
   loadData();
 
-  // Polling every 10 seconds for live telemetry
+  // Polling every 8 seconds for live telemetry
   pollInterval = setInterval(() => {
-    if (currentChildId) {
+    if (currentChildId && !isDemoMode) {
       updateLiveTelemetry(currentChildId);
     }
-  }, 10000);
+  }, 8000);
 });
 
 // Trigger haptic feedback when Telegram WebApp is available
 function haptic(type = "light") {
   if (tg && tg.HapticFeedback) {
-    if (type === "medium") tg.HapticFeedback.impactOccurred("medium");
-    else if (type === "success") tg.HapticFeedback.notificationOccurred("success");
-    else tg.HapticFeedback.impactOccurred("light");
+    try {
+      if (type === "medium") tg.HapticFeedback.impactOccurred("medium");
+      else if (type === "success") tg.HapticFeedback.notificationOccurred("success");
+      else if (type === "warning") tg.HapticFeedback.notificationOccurred("warning");
+      else tg.HapticFeedback.impactOccurred("light");
+    } catch (e) {}
   }
 }
 
-// Extract parent_id and child_id from URL query or Telegram initData
+// Extract parent_id from URL query, Telegram initData, or fallback
 function parseUrlParams() {
   const urlParams = new URLSearchParams(window.location.search);
   parentId = urlParams.get("parent_id");
   currentChildId = urlParams.get("child_id");
 
+  // Read Telegram user id if available
   if (!parentId && tg?.initDataUnsafe?.user?.id) {
     parentId = tg.initDataUnsafe.user.id;
   }
 
-  // Fallback demo parent ID if running standalone preview
+  // Fallback demo parent ID if not specified
   if (!parentId) {
     parentId = 1001;
   }
 }
 
-// Initialize Leaflet Map with dark tile layer suitable for modern app
+// Initialize Leaflet Map with CartoDB Voyager and Esri Satellite layers
 function initMap() {
   map = L.map("map", {
     zoomControl: false,
     attributionControl: false,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
 
-  // CartoDB Dark Matter / Voyager OpenStreetMap tiles
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  // 1. Street Layer: CartoDB Voyager
+  streetTileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     maxZoom: 19,
     subdomains: "abcd",
   }).addTo(map);
 
-  // Map click listener to allow positioning new safe zones
+  // 2. Satellite Layer: Esri World Imagery + Voyager Labels Overlay
+  satelliteTileLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 19,
+  });
+
+  satelliteLabelsLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", {
+    maxZoom: 19,
+    subdomains: "abcd",
+  });
+
+  // Map click listener to set position for new safe zone
   map.on("click", (e) => {
-    if (document.getElementById("modal-add-zone").classList.contains("hidden")) {
-      // Normal click, do nothing
-    } else {
+    const modal = document.getElementById("modal-add-zone");
+    if (!modal.classList.contains("hidden")) {
       updatePreviewCircle(e.latlng.lat, e.latlng.lng);
     }
   });
 }
 
-// Fetch children and initial state
+// Toggle between Street and Satellite Hybrid Map
+function toggleMapLayer() {
+  haptic("medium");
+  const btn = document.getElementById("btnMapLayer");
+  isSatellite = !isSatellite;
+
+  if (isSatellite) {
+    map.removeLayer(streetTileLayer);
+    satelliteTileLayer.addTo(map);
+    satelliteLabelsLayer.addTo(map);
+    btn.classList.add("text-yellow-400");
+    btn.classList.remove("text-emerald-400");
+    showToast("🛰 Yo'ldosh xaritasi yoqildi");
+  } else {
+    map.removeLayer(satelliteTileLayer);
+    map.removeLayer(satelliteLabelsLayer);
+    streetTileLayer.addTo(map);
+    btn.classList.remove("text-yellow-400");
+    btn.classList.add("text-emerald-400");
+    showToast("🗺 Standart xarita yoqildi");
+  }
+}
+
+// Load real data or show empty state banner
 async function loadData() {
   try {
     const res = await fetch(`/api/v1/webapp/parent/${parentId}/children`);
     const data = await res.json();
 
-    if (data.status === "success" && data.children.length > 0) {
+    if (data.status === "success" && data.children && data.children.length > 0) {
       childrenList = data.children;
+      isDemoMode = false;
+      document.getElementById("demoBadge").classList.add("hidden");
+      document.getElementById("emptyStateBanner").classList.add("hidden");
+
       renderChildSelector();
 
-      // Pick first child or child from URL
       if (!currentChildId || !childrenList.some((c) => c.id == currentChildId)) {
         currentChildId = childrenList[0].id;
       }
@@ -110,15 +165,66 @@ async function loadData() {
       document.getElementById("childSelect").value = currentChildId;
       selectChild(currentChildId);
     } else {
-      // No children yet
-      document.getElementById("childSelect").innerHTML = `<option value="">Farzand ulanmagan</option>`;
-      document.getElementById("coordText").textContent = "Ulangan farzandlar mavjud emas";
-      document.getElementById("zoneStatusText").textContent = "Telegram bot orqali kod bilan farzand ulang";
+      // No linked children found -> Prompt demo mode so parent can test immediately
+      showEmptyState();
     }
   } catch (err) {
-    console.error("Error loading children:", err);
-    document.getElementById("coordText").textContent = "Ma'lumotlarni yuklab bo'lmadi";
+    console.warn("API request failed, loading demo simulation:", err);
+    showEmptyState();
   }
+}
+
+// Show empty state prompt
+function showEmptyState() {
+  document.getElementById("emptyStateBanner").classList.remove("hidden");
+  document.getElementById("childSelect").innerHTML = `<option value="">Farzand ulanmagan</option>`;
+  document.getElementById("addressText").textContent = "Ulangan farzandlar mavjud emas";
+  document.getElementById("zoneStatusText").textContent = "Farzand qo'shing yoki Demo rejimni yoqing";
+}
+
+function closeEmptyState() {
+  document.getElementById("emptyStateBanner").classList.add("hidden");
+}
+
+// Enable Demo Mode with simulated child, movement, and safe zones
+function enableDemoMode() {
+  haptic("success");
+  isDemoMode = true;
+  document.getElementById("emptyStateBanner").classList.add("hidden");
+  document.getElementById("demoBadge").classList.remove("hidden");
+
+  childrenList = [
+    {
+      id: 2002,
+      full_name: "Azizbek Karimov (Demo)",
+      username: "azizbek_child",
+      virtual_balance: 18000,
+      is_sos_active: false,
+    },
+  ];
+
+  currentChildId = 2002;
+  renderChildSelector();
+
+  // Render demo child live position in Tashkent
+  const demoLat = 41.2916;
+  const demoLon = 69.2121;
+
+  renderChildMarker(demoLat, demoLon, "Azizbek Karimov (Demo)", false, 82);
+  updateBatteryUI(82, false);
+  updateSoundUI("normal");
+  resolveAddress(demoLat, demoLon);
+
+  // Load demo geofences
+  renderDemoGeofences();
+
+  // Load demo route history
+  renderDemoHistory();
+
+  // Load demo tasks
+  renderDemoTasks();
+
+  showToast("🎮 Demo rejimi faollashtirildi");
 }
 
 // Populate child select dropdown
@@ -135,27 +241,26 @@ function renderChildSelector() {
   });
 }
 
-// Select active child and load their telemetry, zones, route history
+// Select active child and load telemetry
 async function selectChild(childId) {
   const child = childrenList.find((c) => c.id == childId);
   if (!child) return;
 
-  // Avatar initial
   const initial = (child.full_name || "B").charAt(0).toUpperCase();
   document.getElementById("childAvatar").textContent = initial;
 
-  // Apply SOS State
   toggleSosBanner(child.is_sos_active);
 
-  // Load telemetry, history, geofences, tasks
   await updateLiveTelemetry(childId);
   await loadGeofences(childId);
   await loadRouteHistory(childId);
   await loadTasks(childId);
 }
 
-// Update single child live coordinates and battery
+// Fetch live telemetry for child
 async function updateLiveTelemetry(childId) {
+  if (isDemoMode) return;
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${childId}/status`);
     const data = await res.json();
@@ -169,35 +274,61 @@ async function updateLiveTelemetry(childId) {
       const lat = loc.latitude;
       const lon = loc.longitude;
 
-      document.getElementById("coordText").textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-
-      // Update battery pill
       updateBatteryUI(loc.battery_level, loc.is_charging);
-
-      // Update sound mode
       updateSoundUI(loc.sound_mode);
 
-      // Update last seen
       if (loc.recorded_at) {
-        document.getElementById("lastSeenText").textContent = formatTimeAgo(loc.recorded_at);
+        document.getElementById("lastSeenText").innerHTML = `
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>${formatTimeAgo(loc.recorded_at)}</span>
+        `;
       }
 
-      // Render or update child marker on map
       renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level);
+      resolveAddress(lat, lon);
     } else {
-      document.getElementById("coordText").textContent = "Joylashuv hali yuborilmagan";
+      document.getElementById("addressText").textContent = "Joylashuv hali yuborilmagan";
       document.getElementById("lastSeenText").textContent = "Kutilmoqda...";
     }
   } catch (err) {
-    console.error("Telemetry refresh failed:", err);
+    console.warn("Telemetry polling error:", err);
   }
 }
 
-// Render or move child pulsing radar marker
+// Reverse Geocoding with Nominatim & Cache
+async function resolveAddress(lat, lon) {
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (addressCache.has(key)) {
+    document.getElementById("addressText").textContent = addressCache.get(key);
+    return;
+  }
+
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+      headers: { "Accept-Language": "uz,ru,en" },
+    });
+    const data = await res.json();
+    if (data && data.display_name) {
+      // Extract street and district
+      const addr = data.address || {};
+      const shortAddr = addr.road || addr.suburb || addr.neighbourhood || addr.city_district || data.display_name.split(",").slice(0, 2).join(",");
+      const fullText = shortAddr ? `${shortAddr}, Tashkent` : data.display_name.split(",").slice(0, 2).join(",");
+      addressCache.set(key, fullText);
+      document.getElementById("addressText").textContent = fullText;
+      return;
+    }
+  } catch (e) {
+    // Fallback to coordinates
+  }
+
+  document.getElementById("addressText").textContent = `Koordinata: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+// Render or move pulsing radar child marker
 function renderChildMarker(lat, lon, name, isSos, battery) {
   const initial = (name || "B").charAt(0).toUpperCase();
   const pulseClass = isSos ? "sos-pulse-ring" : "child-pulse-ring";
-  const pinBg = isSos ? "bg-red-600" : "bg-blue-600";
+  const pinBg = isSos ? "bg-red-600" : "bg-gradient-to-tr from-blue-700 to-indigo-500";
 
   const customHtml = `
     <div class="child-radar-marker">
@@ -222,32 +353,36 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
   }
 
   childMarker.bindPopup(`
-    <div class="p-1 text-slate-800 text-xs font-semibold">
-      <div class="font-bold text-sm mb-1">${name || "Farzand"}</div>
-      <div>🔋 Batareya: ${battery ? battery + "%" : "Noma'lum"}</div>
-      <div class="text-[10px] text-slate-500 mt-1">Jonli nazorat faol</div>
+    <div class="p-1 text-slate-900 text-xs font-semibold">
+      <div class="font-bold text-sm mb-1 text-blue-700">${name || "Farzand"}</div>
+      <div>🔋 Batareya: <b>${battery !== null ? battery + "%" : "Noma'lum"}</b></div>
+      <div class="text-[10px] text-slate-500 mt-1">Jonli xavfsizlik nazorati faol</div>
     </div>
   `);
 }
 
-// Center map view on child's current location
+// Center view on child
 function centerOnChild() {
   haptic("light");
   if (childMarker) {
     map.flyTo(childMarker.getLatLng(), 16, { animate: true, duration: 1 });
   } else {
-    showToast("Farzand joylashuvi hozircha mavjud emas");
+    showToast("Farzand joylashuvi hali mavjud emas");
   }
 }
 
-// Load and display safe zones (Geofences)
+// Load safe zones (Geofences)
 async function loadGeofences(childId) {
+  if (isDemoMode) {
+    renderDemoGeofences();
+    return;
+  }
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${childId}/geofences`);
     const data = await res.json();
     if (data.status !== "success") return;
 
-    // Clear old fence layers
     geofenceLayers.forEach((layer) => map.removeLayer(layer));
     geofenceLayers = [];
 
@@ -260,59 +395,77 @@ async function loadGeofences(childId) {
       return;
     }
 
-    // Render circles on map
-    fences.forEach((fence, idx) => {
-      const colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
-      const color = colors[idx % colors.length];
-
-      const circle = L.circle([fence.latitude, fence.longitude], {
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.15,
-        weight: 2,
-        radius: fence.radius_meters,
-      }).addTo(map);
-
-      circle.bindTooltip(`🛡 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
-        permanent: true,
-        direction: "top",
-        className: "geofence-tooltip",
-      });
-
-      geofenceLayers.push(circle);
-    });
-
-    // Populate modal list
-    container.innerHTML = fences
-      .map(
-        (f) => `
-      <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-xl flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-            <i data-lucide="shield" class="w-4 h-4"></i>
-          </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">${f.name}</h4>
-            <span class="text-[11px] text-slate-400">Radiusi: ${Math.round(f.radius_meters)} metr</span>
-          </div>
-        </div>
-        <button onclick="deleteGeofence(${f.id})" class="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition" title="O'chirish">
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
-        </button>
-      </div>
-    `
-      )
-      .join("");
-
-    if (window.lucide) lucide.createIcons();
-    document.getElementById("zoneStatusText").textContent = `${fences.length} ta xavfsiz hudud faol`;
+    renderFencesToMapAndList(fences);
   } catch (err) {
     console.error("Failed to load geofences:", err);
   }
 }
 
-// Load today's route history and draw polyline
+function renderFencesToMapAndList(fences) {
+  const container = document.getElementById("zonesListContainer");
+  const colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
+
+  fences.forEach((fence, idx) => {
+    const color = colors[idx % colors.length];
+    const circle = L.circle([fence.latitude, fence.longitude], {
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.16,
+      weight: 2,
+      radius: fence.radius_meters,
+    }).addTo(map);
+
+    circle.bindTooltip(`🛡 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
+      permanent: true,
+      direction: "top",
+      className: "geofence-tooltip",
+    });
+
+    geofenceLayers.push(circle);
+  });
+
+  container.innerHTML = fences
+    .map(
+      (f) => `
+    <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between shadow-sm">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+          <i data-lucide="shield" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <h4 class="text-xs font-bold text-white">${f.name}</h4>
+          <span class="text-[11px] text-slate-400">Radiusi: ${Math.round(f.radius_meters)} metr</span>
+        </div>
+      </div>
+      <button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+      </button>
+    </div>
+  `
+    )
+    .join("");
+
+  if (window.lucide) lucide.createIcons();
+  document.getElementById("zoneStatusText").textContent = `✅ ${fences.length} ta xavfsiz hudud nazoratda`;
+}
+
+// Render Demo Geofences
+function renderDemoGeofences() {
+  const demoFences = [
+    { id: 1, name: "🏠 Uyimiz (Chilonzor)", latitude: 41.2858, longitude: 69.2035, radius_meters: 200 },
+    { id: 2, name: "🏫 Maktab №45", latitude: 41.2915, longitude: 69.2120, radius_meters: 250 },
+    { id: 3, name: "📚 O'quv Markazi", latitude: 41.3000, longitude: 69.2250, radius_meters: 200 },
+  ];
+  renderFencesToMapAndList(demoFences);
+}
+
+// Load route history
 async function loadRouteHistory(childId) {
+  if (isDemoMode) {
+    renderDemoHistory();
+    return;
+  }
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${childId}/history`);
     const data = await res.json();
@@ -331,53 +484,118 @@ async function loadRouteHistory(childId) {
       return;
     }
 
-    const latlngs = points.map((p) => [p.latitude, p.longitude]);
-
-    // Draw smooth route polyline
-    routePolyline = L.polyline(latlngs, {
-      color: "#f59e0b",
-      weight: 4,
-      opacity: 0.8,
-      dashArray: "6, 8",
-    });
-
-    if (isRouteVisible) {
-      routePolyline.addTo(map);
-    }
-
-    // Populate timeline list
-    container.innerHTML = points
-      .slice()
-      .reverse()
-      .map((p) => {
-        const time = p.recorded_at ? new Date(p.recorded_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-        const batteryStr = p.battery_level ? `${p.battery_level}%` : "--";
-        const chargingIcon = p.is_charging ? "⚡" : "";
-
-        return `
-        <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span class="font-mono text-slate-200">${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span>
-          </div>
-          <div class="flex items-center gap-3 text-slate-400 text-[11px]">
-            <span>🔋 ${batteryStr} ${chargingIcon}</span>
-            <span class="font-semibold text-slate-300">🕒 ${time}</span>
-          </div>
-        </div>
-      `;
-      })
-      .join("");
+    renderHistoryToMapAndList(points);
   } catch (err) {
     console.error("Failed to load route history:", err);
   }
+}
+
+function renderHistoryToMapAndList(points) {
+  const container = document.getElementById("historyListContainer");
+  const latlngs = points.map((p) => [p.latitude, p.longitude]);
+
+  routePolyline = L.polyline(latlngs, {
+    color: "#f59e0b",
+    weight: 4,
+    opacity: 0.85,
+    dashArray: "6, 8",
+  });
+
+  if (isRouteVisible) {
+    routePolyline.addTo(map);
+  }
+
+  container.innerHTML = points
+    .slice()
+    .reverse()
+    .map((p, idx) => {
+      const time = p.recorded_at ? new Date(p.recorded_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+      const batteryStr = p.battery_level ? `${p.battery_level}%` : "--";
+      const chargingIcon = p.is_charging ? "⚡" : "";
+
+      return `
+      <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2">
+          <div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+          <span class="font-mono text-slate-200">${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span>
+        </div>
+        <div class="flex items-center gap-2.5 text-slate-400 text-[11px]">
+          <span>🔋 ${batteryStr} ${chargingIcon}</span>
+          <span class="font-bold text-slate-200">🕒 ${time}</span>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+// Render Demo History
+function renderDemoHistory() {
+  const demoPoints = [
+    { latitude: 41.2858, longitude: 69.2035, battery_level: 85, is_charging: false, recorded_at: "2026-10-16T08:00:00" },
+    { latitude: 41.2870, longitude: 69.2060, battery_level: 84, is_charging: false, recorded_at: "2026-10-16T08:10:00" },
+    { latitude: 41.2890, longitude: 69.2090, battery_level: 83, is_charging: false, recorded_at: "2026-10-16T08:20:00" },
+    { latitude: 41.2915, longitude: 69.2120, battery_level: 82, is_charging: false, recorded_at: "2026-10-16T08:30:00" },
+    { latitude: 41.2916, longitude: 69.2121, battery_level: 80, is_charging: false, recorded_at: "2026-10-16T08:45:00" },
+  ];
+  renderHistoryToMapAndList(demoPoints);
+}
+
+// Smooth Route Playback Animation
+function startRoutePlayback() {
+  haptic("medium");
+  if (!routePolyline) {
+    showToast("Harakat marshruti mavjud emas");
+    return;
+  }
+
+  const latlngs = routePolyline.getLatLngs();
+  if (latlngs.length < 2) {
+    showToast("Harakat nuqtalari yetarli emas");
+    return;
+  }
+
+  closeModal("history");
+  showToast("▶ Marshrut harakati ko'rsatilmoqda...");
+
+  if (replayMarker) {
+    map.removeLayer(replayMarker);
+  }
+
+  const replayIcon = L.divIcon({
+    html: `<div class="replay-marker-dot"></div>`,
+    className: "custom-replay-icon",
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+
+  replayMarker = L.marker(latlngs[0], { icon: replayIcon }).addTo(map);
+  map.panTo(latlngs[0]);
+
+  let step = 0;
+  clearInterval(replayTimer);
+
+  replayTimer = setInterval(() => {
+    step++;
+    if (step >= latlngs.length) {
+      clearInterval(replayTimer);
+      showToast("🏁 Harakat yakunlandi");
+      setTimeout(() => {
+        if (replayMarker) map.removeLayer(replayMarker);
+      }, 2000);
+      return;
+    }
+
+    replayMarker.setLatLng(latlngs[step]);
+    map.panTo(latlngs[step], { animate: true, duration: 0.5 });
+  }, 900);
 }
 
 // Toggle route history polyline on map
 function toggleRouteHistory() {
   haptic("light");
   if (!routePolyline) {
-    showToast("Harakat tarixi topilmadi");
+    showToast("Harakat tarixi mavjud emas");
     return;
   }
 
@@ -388,17 +606,22 @@ function toggleRouteHistory() {
     routePolyline.addTo(map);
     btn.classList.add("text-amber-400");
     btn.classList.remove("text-slate-500");
-    showToast("Harakat yo'li ko'rsatildi");
+    showToast("Marshrut ko'rsatildi");
   } else {
     map.removeLayer(routePolyline);
     btn.classList.remove("text-amber-400");
     btn.classList.add("text-slate-500");
-    showToast("Harakat yo'li yashirildi");
+    showToast("Marshrut yashirildi");
   }
 }
 
-// Load tasks for child
+// Load and manage tasks
 async function loadTasks(childId) {
+  if (isDemoMode) {
+    renderDemoTasks();
+    return;
+  }
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${childId}/tasks`);
     const data = await res.json();
@@ -409,41 +632,168 @@ async function loadTasks(childId) {
       document.getElementById("tasksBalanceText").textContent = `${child.virtual_balance.toLocaleString()} tanga`;
     }
 
-    const tasks = data.tasks;
-    const container = document.getElementById("tasksListContainer");
+    renderTasksList(data.tasks);
+  } catch (err) {
+    console.error("Failed to load tasks:", err);
+  }
+}
 
-    if (tasks.length === 0) {
-      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Faol vazifalar mavjud emas.</p>`;
-      return;
-    }
+function renderTasksList(tasks) {
+  const container = document.getElementById("tasksListContainer");
 
-    container.innerHTML = tasks
-      .map((t) => {
-        let badge = "";
-        if (t.status === "approved") {
-          badge = `<span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold">✅ Bajarildi</span>`;
-        } else if (t.status === "completed_by_child") {
-          badge = `<span class="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-bold">⏳ Tekshiruvda</span>`;
-        } else {
-          badge = `<span class="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full font-bold">▫️ Bajarilmoqda</span>`;
-        }
+  if (tasks.length === 0) {
+    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Faol vazifalar mavjud emas. 'Vazifa qo'shish' tugmasi orqali yangi vazifa yuklashingiz mumkin.</p>`;
+    return;
+  }
 
-        return `
-        <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-xl flex items-center justify-between">
+  container.innerHTML = tasks
+    .map((t) => {
+      let badge = "";
+      let actions = "";
+
+      if (t.status === "approved") {
+        badge = `<span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold">✅ Bajarildi</span>`;
+      } else if (t.status === "completed_by_child") {
+        badge = `<span class="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-bold">⏳ Tekshiruvda</span>`;
+        actions = `
+          <div class="flex gap-1.5 mt-2">
+            <button onclick="approveTask(${t.id})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">✅ Tasdiqlash</button>
+            <button onclick="rejectTask(${t.id})" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-red-400 rounded-lg text-xs font-semibold border border-slate-700 transition">Rad etish</button>
+          </div>
+        `;
+      } else {
+        badge = `<span class="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full font-bold">▫️ Bajarilmoqda</span>`;
+      }
+
+      return `
+      <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl">
+        <div class="flex items-start justify-between">
           <div>
             <h4 class="text-xs font-bold text-white">${t.title}</h4>
             ${t.description ? `<p class="text-[11px] text-slate-400 mt-0.5">${t.description}</p>` : ""}
-            <div class="mt-1 flex items-center gap-2">
-              <span class="text-xs font-semibold text-yellow-400">+${t.reward_coins} tanga</span>
+            <div class="mt-1.5 flex items-center gap-2">
+              <span class="text-xs font-bold text-yellow-400">+${t.reward_coins.toLocaleString()} tanga</span>
               ${badge}
             </div>
           </div>
         </div>
-      `;
-      })
-      .join("");
-  } catch (err) {
-    console.error("Failed to load tasks:", err);
+        ${actions}
+      </div>
+    `;
+    })
+    .join("");
+}
+
+// Render Demo Tasks
+function renderDemoTasks() {
+  document.getElementById("tasksBalanceText").textContent = "18,000 tanga";
+  const demoTasks = [
+    { id: 101, title: "Matematika darslarini qilish", description: "5-bob 12-18 mashqlar", reward_coins: 5000, status: "completed_by_child" },
+    { id: 102, title: "Uyga vaqtida kelish", description: "Soat 17:00 gacha", reward_coins: 3000, status: "pending" },
+    { id: 103, title: "Kitob o'qish (20 sahifa)", description: "Ertaklar kitobi", reward_coins: 2000, status: "approved" },
+  ];
+  renderTasksList(demoTasks);
+}
+
+// Approve Task
+async function approveTask(taskId) {
+  haptic("success");
+  if (isDemoMode) {
+    showToast("✅ Vazifa tasdiqlandi (+5,000 tanga)");
+    document.getElementById("tasksBalanceText").textContent = "23,000 tanga";
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/approve`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("✅ Vazifa tasdiqlandi!");
+      await loadTasks(currentChildId);
+    }
+  } catch (e) {
+    showToast("Tasdiqlashda xatolik yuz berdi");
+  }
+}
+
+// Reject Task
+async function rejectTask(taskId) {
+  haptic("warning");
+  if (isDemoMode) {
+    showToast("❌ Vazifa rad etildi");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/reject`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("Vazifa rad etildi");
+      await loadTasks(currentChildId);
+    }
+  } catch (e) {
+    showToast("Xatolik yuz berdi");
+  }
+}
+
+// Open Add Task Modal
+function openAddTaskModal() {
+  haptic("medium");
+  document.getElementById("modal-add-task").classList.remove("hidden");
+}
+
+function closeAddTaskModal() {
+  haptic("light");
+  document.getElementById("modal-add-task").classList.add("hidden");
+}
+
+function setRewardCoin(amount) {
+  haptic("light");
+  document.getElementById("inputTaskReward").value = amount;
+}
+
+// Submit New Task
+async function submitNewTask() {
+  const title = document.getElementById("inputTaskTitle").value.trim();
+  const desc = document.getElementById("inputTaskDesc").value.trim();
+  const reward = parseInt(document.getElementById("inputTaskReward").value) || 1000;
+
+  if (!title) {
+    showToast("Iltimos, vazifa nomini kiriting!");
+    return;
+  }
+
+  if (isDemoMode) {
+    haptic("success");
+    showToast("✅ Yangi vazifa qo'shildi!");
+    closeAddTaskModal();
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/v1/webapp/task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_id: parseInt(parentId),
+        child_id: parseInt(currentChildId),
+        title: title,
+        description: desc || null,
+        reward_coins: reward,
+      }),
+    });
+
+    const data = await res.json();
+    if (data.status === "success") {
+      haptic("success");
+      showToast("✅ Vazifa muvaffaqiyatli yuklandi!");
+      document.getElementById("inputTaskTitle").value = "";
+      document.getElementById("inputTaskDesc").value = "";
+      closeAddTaskModal();
+      await loadTasks(currentChildId);
+    }
+  } catch (e) {
+    showToast("Vazifa saqlashda xatolik");
   }
 }
 
@@ -460,13 +810,13 @@ function updateBatteryUI(level, isCharging) {
   text.textContent = `${level}%`;
 
   if (isCharging) {
-    pill.className = "flex items-center gap-1 bg-blue-900/40 px-2 py-1 rounded-full text-xs font-medium text-blue-400 border border-blue-500/40";
+    pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
   } else if (level <= 15) {
-    pill.className = "flex items-center gap-1 bg-red-900/40 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/50 animate-pulse";
+    pill.className = "flex items-center gap-1 bg-red-900/60 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/60 animate-pulse";
   } else if (level <= 30) {
-    pill.className = "flex items-center gap-1 bg-amber-900/40 px-2 py-1 rounded-full text-xs font-medium text-amber-400 border border-amber-500/40";
+    pill.className = "flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/50";
   } else {
-    pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-medium text-emerald-400 border border-emerald-500/40";
+    pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/40";
   }
 }
 
@@ -478,7 +828,7 @@ function updateSoundUI(mode) {
   } else if (mode === "vibrate") {
     text.textContent = "Vibratsiya";
   } else {
-    text.textContent = "Qo'ng'iroq";
+    text.textContent = "Oddiy";
   }
 }
 
@@ -519,7 +869,6 @@ function switchTab(tabName) {
     activeBtn.classList.remove("text-slate-400");
   }
 
-  // Hide all sliding modals first
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.add("hidden");
   });
@@ -537,7 +886,7 @@ function closeModal(tabName) {
   switchTab("map");
 }
 
-// Add Safe Zone Modal & Preview Circle
+// Add Safe Zone Modal & Presets
 function openAddZoneModal() {
   haptic("medium");
   const modal = document.getElementById("modal-add-zone");
@@ -555,6 +904,13 @@ function closeAddZoneModal() {
     map.removeLayer(previewCircle);
     previewCircle = null;
   }
+}
+
+function applyZonePreset(namePrefix, radius) {
+  haptic("light");
+  document.getElementById("inputZoneName").value = namePrefix;
+  document.getElementById("inputZoneRadius").value = radius;
+  updateRadiusPreview(radius);
 }
 
 function updateRadiusPreview(val) {
@@ -583,7 +939,7 @@ function updatePreviewCircle(lat, lon, radius = null) {
   }
 }
 
-// Submit new safe zone to API
+// Submit new safe zone
 async function submitNewZone() {
   const nameInput = document.getElementById("inputZoneName");
   const name = nameInput.value.trim();
@@ -594,6 +950,14 @@ async function submitNewZone() {
 
   const radius = parseFloat(document.getElementById("inputZoneRadius").value);
   const center = previewCircle ? previewCircle.getLatLng() : map.getCenter();
+
+  if (isDemoMode) {
+    haptic("success");
+    showToast("✅ Xavfsiz hudud saqlandi!");
+    nameInput.value = "";
+    closeAddZoneModal();
+    return;
+  }
 
   try {
     const res = await fetch("/api/v1/webapp/geofence", {
@@ -618,11 +982,8 @@ async function submitNewZone() {
       if (currentChildId) {
         await loadGeofences(currentChildId);
       }
-    } else {
-      showToast("Xatolik: Saqlab bo'lmadi");
     }
   } catch (err) {
-    console.error("Failed to create safe zone:", err);
     showToast("Server bilan aloqa uzildi");
   }
 }
@@ -630,6 +991,12 @@ async function submitNewZone() {
 // Delete geofence
 async function deleteGeofence(fenceId) {
   if (!confirm("Haqiqatan ham bu xavfsiz hududni o'chirmoqchimisiz?")) return;
+
+  if (isDemoMode) {
+    haptic("medium");
+    showToast("Hudud o'chirildi");
+    return;
+  }
 
   try {
     const res = await fetch(`/api/v1/webapp/geofence/${fenceId}?parent_id=${parentId}`, {
@@ -648,7 +1015,7 @@ async function deleteGeofence(fenceId) {
   }
 }
 
-// Open Google / Yandex Maps external navigation
+// Open Google / Yandex navigation
 function openExternalNavigation() {
   haptic("light");
   if (!childMarker) {
@@ -665,11 +1032,21 @@ async function refreshAllData() {
   haptic("light");
   const btn = document.getElementById("btnRefresh");
   btn.classList.add("animate-spin");
+
+  if (isDemoMode) {
+    setTimeout(() => {
+      btn.classList.remove("animate-spin");
+      showToast("Yangilandi (Demo)");
+    }, 400);
+    return;
+  }
+
   if (currentChildId) {
     await updateLiveTelemetry(currentChildId);
     await loadGeofences(currentChildId);
     await loadRouteHistory(currentChildId);
   }
+
   setTimeout(() => {
     btn.classList.remove("animate-spin");
     showToast("Yangilandi");
@@ -683,7 +1060,7 @@ function showToast(message) {
     return;
   }
   const toast = document.createElement("div");
-  toast.className = "fixed bottom-16 left-1/2 -translate-x-1/2 z-[999] bg-slate-800 text-white text-xs px-4 py-2 rounded-xl shadow-2xl border border-slate-700 animate-fade-in";
+  toast.className = "fixed bottom-16 left-1/2 -translate-x-1/2 z-[999] bg-slate-900/95 text-white text-xs px-4 py-2 rounded-2xl shadow-2xl border border-slate-700/80 animate-fade-in font-medium backdrop-blur-md";
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);

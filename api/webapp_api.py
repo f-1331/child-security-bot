@@ -173,3 +173,47 @@ async def get_child_tasks(child_id: int, session: AsyncSession = Depends(get_db)
             for t in tasks
         ]
     }
+
+
+class CreateTaskRequest(BaseModel):
+    parent_id: int
+    child_id: int
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    reward_coins: int = Field(1000, ge=100, le=1000000)
+
+
+@router.post("/task")
+async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession = Depends(get_db)):
+    """Create a task directly from WebApp."""
+    task = await crud.create_task(
+        session=session,
+        parent_id=payload.parent_id,
+        child_id=payload.child_id,
+        title=payload.title,
+        description=payload.description,
+        reward_coins=payload.reward_coins
+    )
+    await session.commit()
+    return {"status": "success", "task": {"id": task.id, "title": task.title, "reward_coins": task.reward_coins}}
+
+
+@router.post("/task/{task_id}/approve")
+async def approve_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
+    """Approve a task directly from WebApp."""
+    task = await crud.approve_task(session, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    await session.commit()
+    return {"status": "success", "task_id": task_id, "status": "approved"}
+
+
+@router.post("/task/{task_id}/reject")
+async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
+    """Reject a task directly from WebApp."""
+    task = await crud.reject_task(session, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    await session.commit()
+    return {"status": "success", "task_id": task_id, "status": "rejected"}
+

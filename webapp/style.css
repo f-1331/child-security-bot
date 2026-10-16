@@ -1,4 +1,4 @@
-/* Custom CSS for Smart Parental Tracker Mini App */
+/* Custom CSS for Smart Parental Tracker Mini App - Enhanced Edition */
 
 :root {
   --primary-color: #3b82f6;
@@ -11,13 +11,15 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  background-color: #090d16;
 }
 
-/* Map container taking available viewport space */
+/* Map container filling available viewport */
 #map {
-  height: calc(100vh - 135px);
+  height: calc(100vh - 128px);
   width: 100%;
   z-index: 10;
+  background-color: #090d16;
 }
 
 /* Pulsing radar effect for child marker */
@@ -32,43 +34,44 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   border: 3px solid #ffffff;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: bold;
+  font-weight: 700;
   font-size: 18px;
   z-index: 2;
   position: relative;
+  transition: all 0.3s ease;
 }
 
 .child-pulse-ring {
   position: absolute;
-  width: 60px;
-  height: 60px;
+  width: 65px;
+  height: 65px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.45);
   animation: pulse-ring 2s infinite ease-out;
   z-index: 1;
 }
 
 .sos-pulse-ring {
   position: absolute;
-  width: 75px;
-  height: 75px;
+  width: 85px;
+  height: 85px;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.5);
-  animation: sos-pulse-ring 1s infinite ease-out;
+  background: rgba(239, 68, 68, 0.6);
+  animation: sos-pulse-ring 0.9s infinite ease-out;
   z-index: 1;
 }
 
 @keyframes pulse-ring {
   0% {
     transform: scale(0.6);
-    opacity: 0.9;
+    opacity: 0.95;
   }
   100% {
     transform: scale(1.6);
@@ -82,25 +85,35 @@ body {
     opacity: 1;
   }
   100% {
-    transform: scale(1.8);
+    transform: scale(2.0);
     opacity: 0;
   }
 }
 
+/* Animated replay dot */
+.replay-marker-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
 /* Custom Geofence labels */
 .geofence-tooltip {
-  background: rgba(15, 23, 42, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
   color: white !important;
   font-size: 11px !important;
   font-weight: 600 !important;
   border-radius: 8px !important;
-  padding: 4px 8px !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  padding: 4px 10px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
 .leaflet-tooltip-top:before {
-  border-top-color: rgba(15, 23, 42, 0.85) !important;
+  border-top-color: rgba(15, 23, 42, 0.92) !important;
 }
 
 /* Custom scrollbar for lists */
@@ -111,6 +124,31 @@ body {
   background: rgba(0, 0, 0, 0.05);
 }
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
+}
+
+/* Modal animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
 }
