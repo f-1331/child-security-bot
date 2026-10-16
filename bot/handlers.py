@@ -965,7 +965,7 @@ async def on_status_pressed(message: Message):
 @router.message(F.text.startswith("🗺 Xaritada ko'rish"))
 async def on_open_map_pressed(message: Message):
     parent_id = message.from_user.id
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}"
+    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}"
 
     if webapp_url.startswith("https://"):
         await message.answer(

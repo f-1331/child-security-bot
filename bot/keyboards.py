@@ -33,7 +33,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     Main persistent reply keyboard for Parent.
     Includes Telegram WebApp button pointing to the Leaflet map dashboard.
     """
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}"
+    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}"
 
     # Telegram strictly enforces HTTPS for WebAppInfo; for HTTP use standard button
     if webapp_url.startswith("https://"):
@@ -118,7 +118,7 @@ def get_pairing_share_keyboard(bot_username: str, pairing_code: str) -> InlineKe
 
 def get_child_details_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
     """Action buttons for a specific child."""
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}&child_id={child_id}"
+    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}&child_id={child_id}"
     
     if webapp_url.startswith("https://"):
         view_btn = InlineKeyboardButton(
@@ -188,7 +188,7 @@ def get_child_task_action_keyboard(task_id: int) -> InlineKeyboardMarkup:
 
 def get_sos_alert_parent_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
     """Action buttons sent to parent during an SOS emergency."""
-    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}&child_id={child_id}"
+    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/child_security_site/index.html?parent_id={parent_id}&child_id={child_id}"
     
     if webapp_url.startswith("https://"):
         view_btn = InlineKeyboardButton(

@@ -61,15 +61,22 @@ app.add_middleware(
 app.include_router(telemetry_router)
 app.include_router(webapp_router)
 
-# Mount WebApp Static Directory
+# Mount WebApp Static Directory under both /child_security_site and /webapp
 webapp_path = Path(__file__).resolve().parent / "webapp"
+app.mount("/child_security_site", StaticFiles(directory=str(webapp_path), html=True), name="child_security_site")
 app.mount("/webapp", StaticFiles(directory=str(webapp_path), html=True), name="webapp")
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/child_security_site", methods=["GET", "HEAD"], include_in_schema=False)
+async def site_path_redirect():
+    """Redirect /child_security_site to /child_security_site/index.html."""
+    return RedirectResponse(url="/child_security_site/index.html")
+
+
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 async def root_redirect():
-    """Redirect root to Telegram Mini App dashboard."""
-    return RedirectResponse(url="/webapp/index.html")
+    """Redirect root to child_security_site dashboard."""
+    return RedirectResponse(url="/child_security_site/index.html")
 
 
 @app.get("/health", tags=["Health"])

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: child-security-bot
+    name: child-security-site
     runtime: python
     plan: free
     region: frankfurt
