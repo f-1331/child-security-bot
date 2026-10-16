@@ -962,6 +962,31 @@ async def on_status_pressed(message: Message):
         await message.answer(text, parse_mode="Markdown")
 
 
+@router.message(F.text.startswith("🗺 Xaritada ko'rish"))
+async def on_open_map_pressed(message: Message):
+    parent_id = message.from_user.id
+    webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}"
+
+    if webapp_url.startswith("https://"):
+        await message.answer(
+            "🗺 **Interaktiv Xaritani ochish:**",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="🗺 Xaritani ochish", web_app=WebAppInfo(url=webapp_url))]]
+            ),
+            parse_mode="Markdown"
+        )
+    else:
+        await message.answer(
+            f"🗺 **Interaktiv Xarita Dashboardi:**\n\n"
+            f"Xaritani brauzerda ochish uchun quyidagi havolani bosing:\n"
+            f"👉 [Xaritani ochish]({webapp_url})\n\n"
+            f"🔗 To'g'ridan-to'g'ri havola: `{webapp_url}`\n\n"
+            f"💡 _Telegram ilovasi ichida to'g'ridan-to'g'ri ochilishi uchun HTTPS havola talab qilinadi (Render.com ga qo'yilsa, avtomatik HTTPS bo'ladi)._",
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
+
+
 @router.message(F.text == "ℹ️ Yordam")
 async def on_help_pressed(message: Message):
     text = (

@@ -35,13 +35,19 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}"
 
+    # Telegram strictly enforces HTTPS for WebAppInfo; for HTTP use standard button
+    if webapp_url.startswith("https://"):
+        map_btn = KeyboardButton(
+            text="🗺 Xaritada ko'rish (Web App)",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+    else:
+        map_btn = KeyboardButton(
+            text="🗺 Xaritada ko'rish (Web App)"
+        )
+
     keyboard = [
-        [
-            KeyboardButton(
-                text="🗺 Xaritada ko'rish (Web App)",
-                web_app=WebAppInfo(url=webapp_url)
-            )
-        ],
+        [map_btn],
         [
             KeyboardButton(text="👶 Farzandlarim"),
             KeyboardButton(text="➕ Farzand ulash (Kodi)")
@@ -113,14 +119,21 @@ def get_pairing_share_keyboard(bot_username: str, pairing_code: str) -> InlineKe
 def get_child_details_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
     """Action buttons for a specific child."""
     webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}&child_id={child_id}"
+    
+    if webapp_url.startswith("https://"):
+        view_btn = InlineKeyboardButton(
+            text="🗺 Xaritada jonli ko'rish",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+    else:
+        view_btn = InlineKeyboardButton(
+            text="🗺 Xaritada ko'rish (Havola)",
+            url=webapp_url
+        )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🗺 Xaritada jonli ko'rish",
-                    web_app=WebAppInfo(url=webapp_url)
-                )
-            ],
+            [view_btn],
             [
                 InlineKeyboardButton(
                     text="➕ Yangi vazifa yuklash",
@@ -176,14 +189,21 @@ def get_child_task_action_keyboard(task_id: int) -> InlineKeyboardMarkup:
 def get_sos_alert_parent_keyboard(child_id: int, parent_id: int) -> InlineKeyboardMarkup:
     """Action buttons sent to parent during an SOS emergency."""
     webapp_url = f"{settings.RESOLVED_WEBAPP_URL}/webapp/index.html?parent_id={parent_id}&child_id={child_id}"
+    
+    if webapp_url.startswith("https://"):
+        view_btn = InlineKeyboardButton(
+            text="🗺 Jonli xaritada ko'rish",
+            web_app=WebAppInfo(url=webapp_url)
+        )
+    else:
+        view_btn = InlineKeyboardButton(
+            text="🗺 Jonli xarita (Havola)",
+            url=webapp_url
+        )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🗺 Jonli xaritada ko'rish",
-                    web_app=WebAppInfo(url=webapp_url)
-                )
-            ],
+            [view_btn],
             [
                 InlineKeyboardButton(
                     text="✅ SOS signalini to'xtatish",
