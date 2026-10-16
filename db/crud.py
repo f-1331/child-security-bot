@@ -1,0 +1,423 @@
+import random
+import string
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional, Tuple
+from sqlalchemy import desc, select, and_, delete
+from sqlalchemy.ext.asyncio import AsyncSession
+from db.models import (
+    User,
+    ParentChildLink,
+    LocationLog,
+    Geofence,
+    GeofenceState,
+    Task,
+    BatteryAlertLog,
+)
+
+
+async def get_user(session: AsyncSession, user_id: int) -> Optional[User]:
+    """Retrieve user by Telegram ID."""
+    result = await session.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def get_or_create_user(
+    session: AsyncSession,
+    user_id: int,
+    role: str = "unassigned",
+    full_name: Optional[str] = None,
+    username: Optional[str] = None
+) -> Tuple[User, bool]:
+    """Get existing user or create a new one."""
+    user = await get_user(session, user_id)
+    if user:
+        # Update user profile info if changed
+        if full_name and user.full_name != full_name:
+            user.full_name = full_name
+        if username and user.username != username:
+            user.username = username
+        return user, False
+
+    user = User(
+        id=user_id,
+        role=role,
+        full_name=full_name,
+        username=username,
+    )
+    session.add(user)
+    await session.flush()
+    return user, True
+
+
+async def update_user_role(session: AsyncSession, user_id: int, role: str) -> Optional[User]:
+    """Update role for user."""
+    user = await get_user(session, user_id)
+    if user:
+        user.role = role
+        await session.flush()
+    return user
+
+
+async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
+    """Generate a unique 6-character pairing code for a parent."""
+    user = await get_user(session, parent_id)
+    if not user:
+        user, _ = await get_or_create_user(session, parent_id, role="parent")
+
+    # Generate 6-digit numeric or alphanumeric code
+    code = "".join(random.choices(string.digits, k=6))
+    user.pairing_code = code
+    user.pairing_code_created_at = datetime.now(timezone.utc)
+    await session.flush()
+    return code
+
+
+async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Optional[User]:
+    """Find parent by their pairing code."""
+    result = await session.execute(
+        select(User).where(
+            User.pairing_code == code.strip(),
+            User.role == "parent"
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def link_parent_child(
+    session: AsyncSession,
+    parent_id: int,
+    child_id: int,
+    nickname: Optional[str] = None
+) -> Tuple[ParentChildLink, bool]:
+    """Link parent and child together."""
+    result = await session.execute(
+        select(ParentChildLink).where(
+            ParentChildLink.parent_id == parent_id,
+            ParentChildLink.child_id == child_id
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link:
+        if nickname and link.nickname != nickname:
+            link.nickname = nickname
+            await session.flush()
+        return link, False
+
+    link = ParentChildLink(
+        parent_id=parent_id,
+        child_id=child_id,
+        nickname=nickname
+    )
+    session.add(link)
+    await session.flush()
+    return link, True
+
+
+async def get_children_for_parent(session: AsyncSession, parent_id: int) -> List[User]:
+    """Fetch all linked children for a parent."""
+    result = await session.execute(
+        select(User)
+        .join(ParentChildLink, ParentChildLink.child_id == User.id)
+        .where(ParentChildLink.parent_id == parent_id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_parents_for_child(session: AsyncSession, child_id: int) -> List[User]:
+    """Fetch all linked parents for a child."""
+    result = await session.execute(
+        select(User)
+        .join(ParentChildLink, ParentChildLink.parent_id == User.id)
+        .where(ParentChildLink.child_id == child_id)
+    )
+    return list(result.scalars().all())
+
+
+async def log_location(
+    session: AsyncSession,
+    child_id: int,
+    latitude: float,
+    longitude: float,
+    accuracy: Optional[float] = None,
+    battery_level: Optional[int] = None,
+    is_charging: bool = False,
+    sound_mode: str = "normal",
+    source: str = "telegram_live"
+) -> LocationLog:
+    """Record a location telemetry entry."""
+    entry = LocationLog(
+        child_id=child_id,
+        latitude=latitude,
+        longitude=longitude,
+        accuracy=accuracy,
+        battery_level=battery_level,
+        is_charging=is_charging,
+        sound_mode=sound_mode,
+        source=source
+    )
+    session.add(entry)
+    await session.flush()
+    return entry
+
+
+async def get_latest_location(session: AsyncSession, child_id: int) -> Optional[LocationLog]:
+    """Fetch the most recent location log for a child."""
+    result = await session.execute(
+        select(LocationLog)
+        .where(LocationLog.child_id == child_id)
+        .order_by(desc(LocationLog.recorded_at), desc(LocationLog.id))
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_location_history_today(
+    session: AsyncSession,
+    child_id: int,
+    limit: int = 150
+) -> List[LocationLog]:
+    """Fetch location history for today (last 24 hours)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    result = await session.execute(
+        select(LocationLog)
+        .where(
+            LocationLog.child_id == child_id,
+            LocationLog.recorded_at >= cutoff
+        )
+        .order_by(LocationLog.recorded_at.asc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def create_geofence(
+    session: AsyncSession,
+    parent_id: int,
+    name: str,
+    latitude: float,
+    longitude: float,
+    radius_meters: float = 200.0,
+    child_id: Optional[int] = None
+) -> Geofence:
+    """Create a new safe zone (geofence)."""
+    fence = Geofence(
+        parent_id=parent_id,
+        child_id=child_id,
+        name=name.strip(),
+        latitude=latitude,
+        longitude=longitude,
+        radius_meters=radius_meters,
+        is_active=True
+    )
+    session.add(fence)
+    await session.flush()
+    return fence
+
+
+async def get_geofences_for_parent(session: AsyncSession, parent_id: int) -> List[Geofence]:
+    """Get all geofences created by a parent."""
+    result = await session.execute(
+        select(Geofence)
+        .where(Geofence.parent_id == parent_id, Geofence.is_active == True)
+        .order_by(Geofence.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_active_geofences_for_child(session: AsyncSession, child_id: int) -> List[Geofence]:
+    """Get all safe zones applicable to a child (from their parents)."""
+    parents = await get_parents_for_child(session, child_id)
+    if not parents:
+        return []
+    parent_ids = [p.id for p in parents]
+
+    result = await session.execute(
+        select(Geofence).where(
+            Geofence.parent_id.in_(parent_ids),
+            Geofence.is_active == True,
+            (Geofence.child_id == None) | (Geofence.child_id == child_id)
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def delete_geofence(session: AsyncSession, geofence_id: int, parent_id: int) -> bool:
+    """Delete a geofence by ID if owned by parent."""
+    result = await session.execute(
+        delete(Geofence).where(
+            Geofence.id == geofence_id,
+            Geofence.parent_id == parent_id
+        )
+    )
+    await session.flush()
+    return result.rowcount > 0
+
+
+async def get_geofence_state(session: AsyncSession, geofence_id: int, child_id: int) -> Optional[GeofenceState]:
+    """Get current inside/outside status of child relative to geofence."""
+    result = await session.execute(
+        select(GeofenceState).where(
+            GeofenceState.geofence_id == geofence_id,
+            GeofenceState.child_id == child_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_geofence_state(
+    session: AsyncSession,
+    geofence_id: int,
+    child_id: int,
+    is_inside: bool
+) -> GeofenceState:
+    """Update or initialize inside/outside state."""
+    state = await get_geofence_state(session, geofence_id, child_id)
+    now = datetime.now(timezone.utc)
+    if state:
+        state.is_inside = is_inside
+        state.last_transition_at = now
+    else:
+        state = GeofenceState(
+            geofence_id=geofence_id,
+            child_id=child_id,
+            is_inside=is_inside,
+            last_transition_at=now
+        )
+        session.add(state)
+    await session.flush()
+    return state
+
+
+async def set_child_sos(session: AsyncSession, child_id: int, is_active: bool = True) -> Optional[User]:
+    """Set child SOS status flag."""
+    child = await get_user(session, child_id)
+    if child:
+        child.is_sos_active = is_active
+        await session.flush()
+    return child
+
+
+async def check_and_update_battery_alert(
+    session: AsyncSession,
+    child_id: int,
+    battery_level: int
+) -> bool:
+    """
+    Returns True if an alert should be sent to the parent (level <= 15% and not already alerted recently).
+    """
+    if battery_level > 15:
+        return False
+
+    result = await session.execute(
+        select(BatteryAlertLog).where(BatteryAlertLog.child_id == child_id)
+    )
+    log = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc)
+
+    if not log:
+        new_log = BatteryAlertLog(
+            child_id=child_id,
+            last_alerted_level=battery_level,
+            last_alerted_at=now
+        )
+        session.add(new_log)
+        await session.flush()
+        return True
+
+    # If alerted more than 2 hours ago or dropped by 5%
+    time_diff = (now - log.last_alerted_at).total_seconds()
+    if time_diff > 7200 or (log.last_alerted_level - battery_level >= 5):
+        log.last_alerted_level = battery_level
+        log.last_alerted_at = now
+        await session.flush()
+        return True
+
+    return False
+
+
+async def create_task(
+    session: AsyncSession,
+    parent_id: int,
+    child_id: int,
+    title: str,
+    description: Optional[str] = None,
+    reward_coins: int = 1000
+) -> Task:
+    """Create a task with gamified reward."""
+    task = Task(
+        parent_id=parent_id,
+        child_id=child_id,
+        title=title.strip(),
+        description=description.strip() if description else None,
+        reward_coins=reward_coins,
+        status="pending"
+    )
+    session.add(task)
+    await session.flush()
+    return task
+
+
+async def get_tasks_for_child(
+    session: AsyncSession,
+    child_id: int,
+    status: Optional[str] = None
+) -> List[Task]:
+    """Fetch tasks assigned to child."""
+    query = select(Task).where(Task.child_id == child_id)
+    if status:
+        query = query.where(Task.status == status)
+    query = query.order_by(Task.created_at.desc())
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_tasks_for_parent(
+    session: AsyncSession,
+    parent_id: int,
+    status: Optional[str] = None
+) -> List[Task]:
+    """Fetch tasks created by parent."""
+    query = select(Task).where(Task.parent_id == parent_id)
+    if status:
+        query = query.where(Task.status == status)
+    query = query.order_by(Task.created_at.desc())
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+async def get_task_by_id(session: AsyncSession, task_id: int) -> Optional[Task]:
+    """Retrieve task by ID."""
+    result = await session.execute(select(Task).where(Task.id == task_id))
+    return result.scalar_one_or_none()
+
+
+async def submit_task_completed(session: AsyncSession, task_id: int) -> Optional[Task]:
+    """Child marks task as completed, awaiting parent approval."""
+    task = await get_task_by_id(session, task_id)
+    if task and task.status == "pending":
+        task.status = "completed_by_child"
+        await session.flush()
+    return task
+
+
+async def approve_task(session: AsyncSession, task_id: int) -> Optional[Task]:
+    """Parent approves task, child receives reward coins."""
+    task = await get_task_by_id(session, task_id)
+    if task and task.status in ["pending", "completed_by_child"]:
+        task.status = "approved"
+        task.completed_at = datetime.now(timezone.utc)
+        # Credit child balance
+        child = await get_user(session, task.child_id)
+        if child:
+            child.virtual_balance += task.reward_coins
+        await session.flush()
+    return task
+
+
+async def reject_task(session: AsyncSession, task_id: int) -> Optional[Task]:
+    """Parent rejects task."""
+    task = await get_task_by_id(session, task_id)
+    if task:
+        task.status = "rejected"
+        await session.flush()
+    return task
