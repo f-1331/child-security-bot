@@ -29,21 +29,11 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
-    """Initialize database tables and auto-seed if needed."""
+    """Initialize database tables schema."""
     async with engine.begin() as conn:
         # Import models so Base metadata has all tables registered
         import db.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
-
-    # If connecting to PostgreSQL, auto-seed if empty
-    if "postgres" in settings.RESOLVED_DATABASE_URL:
-        try:
-            from db.migration import auto_seed_postgres_from_sqlite
-            async with AsyncSessionLocal() as session:
-                await auto_seed_postgres_from_sqlite(session)
-        except Exception as e:
-            import logging
-            logging.getLogger("smart_parental_tracker").warning(f"Auto-seed check note: {e}")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

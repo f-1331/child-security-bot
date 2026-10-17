@@ -107,6 +107,21 @@ async def health_check():
     }
 
 
+@app.api_route("/api/v1/system/reset-database-fresh", methods=["GET", "POST"], tags=["System"])
+async def reset_database_fresh():
+    """Wipes all data from database tables so everyone starts completely from scratch."""
+    from db.database import engine, Base
+    import db.models  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("DATABASE WAS COMPLETELY RESET FROM SCRATCH BY SYSTEM REQUEST!")
+    return {
+        "status": "success",
+        "message": "All users, links, and logs have been wiped. The database is clean and fresh!"
+    }
+
+
 async def start_uvicorn(server: uvicorn.Server):
     """Run uvicorn server inside asyncio loop."""
     logger.info(f"Starting FastAPI WebApp server on http://{settings.API_HOST}:{settings.PORT_NUMBER}")
