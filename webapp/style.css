@@ -12,13 +12,16 @@ body {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   background-color: #090d16;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 /* Map container filling available viewport */
 #map {
-  height: calc(100vh - 128px);
+  height: 100%;
   width: 100%;
-  z-index: 10;
+  z-index: 1;
   background-color: #090d16;
 }
 
@@ -151,4 +154,35 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* ========================================================= */
+/* Hide Netlify Badge, Injected Drawer & Watermarks          */
+/* ========================================================= */
+a[href*="netlify.com"],
+iframe[src*="netlify"],
+[data-netlify-deploy-id],
+.netlify-badge,
+#netlify-badge,
+div[class*="netlify"],
+div[id*="netlify"],
+.leaflet-control-attribution {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Mobile safe area handling */
+.safe-bottom {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Nav Tab Active Indicator */
+.nav-tab.active {
+  color: #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.1);
 }

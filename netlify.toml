@@ -1,6 +1,12 @@
 [build]
   publish = "webapp"
 
+[build.processing]
+  skip_processing = true
+
+[build.environment]
+  NETLIFY_DRAWER_ENABLED = "false"
+
 [[redirects]]
   from = "/api/*"
   to = "https://child-security-site.onrender.com/api/:splat"

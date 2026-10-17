@@ -42,8 +42,26 @@ const addressCache = new Map();
 const DEFAULT_LAT = 41.2995;
 const DEFAULT_LON = 69.2401;
 
+// Clean up any injected Netlify badges, drawers or watermarks
+function removeNetlifyBadge() {
+  document.querySelectorAll('a[href*="netlify"], iframe[src*="netlify"], [class*="netlify"], [id*="netlify"], [data-netlify-deploy-id]').forEach((el) => {
+    el.remove();
+  });
+  document.querySelectorAll("body *").forEach((el) => {
+    if (el.children.length === 0 && el.textContent && el.textContent.toLowerCase().includes("powered by netlify")) {
+      el.remove();
+    }
+  });
+}
+
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
+  removeNetlifyBadge();
+  try {
+    const observer = new MutationObserver(() => removeNetlifyBadge());
+    observer.observe(document.body, { childList: true, subtree: true });
+  } catch (e) {}
+
   if (window.lucide) {
     lucide.createIcons();
   }
@@ -224,9 +242,6 @@ function enableDemoMode() {
   // Load demo route history
   renderDemoHistory();
 
-  // Load demo tasks
-  renderDemoTasks();
-
   showToast("🎮 Demo rejimi faollashtirildi");
 }
 
@@ -257,7 +272,6 @@ async function selectChild(childId) {
   await updateLiveTelemetry(childId);
   await loadGeofences(childId);
   await loadRouteHistory(childId);
-  await loadTasks(childId);
 }
 
 // Fetch live telemetry for child
@@ -633,188 +647,6 @@ function toggleRouteHistory() {
   }
 }
 
-// Load and manage tasks
-async function loadTasks(childId) {
-  if (isDemoMode) {
-    renderDemoTasks();
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/tasks`);
-    const data = await res.json();
-    if (data.status !== "success") return;
-
-    const child = childrenList.find((c) => c.id == childId);
-    if (child) {
-      document.getElementById("tasksBalanceText").textContent = `${child.virtual_balance.toLocaleString()} tanga`;
-    }
-
-    renderTasksList(data.tasks);
-  } catch (err) {
-    console.error("Failed to load tasks:", err);
-  }
-}
-
-function renderTasksList(tasks) {
-  const container = document.getElementById("tasksListContainer");
-
-  if (tasks.length === 0) {
-    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Faol vazifalar mavjud emas. 'Vazifa qo'shish' tugmasi orqali yangi vazifa yuklashingiz mumkin.</p>`;
-    return;
-  }
-
-  container.innerHTML = tasks
-    .map((t) => {
-      let badge = "";
-      let actions = "";
-
-      if (t.status === "approved") {
-        badge = `<span class="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-bold">✅ Bajarildi</span>`;
-      } else if (t.status === "completed_by_child") {
-        badge = `<span class="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full font-bold">⏳ Tekshiruvda</span>`;
-        actions = `
-          <div class="flex gap-1.5 mt-2">
-            <button onclick="approveTask(${t.id})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition">✅ Tasdiqlash</button>
-            <button onclick="rejectTask(${t.id})" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-red-400 rounded-lg text-xs font-semibold border border-slate-700 transition">Rad etish</button>
-          </div>
-        `;
-      } else {
-        badge = `<span class="bg-blue-500/20 text-blue-400 text-[10px] px-2 py-0.5 rounded-full font-bold">▫️ Bajarilmoqda</span>`;
-      }
-
-      return `
-      <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl">
-        <div class="flex items-start justify-between">
-          <div>
-            <h4 class="text-xs font-bold text-white">${t.title}</h4>
-            ${t.description ? `<p class="text-[11px] text-slate-400 mt-0.5">${t.description}</p>` : ""}
-            <div class="mt-1.5 flex items-center gap-2">
-              <span class="text-xs font-bold text-yellow-400">+${t.reward_coins.toLocaleString()} tanga</span>
-              ${badge}
-            </div>
-          </div>
-        </div>
-        ${actions}
-      </div>
-    `;
-    })
-    .join("");
-}
-
-// Render Demo Tasks
-function renderDemoTasks() {
-  document.getElementById("tasksBalanceText").textContent = "18,000 tanga";
-  const demoTasks = [
-    { id: 101, title: "Matematika darslarini qilish", description: "5-bob 12-18 mashqlar", reward_coins: 5000, status: "completed_by_child" },
-    { id: 102, title: "Uyga vaqtida kelish", description: "Soat 17:00 gacha", reward_coins: 3000, status: "pending" },
-    { id: 103, title: "Kitob o'qish (20 sahifa)", description: "Ertaklar kitobi", reward_coins: 2000, status: "approved" },
-  ];
-  renderTasksList(demoTasks);
-}
-
-// Approve Task
-async function approveTask(taskId) {
-  haptic("success");
-  if (isDemoMode) {
-    showToast("✅ Vazifa tasdiqlandi (+5,000 tanga)");
-    document.getElementById("tasksBalanceText").textContent = "23,000 tanga";
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/approve`, { method: "POST" });
-    const data = await res.json();
-    if (data.status === "success") {
-      showToast("✅ Vazifa tasdiqlandi!");
-      await loadTasks(currentChildId);
-    }
-  } catch (e) {
-    showToast("Tasdiqlashda xatolik yuz berdi");
-  }
-}
-
-// Reject Task
-async function rejectTask(taskId) {
-  haptic("warning");
-  if (isDemoMode) {
-    showToast("❌ Vazifa rad etildi");
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/reject`, { method: "POST" });
-    const data = await res.json();
-    if (data.status === "success") {
-      showToast("Vazifa rad etildi");
-      await loadTasks(currentChildId);
-    }
-  } catch (e) {
-    showToast("Xatolik yuz berdi");
-  }
-}
-
-// Open Add Task Modal
-function openAddTaskModal() {
-  haptic("medium");
-  document.getElementById("modal-add-task").classList.remove("hidden");
-}
-
-function closeAddTaskModal() {
-  haptic("light");
-  document.getElementById("modal-add-task").classList.add("hidden");
-}
-
-function setRewardCoin(amount) {
-  haptic("light");
-  document.getElementById("inputTaskReward").value = amount;
-}
-
-// Submit New Task
-async function submitNewTask() {
-  const title = document.getElementById("inputTaskTitle").value.trim();
-  const desc = document.getElementById("inputTaskDesc").value.trim();
-  const reward = parseInt(document.getElementById("inputTaskReward").value) || 1000;
-
-  if (!title) {
-    showToast("Iltimos, vazifa nomini kiriting!");
-    return;
-  }
-
-  if (isDemoMode) {
-    haptic("success");
-    showToast("✅ Yangi vazifa qo'shildi!");
-    closeAddTaskModal();
-    return;
-  }
-
-  try {
-    const res = await fetch("/api/v1/webapp/task", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        parent_id: parseInt(parentId),
-        child_id: parseInt(currentChildId),
-        title: title,
-        description: desc || null,
-        reward_coins: reward,
-      }),
-    });
-
-    const data = await res.json();
-    if (data.status === "success") {
-      haptic("success");
-      showToast("✅ Vazifa muvaffaqiyatli yuklandi!");
-      document.getElementById("inputTaskTitle").value = "";
-      document.getElementById("inputTaskDesc").value = "";
-      closeAddTaskModal();
-      await loadTasks(currentChildId);
-    }
-  } catch (e) {
-    showToast("Vazifa saqlashda xatolik");
-  }
-}
-
 // Battery UI styling
 function updateBatteryUI(level, isCharging) {
   const pill = document.getElementById("batteryPill");
@@ -891,9 +723,17 @@ function switchTab(tabName) {
     panel.classList.add("hidden");
   });
 
+  const floatControls = document.getElementById("floatingMapControls");
+  const locCard = document.getElementById("locationCard");
+
   if (tabName !== "map") {
     const targetModal = document.getElementById(`modal-${tabName}`);
     if (targetModal) targetModal.classList.remove("hidden");
+    if (floatControls) floatControls.classList.add("hidden");
+    if (locCard) locCard.classList.add("hidden");
+  } else {
+    if (floatControls) floatControls.classList.remove("hidden");
+    if (locCard) locCard.classList.remove("hidden");
   }
 }
 
@@ -904,11 +744,16 @@ function closeModal(tabName) {
   switchTab("map");
 }
 
-// Add Safe Zone Modal & Presets
+// Add Kerakli Joy Modal & Presets
 function openAddZoneModal() {
   haptic("medium");
   const modal = document.getElementById("modal-add-zone");
   modal.classList.remove("hidden");
+
+  const floatControls = document.getElementById("floatingMapControls");
+  if (floatControls) floatControls.classList.add("hidden");
+  const locCard = document.getElementById("locationCard");
+  if (locCard) locCard.classList.add("hidden");
 
   const center = map.getCenter();
   const radius = parseFloat(document.getElementById("inputZoneRadius").value);
@@ -922,6 +767,10 @@ function closeAddZoneModal() {
     map.removeLayer(previewCircle);
     previewCircle = null;
   }
+  const floatControls = document.getElementById("floatingMapControls");
+  if (floatControls) floatControls.classList.remove("hidden");
+  const locCard = document.getElementById("locationCard");
+  if (locCard) locCard.classList.remove("hidden");
 }
 
 function applyZonePreset(namePrefix, radius) {
