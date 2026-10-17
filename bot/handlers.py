@@ -1314,6 +1314,25 @@ async def on_help_pressed(message: Message):
 # Settings & 2-Step Logout (Role Reset) Handlers
 # ---------------------------------------------------------
 
+@router.message(Command("reset_all_data", "baza_tozalash", "restart_all"))
+async def on_reset_all_data_command(message: Message, state: FSMContext, bot: Bot):
+    """Wipes all data from database tables completely so everyone starts from scratch."""
+    await state.clear()
+    from db.database import engine, Base
+    import db.models  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    await message.answer(
+        "🔄 **Server va Baza butunlay tozalandi!**\n\n"
+        "Barcha eski foydalanuvchilar, bolalar va ota-onalar ulanishlari, joylar tarixi 100% o'chirildi.\n\n"
+        "Endi hamma tizimni noldan boshlaydi. Iltimos, o'z rolingizni tanlang:",
+        reply_markup=get_role_selection_keyboard(),
+        parse_mode="Markdown"
+    )
+
+
 @router.message(F.text == "⚙️ Sozlamalar / Chiqish")
 @router.message(Command("logout", "chiqish", "reset_role", "sozlamalar"))
 async def on_settings_logout_pressed(message: Message, state: FSMContext):
