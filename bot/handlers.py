@@ -1364,8 +1364,13 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
         await message.answer(text, reply_markup=get_settings_keyboard(), parse_mode="Markdown")
 
 
-@router.message(F.text == "🔄 Rolni almashtirish")
-@router.message(Command("switch_role", "rol", "rolni_almashtirish"))
+@router.message(F.text.in_([
+    "🔄 Rolni o'zgartirish",
+    "Rolni o'zgartirish",
+    "🔄 Rolni almashtirish",
+    "Rolni almashtirish"
+]))
+@router.message(Command("switch_role", "rol", "rolni_almashtirish", "rolni_ozgartirish"))
 async def on_role_switch_pressed(message: Message, state: FSMContext, bot: Bot):
     """Handle role switch request directly from keyboard or slash command."""
     await state.clear()

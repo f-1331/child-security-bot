@@ -55,7 +55,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
-            KeyboardButton(text="🔄 Rolni almashtirish"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -86,7 +86,7 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
-            KeyboardButton(text="🔄 Rolni almashtirish"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
