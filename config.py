@@ -21,6 +21,19 @@ class Settings(BaseSettings):
     )
 
     @property
+    def RESOLVED_DATABASE_URL(self) -> str:
+        """Resolve database URL for SQLAlchemy async engine.
+        Render and cloud providers provide postgres:// or postgresql://,
+        which needs to be postgresql+asyncpg:// for async SQLAlchemy.
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
     def PORT_NUMBER(self) -> int:
         """Resolve port dynamically (for cloud platforms like Render/Railway)."""
         if self.PORT is not None:

@@ -9,11 +9,11 @@ from config import settings
 
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.RESOLVED_DATABASE_URL,
     echo=False,
     future=True,
     # if sqlite, need check_same_thread=False
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    connect_args={"check_same_thread": False} if "sqlite" in settings.RESOLVED_DATABASE_URL else {}
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -29,11 +29,21 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
-    """Initialize database tables."""
+    """Initialize database tables and auto-seed if needed."""
     async with engine.begin() as conn:
         # Import models so Base metadata has all tables registered
         import db.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
+
+    # If connecting to PostgreSQL, auto-seed if empty
+    if "postgres" in settings.RESOLVED_DATABASE_URL:
+        try:
+            from db.migration import auto_seed_postgres_from_sqlite
+            async with AsyncSessionLocal() as session:
+                await auto_seed_postgres_from_sqlite(session)
+        except Exception as e:
+            import logging
+            logging.getLogger("smart_parental_tracker").warning(f"Auto-seed check note: {e}")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

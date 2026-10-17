@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import platform
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,9 +31,26 @@ logging.basicConfig(
 logger = logging.getLogger("smart_parental_tracker")
 
 
+def prevent_windows_sleep():
+    """Prevent Windows from sleeping or throttling background execution when notebook lid is closed."""
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            ES_CONTINUOUS = 0x80000000
+            ES_SYSTEM_REQUIRED = 0x00000001
+            ES_AWAYMODE_REQUIRED = 0x00000040
+            ctypes.windll.kernel32.SetThreadExecutionState(
+                ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED
+            )
+            logger.info("Windows sleep prevention activated (ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED).")
+        except Exception as e:
+            logger.warning(f"Could not configure Windows sleep prevention: {e}")
+
+
 # Lifespan context manager for FastAPI
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    prevent_windows_sleep()
     logger.info("Initializing database schema...")
     await init_db()
     logger.info("Database initialized successfully.")
@@ -110,8 +128,28 @@ async def start_bot(bot: Bot, dp: Dispatcher):
         )
 
 
+async def render_keepalive():
+    """Periodically ping self on Render so the service never sleeps."""
+    render_url = settings.RESOLVED_WEBAPP_URL
+    if not render_url.startswith("https://"):
+        return
+    health_url = f"{render_url}/health"
+    logger.info(f"Render keepalive service active for {health_url}")
+    await asyncio.sleep(60)
+    import httpx
+    while True:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(health_url)
+                logger.info(f"Keepalive ping sent to {health_url} -> {resp.status_code}")
+        except Exception as e:
+            logger.debug(f"Keepalive ping notice: {e}")
+        await asyncio.sleep(600)
+
+
 async def main():
     """Application main entry point running FastAPI and aiogram concurrently."""
+    prevent_windows_sleep()
     logger.info("Starting Smart Parental Control System...")
 
     # Initialize Database first
@@ -159,6 +197,7 @@ async def main():
             "========================================================================"
         )
         tasks.append(asyncio.create_task(start_uvicorn(server)))
+    tasks.append(asyncio.create_task(render_keepalive()))
 
     try:
         await asyncio.gather(*tasks)
