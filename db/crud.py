@@ -113,6 +113,17 @@ async def link_parent_child(
     return link, True
 
 
+async def get_parent_child_link(session: AsyncSession, parent_id: int, child_id: int) -> Optional[ParentChildLink]:
+    """Retrieve link between a parent and child."""
+    result = await session.execute(
+        select(ParentChildLink).where(
+            ParentChildLink.parent_id == parent_id,
+            ParentChildLink.child_id == child_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_children_for_parent(session: AsyncSession, parent_id: int) -> List[User]:
     """Fetch all linked children for a parent."""
     result = await session.execute(

@@ -55,6 +55,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
+            KeyboardButton(text="🔄 Rolni almashtirish"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -85,6 +86,7 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
+            KeyboardButton(text="🔄 Rolni almashtirish"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -102,7 +104,13 @@ def get_settings_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚪 Hisobdan chiqish (Rolni almashtirish)",
+                    text="🔄 Rolni almashtirish",
+                    callback_data="role_switch_start"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚪 Hisobdan chiqish (2-bosqichli)",
                     callback_data="logout_start"
                 )
             ],
@@ -110,6 +118,44 @@ def get_settings_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="❌ Yopish",
                     callback_data="logout_cancel"
+                )
+            ]
+        ]
+    )
+
+
+def get_child_role_switch_request_keyboard() -> InlineKeyboardMarkup:
+    """Inline keyboard for child to confirm sending role switch request to parent."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📩 Ota-onamga so'rov yuborish",
+                    callback_data="child_request_role_switch"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data="logout_cancel"
+                )
+            ]
+        ]
+    )
+
+
+def get_parent_role_switch_approval_keyboard(child_id: int) -> InlineKeyboardMarkup:
+    """Inline keyboard for parent to approve or reject child's role switch request."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ruxsat berish (Rolni almashtirish)",
+                    callback_data=f"approve_role_switch:{child_id}"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Rad etish",
+                    callback_data=f"reject_role_switch:{child_id}"
                 )
             ]
         ]

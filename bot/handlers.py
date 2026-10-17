@@ -31,6 +31,8 @@ from bot.keyboards import (
     get_kerakli_joylar_menu_keyboard,
     get_radius_selection_keyboard,
     get_settings_keyboard,
+    get_child_role_switch_request_keyboard,
+    get_parent_role_switch_approval_keyboard,
     get_logout_step1_keyboard,
     get_logout_step2_keyboard,
 )
@@ -1341,6 +1343,225 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
             f"🛡 *Tasodifan yoki bolalar o'ynab chiqib ketmasligi uchun tizim 2-darajali xavfsizlik tasdiqlashini so'raydi.*"
         )
         await message.answer(text, reply_markup=get_settings_keyboard(), parse_mode="Markdown")
+
+
+@router.message(F.text == "🔄 Rolni almashtirish")
+@router.message(Command("switch_role", "rol", "rolni_almashtirish"))
+async def on_role_switch_pressed(message: Message, state: FSMContext, bot: Bot):
+    """Handle role switch request directly from keyboard or slash command."""
+    await state.clear()
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role == "unassigned":
+            await message.answer(
+                "Siz hali biron-bir rol tanlamagansiz. Iltimos, o'z rolingizni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            return
+
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if parents:
+                parent_names = ", ".join([p.full_name or f"ID: {p.id}" for p in parents])
+                text = (
+                    f"🔒 **OTA-ONANGIZ TASDIG'I TALAB QILINADI!**\n\n"
+                    f"👦 Siz hozirda **Farzand** hisobidasiz va **{parent_names}** hisobiga ulangansiz.\n\n"
+                    f"Xavfsizlik qoidalariga ko'ra, siz rolingizni o'zboshimchalik bilan o'zgartira olmaysiz. "
+                    f"Rolingizni o'zgartirish uchun ota-onangiz o'z Telegram akkauntidan ruxsat berishi shart!\n\n"
+                    f"Ota-onangizga rolni almashtirish so'rovi yuborilsinmi?"
+                )
+                await message.answer(
+                    text,
+                    reply_markup=get_child_role_switch_request_keyboard(),
+                    parse_mode="Markdown"
+                )
+                return
+            else:
+                text = (
+                    f"⚠️ **Rolni almashtirish (Farzand rejimi)**\n\n"
+                    f"Sizga hali hech qanday ota-ona ulanmagan. Rolingizni erkin almashtirishingiz mumkin.\n\n"
+                    f"Davom ettirishni xohlaysizmi?"
+                )
+                await message.answer(
+                    text,
+                    reply_markup=get_logout_step1_keyboard(),
+                    parse_mode="Markdown"
+                )
+                return
+
+        elif user.role == "parent":
+            children = await crud.get_children_for_parent(session, user_id)
+            extra = f"\n\n⚠️ *Diqqat: Sizga {len(children)} nafar farzand ulangan. Chiqsangiz ulanishlar bekor qilinadi.*" if children else ""
+            text = (
+                f"👨‍👩‍👧 **Rolni almashtirish (Ota-ona rejimi)**\n\n"
+                f"Ota-ona hisobidan chiqib, rolni o'zgartirmoqchimisiz?{extra}\n\n"
+                f"Davom ettirish uchun 2-darajali xavfsizlik tasdiqlashidan o'ting:"
+            )
+            await message.answer(
+                text,
+                reply_markup=get_logout_step1_keyboard(),
+                parse_mode="Markdown"
+            )
+
+
+@router.callback_query(F.data == "role_switch_start")
+async def on_role_switch_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """Handle role switch triggered from inline settings menu."""
+    await state.clear()
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role == "unassigned":
+            await callback.message.edit_text(
+                "Siz hali biron-bir rol tanlamagansiz. Iltimos, o'z rolingizni tanlang:"
+            )
+            await callback.message.answer(
+                "Rolni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            await callback.answer()
+            return
+
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if parents:
+                parent_names = ", ".join([p.full_name or f"ID: {p.id}" for p in parents])
+                text = (
+                    f"🔒 **OTA-ONANGIZ TASDIG'I TALAB QILINADI!**\n\n"
+                    f"👦 Siz hozirda **Farzand** hisobidasiz va **{parent_names}** hisobiga ulangansiz.\n\n"
+                    f"Xavfsizlik qoidalariga ko'ra, siz rolingizni o'zboshimchalik bilan o'zgartira olmaysiz. "
+                    f"Rolingizni o'zgartirish uchun ota-onangiz o'z Telegram akkauntidan ruxsat berishi shart!\n\n"
+                    f"Ota-onangizga rolni almashtirish so'rovi yuborilsinmi?"
+                )
+                await callback.message.edit_text(
+                    text,
+                    reply_markup=get_child_role_switch_request_keyboard(),
+                    parse_mode="Markdown"
+                )
+                await callback.answer()
+                return
+
+    # If not a linked child, proceed to standard step 1
+    await on_logout_start(callback, state)
+
+
+@router.callback_query(F.data == "child_request_role_switch")
+async def on_child_request_role_switch(callback: CallbackQuery, bot: Bot):
+    """Child dispatches role switch request to linked parents."""
+    child_id = callback.from_user.id
+    child_name = callback.from_user.full_name
+
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents:
+            await callback.answer("Ulangan ota-ona topilmadi.", show_alert=True)
+            return
+
+        sent_count = 0
+        for parent in parents:
+            try:
+                await bot.send_message(
+                    chat_id=parent.id,
+                    text=(
+                        f"🔔 **DIQQAT: Farzandingiz rolni o'zgartirishni so'ramoqda!**\n\n"
+                        f"👤 Farzand: **{child_name}** (`{child_id}`)\n\n"
+                        f"Farzandingiz hisobdan chiqib, rolni o'zgartirmoqchi (masalan, noto'g'ri rolni tanlagan yoki yangilamoqchi).\n\n"
+                        f"⚠️ *Agar ruxsat bersangiz, uning ulanishi sizdan uziladi va u qaytadan rol tanlay oladi.*\n\n"
+                        f"Farzandingizga rolni almashtirishga ruxsat berasizmi?"
+                    ),
+                    reply_markup=get_parent_role_switch_approval_keyboard(child_id),
+                    parse_mode="Markdown"
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Failed to notify parent {parent.id} of role switch request: {e}")
+
+    await callback.message.edit_text(
+        "📨 **So'rov ota-onangizga yuborildi!**\n\n"
+        "Ota-onangiz o'z Telegram akkauntida ruxsat berishi bilan sizga xabar keladi va yangi rol tanlashingiz mumkin bo'ladi.\n\n"
+        "Ungacha hisobingiz xavfsiz holda saqlanadi.",
+        parse_mode="Markdown"
+    )
+    await callback.answer("So'rov yuborildi!")
+
+
+@router.callback_query(F.data.startswith("approve_role_switch:"))
+async def on_parent_approve_role_switch(callback: CallbackQuery, bot: Bot):
+    """Parent approves child's role switch request."""
+    child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+    parent_name = callback.from_user.full_name
+
+    async with AsyncSessionLocal() as session:
+        link = await crud.get_parent_child_link(session, parent_id, child_id)
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name if child else f"ID: {child_id}"
+
+        if not link and (not child or child.role != "child"):
+            await callback.message.edit_text("ℹ️ Ushbu so'rov allaqachon bajarilgan yoki eskirgan.")
+            await callback.answer()
+            return
+
+        # Reset child's role
+        await crud.reset_user_role(session, child_id)
+        await session.commit()
+
+        # Update parent message
+        await callback.message.edit_text(
+            f"✅ **Farzandingiz ({child_name}) uchun rolni almashtirish tasdiqlandi.**\n\n"
+            f"Uning hisobi sizdan uzildi va u o'z Telegramida yangi rolni tanlay oladi.",
+            parse_mode="Markdown"
+        )
+
+        # Notify child
+        try:
+            await bot.send_message(
+                chat_id=child_id,
+                text=(
+                    f"🎉 **Ota-onangiz ({parent_name}) rolni almashtirishingizga ruxsat berdi!**\n\n"
+                    f"Sizning avvalgi rolingiz bekor qilindi.\n"
+                    f"Endi pastdagi tugmalar orqali to'g'ri rolingizni tanlang:"
+                ),
+                reply_markup=get_role_selection_keyboard(),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify child {child_id} of approval: {e}")
+
+    await callback.answer("Rolni almashtirish tasdiqlandi!")
+
+
+@router.callback_query(F.data.startswith("reject_role_switch:"))
+async def on_parent_reject_role_switch(callback: CallbackQuery, bot: Bot):
+    """Parent rejects child's role switch request."""
+    child_id = int(callback.data.split(":")[1])
+    parent_name = callback.from_user.full_name
+
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name if child else f"ID: {child_id}"
+
+    await callback.message.edit_text(
+        f"❌ **Farzandingiz ({child_name}) ning rolni almashtirish so'rovi rad etildi.**\n"
+        f"Farzandingiz o'z hisobida qoldi.",
+        parse_mode="Markdown"
+    )
+
+    try:
+        await bot.send_message(
+            chat_id=child_id,
+            text=(
+                f"❌ **Ota-onangiz ({parent_name}) rolni almashtirish so'rovingizni rad etdi.**\n\n"
+                f"Siz avvalgidek Farzand hisobida qoldingiz."
+            ),
+            reply_markup=get_child_main_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to notify child of rejection: {e}")
+
+    await callback.answer("So'rov rad etildi.")
 
 
 @router.callback_query(F.data == "logout_start")
