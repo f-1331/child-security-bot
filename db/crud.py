@@ -421,3 +421,35 @@ async def reject_task(session: AsyncSession, task_id: int) -> Optional[Task]:
         task.status = "rejected"
         await session.flush()
     return task
+
+
+async def reset_user_role(session: AsyncSession, user_id: int) -> Tuple[bool, List[int]]:
+    """
+    Reset user role back to 'unassigned', clearing pairing code and links.
+    Returns (success, list_of_notified_user_ids).
+    """
+    user = await get_user(session, user_id)
+    if not user:
+        return False, []
+
+    notified_ids: List[int] = []
+    # If user was a child, find linked parents to notify
+    if user.role == "child":
+        parents = await get_parents_for_child(session, user_id)
+        notified_ids.extend([p.id for p in parents])
+        await session.execute(
+            delete(ParentChildLink).where(ParentChildLink.child_id == user_id)
+        )
+    # If user was a parent, find linked children to notify
+    elif user.role == "parent":
+        children = await get_children_for_parent(session, user_id)
+        notified_ids.extend([c.id for c in children])
+        await session.execute(
+            delete(ParentChildLink).where(ParentChildLink.parent_id == user_id)
+        )
+
+    user.role = "unassigned"
+    user.pairing_code = None
+    user.pairing_code_created_at = None
+    await session.flush()
+    return True, notified_ids

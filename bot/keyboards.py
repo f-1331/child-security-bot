@@ -53,6 +53,9 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="📞 Oila kontaktlari"),
             KeyboardButton(text="ℹ️ Yordam")
+        ],
+        [
+            KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
 
@@ -80,6 +83,9 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="📋 Vazifalarim va Tangalar"),
             KeyboardButton(text="ℹ️ Yordam")
+        ],
+        [
+            KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
 
@@ -87,6 +93,66 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
         keyboard=keyboard,
         resize_keyboard=True,
         is_persistent=True
+    )
+
+
+def get_settings_keyboard() -> InlineKeyboardMarkup:
+    """Settings menu keyboard with logout/role switch option."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚪 Hisobdan chiqish (Rolni almashtirish)",
+                    callback_data="logout_start"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Yopish",
+                    callback_data="logout_cancel"
+                )
+            ]
+        ]
+    )
+
+
+def get_logout_step1_keyboard() -> InlineKeyboardMarkup:
+    """Step 1 confirmation for account logout / role switch."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="➡️ 1-bosqich: Chiqishni davom ettirish",
+                    callback_data="logout_step1"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🟢 Bekor qilish (Hisobda qolish)",
+                    callback_data="logout_cancel"
+                )
+            ]
+        ]
+    )
+
+
+def get_logout_step2_keyboard(confirm_code: str) -> InlineKeyboardMarkup:
+    """Step 2 final verification keyboard with randomized security code."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🔴 HA, BUTUNLAY CHIQISH ({confirm_code})",
+                    callback_data=f"logout_step2:{confirm_code}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🟢 YO'Q, BEKOR QILISH",
+                    callback_data="logout_cancel"
+                )
+            ]
+        ]
     )
 
 

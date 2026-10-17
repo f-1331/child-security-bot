@@ -30,6 +30,9 @@ from bot.keyboards import (
     get_child_task_action_keyboard,
     get_kerakli_joylar_menu_keyboard,
     get_radius_selection_keyboard,
+    get_settings_keyboard,
+    get_logout_step1_keyboard,
+    get_logout_step2_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,6 +42,10 @@ router = Router()
 # FSM States
 class ChildLinkState(StatesGroup):
     waiting_for_code = State()
+
+
+class LogoutState(StatesGroup):
+    waiting_for_confirm = State()
 
 
 class KerakliJoyAddState(StatesGroup):
@@ -183,7 +190,8 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
             await state.set_state(ChildLinkState.waiting_for_code)
             await callback.message.answer(
                 "👦 **Farzand hisobi tanlandi!**\n\n"
-                "Iltimos, ota-onangiz bergan **6 xonali ulanish kodi**ni kiriting (masalan: `123456`):",
+                "Iltimos, ota-onangiz bergan **6 xonali ulanish kodi**ni kiriting (masalan: `123456`):\n\n"
+                "*(Agar adashib bosgan bo'lsangiz, bekor qilish uchun /chiqish deb yozing)*",
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode="Markdown"
             )
@@ -197,6 +205,17 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
     code = message.text.strip().replace(" ", "")
     user_id = message.from_user.id
     full_name = message.from_user.full_name
+
+    if code.lower() in ["/cancel", "/chiqish", "/logout", "bekor", "cancel"]:
+        await state.clear()
+        async with AsyncSessionLocal() as session:
+            await crud.reset_user_role(session, user_id)
+            await session.commit()
+        await message.answer(
+            "Amal bekor qilindi. O'z rolingizni qaytadan tanlashingiz mumkin:",
+            reply_markup=get_role_selection_keyboard()
+        )
+        return
 
     async with AsyncSessionLocal() as session:
         parent = await crud.get_parent_by_pairing_code(session, code)
@@ -1287,3 +1306,187 @@ async def on_help_pressed(message: Message):
         f"5. **📋 Vazifalar va Tangalar:** Farzandingizga rag'batlantiruvchi vazifalar belgilang."
     )
     await message.answer(text, parse_mode="Markdown")
+
+
+# ---------------------------------------------------------
+# Settings & 2-Step Logout (Role Reset) Handlers
+# ---------------------------------------------------------
+
+@router.message(F.text == "⚙️ Sozlamalar / Chiqish")
+@router.message(Command("logout", "chiqish", "reset_role", "sozlamalar"))
+async def on_settings_logout_pressed(message: Message, state: FSMContext):
+    """Show settings menu with option to logout/change role."""
+    await state.clear()
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role == "unassigned":
+            await message.answer(
+                "Siz hali biron-bir rol tanlamagansiz. Iltimos, o'z rolingizni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            return
+
+        role_display = "👨‍👩‍👧 Ota-ona" if user.role == "parent" else "👦 Farzand"
+
+        text = (
+            f"⚙️ **SOZLAMALAR VA HISOB BOSHQARUVI**\n\n"
+            f"👤 **Foydalanuvchi:** {user.full_name or message.from_user.full_name}\n"
+            f"🆔 **Telegram ID:** `{user.id}`\n"
+            f"🎭 **Hozirgi rol:** **{role_display}**\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔄 **Rolni almashtirish / Hisobdan chiqish:**\n"
+            f"Agar siz adashib boshqa rol tanlab qo'ygan bo'lsangiz (masalan, farzand adashib 'Ota-ona' nomidan kirgan bo'lsa yoki aksincha), "
+            f"quyidagi tugma orqali hisobdan chiqib, qaytadan to'g'ri rolni tanlashingiz mumkin.\n\n"
+            f"🛡 *Tasodifan yoki bolalar o'ynab chiqib ketmasligi uchun tizim 2-darajali xavfsizlik tasdiqlashini so'raydi.*"
+        )
+        await message.answer(text, reply_markup=get_settings_keyboard(), parse_mode="Markdown")
+
+
+@router.callback_query(F.data == "logout_start")
+async def on_logout_start(callback: CallbackQuery, state: FSMContext):
+    """Level 1 confirmation for account logout."""
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        role_display = "👨‍👩‍👧 Ota-ona" if (user and user.role == "parent") else "👦 Farzand"
+
+    text = (
+        f"⚠️ **1-BOSQICH: HISOBDAN CHIQISHNI TASDIQLASH (1/2)**\n\n"
+        f"Siz hozirda: **{role_display}** hisobidasiz.\n\n"
+        f"Agar rolingizni adashib tanlagan bo'lsangiz, hisobdan chiqib to'g'ri rolni tanlashingiz mumkin.\n\n"
+        f"❗️ **Ogohlantirish:** Chiqsangiz, joriy rolingiz va barcha ulanishlar bekor qilinadi.\n\n"
+        f"Chiqishni davom ettirishni xohlaysizmi?"
+    )
+    await callback.message.edit_text(text, reply_markup=get_logout_step1_keyboard(), parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "logout_step1")
+async def on_logout_step1(callback: CallbackQuery, state: FSMContext):
+    """Level 2 final confirmation with random security code."""
+    import random
+    confirm_code = "".join(random.choices("0123456789", k=4))
+    await state.set_state(LogoutState.waiting_for_confirm)
+    await state.update_data(confirm_code=confirm_code)
+
+    text = (
+        f"🔒 **2-DARAJALI YAKUNIY TASDIQLASH (2/2)**\n\n"
+        f"Tasodifiy bosilish yoki bolalar o'ynab chiqib ketishining oldini olish uchun xavfsizlik kodi:\n\n"
+        f"🔑 Tasdiqlash kodi: **{confirm_code}**\n\n"
+        f"⚠️ Haqiqatan ham hozirgi hisobdan butunlay chiqib, yangi rol tanlamoqchimisiz?\n\n"
+        f"Yakunlash uchun pastdagi qizil tasdiqlash tugmasini bosing yoki ushbu kodni (`{confirm_code}`) xabar sifatida yozib yuboring:"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=get_logout_step2_keyboard(confirm_code),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("logout_step2:"))
+async def on_logout_step2(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """Process Level 2 button press."""
+    provided_code = callback.data.split(":")[1]
+    state_data = await state.get_data()
+    expected_code = state_data.get("confirm_code")
+
+    if expected_code and provided_code != expected_code:
+        await callback.answer("❌ Tasdiqlash kodi eskirgan yoki noto'g'ri!", show_alert=True)
+        return
+
+    await perform_account_logout(callback.from_user.id, callback.from_user.full_name, callback.message, state, bot)
+    await callback.answer()
+
+
+@router.message(LogoutState.waiting_for_confirm)
+async def on_logout_code_entered(message: Message, state: FSMContext, bot: Bot):
+    """Process Level 2 manual code entry."""
+    user_code = message.text.strip()
+    state_data = await state.get_data()
+    expected_code = state_data.get("confirm_code")
+
+    if expected_code and user_code == expected_code:
+        await perform_account_logout(message.from_user.id, message.from_user.full_name, message, state, bot)
+    elif user_code.lower() in ["bekor", "cancel", "/cancel", "/start"]:
+        await state.clear()
+        async with AsyncSessionLocal() as session:
+            user = await crud.get_user(session, message.from_user.id)
+            keyboard = get_parent_main_keyboard(message.from_user.id) if (user and user.role == "parent") else get_child_main_keyboard()
+        await message.answer("✅ Chiqish bekor qilindi. O'z hisobingizdasiz.", reply_markup=keyboard)
+    else:
+        await message.answer(
+            f"❌ **Noto'g'ri tasdiqlash kodi!**\n\n"
+            f"Chiqish uchun to'g'ri kodni kiriting (`{expected_code}`) yoki bekor qilish uchun 'bekor' deb yozing.",
+            reply_markup=get_logout_step2_keyboard(expected_code or "1234"),
+            parse_mode="Markdown"
+        )
+
+
+@router.callback_query(F.data == "logout_cancel")
+async def on_logout_cancel(callback: CallbackQuery, state: FSMContext):
+    """Cancel logout process."""
+    await state.clear()
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        role = user.role if user else "unassigned"
+
+    keyboard = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard()
+
+    try:
+        await callback.message.edit_text(
+            "✅ **Chiqish bekor qilindi.** Siz o'z hisobingizda xavfsiz qoldingiz.",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+    await callback.answer("Amal bekor qilindi.")
+
+
+async def perform_account_logout(user_id: int, full_name: str, message_obj, state: FSMContext, bot: Bot):
+    """Execute complete reset of user role and notify linked users."""
+    await state.clear()
+    async with AsyncSessionLocal() as session:
+        success, notified_ids = await crud.reset_user_role(session, user_id)
+        await session.commit()
+
+        # Notify linked parents/children
+        for partner_id in notified_ids:
+            try:
+                await bot.send_message(
+                    chat_id=partner_id,
+                    text=(
+                        f"ℹ️ **Hisob yangilanishi:**\n\n"
+                        f"Bog'langan foydalanuvchi (**{full_name}**) o'z hisobidan chiqdi va rolni qayta tanlash holatiga o'tdi.\n"
+                        f"Zarur bo'lsa, qaytadan 6 xonali ulanish kodi orqali bog'lanishingiz mumkin."
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.warning(f"Could not notify partner {partner_id} of logout: {e}")
+
+    notice_text = (
+        f"✅ **Hisobdan muvaffaqiyatli chiqildi!**\n\n"
+        f"Sizning avvalgi rolingiz to'liq bekor qilindi.\n"
+        f"Endi quyidagi tugmalar orqali to'g'ri rolingizni tanlashingiz mumkin:"
+    )
+
+    if isinstance(message_obj, Message):
+        await message_obj.answer(
+            notice_text,
+            reply_markup=get_role_selection_keyboard(),
+            parse_mode="Markdown"
+        )
+    else:
+        try:
+            await message_obj.delete()
+        except Exception:
+            pass
+        await bot.send_message(
+            chat_id=user_id,
+            text=notice_text,
+            reply_markup=get_role_selection_keyboard(),
+            parse_mode="Markdown"
+        )
