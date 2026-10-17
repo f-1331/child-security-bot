@@ -96,20 +96,22 @@ function initMap() {
     attributionControl: false,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
 
-  // 1. Street Layer: CartoDB Voyager
-  streetTileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  // 1. Street Layer: OpenStreetMap Standard (100% Free, No API Key Required)
+  streetTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
-    subdomains: "abcd",
+    subdomains: ["a", "b", "c"],
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
 
-  // 2. Satellite Layer: Esri World Imagery + Voyager Labels Overlay
+  // 2. Satellite Layer: Esri World Imagery (High Resolution, Free)
   satelliteTileLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 19,
+    attribution: '&copy; Esri'
   });
 
-  satelliteLabelsLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png", {
+  // 3. Satellite Labels: Esri Reference Boundaries and Places (Free, No Key)
+  satelliteLabelsLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
     maxZoom: 19,
-    subdomains: "abcd",
   });
 
   // Map click listener to set position for new safe zone
@@ -144,10 +146,11 @@ function toggleMapLayer() {
   }
 }
 
-// Load real data or show empty state banner
+// Load real data or show interactive demo
 async function loadData() {
   try {
     const res = await fetch(`/api/v1/webapp/parent/${parentId}/children`);
+    if (!res.ok) throw new Error("API status " + res.status);
     const data = await res.json();
 
     if (data.status === "success" && data.children && data.children.length > 0) {
@@ -163,14 +166,14 @@ async function loadData() {
       }
 
       document.getElementById("childSelect").value = currentChildId;
-      selectChild(currentChildId);
+      await selectChild(currentChildId);
     } else {
-      // No linked children found -> Prompt demo mode so parent can test immediately
-      showEmptyState();
+      // No linked children yet -> Auto start interactive demo mode so map is active and fully functional
+      enableDemoMode();
     }
   } catch (err) {
-    console.warn("API request failed, loading demo simulation:", err);
-    showEmptyState();
+    console.warn("Backend API not reachable or static Netlify host, loading interactive demo mode:", err);
+    enableDemoMode();
   }
 }
 
@@ -287,8 +290,10 @@ async function updateLiveTelemetry(childId) {
       renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level);
       resolveAddress(lat, lon);
     } else {
-      document.getElementById("addressText").textContent = "Joylashuv hali yuborilmagan";
+      document.getElementById("addressText").textContent = "Joylashuv kutilmoqda (Bot orqali yuboring)";
       document.getElementById("lastSeenText").textContent = "Kutilmoqda...";
+      renderChildMarker(DEFAULT_LAT, DEFAULT_LON, child.full_name, false, 80);
+      resolveAddress(DEFAULT_LAT, DEFAULT_LON);
     }
   } catch (err) {
     console.warn("Telemetry polling error:", err);
@@ -386,12 +391,19 @@ async function loadGeofences(childId) {
     geofenceLayers.forEach((layer) => map.removeLayer(layer));
     geofenceLayers = [];
 
-    const fences = data.geofences;
+    const fences = data.geofences || [];
     const container = document.getElementById("zonesListContainer");
 
     if (fences.length === 0) {
-      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Hozircha xavfsiz hududlar belgilanmagan.</p>`;
-      document.getElementById("zoneStatusText").textContent = "Xavfsiz hududlar o'rnatilmagan";
+      container.innerHTML = `
+        <div class="text-center py-6 px-4">
+          <p class="text-xs text-slate-400 mb-3">Hozircha kerakli joylar belgilanmagan.</p>
+          <button onclick="openAddZoneModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95">
+            ➕ Kerakli joy qo'shish
+          </button>
+        </div>
+      `;
+      document.getElementById("zoneStatusText").textContent = "Kerakli joylar belgilanmagan";
       return;
     }
 
@@ -415,7 +427,7 @@ function renderFencesToMapAndList(fences) {
       radius: fence.radius_meters,
     }).addTo(map);
 
-    circle.bindTooltip(`🛡 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
+    circle.bindTooltip(`📍 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
       permanent: true,
       direction: "top",
       className: "geofence-tooltip",
@@ -430,7 +442,7 @@ function renderFencesToMapAndList(fences) {
     <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between shadow-sm">
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-          <i data-lucide="shield" class="w-4 h-4"></i>
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
         </div>
         <div>
           <h4 class="text-xs font-bold text-white">${f.name}</h4>
@@ -446,7 +458,13 @@ function renderFencesToMapAndList(fences) {
     .join("");
 
   if (window.lucide) lucide.createIcons();
-  document.getElementById("zoneStatusText").textContent = `✅ ${fences.length} ta xavfsiz hudud nazoratda`;
+  document.getElementById("zoneStatusText").textContent = `✅ ${fences.length} ta kerakli joy nazoratda`;
+
+  // Auto-fit view to show all geofences
+  if (geofenceLayers.length > 0) {
+    const group = new L.featureGroup(geofenceLayers.concat(childMarker ? [childMarker] : []));
+    map.fitBounds(group.getBounds().pad(0.2));
+  }
 }
 
 // Render Demo Geofences
@@ -939,12 +957,12 @@ function updatePreviewCircle(lat, lon, radius = null) {
   }
 }
 
-// Submit new safe zone
+// Submit new Kerakli joy
 async function submitNewZone() {
   const nameInput = document.getElementById("inputZoneName");
   const name = nameInput.value.trim();
   if (!name) {
-    showToast("Iltimos, hudud nomini kiriting!");
+    showToast("Iltimos, joy nomini kiriting!");
     return;
   }
 
@@ -953,7 +971,7 @@ async function submitNewZone() {
 
   if (isDemoMode) {
     haptic("success");
-    showToast("✅ Xavfsiz hudud saqlandi!");
+    showToast("✅ Kerakli joy saqlandi!");
     nameInput.value = "";
     closeAddZoneModal();
     return;
@@ -976,7 +994,7 @@ async function submitNewZone() {
     const data = await res.json();
     if (data.status === "success") {
       haptic("success");
-      showToast("✅ Xavfsiz hudud saqlandi!");
+      showToast("✅ Kerakli joy saqlandi!");
       nameInput.value = "";
       closeAddZoneModal();
       if (currentChildId) {
@@ -990,11 +1008,11 @@ async function submitNewZone() {
 
 // Delete geofence
 async function deleteGeofence(fenceId) {
-  if (!confirm("Haqiqatan ham bu xavfsiz hududni o'chirmoqchimisiz?")) return;
+  if (!confirm("Haqiqatan ham bu kerakli joyni o'chirmoqchimisiz?")) return;
 
   if (isDemoMode) {
     haptic("medium");
-    showToast("Hudud o'chirildi");
+    showToast("Kerakli joy o'chirildi");
     return;
   }
 
@@ -1005,7 +1023,7 @@ async function deleteGeofence(fenceId) {
     const data = await res.json();
     if (data.status === "success") {
       haptic("medium");
-      showToast("Hudud o'chirildi");
+      showToast("Kerakli joy o'chirildi");
       if (currentChildId) {
         await loadGeofences(currentChildId);
       }
