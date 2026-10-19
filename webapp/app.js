@@ -44,12 +44,34 @@ const DEFAULT_LON = 69.2401;
 
 // Clean up any injected Netlify badges, drawers or watermarks
 function removeNetlifyBadge() {
-  document.querySelectorAll('a[href*="netlify"], iframe[src*="netlify"], [class*="netlify"], [id*="netlify"], [data-netlify-deploy-id]').forEach((el) => {
-    el.remove();
+  const selectors = [
+    'netlify-drawer',
+    '#netlify-drawer',
+    'div#netlify-drawer',
+    '.netlify-drawer',
+    '.netlify-badge',
+    '#netlify-badge',
+    'a[href*="netlify"]',
+    'iframe[src*="netlify"]',
+    '[class*="netlify"]',
+    '[id*="netlify"]',
+    '[data-netlify-deploy-id]',
+    '.leaflet-control-attribution'
+  ];
+  selectors.forEach((sel) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      try { el.remove(); } catch (e) {}
+    });
   });
+
   document.querySelectorAll("body *").forEach((el) => {
-    if (el.children.length === 0 && el.textContent && el.textContent.toLowerCase().includes("powered by netlify")) {
-      el.remove();
+    if (el.tagName !== "BODY" && el.tagName !== "MAIN" && el.tagName !== "HEADER" && el.tagName !== "NAV") {
+      const txt = (el.innerText || el.textContent || "").toLowerCase().trim();
+      if (txt.includes("powered by netlify") || (txt.includes("netlify") && el.tagName === "A")) {
+        if (el.tagName === "A" || el.offsetWidth < 320) {
+          try { el.remove(); } catch (e) {}
+        }
+      }
     }
   });
 }
@@ -57,6 +79,9 @@ function removeNetlifyBadge() {
 // Initialize on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   removeNetlifyBadge();
+  for (let i = 1; i <= 10; i++) {
+    setTimeout(removeNetlifyBadge, i * 300);
+  }
   try {
     const observer = new MutationObserver(() => removeNetlifyBadge());
     observer.observe(document.body, { childList: true, subtree: true });
