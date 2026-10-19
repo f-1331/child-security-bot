@@ -83,6 +83,89 @@ async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Option
     return result.scalar_one_or_none()
 
 
+async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
+    """Generate or retrieve a unique 6-digit access code for website login."""
+    user = await get_user(session, user_id)
+    if not user:
+        user, _ = await get_or_create_user(session, user_id)
+
+    if user.web_access_code:
+        return user.web_access_code
+
+    # Generate unique 6-digit code
+    for _ in range(10):
+        code = "".join(random.choices(string.digits, k=6))
+        existing = await get_user_by_web_access_code(session, code)
+        if not existing:
+            user.web_access_code = code
+            await session.flush()
+            return code
+
+    # Fallback with timestamp digits
+    code = str(int(datetime.now().timestamp()))[-6:]
+    user.web_access_code = code
+    await session.flush()
+    return code
+
+
+async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optional[User]:
+    """Find user by web access code (or pairing code fallback)."""
+    code_clean = code.strip()
+    result = await session.execute(
+        select(User).where(
+            (User.web_access_code == code_clean) | (User.pairing_code == code_clean)
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_coin_rate(
+    session: AsyncSession,
+    user_id: int,
+    coins: int,
+    som: int
+) -> Optional[User]:
+    """Update coin-to-som rate settings for parent."""
+    user = await get_user(session, user_id)
+    if user:
+        user.coin_rate_coins = max(1, coins)
+        user.coin_rate_som = max(1, som)
+        await session.flush()
+    return user
+
+
+async def get_coin_rate_for_user(session: AsyncSession, user_id: int) -> tuple[int, int]:
+    """
+    Get coin rate (coins, som).
+    If user is child, inherits rate from parent.
+    """
+    user = await get_user(session, user_id)
+    if not user:
+        return (1000, 10000)
+
+    if user.role == "parent":
+        return (user.coin_rate_coins or 1000, user.coin_rate_som or 10000)
+
+    # If child, lookup linked parent
+    result = await session.execute(
+        select(User).join(
+            ParentChildLink, ParentChildLink.parent_id == User.id
+        ).where(ParentChildLink.child_id == user_id)
+    )
+    parent = result.scalar_one_or_none()
+    if parent and parent.coin_rate_coins and parent.coin_rate_som:
+        return (parent.coin_rate_coins, parent.coin_rate_som)
+
+    return (1000, 10000)
+
+
+def calculate_som_from_coins(coins: int, rate_coins: int = 1000, rate_som: int = 10000) -> int:
+    """Calculate equivalent real money in so'm for given coins."""
+    if rate_coins <= 0:
+        rate_coins = 1000
+    return int(coins * (rate_som / rate_coins))
+
+
 async def link_parent_child(
     session: AsyncSession,
     parent_id: int,

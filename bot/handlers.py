@@ -36,6 +36,7 @@ from bot.keyboards import (
     get_parent_role_switch_approval_keyboard,
     get_logout_step1_keyboard,
     get_logout_step2_keyboard,
+    get_coin_rate_preset_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,10 @@ router = Router()
 # FSM States
 class ChildLinkState(StatesGroup):
     waiting_for_code = State()
+
+
+class CoinRateState(StatesGroup):
+    waiting_for_custom_rate = State()
 
 
 class LogoutState(StatesGroup):
@@ -100,12 +105,16 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             if parent:
                 await crud.update_user_role(session, user_id, "child")
                 await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
+                child_web_code = await crud.generate_web_access_code(session, user_id)
                 await session.commit()
 
                 # Notify child
                 await message.answer(
                     f"🎉 **Tabriklaymiz!**\n\n"
-                    f"Siz **{parent.full_name or 'Ota-onangiz'}** hisobiga muvaffaqiyatli ulandingiz.\n"
+                    f"Siz **{parent.full_name or 'Ota-onangiz'}** hisobiga muvaffaqiyatli ulandingiz.\n\n"
+                    f"🔑 **Saytga (Web App) kirish kodingiz:** ` {child_web_code} `\n"
+                    f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n"
+                    f"*(Saytga kirganda ushbu 6 xonali kodni kiriting)*\n\n"
                     f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
                     reply_markup=get_child_main_keyboard(),
                     parse_mode="Markdown"
@@ -175,14 +184,19 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
 
         if role == "parent":
             code = await crud.generate_pairing_code(session, user_id)
+            web_code = await crud.generate_web_access_code(session, user_id)
             await session.commit()
 
             bot_info = await bot.get_me()
             await callback.message.delete()
             await callback.message.answer(
                 f"👨‍👩‍👧 **Ota-ona hisobi faollashtirildi!**\n\n"
-                f"Farzandingizni ulash uchun unga quyidagi 6 xonali ulanish kodini bering:\n\n"
+                f"1️⃣ **Farzandingizni ulash uchun** unga quyidagi 6 xonali ulanish kodini bering:\n"
                 f"🔑 Ulanish kodi: ` {code} `\n\n"
+                f"2️⃣ **Sayt (Web App) boshqaruv kodingiz:**\n"
+                f"💻 Saytga kirish kodi: ` {web_code} `\n"
+                f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n"
+                f"*(Saytga kirganda ushbu 6 xonali kodni kiriting)*\n\n"
                 f"Yoki pastdagi tugma orqali to'g'ridan-to'g'ri havolani farzandingizga yuboring:",
                 reply_markup=get_pairing_share_keyboard(bot_info.username, code),
                 parse_mode="Markdown"
@@ -237,11 +251,15 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
 
         # Link child to parent
         await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
+        child_web_code = await crud.generate_web_access_code(session, user_id)
         await session.commit()
         await state.clear()
 
         await message.answer(
             f"🎉 **Ajoyib! Ota-onangizga ({parent.full_name or 'Ota-ona'}) muvaffaqiyatli ulandingiz!**\n\n"
+            f"🔑 **Saytga (Web App) kirish kodingiz:** ` {child_web_code} `\n"
+            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n"
+            f"*(Saytga kirganda ushbu 6 xonali kodni kiriting)*\n\n"
             f"Quyidagi xavfsizlik menyusi faollashtirildi:",
             reply_markup=get_child_main_keyboard(),
             parse_mode="Markdown"
@@ -942,7 +960,15 @@ async def on_child_tasks_pressed(message: Message):
         tasks = await crud.get_tasks_for_child(session, child_id)
 
         balance = child.virtual_balance if child else 0
-        text = f"💰 **Sizning balansingiz:** `{balance:,}` so'm / tanga\n\n"
+        rate_coins, rate_som = await crud.get_coin_rate_for_user(session, child_id)
+        money_som = crud.calculate_som_from_coins(balance, rate_coins, rate_som)
+
+        text = (
+            f"💰 **Sizning balansingiz:**\n"
+            f"🪙 **{balance:,} tanga**\n"
+            f"💵 **Sizda hozir {money_som:,} so'm pulingiz bor!**\n"
+            f"📌 *(Kurs: {rate_coins:,} tanga = {rate_som:,} so'm)*\n\n"
+        )
 
         pending_tasks = [t for t in tasks if t.status == "pending"]
         completed_tasks = [t for t in tasks if t.status == "completed_by_child"]
@@ -1290,11 +1316,17 @@ async def on_parent_tasks_menu(message: Message):
             return
 
         tasks = await crud.get_tasks_for_parent(session, parent_id)
-        text = f"📋 **Vazifalar boshqaruvi**\n\nJami yaratilgan vazifalar: {len(tasks)} ta.\n\n"
+        rate_coins, rate_som = await crud.get_coin_rate_for_user(session, parent_id)
+        text = (
+            f"📋 **Vazifalar boshqaruvi**\n"
+            f"📌 Belgilangan kurs: **{rate_coins:,} tanga = {rate_som:,} so'm**\n"
+            f"Jami yaratilgan vazifalar: {len(tasks)} ta.\n\n"
+        )
 
         for child in children:
+            c_money = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
             child_tasks = [t for t in tasks if t.child_id == child.id and t.status in ["pending", "seen", "scheduled", "completed_by_child"]]
-            text += f"👤 **{child.full_name}** (Balans: {child.virtual_balance:,} tanga)\n"
+            text += f"👤 **{child.full_name}** (Balans: {child.virtual_balance:,} tanga ≈ {c_money:,} so'm)\n"
             if child_tasks:
                 for t in child_tasks:
                     if t.status == "completed_by_child":
@@ -1318,6 +1350,12 @@ async def on_parent_tasks_menu(message: Message):
                     callback_data=f"create_task:{child.id}"
                 )
             ])
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"💰 Kursni sozlash ({rate_coins:,} = {rate_som:,} so'm)",
+                callback_data="coin_rate_start"
+            )
+        ])
 
         await message.answer(
             text,
@@ -1561,12 +1599,15 @@ async def on_show_pairing_code(message: Message, bot: Bot):
     parent_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         code = await crud.generate_pairing_code(session, parent_id)
+        web_code = await crud.generate_web_access_code(session, parent_id)
         await session.commit()
 
         bot_info = await bot.get_me()
         await message.answer(
-            f"🔑 **Sizning ulanish kodingiz:** ` {code} `\n\n"
-            f"Ushbu kodni farzandingiz telefonida botga yuboring yoki quyidagi ulashish tugmasini bosing:",
+            f"🔑 **Farzandingizni ulash kodi:** ` {code} `\n\n"
+            f"💻 **Saytga (Web App) kirish kodingiz:** ` {web_code} `\n"
+            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+            f"Ushbu ulanish kodini farzandingiz telefonida botga yuboring yoki quyidagi ulashish tugmasini bosing:",
             reply_markup=get_pairing_share_keyboard(bot_info.username, code),
             parse_mode="Markdown"
         )
@@ -2033,3 +2074,202 @@ async def perform_account_logout(user_id: int, full_name: str, message_obj, stat
             reply_markup=get_role_selection_keyboard(),
             parse_mode="Markdown"
         )
+
+
+# ---------------------------------------------------------
+# Web Access Code & Coin Rate Settings Handlers
+# ---------------------------------------------------------
+
+@router.message(F.text == "🔑 Saytga kirish kodi")
+@router.callback_query(F.data == "show_web_access_code")
+async def on_show_web_access_code(event: Message | CallbackQuery):
+    """Provide user with their unique 6-digit access code for the Web App."""
+    message = event if isinstance(event, Message) else event.message
+    user_id = event.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role == "unassigned":
+            await message.answer("Iltimos, avval /start orqali rolingizni tanlang.")
+            if isinstance(event, CallbackQuery):
+                await event.answer()
+            return
+
+        web_code = await crud.generate_web_access_code(session, user_id)
+        await session.commit()
+
+        if user.role == "parent":
+            rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
+            text = (
+                f"🔑 **SAYTGA (WEB APP) KIRISH KODINGIZ:**\n\n"
+                f"🏷 Kodingiz: ` {web_code} `\n\n"
+                f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
+                f"👨‍👩‍👧 **Ota-ona imkoniyatlari:**\n"
+                f"• Farzandlaringiz joylashuvini jonli xaritada kuzatish\n"
+                f"• Yangi topshiriqlar yuklash (foto/video biriktirish bilan)\n"
+                f"• Kerakli joylar (Geofence) belgilash\n"
+                f"• Tangalar kursini sozlash (Hozir: {rate_coins:,} tanga = {rate_som:,} so'm)\n\n"
+                f"📌 Saytimizga kirganda ushbu 6 xonali kodni kiriting!"
+            )
+        else:
+            rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
+            money_som = crud.calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
+            text = (
+                f"🔑 **SAYTGA (WEB APP) KIRISH KODINGIZ:**\n\n"
+                f"🏷 Kodingiz: ` {web_code} `\n\n"
+                f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
+                f"👦 **Farzand imkoniyatlari:**\n"
+                f"• Ota-onangiz bergan topshiriqlarni ko'rish\n"
+                f"• 'Ko'rdim' va 'Shu vaqtda bajaraman' deb vaqt belgilash\n"
+                f"• Topshiriqni bajarib rasm yuborish va tangalarga ega bo'lish\n"
+                f"• Sizda hozir: **{user.virtual_balance:,} tanga** ({money_som:,} so'm) mavjud\n\n"
+                f"📌 Saytimizga kirganda ushbu 6 xonali kodni kiriting!"
+            )
+
+        await message.answer(text, parse_mode="Markdown")
+        if isinstance(event, CallbackQuery):
+            await event.answer()
+
+
+@router.message(F.text == "💰 Tangalar kursini sozlash")
+@router.callback_query(F.data == "coin_rate_start")
+async def on_coin_rate_settings_pressed(event: Message | CallbackQuery, state: FSMContext):
+    """Parent opens coin exchange rate configuration with psychological recommendation."""
+    message = event if isinstance(event, Message) else event.message
+    user_id = event.from_user.id
+    await state.clear()
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role != "parent":
+            await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
+            if isinstance(event, CallbackQuery):
+                await event.answer()
+            return
+
+        rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
+
+        text = (
+            f"💰 **TANGALAR KURSINI SOZLASH (Rag'batlantirish tizimi)**\n\n"
+            f"💡 **Tavsiya va Psixologik maslahat:**\n"
+            f"Farzandingiz bajargan har bir foydali vazifasi (kitob o'qish, dars qilish, uyni tozalash) uchun "
+            f"tangalar to'planadi. Ushbu tangalar real pulga aylanishi bolada mehnat qadrini, maqsad sari intilishni "
+            f"va sog'lom moliyaviy savodxonlikni shakllantiradi.\n\n"
+            f"📌 **Hozirgi belgilangan kurs:**\n"
+            f"🪙 **{rate_coins:,} tanga = {rate_som:,} so'm**\n"
+            f"(ya'ni 1 tanga = {rate_som / rate_coins:,.1f} so'm)\n\n"
+            f"Quyidagi tayyor kurslardan birini tanlang yoki o'z qiymatingizni kiriting:"
+        )
+
+        await message.answer(
+            text,
+            reply_markup=get_coin_rate_preset_keyboard(),
+            parse_mode="Markdown"
+        )
+        if isinstance(event, CallbackQuery):
+            await event.answer()
+
+
+@router.callback_query(F.data.startswith("set_coin_rate:"))
+async def on_preset_coin_rate_selected(callback: CallbackQuery, bot: Bot):
+    parts = callback.data.split(":")
+    coins = int(parts[1])
+    som = int(parts[2])
+    parent_id = callback.from_user.id
+
+    async with AsyncSessionLocal() as session:
+        await crud.update_coin_rate(session, parent_id, coins, som)
+        await session.commit()
+
+        children = await crud.get_children_for_parent(session, parent_id)
+        for ch in children:
+            c_money = crud.calculate_som_from_coins(ch.virtual_balance, coins, som)
+            try:
+                await bot.send_message(
+                    chat_id=ch.id,
+                    text=(
+                        f"📢 **Tangalar kursi yangilandi!**\n\n"
+                        f"📌 Ota-onangiz yangi kursni belgiladi:\n"
+                        f"💰 **{coins:,} tanga = {som:,} so'm**\n"
+                        f"💵 Sizning hozirgi {ch.virtual_balance:,} tangangiz = **{c_money:,} so'm** bo'ldi!\n\n"
+                        f"Vazifalarni faol bajarib, ko'proq pul jamg'arishingiz mumkin! 🚀"
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify child {ch.id} of rate update: {e}")
+
+    await callback.message.edit_text(
+        f"✅ **Tangalar kursi muvaffaqiyatli saqlandi!**\n\n"
+        f"🪙 **{coins:,} tanga = {som:,} so'm**\n"
+        f"Ulangan barcha farzandlaringizga bu haqda bildirishnoma yuborildi.",
+        parse_mode="Markdown"
+    )
+    await callback.answer("Kurs saqlandi!")
+
+
+@router.callback_query(F.data == "custom_coin_rate")
+async def on_custom_coin_rate_prompt(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(CoinRateState.waiting_for_custom_rate)
+    await callback.message.edit_text(
+        "✏️ **O'zingiz xohlagan kursni kiriting:**\n\n"
+        "1,000 tanga uchun necha so'm bermoqchisiz?\n"
+        "Masalan: `15000` yoki `1000 15000` deb yozib yuboring:\n\n"
+        "*(Bekor qilish uchun /cancel deb yozing)*",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.message(CoinRateState.waiting_for_custom_rate)
+async def on_custom_coin_rate_entered(message: Message, state: FSMContext, bot: Bot):
+    text = message.text.strip()
+    if text.lower() in ["/cancel", "bekor", "cancel"]:
+        await state.clear()
+        await message.answer("Tangalar kursini o'zgartirish bekor qilindi.")
+        return
+
+    tokens = [t for t in text.replace(",", " ").replace("=", " ").split() if t.isdigit()]
+    if len(tokens) == 1:
+        coins = 1000
+        som = int(tokens[0])
+    elif len(tokens) >= 2:
+        coins = int(tokens[0])
+        som = int(tokens[1])
+    else:
+        await message.answer("❌ Noto'g'ri format. Iltimos, faqat raqam kiriting (masalan: `15000`):")
+        return
+
+    if coins <= 0 or som <= 0:
+        await message.answer("❌ Qiymatlar musbat son bo'lishi kerak. Qaytadan kiriting:")
+        return
+
+    parent_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        await crud.update_coin_rate(session, parent_id, coins, som)
+        await session.commit()
+        await state.clear()
+
+        children = await crud.get_children_for_parent(session, parent_id)
+        for ch in children:
+            c_money = crud.calculate_som_from_coins(ch.virtual_balance, coins, som)
+            try:
+                await bot.send_message(
+                    chat_id=ch.id,
+                    text=(
+                        f"📢 **Tangalar kursi yangilandi!**\n\n"
+                        f"📌 Ota-onangiz yangi kursni belgiladi:\n"
+                        f"💰 **{coins:,} tanga = {som:,} so'm**\n"
+                        f"💵 Sizning hozirgi {ch.virtual_balance:,} tangangiz = **{c_money:,} so'm** bo'ldi!\n\n"
+                        f"Vazifalarni faol bajarib, ko'proq pul jamg'arishingiz mumkin! 🚀"
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify child {ch.id} of custom rate update: {e}")
+
+    await message.answer(
+        f"✅ **Yangi kurs saqlandi!**\n\n"
+        f"🪙 **{coins:,} tanga = {som:,} so'm**\n"
+        f"Farzandlaringiz hisobida ushbu kurs bo'yicha hisob-kitob qilinadi.",
+        parse_mode="Markdown"
+    )

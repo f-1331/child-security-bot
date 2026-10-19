@@ -26,19 +26,176 @@ class CreateGeofenceRequest(BaseModel):
     child_id: Optional[int] = None
 
 
+class AuthCodeRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=20)
+
+
+@router.post("/auth/code")
+async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSession = Depends(get_db)):
+    """Verify web access code or pairing code and return authenticated user context."""
+    code = payload.code.strip()
+    user = await crud.get_user_by_web_access_code(session, code)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="Kiritilgan kod noto'g'ri yoki mavjud emas. Iltimos, Telegram bot orqali kodni tekshiring."
+        )
+
+    rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user.id)
+
+    if user.role == "parent":
+        children = await crud.get_children_for_parent(session, user.id)
+        children_data = []
+        for child in children:
+            latest = await crud.get_latest_location(session, child.id)
+            c_money = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
+            children_data.append({
+                "id": child.id,
+                "full_name": child.full_name or "Farzand",
+                "username": child.username,
+                "virtual_balance": child.virtual_balance,
+                "virtual_money_som": c_money,
+                "coin_rate_coins": rate_coins,
+                "coin_rate_som": rate_som,
+                "is_sos_active": child.is_sos_active,
+                "latest_location": {
+                    "latitude": latest.latitude if latest else None,
+                    "longitude": latest.longitude if latest else None,
+                    "accuracy": latest.accuracy if latest else None,
+                    "battery_level": latest.battery_level if latest else None,
+                    "is_charging": latest.is_charging if latest else False,
+                    "sound_mode": latest.sound_mode if latest else "normal",
+                    "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+                } if latest else None
+            })
+
+        return {
+            "status": "success",
+            "role": "parent",
+            "user": {
+                "id": user.id,
+                "full_name": user.full_name or "Ota-ona",
+                "role": "parent",
+                "coin_rate_coins": rate_coins,
+                "coin_rate_som": rate_som,
+                "web_access_code": user.web_access_code or code
+            },
+            "children": children_data
+        }
+
+    # If role is child
+    money_som = crud.calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
+    latest = await crud.get_latest_location(session, user.id)
+
+    from db.models import ParentChildLink
+    from sqlalchemy import select
+    res = await session.execute(
+        select(crud.User).join(
+            ParentChildLink, ParentChildLink.parent_id == crud.User.id
+        ).where(ParentChildLink.child_id == user.id)
+    )
+    parent = res.scalar_one_or_none()
+
+    return {
+        "status": "success",
+        "role": "child",
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name or "Farzand",
+            "role": "child",
+            "virtual_balance": user.virtual_balance,
+            "virtual_money_som": money_som,
+            "coin_rate_coins": rate_coins,
+            "coin_rate_som": rate_som,
+            "web_access_code": user.web_access_code or code,
+            "location": {
+                "latitude": latest.latitude if latest else None,
+                "longitude": latest.longitude if latest else None,
+                "battery_level": latest.battery_level if latest else None,
+                "is_charging": latest.is_charging if latest else False,
+                "sound_mode": latest.sound_mode if latest else "normal",
+                "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+            } if latest else None
+        },
+        "parent": {
+            "id": parent.id,
+            "full_name": parent.full_name or "Ota-ona"
+        } if parent else None
+    }
+
+
+class UpdateCoinRateRequest(BaseModel):
+    parent_id: int
+    coins: int = Field(1000, ge=1, le=1000000)
+    som: int = Field(10000, ge=1, le=100000000)
+
+
+@router.get("/coin-rate/{user_id}")
+async def get_coin_rate_endpoint(user_id: int, session: AsyncSession = Depends(get_db)):
+    """Fetch current coin rate for parent or child."""
+    rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
+    return {
+        "status": "success",
+        "coins": rate_coins,
+        "som": rate_som,
+        "som_per_coin": rate_som / rate_coins
+    }
+
+
+@router.post("/coin-rate")
+async def update_coin_rate_endpoint(payload: UpdateCoinRateRequest, session: AsyncSession = Depends(get_db)):
+    """Update coin rate settings and notify linked children."""
+    user = await crud.update_coin_rate(session, payload.parent_id, payload.coins, payload.som)
+    if not user:
+        raise HTTPException(status_code=404, detail="Parent not found")
+
+    await session.commit()
+
+    if telemetry.telegram_bot:
+        try:
+            children = await crud.get_children_for_parent(session, payload.parent_id)
+            for child in children:
+                child_money = crud.calculate_som_from_coins(child.virtual_balance, payload.coins, payload.som)
+                await telemetry.telegram_bot.send_message(
+                    chat_id=child.id,
+                    text=(
+                        f"📢 **Tangalar kursi yangilandi!**\n\n"
+                        f"📌 Ota-onangiz belgilagan yangi kurs:\n"
+                        f"💰 **{payload.coins:,} tanga = {payload.som:,} so'm**\n"
+                        f"(1 tanga = {payload.som / payload.coins:,.1f} so'm)\n\n"
+                        f"💵 Sizning hozirgi pulingiz: **{child_money:,} so'm** ({child.virtual_balance:,} tanga)"
+                    ),
+                    parse_mode="Markdown"
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify children about coin rate update: {e}")
+
+    return {
+        "status": "success",
+        "coins": payload.coins,
+        "som": payload.som,
+        "som_per_coin": payload.som / payload.coins
+    }
+
+
 @router.get("/parent/{parent_id}/children")
 async def get_parent_children(parent_id: int, session: AsyncSession = Depends(get_db)):
-    """Fetch all linked children with their latest location and telemetry state."""
+    """Fetch all linked children with their latest location, telemetry, and money equivalent."""
     children = await crud.get_children_for_parent(session, parent_id)
+    rate_coins, rate_som = await crud.get_coin_rate_for_user(session, parent_id)
     result = []
 
     for child in children:
         latest = await crud.get_latest_location(session, child.id)
+        c_money = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
         result.append({
             "id": child.id,
             "full_name": child.full_name or "Farzand",
             "username": child.username,
             "virtual_balance": child.virtual_balance,
+            "virtual_money_som": c_money,
+            "coin_rate_coins": rate_coins,
+            "coin_rate_som": rate_som,
             "is_sos_active": child.is_sos_active,
             "latest_location": {
                 "latitude": latest.latitude if latest else None,
@@ -56,12 +213,15 @@ async def get_parent_children(parent_id: int, session: AsyncSession = Depends(ge
 
 @router.get("/child/{child_id}/status")
 async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db)):
-    """Fetch single child latest telemetry and status."""
+    """Fetch single child latest telemetry, balance, and real money equivalent."""
     child = await crud.get_user(session, child_id)
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
 
+    rate_coins, rate_som = await crud.get_coin_rate_for_user(session, child_id)
+    money_som = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
     latest = await crud.get_latest_location(session, child_id)
+
     return {
         "status": "success",
         "child": {
@@ -69,6 +229,9 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "full_name": child.full_name,
             "username": child.username,
             "virtual_balance": child.virtual_balance,
+            "virtual_money_som": money_som,
+            "coin_rate_coins": rate_coins,
+            "coin_rate_som": rate_som,
             "is_sos_active": child.is_sos_active,
             "location": {
                 "latitude": latest.latitude if latest else None,

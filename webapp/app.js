@@ -17,6 +17,12 @@ let parentId = null;
 let currentChildId = null;
 let childrenList = [];
 let isDemoMode = false;
+let currentRole = "parent"; // "parent" or "child"
+let authenticatedSession = null;
+let coinRateCoins = 1000;
+let coinRateSom = 10000;
+let childBalanceCoins = 0;
+let childBalanceSom = 0;
 
 // Map & Layers
 let map = null;
@@ -91,9 +97,8 @@ document.addEventListener("DOMContentLoaded", () => {
     lucide.createIcons();
   }
 
-  parseUrlParams();
   initMap();
-  loadData();
+  checkAuthenticationState();
 
   // Polling every 8 seconds for live telemetry
   pollInterval = setInterval(() => {
@@ -115,20 +120,364 @@ function haptic(type = "light") {
   }
 }
 
-// Extract parent_id from URL query, Telegram initData, or fallback
-function parseUrlParams() {
+// Check session in localStorage or URL
+function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
-  parentId = urlParams.get("parent_id");
-  currentChildId = urlParams.get("child_id");
+  const qCode = urlParams.get("code");
+  const qParent = urlParams.get("parent_id");
 
-  // Read Telegram user id if available
-  if (!parentId && tg?.initDataUnsafe?.user?.id) {
-    parentId = tg.initDataUnsafe.user.id;
+  // 1. Direct code in query param: ?code=123456
+  if (qCode) {
+    const input = document.getElementById("inputAuthCode");
+    if (input) input.value = qCode;
+    submitAuthCode();
+    return;
   }
 
-  // Fallback demo parent ID if not specified
-  if (!parentId) {
-    parentId = 1001;
+  // 2. Check localStorage session
+  const stored = localStorage.getItem("smart_tracker_session");
+  if (stored) {
+    try {
+      const data = JSON.parse(stored);
+      if (data && data.user && data.role) {
+        hideAuthGateModal();
+        applyAuthenticatedUser(data);
+        return;
+      }
+    } catch (e) {
+      localStorage.removeItem("smart_tracker_session");
+    }
+  }
+
+  // 3. Fallback if opened directly via Telegram parent WebApp button
+  if (qParent || tg?.initDataUnsafe?.user?.id) {
+    parentId = qParent || tg.initDataUnsafe.user.id;
+    hideAuthGateModal();
+    loadData();
+    return;
+  }
+
+  // 4. Otherwise: Must authenticate with 6-digit code!
+  showAuthGateModal();
+}
+
+function showAuthGateModal() {
+  const modal = document.getElementById("authGateModal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    const input = document.getElementById("inputAuthCode");
+    if (input) setTimeout(() => input.focus(), 200);
+  }
+}
+
+function hideAuthGateModal() {
+  const modal = document.getElementById("authGateModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function submitAuthCode() {
+  const codeInput = document.getElementById("inputAuthCode");
+  const code = codeInput ? codeInput.value.trim() : "";
+  const errorText = document.getElementById("authErrorText");
+  const errorMsg = document.getElementById("authErrorMsg");
+  const btn = document.getElementById("btnSubmitAuthCode");
+
+  if (!code || code.length < 4) {
+    if (errorText) errorText.classList.remove("hidden");
+    if (errorMsg) errorMsg.textContent = "Iltimos, Telegram bot bergan kodni kiriting.";
+    return;
+  }
+
+  if (errorText) errorText.classList.add("hidden");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">Tekshirilmoqda...</span>`;
+  }
+
+  try {
+    const res = await fetch("/api/v1/webapp/auth/code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code })
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || "Kiritilgan kod noto'g'ri yoki mavjud emas.");
+    }
+
+    // Save session
+    localStorage.setItem("smart_tracker_session", JSON.stringify(data));
+    haptic("success");
+    hideAuthGateModal();
+    applyAuthenticatedUser(data);
+    showToast("🎉 Xush kelibsiz!");
+  } catch (err) {
+    console.error("Auth error:", err);
+    haptic("warning");
+    if (errorText) errorText.classList.remove("hidden");
+    if (errorMsg) errorMsg.textContent = err.message || "Kod noto'g'ri. Iltimos, qayta tekshiring.";
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span>Saytga kirish</span><i data-lucide="arrow-right" class="w-4 h-4"></i>`;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function startDemoMode(role) {
+  haptic("medium");
+  hideAuthGateModal();
+  if (role === "child") {
+    enableChildDemoMode();
+  } else {
+    enableDemoMode();
+  }
+}
+
+function enableChildDemoMode() {
+  currentRole = "child";
+  isDemoMode = true;
+  parentId = null;
+  currentChildId = 2002;
+  coinRateCoins = 1000;
+  coinRateSom = 10000;
+  childBalanceCoins = 18000;
+  childBalanceSom = 180000;
+
+  applyChildUI({
+    id: 2002,
+    full_name: "Azizbek Karimov (Farzand Demo)",
+    virtual_balance: 18000,
+    virtual_money_som: 180000,
+    coin_rate_coins: 1000,
+    coin_rate_som: 10000
+  });
+
+  document.getElementById("emptyStateBanner").classList.add("hidden");
+  document.getElementById("demoBadge").classList.remove("hidden");
+
+  // Render demo child live position
+  const demoLat = 41.2916;
+  const demoLon = 69.2121;
+  renderChildMarker(demoLat, demoLon, "Azizbek Karimov (Demo)", false, 85);
+  updateBatteryUI(85, false);
+  updateSoundUI("normal");
+  resolveAddress(demoLat, demoLon);
+  renderDemoGeofences();
+  renderDemoHistory();
+  renderDemoTasks();
+  showToast("👦 Farzand demo rejimi faollashtirildi");
+}
+
+function applyAuthenticatedUser(data) {
+  authenticatedSession = data;
+  isDemoMode = false;
+  currentRole = data.role;
+
+  if (data.role === "parent") {
+    parentId = data.user.id;
+    coinRateCoins = data.user.coin_rate_coins || 1000;
+    coinRateSom = data.user.coin_rate_som || 10000;
+    updateCoinRateBadgeUI(coinRateCoins, coinRateSom);
+    applyParentUI(data);
+
+    if (data.children && data.children.length > 0) {
+      childrenList = data.children;
+      renderChildSelector();
+      currentChildId = childrenList[0].id;
+      selectChild(currentChildId);
+    } else {
+      showEmptyState();
+    }
+  } else if (data.role === "child") {
+    currentChildId = data.user.id;
+    coinRateCoins = data.user.coin_rate_coins || 1000;
+    coinRateSom = data.user.coin_rate_som || 10000;
+    childBalanceCoins = data.user.virtual_balance || 0;
+    childBalanceSom = data.user.virtual_money_som || 0;
+    applyChildUI(data.user);
+    loadChildSelfData(data.user);
+  }
+}
+
+function applyParentUI(data) {
+  document.getElementById("childWelcomeBanner").classList.add("hidden");
+  document.getElementById("childMoneyCorner").classList.add("hidden");
+  document.getElementById("btnCoinRateCorner").classList.remove("hidden");
+  document.getElementById("parentTaskActionSection")?.classList.remove("hidden");
+  document.getElementById("btnAddZoneMap")?.classList.remove("hidden");
+  document.getElementById("childSelect").disabled = false;
+}
+
+function applyChildUI(user) {
+  document.getElementById("childWelcomeBanner").classList.remove("hidden");
+  document.getElementById("childMoneyCorner").classList.remove("hidden");
+  document.getElementById("btnCoinRateCorner").classList.add("hidden");
+  document.getElementById("parentTaskActionSection")?.classList.add("hidden");
+  document.getElementById("btnAddZoneMap")?.classList.add("hidden");
+
+  const moneyStr = (user.virtual_money_som || 0).toLocaleString();
+  const coinsStr = (user.virtual_balance || 0).toLocaleString();
+
+  const cornerMoneyText = document.getElementById("childMoneyCornerText");
+  if (cornerMoneyText) cornerMoneyText.textContent = `${moneyStr} so'm`;
+
+  const bannerName = document.getElementById("childBannerName");
+  if (bannerName) bannerName.textContent = user.full_name || "Farzand hisobi";
+
+  const bannerMoney = document.getElementById("childBannerMoney");
+  if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm pulingiz bor! (${coinsStr} tanga)`;
+
+  const sel = document.getElementById("childSelect");
+  if (sel) {
+    sel.innerHTML = `<option value="${user.id}">${user.full_name || 'Mening hisobim'}</option>`;
+    sel.disabled = true;
+  }
+}
+
+async function loadChildSelfData(user) {
+  childrenList = [user];
+  currentChildId = user.id;
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${user.id}/status`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "success" && data.child) {
+        const ch = data.child;
+        childBalanceCoins = ch.virtual_balance || 0;
+        childBalanceSom = ch.virtual_money_som || 0;
+        applyChildUI(ch);
+
+        if (ch.location && ch.location.latitude && ch.location.longitude) {
+          renderChildMarker(ch.location.latitude, ch.location.longitude, ch.full_name, ch.is_sos_active, ch.location.battery_level);
+          updateBatteryUI(ch.location.battery_level, ch.location.is_charging);
+          updateSoundUI(ch.location.sound_mode);
+          resolveAddress(ch.location.latitude, ch.location.longitude);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Child self status load error:", e);
+  }
+
+  await loadGeofences(user.id);
+  await loadRouteHistory(user.id);
+  await loadTasks();
+}
+
+function logoutSession() {
+  haptic("medium");
+  if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
+    localStorage.removeItem("smart_tracker_session");
+    authenticatedSession = null;
+    isDemoMode = false;
+    showAuthGateModal();
+    showToast("🚪 Hisobdan chiqildi");
+  }
+}
+
+// Coin Rate Settings Modal functions
+function openCoinRateModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-coin-rate");
+  if (!modal) return;
+
+  const tipDismissed = localStorage.getItem("coin_rate_tip_dismissed") === "true";
+  const tipBox = document.getElementById("coinRateTipBox");
+  if (tipBox) {
+    if (tipDismissed) tipBox.classList.add("hidden");
+    else tipBox.classList.remove("hidden");
+  }
+
+  document.getElementById("inputCoinRateCoins").value = coinRateCoins || 1000;
+  document.getElementById("inputCoinRateSom").value = coinRateSom || 10000;
+  updateCoinRatePreview();
+  modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeCoinRateModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-coin-rate");
+  if (modal) modal.classList.add("hidden");
+}
+
+function dismissCoinRateTip() {
+  localStorage.setItem("coin_rate_tip_dismissed", "true");
+  const tipBox = document.getElementById("coinRateTipBox");
+  if (tipBox) tipBox.classList.add("hidden");
+  showToast("Tavsiya berkitildi");
+}
+
+function applyCoinRatePreset(coins, som) {
+  haptic("light");
+  document.getElementById("inputCoinRateCoins").value = coins;
+  document.getElementById("inputCoinRateSom").value = som;
+  updateCoinRatePreview();
+}
+
+function updateCoinRatePreview() {
+  const coins = parseInt(document.getElementById("inputCoinRateCoins").value) || 1000;
+  const som = parseInt(document.getElementById("inputCoinRateSom").value) || 10000;
+  const perCoin = som / Math.max(1, coins);
+  const preview = document.getElementById("coinRateLivePreview");
+  if (preview) {
+    preview.textContent = `1 tanga = ${perCoin.toLocaleString()} so'm (1,000 tanga = ${(perCoin * 1000).toLocaleString()} so'm)`;
+  }
+}
+
+async function saveCoinRate() {
+  const coins = parseInt(document.getElementById("inputCoinRateCoins").value) || 1000;
+  const som = parseInt(document.getElementById("inputCoinRateSom").value) || 10000;
+  const btn = document.getElementById("btnSaveCoinRate");
+
+  if (coins <= 0 || som <= 0) {
+    alert("Iltimos, musbat sonlar kiriting.");
+    return;
+  }
+
+  if (isDemoMode) {
+    coinRateCoins = coins;
+    coinRateSom = som;
+    updateCoinRateBadgeUI(coins, som);
+    closeCoinRateModal();
+    showToast("✅ Tangalar kursi saqlandi (Demo)");
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/v1/webapp/coin-rate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parent_id: parentId, coins, som })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      coinRateCoins = coins;
+      coinRateSom = som;
+      updateCoinRateBadgeUI(coins, som);
+      closeCoinRateModal();
+      showToast("✅ Tangalar kursi saqlandi va bolalarga xabar berildi!");
+      if (parentId) loadData();
+    } else {
+      alert("Xatolik: " + (data.detail || "Kursni saqlashda xatolik"));
+    }
+  } catch (e) {
+    console.error("Save coin rate error:", e);
+    alert("Server bilan aloqa uzildi.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function updateCoinRateBadgeUI(coins, som) {
+  const cornerText = document.getElementById("coinRateCornerText");
+  if (cornerText) {
+    cornerText.textContent = `${(coins / 1000).toFixed(0)}k = ${(som / 1000).toFixed(0)}k so'm`;
   }
 }
 
@@ -1044,8 +1393,51 @@ function renderTasksList() {
   const container = document.getElementById("tasksListContainer");
   if (!container) return;
 
+  let balanceBanner = "";
+  if (currentRole === "child" || (authenticatedSession && authenticatedSession.role === "child") || (isDemoMode && currentRole === "child")) {
+    const moneyStr = (childBalanceSom || 0).toLocaleString();
+    const coinStr = (childBalanceCoins || 0).toLocaleString();
+    const perCoin = coinRateSom / Math.max(1, coinRateCoins);
+    balanceBanner = `
+      <div class="p-3.5 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-2xl mb-3 shadow-lg">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+            <i data-lucide="wallet" class="w-4 h-4"></i>
+            <span>Sizning Jamg'armangiz:</span>
+          </span>
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+            1k = ${(perCoin * 1000).toLocaleString()} so'm
+          </span>
+        </div>
+        <p class="text-xl font-black text-white mt-1 tracking-tight">
+          ${moneyStr} so'm
+        </p>
+        <p class="text-xs text-amber-400 font-bold mt-0.5 flex items-center gap-1">
+          <i data-lucide="coins" class="w-3.5 h-3.5"></i>
+          <span>${coinStr} tanga</span>
+        </p>
+      </div>
+    `;
+  } else if (currentRole === "parent" || !currentRole) {
+    const activeChild = childrenList.find(c => c.id == currentChildId);
+    if (activeChild) {
+      const cMoney = activeChild.virtual_money_som || Math.round((activeChild.virtual_balance || 0) * (coinRateSom / Math.max(1, coinRateCoins)));
+      balanceBanner = `
+        <div class="p-3 bg-gradient-to-r from-slate-900 to-slate-800/80 border border-slate-700/80 rounded-2xl mb-3 flex items-center justify-between">
+          <div>
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${activeChild.full_name || 'Farzand'} balansi:</span>
+            <p class="text-xs font-bold text-white mt-0.5">${(activeChild.virtual_balance || 0).toLocaleString()} tanga <span class="text-emerald-400 font-semibold">(≈ ${cMoney.toLocaleString()} so'm)</span></p>
+          </div>
+          <button onclick="openCoinRateModal()" class="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition active:scale-95">
+            💰 Kurs: ${(coinRateCoins/1000).toFixed(0)}k=${(coinRateSom/1000).toFixed(0)}k
+          </button>
+        </div>
+      `;
+    }
+  }
+
   if (tasksList.length === 0) {
-    container.innerHTML = `
+    container.innerHTML = balanceBanner + `
       <div class="text-center py-8">
         <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-2">
           <i data-lucide="check-circle" class="w-6 h-6"></i>
@@ -1058,7 +1450,7 @@ function renderTasksList() {
     return;
   }
 
-  container.innerHTML = tasksList.map(t => {
+  container.innerHTML = balanceBanner + tasksList.map(t => {
     let statusBadge = "";
     if (t.status === "completed_by_child") {
       statusBadge = '<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">⏳ Tekshiruvda</span>';

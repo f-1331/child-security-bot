@@ -74,8 +74,20 @@
         </div>
       </div>
 
-      <!-- Telemetry Status Pills -->
+      <!-- Telemetry Status Pills & Corner Controls -->
       <div class="flex items-center gap-1.5">
+        <!-- Coin rate corner button (for Parent) -->
+        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-full text-[11px] font-bold shadow-sm transition active:scale-95" title="Tangalar kursini sozlash">
+          <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="coinRateCornerText">1k = 10k so'm</span>
+        </button>
+
+        <!-- Child balance corner pill (for Child) -->
+        <div id="childMoneyCorner" class="hidden flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-full text-[11px] font-bold shadow-sm" title="Jamg'arilgan mablag'ingiz">
+          <i data-lucide="wallet" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span id="childMoneyCornerText">0 so'm</span>
+        </div>
+
         <!-- Battery Pill -->
         <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm">
           <i id="batteryIcon" data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
@@ -87,7 +99,27 @@
           <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
           <span id="soundText">Oddiy</span>
         </div>
+
+        <!-- Logout / Switch Account Button -->
+        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-red-900/40 border border-slate-700 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90" title="Chiqish / Boshqa hisobga o'tish">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        </button>
       </div>
+    </div>
+
+    <!-- Child View Welcome Banner (Visible in Child Mode) -->
+    <div id="childWelcomeBanner" class="hidden bg-gradient-to-r from-emerald-950/80 to-slate-900/90 border border-emerald-500/40 p-2.5 rounded-xl flex items-center justify-between text-xs shadow-md">
+      <div>
+        <p class="font-bold text-white flex items-center gap-1">
+          <span>👦</span> <span id="childBannerName">Farzand hisobi</span>
+        </p>
+        <p class="text-emerald-300 font-bold text-xs mt-0.5" id="childBannerMoney">
+          💵 Sizda hozir 0 so'm pulingiz bor! (0 tanga)
+        </p>
+      </div>
+      <button onclick="switchTab('tasks')" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-md transition active:scale-95">
+        Topshiriqlar
+      </button>
     </div>
 
     <!-- Urgent SOS Alert Banner (Hidden by default) -->
@@ -449,6 +481,138 @@
       <div class="pt-2 flex gap-2">
         <button onclick="closeProofModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
         <button id="btnSubmitProof" onclick="submitTaskProof()" disabled class="flex-1 py-2.5 bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-lg">Ota-onaga yuborish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL SCREEN AUTH GATE (Locks site until 6-digit code is verified) -->
+  <div id="authGateModal" class="hidden fixed inset-0 z-[2000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in text-center">
+      <div class="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3">
+        <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
+      </div>
+
+      <h2 class="text-base font-bold text-white">Smart Parental Control</h2>
+      <p class="text-xs text-slate-400 mt-1">
+        Bolalar xavfsizligi va rag'batlantirish platformasi
+      </p>
+
+      <div class="my-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 text-left">
+        <label class="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center justify-between">
+          <span>🔑 6 xonali kirish kodingiz:</span>
+          <span class="text-[10px] text-blue-400 font-normal">Telegram botdan oling</span>
+        </label>
+        <input
+          id="inputAuthCode"
+          type="text"
+          maxlength="8"
+          inputmode="numeric"
+          placeholder="123456"
+          class="w-full bg-slate-900 border border-slate-600 text-center text-2xl font-mono tracking-widest font-bold text-white rounded-xl py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+          onkeyup="if(event.key === 'Enter') submitAuthCode()"
+        />
+        <p id="authErrorText" class="hidden text-[11px] text-red-400 font-medium mt-1.5 flex items-center gap-1">
+          <i data-lucide="alert-circle" class="w-3 h-3"></i>
+          <span id="authErrorMsg">Kiritilgan kod noto'g'ri</span>
+        </p>
+
+        <button
+          id="btnSubmitAuthCode"
+          onclick="submitAuthCode()"
+          class="w-full mt-3 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/30 transition active:scale-95 flex items-center justify-center gap-2"
+        >
+          <span>Saytga kirish</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Telegram Bot Info Helper -->
+      <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60 text-left mb-3">
+        💡 <b>Kod qayerdan olinadi?</b><br/>
+        Telegram botimizda <b>«🔑 Saytga kirish kodi»</b> tugmasini bosing va olingan kodni kiriting.
+      </div>
+
+      <!-- Demo preview buttons -->
+      <div class="border-t border-slate-800 pt-3">
+        <p class="text-[11px] text-slate-400 mb-2 font-medium">Yoki tizimni kodsiz demo rejimida sinab ko'ring:</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="startDemoMode('parent')" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition">
+            👨‍👩‍👧 Ota-ona Demo
+          </button>
+          <button onclick="startDemoMode('child')" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-emerald-400 transition">
+            👦 Farzand Demo
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COIN RATE SETTINGS (Corner feature) -->
+  <div id="modal-coin-rate" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>
+          <span>Tangalar Kursini Sozlash</span>
+        </h3>
+        <button onclick="closeCoinRateModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Recommendation tip (shown on first use, dismissed forever if clicked) -->
+      <div id="coinRateTipBox" class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200/90 space-y-2">
+        <div class="flex items-start gap-2">
+          <i data-lucide="lightbulb" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+          <p class="leading-relaxed">
+            <b>Psixologik tavsiya:</b> Farzandingiz bajargan foydali topshiriqlari uchun berilgan tangalar real pulga aylanishi bolada mehnat qadrini va sog'lom moliyaviy maqsadlarni shakllantiradi.
+          </p>
+        </div>
+        <button type="button" onclick="dismissCoinRateTip()" class="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] rounded-lg border border-amber-500/40 transition">
+          ✓ Tushundim (Boshqa ko'rsatilmasin)
+        </button>
+      </div>
+
+      <div class="py-3 space-y-3">
+        <!-- Presets -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Tezkor tavsiyaviy kurslar:</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button type="button" onclick="applyCoinRatePreset(1000, 10000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 10,000
+            </button>
+            <button type="button" onclick="applyCoinRatePreset(1000, 5000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 5,000
+            </button>
+            <button type="button" onclick="applyCoinRatePreset(1000, 20000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 20,000
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Tanga miqdori:</label>
+            <input id="inputCoinRateCoins" type="number" value="1000" min="1" step="100" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-500 font-bold" oninput="updateCoinRatePreview()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">So'm miqdori:</label>
+            <input id="inputCoinRateSom" type="number" value="10000" min="1" step="1000" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-500 font-bold text-amber-400" oninput="updateCoinRatePreview()" />
+          </div>
+        </div>
+
+        <!-- Live calculation indicator -->
+        <div class="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700 text-center text-xs">
+          <span class="text-slate-400">Hisob-kitob:</span>
+          <span id="coinRateLivePreview" class="font-bold text-amber-300 ml-1">1 tanga = 10 so'm</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeCoinRateModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSaveCoinRate" onclick="saveCoinRate()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <span>Saqlash</span>
+        </button>
       </div>
     </div>
   </div>

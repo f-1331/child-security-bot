@@ -49,6 +49,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📋 Vazifalar va Tangalar"),
+            KeyboardButton(text="💰 Tangalar kursini sozlash")
+        ],
+        [
+            KeyboardButton(text="🔑 Saytga kirish kodi"),
             KeyboardButton(text="📊 Bugungi hisobot")
         ],
         [
@@ -87,10 +91,11 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="📋 Vazifalarim va Tangalar")
         ],
         [
-            KeyboardButton(text="🔄 Rolni o'zgartirish"),
-            KeyboardButton(text="ℹ️ Yordam")
+            KeyboardButton(text="🔑 Saytga kirish kodi"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish")
         ],
         [
+            KeyboardButton(text="ℹ️ Yordam"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -108,6 +113,16 @@ def get_settings_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
+                    text="🔑 Saytga kirish kodi",
+                    callback_data="show_web_access_code"
+                ),
+                InlineKeyboardButton(
+                    text="💰 Tangalar kursini sozlash",
+                    callback_data="coin_rate_start"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="🔄 Rolni almashtirish",
                     callback_data="role_switch_start"
                 )
@@ -123,6 +138,40 @@ def get_settings_keyboard() -> InlineKeyboardMarkup:
                     text="❌ Yopish",
                     callback_data="logout_cancel"
                 )
+            ]
+        ]
+    )
+
+
+def get_coin_rate_preset_keyboard() -> InlineKeyboardMarkup:
+    """Preset options for coin rate."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🪙 1,000 tanga = 10,000 so'm (Standart)",
+                    callback_data="set_coin_rate:1000:10000"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🪙 1,000 = 5,000 so'm",
+                    callback_data="set_coin_rate:1000:5000"
+                ),
+                InlineKeyboardButton(
+                    text="🪙 1,000 = 20,000 so'm",
+                    callback_data="set_coin_rate:1000:20000"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ O'z qiymatimni kiritish",
+                    callback_data="custom_coin_rate"
+                ),
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data="cancel_action"
+                ),
             ]
         ]
     )
