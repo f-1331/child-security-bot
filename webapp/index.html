@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Smart Parental Control - Bolalar Nazorati</title>
   
   <!-- Telegram WebApp SDK -->
@@ -19,7 +22,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=6" />
 
   <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
   <script>
@@ -117,8 +120,8 @@
               <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
               <span class="truncate">Jonli</span>
             </p>
-            <!-- Demo Mode Indicator (Safely on 2nd line with distinct purple color - NEVER collides with coin rate!) -->
-            <span id="demoBadge" class="hidden text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded-md font-bold shrink-0">🎮 Demo</span>
+            <!-- Demo badge suppressed in header to prevent any collisions; Demo mode is fully shown in demoNoticeBanner below -->
+            <span id="demoBadge" class="hidden" style="display:none !important;"></span>
           </div>
         </div>
       </div>
@@ -974,6 +977,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
