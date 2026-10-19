@@ -48,60 +48,60 @@
 <body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden select-none">
 
   <!-- TOP HEADER -->
-  <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-3.5 py-2 z-20 flex flex-col gap-1.5 shadow-lg">
+  <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-2.5 sm:px-4 py-2 z-20 flex flex-col gap-1.5 shadow-lg safe-top">
     <!-- Top Row: Child Selector & Telemetry Pills -->
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <div class="relative cursor-pointer" onclick="centerOnChild()">
-          <div id="childAvatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+    <div class="flex items-center justify-between gap-1 sm:gap-2">
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+        <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
+          <div id="childAvatar" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md text-xs sm:text-base">
             B
           </div>
-          <span id="onlineDot" class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+          <span id="onlineDot" class="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
         </div>
         
-        <div>
-          <div class="flex items-center gap-1.5">
-            <select id="childSelect" class="bg-slate-800 text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500">
-              <option value="">Farzand yuklanmoqda...</option>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1">
+            <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-1.5 sm:px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[105px] sm:max-w-[170px] truncate">
+              <option value="">Farzand...</option>
             </select>
             <!-- Demo Mode Indicator -->
-            <span id="demoBadge" class="hidden text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-semibold">Demo</span>
+            <span id="demoBadge" class="hidden text-[9px] sm:text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1 sm:px-1.5 py-0.5 rounded font-semibold shrink-0">Demo</span>
           </div>
-          <p id="lastSeenText" class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-            <span>Jonli rejim</span>
+          <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 truncate">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+            <span class="truncate">Jonli</span>
           </p>
         </div>
       </div>
 
       <!-- Telemetry Status Pills & Corner Controls -->
-      <div class="flex items-center gap-1.5">
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <!-- Coin rate corner button (for Parent) -->
-        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-full text-[11px] font-bold shadow-sm transition active:scale-95" title="Tangalar kursini sozlash">
+        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-full text-[10px] sm:text-[11px] font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
           <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="coinRateCornerText">1k = 10k so'm</span>
+          <span id="coinRateCornerText" class="truncate">1k = 10k</span>
         </button>
 
         <!-- Child balance corner pill (for Child) -->
-        <div id="childMoneyCorner" class="hidden flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-full text-[11px] font-bold shadow-sm" title="Jamg'arilgan mablag'ingiz">
+        <div id="childMoneyCorner" class="hidden flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-1 rounded-full text-[10px] sm:text-[11px] font-bold shadow-sm shrink-0" title="Jamg'arilgan mablag'ingiz">
           <i data-lucide="wallet" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span id="childMoneyCornerText">0 so'm</span>
+          <span id="childMoneyCornerText" class="truncate">0 so'm</span>
         </div>
 
         <!-- Battery Pill -->
-        <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm">
+        <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm shrink-0">
           <i id="batteryIcon" data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
           <span id="batteryText">--%</span>
         </div>
 
-        <!-- Sound Profile Pill -->
-        <div id="soundPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-full text-xs font-medium text-slate-300 border border-slate-700 shadow-sm" title="Ovoz rejimi">
+        <!-- Sound Profile Pill (Text hidden on mobile, visible on desktop) -->
+        <div id="soundPill" class="flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 border border-slate-700 shadow-sm shrink-0" title="Ovoz rejimi">
           <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-          <span id="soundText">Oddiy</span>
+          <span id="soundText" class="hidden sm:inline">Oddiy</span>
         </div>
 
         <!-- Logout / Switch Account Button -->
-        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-red-900/40 border border-slate-700 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90" title="Chiqish / Boshqa hisobga o'tish">
+        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800 hover:bg-red-900/40 border border-slate-700 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Chiqish / Boshqa hisobga o'tish">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -183,8 +183,8 @@
       </button>
     </div>
 
-    <!-- Map Bottom Card: Address & Geofence Status (Safely kept away from bottom-right) -->
-    <div id="locationCard" class="absolute left-3.5 right-36 bottom-3 z-20 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-2xl flex items-center justify-between transition-all duration-200">
+    <!-- Map Bottom Card: Address & Geofence Status (Safely kept away from bottom-right on mobile; neat floating card on desktop) -->
+    <div id="locationCard" class="absolute left-3.5 right-36 md:right-auto md:left-6 bottom-3 md:bottom-24 z-20 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-2xl flex items-center justify-between transition-all duration-200 md:max-w-sm">
       <div class="flex flex-col pr-2 min-w-0">
         <div class="flex items-center gap-1.5 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
           <i data-lucide="map-pin" class="w-3 h-3 text-blue-400"></i>
@@ -203,34 +203,34 @@
     </div>
   </main>
 
-  <!-- BOTTOM NAVIGATION BAR (Mobile Optimized 4-tab with bottom-right clearance) -->
-  <nav class="bg-slate-900/95 backdrop-blur-md border-t border-slate-800 pl-2 pr-36 py-2 z-30 grid grid-cols-4 gap-1 shadow-2xl safe-bottom">
-    <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active flex flex-col items-center py-1.5 px-0.5 rounded-xl text-blue-400 transition">
+  <!-- BOTTOM NAVIGATION BAR (Responsive: Mobile Bar + Desktop Floating Dock) -->
+  <nav class="bg-slate-900/95 backdrop-blur-md border-t md:border border-slate-800 pl-2 pr-36 md:pr-2 md:pl-2 py-2 z-30 grid grid-cols-4 gap-1 shadow-2xl safe-bottom md:fixed md:bottom-5 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[420px] md:rounded-2xl transition-all duration-300">
+    <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-blue-400 transition hover:bg-slate-800/60">
       <i data-lucide="map" class="w-5 h-5"></i>
-      <span class="text-[9px] font-bold mt-1 truncate">Xarita</span>
+      <span class="text-[9px] md:text-[11px] font-bold mt-1 truncate">Xarita</span>
     </button>
 
-    <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab flex flex-col items-center py-1.5 px-0.5 rounded-xl text-slate-400 hover:text-slate-200 transition">
+    <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
       <i data-lucide="map-pin" class="w-5 h-5"></i>
-      <span class="text-[9px] font-medium mt-1 truncate">Joylar</span>
+      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Joylar</span>
     </button>
 
-    <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab flex flex-col items-center py-1.5 px-0.5 rounded-xl text-slate-400 hover:text-slate-200 transition">
+    <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
       <i data-lucide="check-square" class="w-5 h-5"></i>
-      <span class="text-[9px] font-medium mt-1 truncate">Vazifalar</span>
+      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Vazifalar</span>
     </button>
 
-    <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab flex flex-col items-center py-1.5 px-0.5 rounded-xl text-slate-400 hover:text-slate-200 transition">
+    <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
       <i data-lucide="history" class="w-5 h-5"></i>
-      <span class="text-[9px] font-medium mt-1 truncate">Tarix</span>
+      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Tarix</span>
     </button>
   </nav>
 
-  <!-- SLIDING MODAL: KERAKLI JOYLAR (Mobile Bottom Sheet) -->
-  <div id="modal-zones" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end">
-    <div class="bg-slate-900 border-t border-slate-800 rounded-t-[28px] p-5 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl safe-bottom">
+  <!-- SLIDING MODAL: KERAKLI JOYLAR (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-zones" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
       <!-- Drag handle indicator for mobile -->
-      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0"></div>
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
 
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
@@ -255,11 +255,11 @@
     </div>
   </div>
 
-  <!-- SLIDING MODAL: ROUTE HISTORY (Mobile Bottom Sheet) -->
-  <div id="modal-history" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end">
-    <div class="bg-slate-900 border-t border-slate-800 rounded-t-[28px] p-5 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl safe-bottom">
+  <!-- SLIDING MODAL: ROUTE HISTORY (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-history" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
       <!-- Drag handle indicator for mobile -->
-      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0"></div>
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
 
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
@@ -286,8 +286,8 @@
   </div>
 
   <!-- MODAL: ADD KERAKLI JOY WITH QUICK PRESETS -->
-  <div id="modal-add-zone" class="hidden fixed inset-0 z-[1000] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+  <div id="modal-add-zone" class="hidden fixed inset-0 z-[1000] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in my-auto max-h-[92dvh] overflow-y-auto custom-scroll">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="map-pin" class="w-4 h-4 text-emerald-400"></i>
@@ -335,10 +335,10 @@
     </div>
   </div>
 
-  <!-- SLIDING MODAL: TASKS (Mobile Bottom Sheet) -->
-  <div id="modal-tasks" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end">
-    <div class="bg-slate-900 border-t border-slate-800 rounded-t-[28px] p-5 max-h-[85vh] flex flex-col animate-slide-up shadow-2xl safe-bottom">
-      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0"></div>
+  <!-- SLIDING MODAL: TASKS (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-tasks" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
 
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
@@ -365,8 +365,8 @@
   </div>
 
   <!-- MODAL: ADD TASK (With Photo/Video capture & preview) -->
-  <div id="modal-add-task" class="hidden fixed inset-0 z-[1010] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+  <div id="modal-add-task" class="hidden fixed inset-0 z-[1010] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in my-auto max-h-[92dvh] overflow-y-auto custom-scroll">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-400"></i>
@@ -423,8 +423,8 @@
   </div>
 
   <!-- MODAL: TASK SCHEDULE PICKER (Child commitment) -->
-  <div id="modal-task-schedule" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+  <div id="modal-task-schedule" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
@@ -449,8 +449,8 @@
   </div>
 
   <!-- MODAL: TASK PROOF UPLOAD (Child sends proof photo) -->
-  <div id="modal-task-proof" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+  <div id="modal-task-proof" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="camera" class="w-4 h-4 text-emerald-400"></i>
@@ -486,8 +486,8 @@
   </div>
 
   <!-- FULL SCREEN AUTH GATE (Locks site until 6-digit code is verified) -->
-  <div id="authGateModal" class="hidden fixed inset-0 z-[2000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in text-center">
+  <div id="authGateModal" class="hidden fixed inset-0 z-[2000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-top safe-bottom">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-sm sm:max-w-md max-h-[94dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in text-center">
       <div class="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3">
         <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
       </div>
@@ -548,8 +548,8 @@
   </div>
 
   <!-- MODAL: COIN RATE SETTINGS (Corner feature) -->
-  <div id="modal-coin-rate" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in">
+  <div id="modal-coin-rate" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>

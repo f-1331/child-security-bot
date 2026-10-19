@@ -106,6 +106,14 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLiveTelemetry(currentChildId);
     }
   }, 8000);
+
+  // Responsive map size adjustment on screen resize & device orientation change
+  window.addEventListener("resize", () => {
+    if (map) map.invalidateSize();
+  });
+  window.addEventListener("orientationchange", () => {
+    if (map) setTimeout(() => map.invalidateSize(), 200);
+  });
 });
 
 // Trigger haptic feedback when Telegram WebApp is available
@@ -1111,6 +1119,9 @@ function switchTab(tabName) {
   } else {
     if (floatControls) floatControls.classList.remove("hidden");
     if (locCard) locCard.classList.remove("hidden");
+    if (map) {
+      setTimeout(() => map.invalidateSize(), 80);
+    }
   }
 }
 
