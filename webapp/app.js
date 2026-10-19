@@ -132,7 +132,6 @@ function haptic(type = "light") {
 function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
   const qCode = urlParams.get("code");
-  const qParent = urlParams.get("parent_id");
 
   // 1. Direct code in query param: ?code=123456
   if (qCode) {
@@ -142,7 +141,7 @@ function checkAuthenticationState() {
     return;
   }
 
-  // 2. Check localStorage session
+  // 2. Check localStorage session (User previously authenticated with code)
   const stored = localStorage.getItem("smart_tracker_session");
   if (stored) {
     try {
@@ -157,15 +156,20 @@ function checkAuthenticationState() {
     }
   }
 
-  // 3. Fallback if opened directly via Telegram parent WebApp button
-  if (qParent || tg?.initDataUnsafe?.user?.id) {
-    parentId = qParent || tg.initDataUnsafe.user.id;
+  // 3. Check if user previously chosen Demo mode in this session
+  const demoRole = sessionStorage.getItem("smart_tracker_demo_role");
+  if (demoRole) {
     hideAuthGateModal();
-    loadData();
+    if (demoRole === "child") {
+      enableChildDemoMode();
+    } else {
+      enableDemoMode();
+    }
     return;
   }
 
-  // 4. Otherwise: Must authenticate with 6-digit code!
+  // 4. Default for all new visitors (including Telegram Mini App):
+  // ALWAYS show auth gate modal with 6-digit code prompt and Demo options!
   showAuthGateModal();
 }
 
@@ -173,8 +177,14 @@ function showAuthGateModal() {
   const modal = document.getElementById("authGateModal");
   if (modal) {
     modal.classList.remove("hidden");
+    const closeBtn = document.getElementById("btnCloseAuthGate");
+    if (closeBtn) {
+      if (isDemoMode || authenticatedSession) closeBtn.classList.remove("hidden");
+      else closeBtn.classList.add("hidden");
+    }
     const input = document.getElementById("inputAuthCode");
     if (input) setTimeout(() => input.focus(), 200);
+    if (window.lucide) lucide.createIcons();
   }
 }
 
@@ -209,6 +219,14 @@ async function submitAuthCode() {
       body: JSON.stringify({ code: code })
     });
 
+    if (res.status === 404 && (code === "123456" || code === "000000" || code.toLowerCase() === "demo")) {
+      sessionStorage.setItem("smart_tracker_demo_role", "parent");
+      hideAuthGateModal();
+      enableDemoMode();
+      showToast("🎮 Namuna (Demo) rejimiga kirildi!");
+      return;
+    }
+
     const data = await res.json();
     if (!res.ok || data.status !== "success") {
       throw new Error(data.detail || "Kiritilgan kod noto'g'ri yoki mavjud emas.");
@@ -216,6 +234,7 @@ async function submitAuthCode() {
 
     // Save session
     localStorage.setItem("smart_tracker_session", JSON.stringify(data));
+    sessionStorage.removeItem("smart_tracker_demo_role");
     haptic("success");
     hideAuthGateModal();
     applyAuthenticatedUser(data);
@@ -237,6 +256,7 @@ async function submitAuthCode() {
 function startDemoMode(role) {
   haptic("medium");
   hideAuthGateModal();
+  sessionStorage.setItem("smart_tracker_demo_role", role);
   if (role === "child") {
     enableChildDemoMode();
   } else {
@@ -264,7 +284,9 @@ function enableChildDemoMode() {
   });
 
   document.getElementById("emptyStateBanner").classList.add("hidden");
-  document.getElementById("demoBadge").classList.remove("hidden");
+  document.getElementById("demoBadge")?.classList.remove("hidden");
+  document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
 
   // Render demo child live position
   const demoLat = 41.2916;
@@ -283,6 +305,9 @@ function applyAuthenticatedUser(data) {
   authenticatedSession = data;
   isDemoMode = false;
   currentRole = data.role;
+  sessionStorage.removeItem("smart_tracker_demo_role");
+  document.getElementById("demoBadge")?.classList.add("hidden");
+  document.getElementById("demoNoticeBanner")?.classList.add("hidden");
 
   if (data.role === "parent") {
     parentId = data.user.id;
@@ -380,8 +405,11 @@ function logoutSession() {
   haptic("medium");
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
     localStorage.removeItem("smart_tracker_session");
+    sessionStorage.removeItem("smart_tracker_demo_role");
     authenticatedSession = null;
     isDemoMode = false;
+    document.getElementById("demoBadge")?.classList.add("hidden");
+    document.getElementById("demoNoticeBanner")?.classList.add("hidden");
     showAuthGateModal();
     showToast("🚪 Hisobdan chiqildi");
   }
@@ -594,7 +622,9 @@ function enableDemoMode() {
   haptic("success");
   isDemoMode = true;
   document.getElementById("emptyStateBanner").classList.add("hidden");
-  document.getElementById("demoBadge").classList.remove("hidden");
+  document.getElementById("demoBadge")?.classList.remove("hidden");
+  document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
 
   childrenList = [
     {
