@@ -109,24 +109,24 @@
         </div>
         
         <div class="min-w-0">
-          <div class="flex items-center gap-1">
-            <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-1.5 sm:px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[105px] sm:max-w-[170px] truncate">
-              <option value="">Farzand...</option>
-            </select>
-            <!-- Demo Mode Indicator -->
-            <span id="demoBadge" class="hidden text-[10px] bg-amber-500/25 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-extrabold shrink-0">🎮 Demo</span>
+          <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[110px] sm:max-w-[160px] truncate block">
+            <option value="">Farzand...</option>
+          </select>
+          <div class="flex items-center gap-1.5 mt-0.5">
+            <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 truncate">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+              <span class="truncate">Jonli</span>
+            </p>
+            <!-- Demo Mode Indicator (Safely on 2nd line with distinct purple color - NEVER collides with coin rate!) -->
+            <span id="demoBadge" class="hidden text-[9px] bg-purple-500/20 text-purple-300 border border-purple-500/40 px-1.5 py-0.5 rounded-md font-bold shrink-0">🎮 Demo</span>
           </div>
-          <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 truncate">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-            <span class="truncate">Jonli kuzatuv</span>
-          </p>
         </div>
       </div>
 
       <!-- Parent Telemetry Pills & Action Controls -->
       <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
         <!-- Coin rate corner button (for Parent) -->
-        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-full text-[10px] sm:text-[11px] font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
+        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
           <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
           <span id="coinRateCornerText" class="truncate">1k = 10k</span>
         </button>
@@ -137,8 +137,8 @@
           <span id="batteryText">--%</span>
         </div>
 
-        <!-- Sound Profile Pill -->
-        <div id="soundPill" class="flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 border border-slate-700 shadow-sm shrink-0" title="Ovoz rejimi">
+        <!-- Sound Profile Pill (Hidden on mobile to keep top row spacious and prevent overlap) -->
+        <div id="soundPill" class="hidden sm:flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 border border-slate-700 shadow-sm shrink-0" title="Ovoz rejimi">
           <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
           <span id="soundText" class="hidden sm:inline">Oddiy</span>
         </div>
