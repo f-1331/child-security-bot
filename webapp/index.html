@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=9" />
 
   <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
   <script>
@@ -739,8 +739,11 @@
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Mukofot tangasi:</label>
-          <input id="inputTaskReward" type="number" value="1000" min="100" step="500" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 transition font-bold text-amber-400" />
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-300">Mukofot tangasi:</label>
+            <span id="inputTaskRewardSom" class="text-xs font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shadow-sm">≈ 10,000 so'm</span>
+          </div>
+          <input id="inputTaskReward" type="number" value="1000" min="100" step="500" oninput="updateTaskRewardPreview(this.value)" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 transition font-bold text-amber-400" />
         </div>
 
         <div>
@@ -774,7 +777,7 @@
 
   <!-- MODAL: TASK SCHEDULE PICKER (Child commitment) -->
   <div id="modal-task-schedule" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[90dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
@@ -787,13 +790,75 @@
 
       <p class="text-xs text-slate-300 mt-3 mb-2">Vaqtni tanlang, ota-onangizga darhol bildirishnoma boradi:</p>
 
-      <div class="grid grid-cols-2 gap-2 py-2">
-        <button onclick="confirmTaskSchedule('Hozir')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">⚡️ Hozir</button>
-        <button onclick="confirmTaskSchedule('15 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">⏰ 15 daqiqada</button>
-        <button onclick="confirmTaskSchedule('30 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">⏰ 30 daqiqada</button>
-        <button onclick="confirmTaskSchedule('1 soatdan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">⏰ 1 soatda</button>
-        <button onclick="confirmTaskSchedule('Bugun soat 18:00 da')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">🌙 Soat 18:00 da</button>
-        <button onclick="confirmTaskSchedule('Ertaga')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left">📅 Ertaga</button>
+      <!-- Tezkor tanlov tugmalari -->
+      <div class="grid grid-cols-2 gap-2 py-1">
+        <button onclick="confirmTaskSchedule('Hozir')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⚡️ Hozir</button>
+        <button onclick="confirmTaskSchedule('15 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 15 daqiqada</button>
+        <button onclick="confirmTaskSchedule('30 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 30 daqiqada</button>
+        <button onclick="confirmTaskSchedule('1 soatdan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 1 soatda</button>
+        <button onclick="confirmTaskSchedule('Ertaga')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">📅 Ertaga</button>
+        <button type="button" onclick="toggleCustomSchedulePicker()" class="p-2.5 bg-gradient-to-r from-amber-600/30 to-purple-600/30 hover:from-amber-600/40 border border-amber-500/50 rounded-xl text-xs font-bold text-amber-300 text-left active:scale-95 transition flex items-center justify-between">
+          <span>⚙️ Boshqa vaqt...</span>
+          <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-amber-400"></i>
+        </button>
+      </div>
+
+      <!-- BOLA O'ZI BELGILASH BO'LIMI: Sana va Vaqt tanlash (Sana avtomatik bugungi kunga to'g'irlangan) -->
+      <div id="customScheduleBox" class="mt-3 p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-2xl flex flex-col gap-3 shadow-inner">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-amber-300 flex items-center gap-1.5">
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>O'zingiz aniq vaqtni tanlang</span>
+          </span>
+          <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black">
+            ✨ Bugun avtomatik
+          </span>
+        </div>
+
+        <!-- Sana tanlash (Avtomatik bugungi sana qo'yilgan, yosh bolalar tegishi shart emas) -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1 flex items-center justify-between">
+            <span>📅 Bajarish sanasi:</span>
+            <span class="text-[9px] text-emerald-400 font-medium">Bugungi kun tayyor</span>
+          </label>
+          <input
+            id="scheduleCustomDate"
+            type="date"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-400 transition"
+          />
+        </div>
+
+        <!-- Vaqt tanlash -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-bold text-slate-300">⏰ Bajarish vaqti:</label>
+            <span id="customTimePreviewBadge" class="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md"></span>
+          </div>
+          <input
+            id="scheduleCustomTime"
+            type="time"
+            onchange="updateScheduleTimeBadge()"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center text-lg font-black text-amber-300 outline-none focus:border-amber-400 transition tracking-widest"
+          />
+        </div>
+
+        <!-- Tezkor vaqt sozlash tugmalari (Yosh bolalar uchun oson: bitta bosishda vaqt qo'shiladi) -->
+        <div class="grid grid-cols-4 gap-1.5">
+          <button type="button" onclick="adjustScheduleMinutes(15)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+15 daq</button>
+          <button type="button" onclick="adjustScheduleMinutes(30)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+30 daq</button>
+          <button type="button" onclick="adjustScheduleMinutes(60)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+1 soat</button>
+          <button type="button" onclick="adjustScheduleMinutes(120)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+2 soat</button>
+        </div>
+
+        <!-- Tasdiqlash tugmasi -->
+        <button
+          type="button"
+          onclick="submitCustomSchedule()"
+          class="w-full mt-1 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-1.5"
+        >
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Shu vaqtga va'da berish</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1252,6 +1317,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

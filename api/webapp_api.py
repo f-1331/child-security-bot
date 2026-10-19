@@ -519,10 +519,12 @@ async def schedule_task_endpoint(
 
     if telemetry.telegram_bot:
         try:
+            pt_clean = payload.promised_time.strip()
+            suffix = "" if (pt_clean.endswith("da") or pt_clean.endswith("da)")) else "da"
             await telemetry.telegram_bot.send_message(
                 chat_id=task.parent_id,
                 text=(
-                    f"⏰ **Bolangiz {payload.promised_time}da bu topshiriqni bajarishga qaror qildi**\n\n"
+                    f"⏰ **Bolangiz {pt_clean}{suffix} bu topshiriqni bajarishga qaror qildi**\n\n"
                     f"📌 Topshiriq: **{task.title}**\n"
                     f"👤 Farzand: **{child_name}**"
                 ),

@@ -1905,10 +1905,14 @@ function renderChildDashboardQuests() {
             <span class="text-xs font-bold text-white truncate">${t.title || 'Missiya'}</span>
             <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${statusClass}">${statusText}</span>
           </div>
-          <p class="text-[11px] text-amber-300 font-black flex items-center gap-1 mt-1">
-            <span>🪙 +${coins.toLocaleString()} tanga</span>
-            <span class="text-slate-400 font-normal text-[10px]">(≈ ${moneyEquivalent.toLocaleString()} so'm)</span>
-          </p>
+          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <span class="text-[10px] sm:text-[11px] text-amber-300 font-black flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg shadow-sm">
+              <span>🪙 +${coins.toLocaleString()} tanga</span>
+            </span>
+            <span class="text-[10px] sm:text-[11px] text-emerald-300 font-black flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-lg shadow-sm">
+              <span>💵 +${moneyEquivalent.toLocaleString()} so'm</span>
+            </span>
+          </div>
         </div>
         <button onclick="switchTab('tasks')" class="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white rounded-xl text-xs font-bold shrink-0 transition active:scale-95 shadow">
           Bajarish
@@ -2297,6 +2301,9 @@ function renderTasksList() {
   }
 
   container.innerHTML = balanceBanner + tasksList.map(t => {
+    const rewardCoins = t.reward_coins || 1000;
+    const rewardSom = Math.round(rewardCoins * (coinRateSom / Math.max(1, coinRateCoins)));
+
     let statusBadge = "";
     if (t.status === "completed_by_child") {
       statusBadge = '<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">⏳ Tekshiruvda</span>';
@@ -2386,7 +2393,7 @@ function renderTasksList() {
         actionButtons = `
           <div class="mt-3 pt-2 border-t border-slate-800 text-center py-1 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
             <span class="text-xs text-emerald-300 font-bold flex items-center justify-center gap-1.5">
-              <span>🎉</span> <span>Ota-onangiz tasdiqladi! +${(t.reward_coins || 1000).toLocaleString()} tanga berildi</span>
+              <span>🎉</span> <span>Ota-onangiz tasdiqladi! +${rewardCoins.toLocaleString()} tanga (+${rewardSom.toLocaleString()} so'm) berildi</span>
             </span>
           </div>
         `;
@@ -2408,7 +2415,7 @@ function renderTasksList() {
           <div class="flex gap-2 mt-3 pt-2 border-t border-slate-800">
             <button onclick="approveTask(${t.id})" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-lg flex items-center justify-center gap-1">
               <i data-lucide="check" class="w-4 h-4"></i>
-              <span>Tasdiqlash (+tanga)</span>
+              <span>Tasdiqlash (+${rewardCoins.toLocaleString()} tanga / ${rewardSom.toLocaleString()} so'm)</span>
             </button>
             <button onclick="rejectTask(${t.id})" class="px-3 py-2 bg-slate-800 hover:bg-red-600/30 text-red-400 border border-slate-700 active:scale-95 rounded-xl text-xs font-semibold transition">
               Rad etish
@@ -2419,7 +2426,10 @@ function renderTasksList() {
         actionButtons = `
           <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
             <span>⏳ Farzand hali xabarni ko'rmadi</span>
-            <span class="text-amber-400 font-bold">+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-amber-400 font-bold">+${rewardCoins.toLocaleString()} tanga</span>
+              <span class="text-emerald-400 font-bold text-[10px]">(≈ ${rewardSom.toLocaleString()} so'm)</span>
+            </div>
           </div>
         `;
       } else if (t.status === "seen") {
@@ -2439,8 +2449,11 @@ function renderTasksList() {
       } else if (t.status === "approved") {
         actionButtons = `
           <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-emerald-400 flex items-center justify-between font-medium">
-            <span>🏆 Tasdiqlangan va tanga berilgan</span>
-            <span class="font-bold">+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+            <span>🏆 Tasdiqlangan</span>
+            <div class="flex items-center gap-1.5">
+              <span class="font-bold">+${rewardCoins.toLocaleString()} tanga</span>
+              <span class="text-emerald-400 font-bold text-[10px]">(+${rewardSom.toLocaleString()} so'm)</span>
+            </div>
           </div>
         `;
       } else if (t.status === "rejected") {
@@ -2461,9 +2474,15 @@ function renderTasksList() {
             ${statusBadge}
           </div>
           ${t.description ? `<p class="text-[11px] text-slate-300 mt-1">${t.description}</p>` : ''}
-          <div class="flex items-center gap-1.5 mt-2 text-xs font-bold text-amber-400">
-            <i data-lucide="coins" class="w-3.5 h-3.5"></i>
-            <span>+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+          <div class="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-700/60">
+            <div class="flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl shadow-sm">
+              <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>+${rewardCoins.toLocaleString()} tanga</span>
+            </div>
+            <div class="flex items-center gap-1 text-xs font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-xl shadow-sm">
+              <span>💵</span>
+              <span>+${rewardSom.toLocaleString()} so'm</span>
+            </div>
           </div>
           ${mediaHtml}
           ${proofHtml}
@@ -2636,7 +2655,131 @@ async function markTaskSeen(taskId) {
 function openScheduleModal(taskId) {
   haptic("medium");
   activeScheduleTaskId = taskId;
-  document.getElementById("modal-task-schedule").classList.remove("hidden");
+
+  const modal = document.getElementById("modal-task-schedule");
+  if (modal) modal.classList.remove("hidden");
+
+  // Automatically compute and fill current date and time
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+
+  const dateInput = document.getElementById("scheduleCustomDate");
+  if (dateInput) {
+    dateInput.value = todayStr;
+    dateInput.min = todayStr; // Cannot pick past dates
+  }
+
+  // Set time to round 15-30 mins ahead of current time
+  let hours = now.getHours();
+  let minutes = now.getMinutes();
+  minutes = Math.ceil((minutes + 15) / 5) * 5;
+  if (minutes >= 60) {
+    hours = (hours + 1) % 24;
+    minutes = minutes % 60;
+  }
+  const hoursStr = String(hours).padStart(2, "0");
+  const minsStr = String(minutes).padStart(2, "0");
+  const timeStr = `${hoursStr}:${minsStr}`;
+
+  const timeInput = document.getElementById("scheduleCustomTime");
+  if (timeInput) {
+    timeInput.value = timeStr;
+  }
+
+  updateScheduleTimeBadge();
+  if (window.lucide) lucide.createIcons();
+}
+
+function adjustScheduleMinutes(addMins) {
+  haptic("light");
+  const timeInput = document.getElementById("scheduleCustomTime");
+  const dateInput = document.getElementById("scheduleCustomDate");
+  if (!timeInput) return;
+
+  const currentTime = timeInput.value || "12:00";
+  const [h, m] = currentTime.split(":").map(Number);
+
+  let totalMins = (h || 0) * 60 + (m || 0) + addMins;
+  if (totalMins >= 24 * 60) {
+    totalMins = totalMins % (24 * 60);
+    if (dateInput && dateInput.value) {
+      const d = new Date(dateInput.value);
+      d.setDate(d.getDate() + 1);
+      dateInput.value = d.toISOString().split("T")[0];
+    }
+  }
+
+  const newH = Math.floor(totalMins / 60);
+  const newM = totalMins % 60;
+  timeInput.value = `${String(newH).padStart(2, "0")}:${String(newM).padStart(2, "0")}`;
+  updateScheduleTimeBadge();
+}
+
+function updateScheduleTimeBadge() {
+  const timeInput = document.getElementById("scheduleCustomTime");
+  const badge = document.getElementById("customTimePreviewBadge");
+  if (timeInput && badge) {
+    badge.textContent = `Soat: ${timeInput.value || "--:--"}`;
+  }
+}
+
+function toggleCustomSchedulePicker() {
+  haptic("light");
+  const box = document.getElementById("customScheduleBox");
+  if (box) {
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const timeInput = document.getElementById("scheduleCustomTime");
+    if (timeInput) timeInput.focus();
+  }
+}
+
+function submitCustomSchedule() {
+  const dateInput = document.getElementById("scheduleCustomDate");
+  const timeInput = document.getElementById("scheduleCustomTime");
+
+  const selectedTime = timeInput ? timeInput.value : "";
+  if (!selectedTime) {
+    showToast("Iltimos, bajarish vaqtini tanlang");
+    return;
+  }
+
+  const selectedDate = dateInput ? dateInput.value : "";
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const todayStr = `${year}-${month}-${day}`;
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomYear = tomorrow.getFullYear();
+  const tomMonth = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const tomDay = String(tomorrow.getDate()).padStart(2, "0");
+  const tomorrowStr = `${tomYear}-${tomMonth}-${tomDay}`;
+
+  let promisedStr = "";
+  if (!selectedDate || selectedDate === todayStr) {
+    promisedStr = `Bugun soat ${selectedTime}`;
+  } else if (selectedDate === tomorrowStr) {
+    promisedStr = `Ertaga soat ${selectedTime}`;
+  } else {
+    const parts = selectedDate.split("-");
+    promisedStr = `${parts[2]}.${parts[1]} soat ${selectedTime}`;
+  }
+
+  confirmTaskSchedule(promisedStr);
+}
+
+function updateTaskRewardPreview(coinsVal) {
+  const coins = parseInt(coinsVal) || 0;
+  const som = Math.round(coins * (coinRateSom / Math.max(1, coinRateCoins)));
+  const badge = document.getElementById("inputTaskRewardSom");
+  if (badge) {
+    badge.textContent = `≈ ${som.toLocaleString()} so'm`;
+  }
 }
 
 function closeScheduleModal() {
