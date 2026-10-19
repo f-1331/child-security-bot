@@ -1,10 +1,18 @@
+import logging
+import uuid
+from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram.types import FSInputFile
 
 from db.database import get_db
 import db.crud as crud
+from api import telemetry
+from bot.keyboards import get_child_task_action_keyboard, get_task_approval_keyboard
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/webapp", tags=["WebApp"])
 
@@ -155,6 +163,30 @@ async def delete_geofence_endpoint(
     return {"status": "success", "message": "Geofence deleted"}
 
 
+@router.post("/upload")
+async def upload_file_endpoint(file: UploadFile = File(...)):
+    """Upload media file (photo or video) for task assignment or proof."""
+    uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "").suffix.lower()
+    unique_filename = f"{uuid.uuid4().hex}{ext if ext else '.jpg'}"
+    target_path = uploads_dir / unique_filename
+
+    contents = await file.read()
+    with open(target_path, "wb") as f:
+        f.write(contents)
+
+    is_video = ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp"]
+    media_type = "video" if is_video else "photo"
+
+    return {
+        "status": "success",
+        "file_url": f"/uploads/{unique_filename}",
+        "media_type": media_type
+    }
+
+
 @router.get("/child/{child_id}/tasks")
 async def get_child_tasks(child_id: int, session: AsyncSession = Depends(get_db)):
     """Fetch child tasks list for WebApp display."""
@@ -164,10 +196,42 @@ async def get_child_tasks(child_id: int, session: AsyncSession = Depends(get_db)
         "tasks": [
             {
                 "id": t.id,
+                "parent_id": t.parent_id,
                 "title": t.title,
                 "description": t.description,
                 "reward_coins": t.reward_coins,
                 "status": t.status,
+                "media_type": t.media_type,
+                "media_url": t.media_url,
+                "seen_at": t.seen_at.isoformat() if t.seen_at else None,
+                "promised_time": t.promised_time,
+                "proof_photo_url": t.proof_photo_url,
+                "created_at": t.created_at.isoformat() if t.created_at else None
+            }
+            for t in tasks
+        ]
+    }
+
+
+@router.get("/parent/{parent_id}/tasks")
+async def get_parent_tasks_endpoint(parent_id: int, session: AsyncSession = Depends(get_db)):
+    """Fetch all tasks assigned by parent for WebApp display."""
+    tasks = await crud.get_tasks_for_parent(session, parent_id)
+    return {
+        "status": "success",
+        "tasks": [
+            {
+                "id": t.id,
+                "child_id": t.child_id,
+                "title": t.title,
+                "description": t.description,
+                "reward_coins": t.reward_coins,
+                "status": t.status,
+                "media_type": t.media_type,
+                "media_url": t.media_url,
+                "seen_at": t.seen_at.isoformat() if t.seen_at else None,
+                "promised_time": t.promised_time,
+                "proof_photo_url": t.proof_photo_url,
                 "created_at": t.created_at.isoformat() if t.created_at else None
             }
             for t in tasks
@@ -181,39 +245,238 @@ class CreateTaskRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     reward_coins: int = Field(1000, ge=100, le=1000000)
+    media_type: Optional[str] = None
+    media_url: Optional[str] = None
 
 
 @router.post("/task")
 async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession = Depends(get_db)):
-    """Create a task directly from WebApp."""
+    """Create a task directly from WebApp and deliver to child's Telegram."""
     task = await crud.create_task(
         session=session,
         parent_id=payload.parent_id,
         child_id=payload.child_id,
         title=payload.title,
         description=payload.description,
-        reward_coins=payload.reward_coins
+        reward_coins=payload.reward_coins,
+        media_type=payload.media_type,
+        media_url=payload.media_url
     )
     await session.commit()
-    return {"status": "success", "task": {"id": task.id, "title": task.title, "reward_coins": task.reward_coins}}
+
+    if telemetry.telegram_bot:
+        try:
+            bot = telemetry.telegram_bot
+            caption = (
+                f"🎯 **SIZGA YANGI VAZIFA BERILDI!**\n\n"
+                f"📌 **Vazifa:** {task.title}\n"
+                + (f"📝 **Tavsif:** {task.description}\n" if task.description else "")
+                + f"💰 **Mukofot:** +{task.reward_coins:,} tanga!\n\n"
+                f"Pastdagi tugmalar orqali xabarni ko'rganingizni tasdiqlang va qachon bajarishingizni belgilang 👇"
+            )
+            markup = get_child_task_action_keyboard(task.id, task.status, task.promised_time)
+
+            if task.media_type and task.media_url:
+                local_path = None
+                if task.media_url.startswith("/uploads/"):
+                    disk_file = Path(__file__).resolve().parent.parent / task.media_url.lstrip("/")
+                    if disk_file.exists():
+                        local_path = FSInputFile(str(disk_file))
+
+                target_media = local_path if local_path else task.media_url
+
+                if task.media_type == "photo":
+                    await bot.send_photo(chat_id=task.child_id, photo=target_media, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                elif task.media_type == "video":
+                    await bot.send_video(chat_id=task.child_id, video=target_media, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                else:
+                    await bot.send_message(chat_id=task.child_id, text=caption, reply_markup=markup, parse_mode="Markdown")
+            else:
+                await bot.send_message(chat_id=task.child_id, text=caption, reply_markup=markup, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Failed to dispatch task to child Telegram: {e}")
+
+    return {
+        "status": "success",
+        "task": {
+            "id": task.id,
+            "title": task.title,
+            "reward_coins": task.reward_coins,
+            "media_type": task.media_type,
+            "media_url": task.media_url
+        }
+    }
+
+
+@router.post("/task/{task_id}/seen")
+async def mark_task_seen_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
+    """Child marks task seen via WebApp -> notifies parent in Telegram."""
+    task = await crud.mark_task_seen(session, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    child = await crud.get_user(session, task.child_id)
+    child_name = child.full_name if child else "Farzandingiz"
+
+    if telemetry.telegram_bot:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=task.parent_id,
+                text=(
+                    f"👁 **Bolangiz bu habarni ko'rdi**\n\n"
+                    f"📌 Topshiriq: **{task.title}**\n"
+                    f"👤 Farzand: **{child_name}**"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify parent about task seen: {e}")
+
+    await session.commit()
+    return {"status": "success", "task_id": task_id, "seen": True}
+
+
+class ScheduleTaskRequest(BaseModel):
+    promised_time: str = Field(..., min_length=1, max_length=100)
+
+
+@router.post("/task/{task_id}/schedule")
+async def schedule_task_endpoint(
+    task_id: int,
+    payload: ScheduleTaskRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child sets promised completion time via WebApp -> notifies parent in Telegram."""
+    task = await crud.set_task_schedule(session, task_id, payload.promised_time)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    child = await crud.get_user(session, task.child_id)
+    child_name = child.full_name if child else "Farzandingiz"
+
+    if telemetry.telegram_bot:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=task.parent_id,
+                text=(
+                    f"⏰ **Bolangiz {payload.promised_time}da bu topshiriqni bajarishga qaror qildi**\n\n"
+                    f"📌 Topshiriq: **{task.title}**\n"
+                    f"👤 Farzand: **{child_name}**"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify parent about task schedule: {e}")
+
+    await session.commit()
+    return {"status": "success", "task_id": task_id, "promised_time": payload.promised_time}
+
+
+class CompleteTaskRequest(BaseModel):
+    proof_photo_url: str = Field(..., min_length=1)
+
+
+@router.post("/task/{task_id}/complete")
+async def complete_task_endpoint(
+    task_id: int,
+    payload: CompleteTaskRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child submits completed task with mandatory photo proof via WebApp."""
+    task = await crud.submit_task_completed(session, task_id, proof_photo_url=payload.proof_photo_url)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    child = await crud.get_user(session, task.child_id)
+    child_name = child.full_name if child else "Farzandingiz"
+
+    if telemetry.telegram_bot:
+        try:
+            bot = telemetry.telegram_bot
+            caption = (
+                f"🔔 **Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:**\n\n"
+                f"👤 Farzand: **{child_name}**\n"
+                f"📌 Topshiriq: **{task.title}**\n"
+                f"💰 Mukofot: **{task.reward_coins:,}** tanga\n\n"
+                f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
+            )
+            markup = get_task_approval_keyboard(task.id, task.reward_coins)
+
+            local_path = None
+            if payload.proof_photo_url.startswith("/uploads/"):
+                disk_file = Path(__file__).resolve().parent.parent / payload.proof_photo_url.lstrip("/")
+                if disk_file.exists():
+                    local_path = FSInputFile(str(disk_file))
+
+            target_photo = local_path if local_path else payload.proof_photo_url
+            try:
+                await bot.send_photo(
+                    chat_id=task.parent_id,
+                    photo=target_photo,
+                    caption=caption,
+                    reply_markup=markup,
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                await bot.send_message(
+                    chat_id=task.parent_id,
+                    text=f"{caption}\n\n📷 Rasm hisoboti: {payload.proof_photo_url}",
+                    reply_markup=markup,
+                    parse_mode="Markdown"
+                )
+        except Exception as e:
+            logger.error(f"Failed to forward completed task to parent Telegram: {e}")
+
+    await session.commit()
+    return {"status": "success", "task_id": task_id, "status": "completed_by_child"}
 
 
 @router.post("/task/{task_id}/approve")
 async def approve_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
-    """Approve a task directly from WebApp."""
+    """Approve a task directly from WebApp and notify child."""
     task = await crud.approve_task(session, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    child = await crud.get_user(session, task.child_id)
+    new_balance = child.virtual_balance if child else 0
+
+    if telemetry.telegram_bot:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=task.child_id,
+                text=(
+                    f"🎉🎉 **TABRIKLAYMIZ!** 🎉🎉\n\n"
+                    f"Ota-onangiz **'{task.title}'** vazifangizni tasdiqladi!\n"
+                    f"💰 Balansingizga: **+{task.reward_coins:,} tanga** qo'shildi!\n"
+                    f"Hozirgi umumiy balansingiz: **{new_balance:,} tanga**."
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify child of approved task: {e}")
+
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "approved"}
 
 
 @router.post("/task/{task_id}/reject")
 async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
-    """Reject a task directly from WebApp."""
+    """Reject a task directly from WebApp and notify child."""
     task = await crud.reject_task(session, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    if telemetry.telegram_bot:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=task.child_id,
+                text=f"❌ **'{task.title}'** vazifasi ota-onangiz tomonidan rad etildi. Iltimos, vazifani to'liq bajarib, qayta topshiring.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify child of rejected task: {e}")
+
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "rejected"}
 

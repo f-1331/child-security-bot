@@ -352,19 +352,45 @@ async def create_task(
     child_id: int,
     title: str,
     description: Optional[str] = None,
-    reward_coins: int = 1000
+    reward_coins: int = 1000,
+    media_type: Optional[str] = None,
+    media_url: Optional[str] = None
 ) -> Task:
-    """Create a task with gamified reward."""
+    """Create a task with gamified reward and optional photo/video attachment."""
     task = Task(
         parent_id=parent_id,
         child_id=child_id,
         title=title.strip(),
         description=description.strip() if description else None,
         reward_coins=reward_coins,
-        status="pending"
+        status="pending",
+        media_type=media_type,
+        media_url=media_url
     )
     session.add(task)
     await session.flush()
+    return task
+
+
+async def mark_task_seen(session: AsyncSession, task_id: int) -> Optional[Task]:
+    """Mark task as viewed by child."""
+    task = await get_task_by_id(session, task_id)
+    if task:
+        task.seen_at = datetime.now(timezone.utc)
+        if task.status == "pending":
+            task.status = "seen"
+        await session.flush()
+    return task
+
+
+async def set_task_schedule(session: AsyncSession, task_id: int, promised_time: str) -> Optional[Task]:
+    """Child commits to a specific time to complete the task."""
+    task = await get_task_by_id(session, task_id)
+    if task:
+        task.promised_time = promised_time.strip()
+        if task.status in ["pending", "seen"]:
+            task.status = "scheduled"
+        await session.flush()
     return task
 
 
@@ -402,11 +428,17 @@ async def get_task_by_id(session: AsyncSession, task_id: int) -> Optional[Task]:
     return result.scalar_one_or_none()
 
 
-async def submit_task_completed(session: AsyncSession, task_id: int) -> Optional[Task]:
-    """Child marks task as completed, awaiting parent approval."""
+async def submit_task_completed(
+    session: AsyncSession,
+    task_id: int,
+    proof_photo_url: Optional[str] = None
+) -> Optional[Task]:
+    """Child marks task as completed with photo proof, awaiting parent approval."""
     task = await get_task_by_id(session, task_id)
-    if task and task.status == "pending":
+    if task:
         task.status = "completed_by_child"
+        if proof_photo_url:
+            task.proof_photo_url = proof_photo_url
         await session.flush()
     return task
 
@@ -414,7 +446,7 @@ async def submit_task_completed(session: AsyncSession, task_id: int) -> Optional
 async def approve_task(session: AsyncSession, task_id: int) -> Optional[Task]:
     """Parent approves task, child receives reward coins."""
     task = await get_task_by_id(session, task_id)
-    if task and task.status in ["pending", "completed_by_child"]:
+    if task and task.status in ["pending", "seen", "scheduled", "completed_by_child"]:
         task.status = "approved"
         task.completed_at = datetime.now(timezone.utc)
         # Credit child balance

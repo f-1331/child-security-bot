@@ -28,6 +28,7 @@ from bot.keyboards import (
     get_sos_alert_parent_keyboard,
     get_task_approval_keyboard,
     get_child_task_action_keyboard,
+    get_task_schedule_options_keyboard,
     get_kerakli_joylar_menu_keyboard,
     get_radius_selection_keyboard,
     get_settings_keyboard,
@@ -60,6 +61,11 @@ class TaskCreateState(StatesGroup):
     waiting_for_child = State()
     waiting_for_title = State()
     waiting_for_reward = State()
+    waiting_for_media = State()
+
+
+class TaskProofState(StatesGroup):
+    waiting_for_photo = State()
 
 
 class PhoneSaveState(StatesGroup):
@@ -966,48 +972,229 @@ async def on_child_tasks_pressed(message: Message):
         await message.answer(text, parse_mode="Markdown")
 
         for t in pending_tasks:
-            await message.answer(
-                f"🎯 **Vazifa:** {t.title}\n💰 Mukofot: {t.reward_coins} tanga",
-                reply_markup=get_child_task_action_keyboard(t.id),
-                parse_mode="Markdown"
-            )
+            caption = f"🎯 **Vazifa:** {t.title}\n💰 Mukofot: {t.reward_coins:,} tanga"
+            if t.description:
+                caption += f"\n📝 Tavsif: {t.description}"
+            if t.promised_time:
+                caption += f"\n⏰ Belgilangan vaqt: {t.promised_time}"
+
+            markup = get_child_task_action_keyboard(t.id, t.status, t.promised_time)
+            sent = False
+            if t.media_type == "photo" and t.media_url:
+                try:
+                    await message.answer_photo(t.media_url, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                    sent = True
+                except Exception:
+                    pass
+            elif t.media_type == "video" and t.media_url:
+                try:
+                    await message.answer_video(t.media_url, caption=caption, reply_markup=markup, parse_mode="Markdown")
+                    sent = True
+                except Exception:
+                    pass
+
+            if not sent:
+                await message.answer(caption, reply_markup=markup, parse_mode="Markdown")
 
 
-@router.callback_query(F.data.startswith("complete_task:"))
-async def on_complete_task_clicked(callback: CallbackQuery, bot: Bot):
-    """Child submits task for parent approval."""
+# ---------------------------------------------------------
+# Child Task Action Handlers: Ko'rdim, Shu vaqtda bajaraman, Rasm hisoboti
+# ---------------------------------------------------------
+
+@router.callback_query(F.data.startswith("task_seen:"))
+async def on_task_seen_clicked(callback: CallbackQuery, bot: Bot):
+    """Child acknowledges viewing the task: notifies parent 'Bolangiz bu habarni ko'rdi'."""
     task_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
-        task = await crud.submit_task_completed(session, task_id)
+        task = await crud.mark_task_seen(session, task_id)
         if not task:
-            await callback.answer("Vazifa topilmadi yoki allaqachon bajarilgan.", show_alert=True)
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
             return
 
         child = await crud.get_user(session, task.child_id)
         child_name = child.full_name if child else "Farzandingiz"
 
-        approval_text = (
-            f"🔔 **Vazifa bajarildi deb bildirildi!**\n\n"
-            f"👤 Farzand: **{child_name}**\n"
-            f"📌 Vazifa: **{task.title}**\n"
-            f"💰 Mukofot: **{task.reward_coins:,}** tanga\n\n"
-            f"Vazifa to'g'ri bajarilgan bo'lsa, tasdiqlang:"
-        )
+        try:
+            await bot.send_message(
+                chat_id=task.parent_id,
+                text=(
+                    f"👁 **Bolangiz bu habarni ko'rdi**\n\n"
+                    f"📌 Topshiriq: **{task.title}**\n"
+                    f"👤 Farzand: **{child_name}**"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify parent about task seen: {e}")
+
+        await session.commit()
+
+    try:
+        new_markup = get_child_task_action_keyboard(task.id, task.status, task.promised_time)
+        await callback.message.edit_reply_markup(reply_markup=new_markup)
+    except Exception as e:
+        logger.debug(f"Could not update task markup: {e}")
+
+    await callback.answer("Ota-onangizga xabarni ko'rganingiz bildirildi!")
+
+
+@router.callback_query(F.data.startswith("task_sched_menu:"))
+async def on_task_sched_menu_clicked(callback: CallbackQuery):
+    """Open time schedule picker options for child."""
+    task_id = int(callback.data.split(":")[1])
+    await callback.message.edit_reply_markup(
+        reply_markup=get_task_schedule_options_keyboard(task_id)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("task_back:"))
+async def on_task_back_clicked(callback: CallbackQuery):
+    """Return back to main task action buttons."""
+    task_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        task = await crud.get_task_by_id(session, task_id)
+        if not task:
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
+            return
+        markup = get_child_task_action_keyboard(task.id, task.status, task.promised_time)
+        await callback.message.edit_reply_markup(reply_markup=markup)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("task_sched:"))
+async def on_task_sched_picked(callback: CallbackQuery, bot: Bot):
+    """Child committed to a specific completion time."""
+    parts = callback.data.split(":", 2)
+    task_id = int(parts[1])
+    promised_time = parts[2]
+
+    async with AsyncSessionLocal() as session:
+        task = await crud.set_task_schedule(session, task_id, promised_time)
+        if not task:
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
+            return
+
+        child = await crud.get_user(session, task.child_id)
+        child_name = child.full_name if child else "Farzandingiz"
 
         try:
             await bot.send_message(
                 chat_id=task.parent_id,
-                text=approval_text,
+                text=(
+                    f"⏰ **Bolangiz {promised_time}da bu topshiriqni bajarishga qaror qildi**\n\n"
+                    f"📌 Topshiriq: **{task.title}**\n"
+                    f"👤 Farzand: **{child_name}**"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify parent about task schedule: {e}")
+
+        await session.commit()
+
+    try:
+        new_markup = get_child_task_action_keyboard(task.id, task.status, task.promised_time)
+        await callback.message.edit_reply_markup(reply_markup=new_markup)
+    except Exception as e:
+        logger.debug(f"Could not update task markup: {e}")
+
+    await callback.answer(f"Vaqt belgilandi: {promised_time}")
+
+
+@router.callback_query(F.data.startswith("task_submit_photo:") | F.data.startswith("complete_task:"))
+async def on_task_submit_photo_clicked(callback: CallbackQuery, state: FSMContext):
+    """Child initiates submitting required proof photo for completed task."""
+    task_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        task = await crud.get_task_by_id(session, task_id)
+        if not task:
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
+            return
+
+    await state.update_data(task_id=task_id)
+    await state.set_state(TaskProofState.waiting_for_photo)
+
+    await callback.message.answer(
+        f"📸 **'{task.title}' topshirig'ini topshirish:**\n\n"
+        f"Topshiriq bajarilganini tasdiqlovchi rasmni yuboring (kameradan rasmga oling yoki galereyadan yuboring).\n"
+        f"⚠️ _Eslatma: Ota-onaga rasm jo'natishingiz shart!_",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_task_proof")
+        ]]),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.message(TaskProofState.waiting_for_photo, F.photo)
+async def on_task_proof_photo_received(message: Message, state: FSMContext, bot: Bot):
+    """Child submits the required proof photo."""
+    data = await state.get_data()
+    task_id = data.get("task_id")
+    if not task_id:
+        await state.clear()
+        await message.answer("Xatolik yuz berdi. Iltimos, qaytadan boshlang.")
+        return
+
+    photo_id = message.photo[-1].file_id
+
+    async with AsyncSessionLocal() as session:
+        task = await crud.submit_task_completed(session, task_id, proof_photo_url=photo_id)
+        if not task:
+            await state.clear()
+            await message.answer("Vazifa topilmadi.")
+            return
+
+        child = await crud.get_user(session, task.child_id)
+        child_name = child.full_name if child else "Farzandingiz"
+
+        try:
+            await bot.send_photo(
+                chat_id=task.parent_id,
+                photo=photo_id,
+                caption=(
+                    f"🔔 **Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:**\n\n"
+                    f"👤 Farzand: **{child_name}**\n"
+                    f"📌 Topshiriq: **{task.title}**\n"
+                    f"💰 Mukofot: **{task.reward_coins:,}** tanga\n\n"
+                    f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
+                ),
                 reply_markup=get_task_approval_keyboard(task.id, task.reward_coins),
                 parse_mode="Markdown"
             )
         except Exception as e:
-            logger.error(f"Failed to notify parent about task completion: {e}")
+            logger.error(f"Failed to forward task proof photo to parent: {e}")
 
         await session.commit()
 
-    await callback.message.edit_text("⏳ Vazifa ota-onangizga tekshirish uchun yuborildi!")
-    await callback.answer("Yuborildi!")
+    await state.clear()
+    await message.answer(
+        f"✅ **Rasm qabul qilindi va ota-onangizga tekshirish uchun yuborildi!**\n\n"
+        f"Ota-onangiz tasdiqlaganidan so'ng hisobingizga **+{task.reward_coins:,} tanga** o'tkaziladi. 👏"
+    )
+
+
+@router.message(TaskProofState.waiting_for_photo)
+async def on_task_proof_invalid(message: Message):
+    """Enforce that proof MUST be a photo."""
+    await message.answer(
+        "⚠️ **Topshiriq bajarilganini tasdiqlash uchun rasm yuborishingiz shart!**\n\n"
+        "Iltimos, kamera orqali rasmga tushirib yoki galereyadan rasm yuboring."
+    )
+
+
+@router.callback_query(F.data == "cancel_task_proof")
+async def on_cancel_task_proof(callback: CallbackQuery, state: FSMContext):
+    """Cancel proof submission."""
+    await state.clear()
+    await callback.message.edit_text("❌ Rasm yuborish bekor qilindi.")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "noop")
+async def on_noop_callback(callback: CallbackQuery):
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("approve_task:"))
@@ -1040,10 +1227,20 @@ async def on_approve_task(callback: CallbackQuery, bot: Bot):
 
         await session.commit()
 
-    await callback.message.edit_text(
+    confirm_msg = (
         f"✅ **Vazifa tasdiqlandi!**\n\n"
         f"Farzandingiz hisobiga **+{task.reward_coins:,} tanga** muvaffaqiyatli o'tkazildi."
     )
+    if callback.message.photo or callback.message.video:
+        try:
+            await callback.message.edit_caption(caption=confirm_msg, reply_markup=None, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(confirm_msg, parse_mode="Markdown")
+    else:
+        try:
+            await callback.message.edit_text(confirm_msg, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(confirm_msg, parse_mode="Markdown")
     await callback.answer("Tasdiqlandi!")
 
 
@@ -1064,9 +1261,23 @@ async def on_reject_task(callback: CallbackQuery, bot: Bot):
                 logger.error(f"Failed to notify child of rejected task: {e}")
         await session.commit()
 
-    await callback.message.edit_text("❌ Vazifa rad etildi.")
+    reject_msg = "❌ Vazifa rad etildi."
+    if callback.message.photo or callback.message.video:
+        try:
+            await callback.message.edit_caption(caption=reject_msg, reply_markup=None)
+        except Exception:
+            await callback.message.answer(reject_msg)
+    else:
+        try:
+            await callback.message.edit_text(reject_msg)
+        except Exception:
+            await callback.message.answer(reject_msg)
     await callback.answer("Rad etildi!")
 
+
+# ---------------------------------------------------------
+# Parent Task Management & Creation with Photo/Video Attachment
+# ---------------------------------------------------------
 
 @router.message(F.text == "📋 Vazifalar va Tangalar")
 async def on_parent_tasks_menu(message: Message):
@@ -1082,11 +1293,18 @@ async def on_parent_tasks_menu(message: Message):
         text = f"📋 **Vazifalar boshqaruvi**\n\nJami yaratilgan vazifalar: {len(tasks)} ta.\n\n"
 
         for child in children:
-            child_tasks = [t for t in tasks if t.child_id == child.id and t.status in ["pending", "completed_by_child"]]
+            child_tasks = [t for t in tasks if t.child_id == child.id and t.status in ["pending", "seen", "scheduled", "completed_by_child"]]
             text += f"👤 **{child.full_name}** (Balans: {child.virtual_balance:,} tanga)\n"
             if child_tasks:
                 for t in child_tasks:
-                    status_text = "⏳ Tekshiruvda" if t.status == "completed_by_child" else "▫️ Bajarilmoqda"
+                    if t.status == "completed_by_child":
+                        status_text = "⏳ Tekshiruvda"
+                    elif t.status == "scheduled":
+                        status_text = f"⏰ Vaqt belgilangan: {t.promised_time}"
+                    elif t.status == "seen":
+                        status_text = "👁 Ko'rildi"
+                    else:
+                        status_text = "▫️ Kutilmoqda"
                     text += f"  - {t.title} ({t.reward_coins:,} tanga) [{status_text}]\n"
             else:
                 text += "  - Faol vazifalar yo'q\n"
@@ -1116,7 +1334,7 @@ async def on_start_create_task(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TaskCreateState.waiting_for_title)
 
     await callback.message.answer(
-        "📝 **Yangi vazifa nomini kiriting:**\n\n(Masalan: _'Matematika darslarini qilish'_, _'Xonani tartibga keltirish'_, _'Uyga vaqtida kelish'_)",
+        "📝 **Yangi vazifa nomini kiriting:**\n\n(Masalan: _'Matematika darslarini qilish'_, _'Xonani tartibga keltirish'_, _'Kitob o'qish'_)",
         parse_mode="Markdown"
     )
     await callback.answer()
@@ -1135,50 +1353,130 @@ async def on_task_title_entered(message: Message, state: FSMContext):
 
 
 @router.message(TaskCreateState.waiting_for_reward)
-async def on_task_reward_entered(message: Message, state: FSMContext, bot: Bot):
+async def on_task_reward_entered(message: Message, state: FSMContext):
     try:
         reward = int(message.text.strip().replace(" ", "").replace(",", ""))
     except ValueError:
         await message.answer("Iltimos, faqat butun son kiriting (masalan: `5000`):")
         return
 
+    await state.update_data(reward=reward)
+    await state.set_state(TaskCreateState.waiting_for_media)
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⏭ O'tkazib yuborish (Rasmsiz)", callback_data="skip_task_media")
+    ]])
+
+    await message.answer(
+        "📷 / 🎥 **Vazifaga rasm yoki video biriktirasizmi?**\n\n"
+        "Farzandingiz topshiriqni yaxshiroq tushunishi uchun rasm yoki video yuborishingiz mumkin.\n"
+        "Agar kerak bo'lmasa, pastdagi tugmani bosing:",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+
+async def _finalize_task_creation(
+    event_target,
+    state: FSMContext,
+    bot: Bot,
+    media_type: Optional[str] = None,
+    media_url: Optional[str] = None,
+    parent_id: Optional[int] = None
+):
+    """Helper to commit task to DB and send notification to child."""
     data = await state.get_data()
     child_id = data["child_id"]
     title = data["title"]
-    parent_id = message.from_user.id
+    reward = data.get("reward", 1000)
+    if not parent_id:
+        parent_id = event_target.from_user.id
 
     async with AsyncSessionLocal() as session:
-        await crud.create_task(
+        task = await crud.create_task(
             session=session,
             parent_id=parent_id,
             child_id=child_id,
             title=title,
-            reward_coins=reward
+            reward_coins=reward,
+            media_type=media_type,
+            media_url=media_url
         )
         await session.commit()
 
+        child_text = (
+            f"🎯 **SIZGA YANGI VAZIFA BERILDI!**\n\n"
+            f"📌 **Vazifa:** {title}\n"
+            f"💰 **Mukofot:** +{reward:,} tanga!\n\n"
+            f"Pastdagi tugmalar orqali xabarni ko'rganingizni tasdiqlang va qachon bajarishingizni belgilang 👇"
+        )
+        child_markup = get_child_task_action_keyboard(task.id, task.status, task.promised_time)
+
         try:
-            await bot.send_message(
-                chat_id=child_id,
-                text=(
-                    f"🎯 **SIZGA YANGI VAZIFA BERILDI!**\n\n"
-                    f"📌 Vazifa: **{title}**\n"
-                    f"💰 Mukofot: **+{reward:,} tanga**!\n\n"
-                    f"Vazifani bajargach, '📋 Vazifalarim' bo'limidan 'Bajarildi' deb yuboring!"
-                ),
-                parse_mode="Markdown"
-            )
+            if media_type == "photo" and media_url:
+                await bot.send_photo(
+                    chat_id=child_id,
+                    photo=media_url,
+                    caption=child_text,
+                    reply_markup=child_markup,
+                    parse_mode="Markdown"
+                )
+            elif media_type == "video" and media_url:
+                await bot.send_video(
+                    chat_id=child_id,
+                    video=media_url,
+                    caption=child_text,
+                    reply_markup=child_markup,
+                    parse_mode="Markdown"
+                )
+            else:
+                await bot.send_message(
+                    chat_id=child_id,
+                    text=child_text,
+                    reply_markup=child_markup,
+                    parse_mode="Markdown"
+                )
         except Exception as e:
             logger.error(f"Failed to notify child: {e}")
 
     await state.clear()
-    await message.answer(
+    media_info = f"\n📎 Biriktirilgan fayl: {media_type.capitalize()}" if media_type else ""
+    success_text = (
         f"✅ **Vazifa muvaffaqiyatli saqlandi va farzandga yuborildi!**\n\n"
         f"📌 Nomi: **{title}**\n"
-        f"💰 Mukofot: **{reward:,} tanga**",
-        reply_markup=get_parent_main_keyboard(parent_id),
-        parse_mode="Markdown"
+        f"💰 Mukofot: **{reward:,} tanga**{media_info}"
     )
+
+    if isinstance(event_target, CallbackQuery):
+        await event_target.message.answer(
+            success_text,
+            reply_markup=get_parent_main_keyboard(parent_id),
+            parse_mode="Markdown"
+        )
+    else:
+        await event_target.answer(
+            success_text,
+            reply_markup=get_parent_main_keyboard(parent_id),
+            parse_mode="Markdown"
+        )
+
+
+@router.message(TaskCreateState.waiting_for_media, F.photo)
+async def on_task_media_photo(message: Message, state: FSMContext, bot: Bot):
+    photo_id = message.photo[-1].file_id
+    await _finalize_task_creation(message, state, bot, media_type="photo", media_url=photo_id)
+
+
+@router.message(TaskCreateState.waiting_for_media, F.video)
+async def on_task_media_video(message: Message, state: FSMContext, bot: Bot):
+    video_id = message.video.file_id
+    await _finalize_task_creation(message, state, bot, media_type="video", media_url=video_id)
+
+
+@router.callback_query(TaskCreateState.waiting_for_media, F.data == "skip_task_media")
+async def on_skip_task_media(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    await callback.answer()
+    await _finalize_task_creation(callback, state, bot, media_type=None, media_url=None, parent_id=callback.from_user.id)
 
 
 # ---------------------------------------------------------

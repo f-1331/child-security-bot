@@ -35,6 +35,21 @@ async def init_db() -> None:
         import db.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
 
+        # Safe automatic migration for new Task columns
+        from sqlalchemy import text
+        new_columns = [
+            ("media_type", "VARCHAR(20)"),
+            ("media_url", "VARCHAR(500)"),
+            ("seen_at", "TIMESTAMP"),
+            ("promised_time", "VARCHAR(100)"),
+            ("proof_photo_url", "VARCHAR(500)")
+        ]
+        for col_name, col_type in new_columns:
+            try:
+                await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+            except Exception:
+                pass
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for FastAPI endpoints and standalone scripts."""

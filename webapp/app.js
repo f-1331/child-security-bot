@@ -731,6 +731,9 @@ function switchTab(tabName) {
     if (targetModal) targetModal.classList.remove("hidden");
     if (floatControls) floatControls.classList.add("hidden");
     if (locCard) locCard.classList.add("hidden");
+    if (tabName === "tasks") {
+      loadTasks();
+    }
   } else {
     if (floatControls) floatControls.classList.remove("hidden");
     if (locCard) locCard.classList.remove("hidden");
@@ -931,4 +934,551 @@ function showToast(message) {
   toast.textContent = message;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2500);
+}
+
+
+// =========================================================
+// TASKS & ASSIGNMENTS SERVICE (Topshiriq berish xizmati)
+// =========================================================
+
+let tasksList = [];
+let activeScheduleTaskId = null;
+let activeProofTaskId = null;
+let selectedTaskMediaFile = null;
+let selectedProofPhotoFile = null;
+
+async function loadTasks() {
+  const container = document.getElementById("tasksListContainer");
+  if (!container) return;
+
+  if (isDemoMode) {
+    renderDemoTasks();
+    return;
+  }
+
+  container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Topshiriqlar yuklanmoqda...</p>';
+
+  try {
+    let url = "";
+    if (parentId) {
+      url = `/api/v1/webapp/parent/${parentId}/tasks`;
+    } else if (currentChildId) {
+      url = `/api/v1/webapp/child/${currentChildId}/tasks`;
+    } else {
+      container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Farzand tanlanmagan.</p>';
+      return;
+    }
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.status === "success") {
+      tasksList = data.tasks || [];
+      renderTasksList();
+    } else {
+      container.innerHTML = '<p class="text-center text-xs text-red-400 py-6">Topshiriqlarni yuklashda xatolik.</p>';
+    }
+  } catch (err) {
+    console.error("Error loading tasks:", err);
+    container.innerHTML = '<p class="text-center text-xs text-red-400 py-6">Server bilan aloqa uzildi.</p>';
+  }
+}
+
+function renderDemoTasks() {
+  tasksList = [
+    {
+      id: 991,
+      title: "Matematika darslarini qilish",
+      description: "45-sahifadagi 1-dan 5-gacha bo'lgan misollar",
+      reward_coins: 5000,
+      status: "pending",
+      media_type: null,
+      media_url: null,
+      seen_at: null,
+      promised_time: null,
+      proof_photo_url: null,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 992,
+      title: "Xonani tartibga keltirish",
+      description: "Kitoblarni taxlab, kiyimlarni joyiga qo'yish",
+      reward_coins: 3000,
+      status: "scheduled",
+      media_type: null,
+      media_url: null,
+      seen_at: new Date().toISOString(),
+      promised_time: "30 daqiqadan keyin",
+      proof_photo_url: null,
+      created_at: new Date().toISOString()
+    }
+  ];
+  renderTasksList();
+}
+
+function renderTasksList() {
+  const container = document.getElementById("tasksListContainer");
+  if (!container) return;
+
+  if (tasksList.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-8">
+        <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-2">
+          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        </div>
+        <p class="text-xs font-semibold text-slate-300">Faol topshiriqlar yo'q</p>
+        <p class="text-[11px] text-slate-500 mt-1">Yangi topshiriq qo'shish uchun yuqoridagi tugmani bosing</p>
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
+    return;
+  }
+
+  container.innerHTML = tasksList.map(t => {
+    let statusBadge = "";
+    if (t.status === "completed_by_child") {
+      statusBadge = '<span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">⏳ Tekshiruvda</span>';
+    } else if (t.status === "approved") {
+      statusBadge = '<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">🏆 Tasdiqlangan</span>';
+    } else if (t.status === "rejected") {
+      statusBadge = '<span class="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full font-semibold">❌ Rad etilgan</span>';
+    } else if (t.status === "scheduled") {
+      statusBadge = `<span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-semibold">⏰ ${t.promised_time || 'Rejalashtirilgan'}</span>`;
+    } else if (t.status === "seen") {
+      statusBadge = '<span class="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-semibold">👁 Ko\'rildi</span>';
+    } else {
+      statusBadge = '<span class="text-[10px] bg-slate-700/50 text-slate-300 border border-slate-600 px-2 py-0.5 rounded-full font-semibold">▫️ Kutilmoqda</span>';
+    }
+
+    let mediaHtml = "";
+    if (t.media_type === "photo" && t.media_url) {
+      mediaHtml = `
+        <div class="mt-2 rounded-xl overflow-hidden border border-slate-700 max-h-40 bg-slate-950 flex items-center justify-center">
+          <img src="${t.media_url}" class="max-h-40 w-full object-cover cursor-pointer" onclick="window.open('${t.media_url}', '_blank')" />
+        </div>
+      `;
+    } else if (t.media_type === "video" && t.media_url) {
+      mediaHtml = `
+        <div class="mt-2 rounded-xl overflow-hidden border border-slate-700 max-h-48 bg-slate-950">
+          <video src="${t.media_url}" controls class="w-full max-h-48"></video>
+        </div>
+      `;
+    }
+
+    let proofHtml = "";
+    if (t.proof_photo_url) {
+      proofHtml = `
+        <div class="mt-2.5 p-2 bg-slate-950/60 rounded-xl border border-slate-800">
+          <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 mb-1">
+            <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+            <span>Farzand yuborgan hisobot rasmi:</span>
+          </div>
+          <img src="${t.proof_photo_url}" class="rounded-lg max-h-36 w-full object-cover cursor-pointer" onclick="window.open('${t.proof_photo_url}', '_blank')" />
+        </div>
+      `;
+    }
+
+    // Action buttons based on status
+    let actionButtons = "";
+    if (t.status === "completed_by_child") {
+      actionButtons = `
+        <div class="flex gap-2 mt-3 pt-2 border-t border-slate-800">
+          <button onclick="approveTask(${t.id})" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow">
+            ✅ Tasdiqlash
+          </button>
+          <button onclick="rejectTask(${t.id})" class="px-3 py-1.5 bg-slate-800 hover:bg-red-600/30 text-red-400 border border-slate-700 rounded-lg text-xs font-medium transition">
+            ❌ Rad etish
+          </button>
+        </div>
+      `;
+    } else if (t.status === "pending" || t.status === "seen" || t.status === "scheduled") {
+      const seenBtn = t.status === "pending"
+        ? `<button onclick="markTaskSeen(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-blue-400 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
+             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+             <span>Ko'rdim</span>
+           </button>`
+        : `<div class="px-2 py-1 text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+             <i data-lucide="check" class="w-3.5 h-3.5"></i>
+             <span>Ko'rildi</span>
+           </div>`;
+
+      const schedBtn = `<button onclick="openScheduleModal(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-amber-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
+             <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+             <span>${t.promised_time ? t.promised_time : 'Vaqt tanlash'}</span>
+           </button>`;
+
+      const proofBtn = `<button onclick="openProofModal(${t.id})" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow">
+             <i data-lucide="camera" class="w-4 h-4"></i>
+             <span>Bajarildi (Rasm yuborish)</span>
+           </button>`;
+
+      actionButtons = `
+        <div class="mt-3 pt-2 border-t border-slate-800 space-y-2">
+          <div class="flex gap-2">
+            ${seenBtn}
+            ${schedBtn}
+          </div>
+          ${proofBtn}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md flex flex-col justify-between transition hover:border-slate-600">
+        <div>
+          <div class="flex items-start justify-between gap-2">
+            <h3 class="text-xs font-bold text-white">${t.title}</h3>
+            ${statusBadge}
+          </div>
+          ${t.description ? `<p class="text-[11px] text-slate-300 mt-1">${t.description}</p>` : ''}
+          <div class="flex items-center gap-1.5 mt-2 text-xs font-bold text-amber-400">
+            <i data-lucide="coins" class="w-3.5 h-3.5"></i>
+            <span>+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+          </div>
+          ${mediaHtml}
+          ${proofHtml}
+        </div>
+        ${actionButtons}
+      </div>
+    `;
+  }).join("");
+
+  if (window.lucide) lucide.createIcons();
+}
+
+function openAddTaskModal() {
+  haptic("medium");
+  document.getElementById("modal-add-task").classList.remove("hidden");
+  clearTaskMedia();
+}
+
+function closeAddTaskModal() {
+  haptic("light");
+  document.getElementById("modal-add-task").classList.add("hidden");
+  clearTaskMedia();
+}
+
+function handleTaskMediaSelected(input) {
+  if (!input.files || input.files.length === 0) return;
+  selectedTaskMediaFile = input.files[0];
+
+  const previewBox = document.getElementById("taskMediaPreview");
+  const imgEl = document.getElementById("taskPreviewImg");
+  const videoEl = document.getElementById("taskPreviewVideo");
+  const label = document.getElementById("taskMediaLabel");
+
+  label.textContent = selectedTaskMediaFile.name;
+  previewBox.classList.remove("hidden");
+
+  const url = URL.createObjectURL(selectedTaskMediaFile);
+  if (selectedTaskMediaFile.type.startsWith("video/")) {
+    imgEl.classList.add("hidden");
+    videoEl.classList.remove("hidden");
+    videoEl.src = url;
+  } else {
+    videoEl.classList.add("hidden");
+    imgEl.classList.remove("hidden");
+    imgEl.src = url;
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function clearTaskMedia() {
+  selectedTaskMediaFile = null;
+  const input = document.getElementById("taskMediaFileInput");
+  if (input) input.value = "";
+  const previewBox = document.getElementById("taskMediaPreview");
+  if (previewBox) previewBox.classList.add("hidden");
+  const imgEl = document.getElementById("taskPreviewImg");
+  if (imgEl) { imgEl.src = ""; imgEl.classList.add("hidden"); }
+  const videoEl = document.getElementById("taskPreviewVideo");
+  if (videoEl) { videoEl.src = ""; videoEl.classList.add("hidden"); }
+  const label = document.getElementById("taskMediaLabel");
+  if (label) label.textContent = "Rasm / Video olish yoki tanlash";
+}
+
+async function submitNewTask() {
+  const title = document.getElementById("inputTaskTitle").value.trim();
+  const desc = document.getElementById("inputTaskDesc").value.trim();
+  const reward = parseInt(document.getElementById("inputTaskReward").value) || 1000;
+
+  if (!title) {
+    alert("Iltimos, topshiriq nomini kiriting!");
+    return;
+  }
+
+  const submitBtn = document.getElementById("btnSubmitTask");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Yuborilmoqda...";
+
+  let mediaUrl = null;
+  let mediaType = null;
+
+  try {
+    if (selectedTaskMediaFile) {
+      const formData = new FormData();
+      formData.append("file", selectedTaskMediaFile);
+      const uploadRes = await fetch("/api/v1/webapp/upload", {
+        method: "POST",
+        body: formData
+      });
+      const uploadData = await uploadRes.json();
+      if (uploadData.status === "success") {
+        mediaUrl = uploadData.file_url;
+        mediaType = uploadData.media_type;
+      }
+    }
+
+    if (isDemoMode) {
+      tasksList.unshift({
+        id: Date.now(),
+        title: title,
+        description: desc,
+        reward_coins: reward,
+        status: "pending",
+        media_type: mediaType,
+        media_url: mediaUrl,
+        created_at: new Date().toISOString()
+      });
+      renderTasksList();
+      closeAddTaskModal();
+      showToast("Topshiriq yuborildi (Demo)");
+      return;
+    }
+
+    const payload = {
+      parent_id: parseInt(parentId),
+      child_id: parseInt(currentChildId),
+      title: title,
+      description: desc || null,
+      reward_coins: reward,
+      media_type: mediaType,
+      media_url: mediaUrl
+    };
+
+    const res = await fetch("/api/v1/webapp/task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const resData = await res.json();
+    if (resData.status === "success") {
+      haptic("success");
+      closeAddTaskModal();
+      showToast("Topshiriq muvaffaqiyatli yuborildi!");
+      document.getElementById("inputTaskTitle").value = "";
+      document.getElementById("inputTaskDesc").value = "";
+      loadTasks();
+    } else {
+      alert("Xatolik: " + (resData.detail || "Topshiriq saqlanmadi"));
+    }
+  } catch (err) {
+    console.error("Submit task error:", err);
+    alert("Topshiriqni yuborishda xatolik yuz berdi.");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Yuborish";
+  }
+}
+
+async function markTaskSeen(taskId) {
+  haptic("light");
+  try {
+    if (isDemoMode) {
+      const t = tasksList.find(x => x.id === taskId);
+      if (t) t.status = "seen";
+      renderTasksList();
+      showToast("Xabar ko'rildi (Demo)");
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/seen`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("Ota-onangizga xabar ko'rilgani bildirildi!");
+      loadTasks();
+    }
+  } catch (e) {
+    console.error("Mark seen error:", e);
+  }
+}
+
+function openScheduleModal(taskId) {
+  haptic("medium");
+  activeScheduleTaskId = taskId;
+  document.getElementById("modal-task-schedule").classList.remove("hidden");
+}
+
+function closeScheduleModal() {
+  haptic("light");
+  activeScheduleTaskId = null;
+  document.getElementById("modal-task-schedule").classList.add("hidden");
+}
+
+async function confirmTaskSchedule(promisedTime) {
+  if (!activeScheduleTaskId) return;
+  haptic("medium");
+
+  try {
+    if (isDemoMode) {
+      const t = tasksList.find(x => x.id === activeScheduleTaskId);
+      if (t) {
+        t.status = "scheduled";
+        t.promised_time = promisedTime;
+      }
+      closeScheduleModal();
+      renderTasksList();
+      showToast(`Vaqt belgilandi: ${promisedTime}`);
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/task/${activeScheduleTaskId}/schedule`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ promised_time: promisedTime })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      closeScheduleModal();
+      showToast(`Vaqt belgilandi: ${promisedTime}`);
+      loadTasks();
+    }
+  } catch (e) {
+    console.error("Confirm schedule error:", e);
+  }
+}
+
+function openProofModal(taskId) {
+  haptic("medium");
+  activeProofTaskId = taskId;
+  selectedProofPhotoFile = null;
+  const input = document.getElementById("proofFileInput");
+  if (input) input.value = "";
+  const prev = document.getElementById("proofPhotoPreviewContainer");
+  if (prev) prev.classList.add("hidden");
+  const btn = document.getElementById("btnSubmitProof");
+  if (btn) btn.disabled = true;
+  document.getElementById("modal-task-proof").classList.remove("hidden");
+}
+
+function closeProofModal() {
+  haptic("light");
+  activeProofTaskId = null;
+  selectedProofPhotoFile = null;
+  document.getElementById("modal-task-proof").classList.add("hidden");
+}
+
+function handleProofPhotoSelected(input) {
+  if (!input.files || input.files.length === 0) return;
+  selectedProofPhotoFile = input.files[0];
+
+  const prev = document.getElementById("proofPhotoPreviewContainer");
+  const img = document.getElementById("proofPreviewImg");
+  const btn = document.getElementById("btnSubmitProof");
+
+  img.src = URL.createObjectURL(selectedProofPhotoFile);
+  prev.classList.remove("hidden");
+  btn.disabled = false;
+  document.getElementById("proofFileLabel").textContent = "📸 Rasm tanlandi";
+}
+
+async function submitTaskProof() {
+  if (!activeProofTaskId || !selectedProofPhotoFile) {
+    alert("Iltimos, topshiriq bajarilganini tasdiqlovchi rasm oling!");
+    return;
+  }
+
+  const btn = document.getElementById("btnSubmitProof");
+  btn.disabled = true;
+  btn.textContent = "Yuklanmoqda...";
+
+  try {
+    const formData = new FormData();
+    formData.append("file", selectedProofPhotoFile);
+    const upRes = await fetch("/api/v1/webapp/upload", {
+      method: "POST",
+      body: formData
+    });
+    const upData = await upRes.json();
+    if (upData.status !== "success") {
+      throw new Error("Rasm yuklanmadi");
+    }
+
+    if (isDemoMode) {
+      const t = tasksList.find(x => x.id === activeProofTaskId);
+      if (t) {
+        t.status = "completed_by_child";
+        t.proof_photo_url = upData.file_url;
+      }
+      closeProofModal();
+      renderTasksList();
+      showToast("Hisobot rasmi ota-onaga yuborildi! (Demo)");
+      return;
+    }
+
+    const completeRes = await fetch(`/api/v1/webapp/task/${activeProofTaskId}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proof_photo_url: upData.file_url })
+    });
+    const completeData = await completeRes.json();
+    if (completeData.status === "success") {
+      haptic("success");
+      closeProofModal();
+      showToast("Rasm hisoboti ota-onangizga yuborildi!");
+      loadTasks();
+    } else {
+      alert("Xatolik yuz berdi: " + (completeData.detail || "Topshirish amalga oshmadi"));
+    }
+  } catch (err) {
+    console.error("Submit proof error:", err);
+    alert("Rasmni yuborishda xatolik yuz berdi.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Ota-onaga yuborish";
+  }
+}
+
+async function approveTask(taskId) {
+  haptic("medium");
+  try {
+    if (isDemoMode) {
+      const t = tasksList.find(x => x.id === taskId);
+      if (t) t.status = "approved";
+      renderTasksList();
+      showToast("Topshiriq tasdiqlandi (+tanga o'tkazildi)!");
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/approve`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "success") {
+      haptic("success");
+      showToast("Topshiriq tasdiqlandi!");
+      loadTasks();
+    }
+  } catch (e) {
+    console.error("Approve task error:", e);
+  }
+}
+
+async function rejectTask(taskId) {
+  haptic("warning");
+  try {
+    if (isDemoMode) {
+      const t = tasksList.find(x => x.id === taskId);
+      if (t) t.status = "rejected";
+      renderTasksList();
+      showToast("Topshiriq rad etildi.");
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/reject`, { method: "POST" });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("Topshiriq rad etildi.");
+      loadTasks();
+    }
+  } catch (e) {
+    console.error("Reject task error:", e);
+  }
 }

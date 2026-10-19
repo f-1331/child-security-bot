@@ -107,7 +107,19 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reward_coins: Mapped[int] = mapped_column(Integer, default=1000)
-    status: Mapped[str] = mapped_column(String(30), default="pending")  # "pending", "completed_by_child", "approved", "rejected"
+    status: Mapped[str] = mapped_column(String(30), default="pending")  # "pending", "seen", "scheduled", "completed_by_child", "approved", "rejected"
+    
+    # Parent media attachment (photo or video)
+    media_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "photo", "video"
+    media_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    # Child response and commitment
+    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    promised_time: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g. "30 daqiqadan keyin"
+
+    # Child completion proof photo
+    proof_photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

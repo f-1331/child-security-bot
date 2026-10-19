@@ -32,10 +32,11 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Native Telegram-centric: Instant Location, Kerakli joylar, Telemetry, and Tasks.
+    Includes Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
     """
     keyboard = [
         [
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)),
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
         ],
         [
@@ -70,23 +71,26 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
 def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
-    Includes instant SOS, Check-in, Request Location, and Emergency Call.
+    Includes Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
     """
     keyboard = [
         [
-            KeyboardButton(text="🚨 SOS (Xavf tugmasi)"),
-            KeyboardButton(text="✅ Yetib keldim (Check-in)")
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)),
+            KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [
-            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True),
-            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq")
+            KeyboardButton(text="✅ Yetib keldim (Check-in)"),
+            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True)
         ],
         [
-            KeyboardButton(text="📋 Vazifalarim va Tangalar"),
-            KeyboardButton(text="ℹ️ Yordam")
+            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq"),
+            KeyboardButton(text="📋 Vazifalarim va Tangalar")
         ],
         [
             KeyboardButton(text="🔄 Rolni o'zgartirish"),
+            KeyboardButton(text="ℹ️ Yordam")
+        ],
+        [
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -323,15 +327,95 @@ def get_task_approval_keyboard(task_id: int, reward_coins: int) -> InlineKeyboar
     )
 
 
-def get_child_task_action_keyboard(task_id: int) -> InlineKeyboardMarkup:
-    """Child keyboard to mark a task as completed."""
+def get_child_task_action_keyboard(
+    task_id: int,
+    status: str = "pending",
+    promised_time: Optional[str] = None
+) -> InlineKeyboardMarkup:
+    """
+    Child interactive keyboard for task:
+    1. '👁 Ko'rdim' button (notifies parent that child saw the task).
+    2. '⏰ Shu vaqtda bajaraman' button (choose time commitment).
+    3. '📸 Bajarildi (Rasm yuborish)' button (submitting proof photo).
+    """
+    rows = []
+
+    # 1. Seen status / button
+    if status == "pending":
+        rows.append([
+            InlineKeyboardButton(
+                text="👁 Ko'rdim",
+                callback_data=f"task_seen:{task_id}"
+            )
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(
+                text="✅ Ko'rildi",
+                callback_data="noop"
+            )
+        ])
+
+    # 2. Schedule commitment button
+    if promised_time:
+        rows.append([
+            InlineKeyboardButton(
+                text=f"⏰ Vaqt belgilandi: {promised_time}",
+                callback_data=f"task_sched_menu:{task_id}"
+            )
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(
+                text="⏰ Shu vaqtda bajaraman",
+                callback_data=f"task_sched_menu:{task_id}"
+            )
+        ])
+
+    # 3. Completion / Proof upload button
+    if status == "completed_by_child":
+        rows.append([
+            InlineKeyboardButton(
+                text="⏳ Ota-ona tekshirmoqda...",
+                callback_data="noop"
+            )
+        ])
+    elif status == "approved":
+        rows.append([
+            InlineKeyboardButton(
+                text="🏆 Vazifa tasdiqlangan!",
+                callback_data="noop"
+            )
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(
+                text="📸 Bajarildi (Rasm yuborish)",
+                callback_data=f"task_submit_photo:{task_id}"
+            )
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_task_schedule_options_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    """Options for child to pick when they plan to execute the task."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="✅ Bajarildi deb yuborish",
-                    callback_data=f"complete_task:{task_id}"
-                )
+                InlineKeyboardButton(text="⚡️ Hozir bajaraman", callback_data=f"task_sched:{task_id}:Hozir"),
+                InlineKeyboardButton(text="⏰ 15 daqiqada", callback_data=f"task_sched:{task_id}:15 daqiqadan keyin")
+            ],
+            [
+                InlineKeyboardButton(text="⏰ 30 daqiqada", callback_data=f"task_sched:{task_id}:30 daqiqadan keyin"),
+                InlineKeyboardButton(text="⏰ 1 soatda", callback_data=f"task_sched:{task_id}:1 soatdan keyin")
+            ],
+            [
+                InlineKeyboardButton(text="🌙 Bugun soat 18:00 da", callback_data=f"task_sched:{task_id}:Bugun soat 18:00 da"),
+                InlineKeyboardButton(text="📅 Ertaga", callback_data=f"task_sched:{task_id}:Ertaga")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Ortga", callback_data=f"task_back:{task_id}")
             ]
         ]
     )

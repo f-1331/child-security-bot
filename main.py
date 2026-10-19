@@ -15,6 +15,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from config import settings
 from db.database import init_db
@@ -84,6 +85,11 @@ webapp_path = Path(__file__).resolve().parent / "webapp"
 app.mount("/child_security_site", StaticFiles(directory=str(webapp_path), html=True), name="child_security_site")
 app.mount("/webapp", StaticFiles(directory=str(webapp_path), html=True), name="webapp")
 
+# Mount Uploads directory for task photos and videos
+uploads_path = Path(__file__).resolve().parent / "uploads"
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
+
 
 @app.api_route("/child_security_site", methods=["GET", "HEAD"], include_in_schema=False)
 async def site_path_redirect():
@@ -133,6 +139,18 @@ async def start_bot(bot: Bot, dp: Dispatcher):
     try:
         bot_info = await bot.get_me()
         logger.info(f"Telegram Bot initialized successfully: @{bot_info.username} (ID: {bot_info.id})")
+        # Configure persistent Menu button next to chat input to open WebApp
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="🌐 Web App",
+                    web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)
+                )
+            )
+            logger.info(f"Telegram chat menu button configured: {settings.WEBAPP_BASE_URL}")
+        except Exception as e:
+            logger.warning(f"Could not configure chat menu button: {e}")
+
         # Drop pending updates to avoid processing stale backlog
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
