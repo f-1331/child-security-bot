@@ -36,7 +36,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     keyboard = [
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
         ],
         [
@@ -79,7 +79,7 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     keyboard = [
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
             KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [

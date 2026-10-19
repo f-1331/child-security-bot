@@ -56,6 +56,13 @@ class Settings(BaseSettings):
         return self.WEBAPP_BASE_URL.rstrip("/")
 
     @property
+    def MINI_APP_URL(self) -> str:
+        """URL for Telegram WebApp button with cache-busting version parameter."""
+        base = self.RESOLVED_WEBAPP_URL
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}v=10"
+
+    @property
     def BASE_DIR(self) -> Path:
         return Path(__file__).resolve().parent
 

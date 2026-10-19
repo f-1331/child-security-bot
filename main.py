@@ -144,10 +144,10 @@ async def start_bot(bot: Bot, dp: Dispatcher):
             await bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(
                     text="🌐 Web App",
-                    web_app=WebAppInfo(url=settings.WEBAPP_BASE_URL)
+                    web_app=WebAppInfo(url=settings.MINI_APP_URL)
                 )
             )
-            logger.info(f"Telegram chat menu button configured: {settings.WEBAPP_BASE_URL}")
+            logger.info(f"Telegram chat menu button configured: {settings.MINI_APP_URL}")
         except Exception as e:
             logger.warning(f"Could not configure chat menu button: {e}")
 

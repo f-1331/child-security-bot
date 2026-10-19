@@ -1158,16 +1158,14 @@ function setGlobalTheme(themeName, showNotification = true) {
 
 function openSettingsModal() {
   haptic("medium");
-  const modal = document.getElementById("modal-settings");
-  if (modal) modal.classList.remove("hidden");
-  setGlobalTheme(currentTheme, false);
-  setGlobalLanguage(currentLanguage, false);
+  switchTab("settings");
 }
 
 function closeSettingsModal() {
   haptic("light");
   const modal = document.getElementById("modal-settings");
   if (modal) modal.classList.add("hidden");
+  switchTab("map");
 }
 
 function openThemeModal() {
@@ -1830,6 +1828,10 @@ function switchTab(tabName) {
     if (locCard) locCard.classList.add("hidden");
     if (tabName === "tasks") {
       loadTasks();
+    }
+    if (tabName === "settings") {
+      setGlobalTheme(currentTheme, false);
+      setGlobalLanguage(currentLanguage, false);
     }
   } else {
     // Tab 1 (Map for parent / Adventure Hub for child)
