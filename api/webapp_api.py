@@ -643,3 +643,62 @@ async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "rejected"}
 
+
+@router.post("/child/{child_id}/sos")
+async def child_sos_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Trigger SOS emergency alert from child WebApp and notify all linked parents."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child else f"Farzand #{child_id}"
+    parents = await crud.get_parents_for_child(session, child_id)
+
+    if telemetry.telegram_bot and parents:
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=p.id,
+                    text=f"🚨 **SHOSHILINCH SOS SIGNAL!**\n\nFarzandingiz **{child_name}** WebApp orqali SOS xavf signalini yoqdi!\nIltimos, zudlik bilan farzandingiz bilan bog'laning yoki xaritada lokatsiyasini ko'ring.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
+
+    return {"status": "success", "child_id": child_id, "notified_parents": len(parents)}
+
+
+@router.post("/child/{child_id}/checkin")
+async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Safe arrival check-in ('Men yetib keldim') notification to parents."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child else f"Farzand #{child_id}"
+    parents = await crud.get_parents_for_child(session, child_id)
+
+    if telemetry.telegram_bot and parents:
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=p.id,
+                    text=f"✅ **Manzilga yetib borildi!**\n\nFarzandingiz **{child_name}**: *«Men manzilga yetib keldim»* deb xabar berdi.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Failed to notify parent {p.id} of checkin: {e}")
+
+    return {"status": "success", "child_id": child_id, "notified_parents": len(parents)}
+
+
+@router.post("/child/{child_id}/siren")
+async def parent_siren_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Parent triggers remote siren / sound ping to child's phone."""
+    if telemetry.telegram_bot:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text="🔔 **DIQQAT: Ota-onangiz telefoningizga qidiruv/ogohlantirish signali yubordi!**",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send siren alert to child {child_id}: {e}")
+
+    return {"status": "success", "child_id": child_id}
+
+

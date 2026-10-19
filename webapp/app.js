@@ -144,9 +144,105 @@ function haptic(type = "light") {
       if (type === "medium") tg.HapticFeedback.impactOccurred("medium");
       else if (type === "success") tg.HapticFeedback.notificationOccurred("success");
       else if (type === "warning") tg.HapticFeedback.notificationOccurred("warning");
+      else if (type === "heavy") tg.HapticFeedback.impactOccurred("heavy");
       else tg.HapticFeedback.impactOccurred("light");
     } catch (e) {}
   }
+}
+
+// Web Audio API Sound Synthesis Engine (Zero external dependencies)
+let audioCtx = null;
+function getAudioContext() {
+  try {
+    if (!audioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) audioCtx = new AudioCtxClass();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  } catch (e) {}
+  return audioCtx;
+}
+
+function playSirenSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sawtooth";
+    const now = ctx.currentTime;
+    osc.frequency.setValueAtTime(800, now);
+    osc.frequency.linearRampToValueAtTime(1400, now + 0.25);
+    osc.frequency.linearRampToValueAtTime(800, now + 0.5);
+    osc.frequency.linearRampToValueAtTime(1400, now + 0.75);
+    osc.frequency.linearRampToValueAtTime(800, now + 1.0);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.1);
+  } catch (e) {}
+}
+
+function playCoinChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [1318.51, 1975.53].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+      gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.1);
+      osc.stop(now + idx * 0.1 + 0.35);
+    });
+  } catch (e) {}
+}
+
+function playSuccessChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+      gain.gain.setValueAtTime(0.18, now + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.08);
+      osc.stop(now + idx * 0.08 + 0.25);
+    });
+  } catch (e) {}
+}
+
+function playPingSound() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(987.77, now);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  } catch (e) {}
 }
 
 // Check session in localStorage or URL
@@ -285,6 +381,16 @@ function startDemoMode(role) {
   }
 }
 
+function switchDemoRole(newRole) {
+  haptic("medium");
+  sessionStorage.setItem("smart_tracker_demo_role", newRole);
+  if (newRole === "child") {
+    enableChildDemoMode();
+  } else {
+    enableDemoMode();
+  }
+}
+
 function enableChildDemoMode() {
   currentRole = "child";
   isDemoMode = true;
@@ -294,6 +400,17 @@ function enableChildDemoMode() {
   coinRateSom = 10000;
   childBalanceCoins = 18000;
   childBalanceSom = 180000;
+
+  childrenList = [
+    {
+      id: 2002,
+      full_name: "Azizbek Karimov (Farzand)",
+      username: "azizbek_child",
+      virtual_balance: 18000,
+      virtual_money_som: 180000,
+      is_sos_active: false,
+    },
+  ];
 
   applyChildUI({
     id: 2002,
@@ -319,7 +436,7 @@ function enableChildDemoMode() {
   renderDemoGeofences();
   renderDemoHistory();
   renderDemoTasks();
-  showToast("👦 Farzand demo rejimi faollashtirildi");
+  showToast("👦 Farzand demo rejimiga o'tildi");
 }
 
 function applyAuthenticatedUser(data) {
@@ -357,20 +474,84 @@ function applyAuthenticatedUser(data) {
 }
 
 function applyParentUI(data) {
-  document.getElementById("childWelcomeBanner").classList.add("hidden");
-  document.getElementById("childMoneyCorner").classList.add("hidden");
-  document.getElementById("btnCoinRateCorner").classList.remove("hidden");
-  document.getElementById("parentTaskActionSection")?.classList.remove("hidden");
+  currentRole = "parent";
+  document.getElementById("childWelcomeBanner")?.classList.add("hidden");
+  document.getElementById("childMoneyCorner")?.classList.add("hidden");
+  document.getElementById("btnCoinRateCorner")?.classList.remove("hidden");
+  document.getElementById("childFloatingActions")?.classList.add("hidden");
+  document.getElementById("btnParentSiren")?.classList.remove("hidden");
   document.getElementById("btnAddZoneMap")?.classList.remove("hidden");
-  document.getElementById("childSelect").disabled = false;
+  document.getElementById("btnAddZoneSection")?.classList.remove("hidden");
+  document.getElementById("parentTaskActionSection")?.classList.remove("hidden");
+
+  // Titles
+  const zonesTitle = document.getElementById("zonesModalTitle");
+  if (zonesTitle) zonesTitle.textContent = "Kerakli Joylar (Geozonalar)";
+  const tasksTitle = document.getElementById("tasksModalTitle");
+  if (tasksTitle) tasksTitle.textContent = "Farzandga Topshiriq Berish";
+
+  // Tab 4 (History for Parent)
+  const tab4Btn = document.getElementById("tabBtn-history");
+  if (tab4Btn) {
+    tab4Btn.setAttribute("onclick", "switchTab('history')");
+  }
+  const tab4Icon = document.getElementById("tabIcon-history");
+  if (tab4Icon) {
+    tab4Icon.setAttribute("data-lucide", "history");
+  }
+  const tab4Label = document.getElementById("tabLabel-history");
+  if (tab4Label) tab4Label.textContent = "Tarix";
+
+  // Demo Switcher Segmented Button Styling
+  const pBtn = document.getElementById("btnDemoRoleParent");
+  const cBtn = document.getElementById("btnDemoRoleChild");
+  if (pBtn && cBtn) {
+    pBtn.className = "px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 bg-slate-900 text-blue-300 shadow";
+    cBtn.className = "px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 text-slate-900 hover:text-white";
+  }
+
+  const sel = document.getElementById("childSelect");
+  if (sel) sel.disabled = false;
+
+  if (window.lucide) lucide.createIcons();
 }
 
 function applyChildUI(user) {
-  document.getElementById("childWelcomeBanner").classList.remove("hidden");
-  document.getElementById("childMoneyCorner").classList.remove("hidden");
-  document.getElementById("btnCoinRateCorner").classList.add("hidden");
-  document.getElementById("parentTaskActionSection")?.classList.add("hidden");
+  currentRole = "child";
+  document.getElementById("childWelcomeBanner")?.classList.remove("hidden");
+  document.getElementById("childMoneyCorner")?.classList.remove("hidden");
+  document.getElementById("btnCoinRateCorner")?.classList.add("hidden");
+  document.getElementById("childFloatingActions")?.classList.remove("hidden");
+  document.getElementById("btnParentSiren")?.classList.add("hidden");
   document.getElementById("btnAddZoneMap")?.classList.add("hidden");
+  document.getElementById("btnAddZoneSection")?.classList.add("hidden");
+  document.getElementById("parentTaskActionSection")?.classList.add("hidden");
+
+  // Titles
+  const zonesTitle = document.getElementById("zonesModalTitle");
+  if (zonesTitle) zonesTitle.textContent = "Xavfsiz Hududlar (Uy, Maktab)";
+  const tasksTitle = document.getElementById("tasksModalTitle");
+  if (tasksTitle) tasksTitle.textContent = "Mening Vazifalarim";
+
+  // Tab 4 (Hamyonim / Wallet for Child)
+  const tab4Btn = document.getElementById("tabBtn-history");
+  if (tab4Btn) {
+    tab4Btn.setAttribute("onclick", "switchTab('wallet')");
+  }
+  const tab4Icon = document.getElementById("tabIcon-history");
+  if (tab4Icon) {
+    tab4Icon.setAttribute("data-lucide", "wallet");
+  }
+  const tab4Label = document.getElementById("tabLabel-history");
+  if (tab4Label) tab4Label.textContent = "Hamyonim";
+
+  // Demo Switcher Segmented Button Styling
+  const pBtn = document.getElementById("btnDemoRoleParent");
+  const cBtn = document.getElementById("btnDemoRoleChild");
+  if (pBtn && cBtn) {
+    cBtn.className = "px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 bg-slate-900 text-emerald-300 shadow";
+    pBtn.className = "px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 text-slate-900 hover:text-white";
+  }
 
   const moneyStr = (user.virtual_money_som || 0).toLocaleString();
   const coinsStr = (user.virtual_balance || 0).toLocaleString();
@@ -384,11 +565,22 @@ function applyChildUI(user) {
   const bannerMoney = document.getElementById("childBannerMoney");
   if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm pulingiz bor! (${coinsStr} tanga)`;
 
+  // Update modal-wallet piggy bank numbers
+  const wMoney = document.getElementById("childWalletMoneyText");
+  if (wMoney) wMoney.textContent = `${moneyStr} so'm`;
+  const wCoins = document.getElementById("childWalletCoinsText");
+  if (wCoins) {
+    const rateText = `(Kurs: ${(coinRateCoins/1000).toFixed(0)}k = ${(coinRateSom/1000).toFixed(0)}k so'm)`;
+    wCoins.innerHTML = `<i data-lucide="coins" class="w-3.5 h-3.5"></i> <span>${coinsStr} tanga ${rateText}</span>`;
+  }
+
   const sel = document.getElementById("childSelect");
   if (sel) {
     sel.innerHTML = `<option value="${user.id}">${user.full_name || 'Mening hisobim'}</option>`;
     sel.disabled = true;
   }
+
+  if (window.lucide) lucide.createIcons();
 }
 
 async function loadChildSelfData(user) {
@@ -642,17 +834,22 @@ function closeEmptyState() {
 function enableDemoMode() {
   haptic("success");
   isDemoMode = true;
+  currentRole = "parent";
+  parentId = 1001;
+  coinRateCoins = 1000;
+  coinRateSom = 10000;
+
   document.getElementById("emptyStateBanner").classList.add("hidden");
   document.getElementById("demoBadge")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
-  if (window.lucide) lucide.createIcons();
 
   childrenList = [
     {
       id: 2002,
-      full_name: "Azizbek Karimov (Demo)",
+      full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
       virtual_balance: 18000,
+      virtual_money_som: 180000,
       is_sos_active: false,
     },
   ];
@@ -660,11 +857,16 @@ function enableDemoMode() {
   currentChildId = 2002;
   renderChildSelector();
 
+  applyParentUI({
+    user: { id: 1001, full_name: "Ota-ona (Demo)", coin_rate_coins: 1000, coin_rate_som: 10000 },
+    children: childrenList
+  });
+
   // Render demo child live position in Tashkent
   const demoLat = 41.2916;
   const demoLon = 69.2121;
 
-  renderChildMarker(demoLat, demoLon, "Azizbek Karimov (Demo)", false, 82);
+  renderChildMarker(demoLat, demoLon, "Azizbek Karimov (Farzand)", false, 82);
   updateBatteryUI(82, false);
   updateSoundUI("normal");
   resolveAddress(demoLat, demoLon);
@@ -675,7 +877,10 @@ function enableDemoMode() {
   // Load demo route history
   renderDemoHistory();
 
-  showToast("🎮 Demo rejimi faollashtirildi");
+  // Load demo tasks
+  renderDemoTasks();
+
+  showToast("👨‍👩‍👧 Ota-ona demo rejimiga o'tildi");
 }
 
 // Populate child select dropdown
@@ -1141,12 +1346,21 @@ function dismissSos() {
 // Bottom tab switching
 function switchTab(tabName) {
   haptic("light");
+
+  // In child mode, Tab 4 routes to child wallet
+  if (currentRole === "child" && tabName === "history") {
+    tabName = "wallet";
+  }
+
   document.querySelectorAll(".nav-tab").forEach((btn) => {
     btn.classList.remove("text-blue-400", "active");
     btn.classList.add("text-slate-400");
   });
 
-  const activeBtn = document.getElementById(`tabBtn-${tabName}`);
+  let activeBtn = document.getElementById(`tabBtn-${tabName}`);
+  if (!activeBtn && tabName === "wallet") {
+    activeBtn = document.getElementById("tabBtn-history");
+  }
   if (activeBtn) {
     activeBtn.classList.add("text-blue-400", "active");
     activeBtn.classList.remove("text-slate-400");
@@ -1157,18 +1371,23 @@ function switchTab(tabName) {
   });
 
   const floatControls = document.getElementById("floatingMapControls");
+  const childActions = document.getElementById("childFloatingActions");
   const locCard = document.getElementById("locationCard");
 
   if (tabName !== "map") {
     const targetModal = document.getElementById(`modal-${tabName}`);
     if (targetModal) targetModal.classList.remove("hidden");
     if (floatControls) floatControls.classList.add("hidden");
+    if (childActions) childActions.classList.add("hidden");
     if (locCard) locCard.classList.add("hidden");
     if (tabName === "tasks") {
       loadTasks();
     }
   } else {
     if (floatControls) floatControls.classList.remove("hidden");
+    if (childActions && currentRole === "child") {
+      childActions.classList.remove("hidden");
+    }
     if (locCard) locCard.classList.remove("hidden");
     if (map) {
       setTimeout(() => map.invalidateSize(), 80);
@@ -1446,6 +1665,19 @@ function renderDemoTasks() {
       promised_time: "30 daqiqadan keyin",
       proof_photo_url: null,
       created_at: new Date().toISOString()
+    },
+    {
+      id: 993,
+      title: "Ingliz tili yangi lug'at yodlash",
+      description: "Unit 4 mavzusidagi 15 ta yangi so'zni daftarga yozib yodlash",
+      reward_coins: 4000,
+      status: "completed_by_child",
+      media_type: null,
+      media_url: null,
+      seen_at: new Date().toISOString(),
+      promised_time: "1 soat ichida",
+      proof_photo_url: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80",
+      created_at: new Date().toISOString()
     }
   ];
   renderTasksList();
@@ -1455,23 +1687,25 @@ function renderTasksList() {
   const container = document.getElementById("tasksListContainer");
   if (!container) return;
 
+  const isChild = (currentRole === "child");
+
   let balanceBanner = "";
-  if (currentRole === "child" || (authenticatedSession && authenticatedSession.role === "child") || (isDemoMode && currentRole === "child")) {
+  if (isChild) {
     const moneyStr = (childBalanceSom || 0).toLocaleString();
     const coinStr = (childBalanceCoins || 0).toLocaleString();
     const perCoin = coinRateSom / Math.max(1, coinRateCoins);
     balanceBanner = `
-      <div class="p-3.5 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-2xl mb-3 shadow-lg">
+      <div class="p-3.5 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-indigo-950/80 border border-emerald-500/40 rounded-2xl mb-3 shadow-lg">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-            <i data-lucide="wallet" class="w-4 h-4"></i>
-            <span>Sizning Jamg'armangiz:</span>
+            <span class="text-base">🐷</span>
+            <span>Jamg'arilgan naqd pulingiz:</span>
           </span>
           <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
             1k = ${(perCoin * 1000).toLocaleString()} so'm
           </span>
         </div>
-        <p class="text-xl font-black text-white mt-1 tracking-tight">
+        <p class="text-2xl font-black text-white mt-1 tracking-tight">
           ${moneyStr} so'm
         </p>
         <p class="text-xs text-amber-400 font-bold mt-0.5 flex items-center gap-1">
@@ -1480,7 +1714,8 @@ function renderTasksList() {
         </p>
       </div>
     `;
-  } else if (currentRole === "parent" || !currentRole) {
+  } else {
+    // Parent view
     const activeChild = childrenList.find(c => c.id == currentChildId);
     if (activeChild) {
       const cMoney = activeChild.virtual_money_som || Math.round((activeChild.virtual_balance || 0) * (coinRateSom / Math.max(1, coinRateCoins)));
@@ -1490,7 +1725,7 @@ function renderTasksList() {
             <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${activeChild.full_name || 'Farzand'} balansi:</span>
             <p class="text-xs font-bold text-white mt-0.5">${(activeChild.virtual_balance || 0).toLocaleString()} tanga <span class="text-emerald-400 font-semibold">(≈ ${cMoney.toLocaleString()} so'm)</span></p>
           </div>
-          <button onclick="openCoinRateModal()" class="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition active:scale-95">
+          <button onclick="openCoinRateModal()" class="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition active:scale-95 shadow">
             💰 Kurs: ${(coinRateCoins/1000).toFixed(0)}k=${(coinRateSom/1000).toFixed(0)}k
           </button>
         </div>
@@ -1504,8 +1739,8 @@ function renderTasksList() {
         <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-400 mb-2">
           <i data-lucide="check-circle" class="w-6 h-6"></i>
         </div>
-        <p class="text-xs font-semibold text-slate-300">Faol topshiriqlar yo'q</p>
-        <p class="text-[11px] text-slate-500 mt-1">Yangi topshiriq qo'shish uchun yuqoridagi tugmani bosing</p>
+        <p class="text-xs font-semibold text-slate-300">${isChild ? "Sizda hozircha topshiriqlar yo'q" : "Faol topshiriqlar yo'q"}</p>
+        <p class="text-[11px] text-slate-500 mt-1">${isChild ? "Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi" : "Yangi topshiriq berish uchun yuqoridagi tugmani bosing"}</p>
       </div>
     `;
     if (window.lucide) lucide.createIcons();
@@ -1549,56 +1784,124 @@ function renderTasksList() {
         <div class="mt-2.5 p-2 bg-slate-950/60 rounded-xl border border-slate-800">
           <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 mb-1">
             <i data-lucide="camera" class="w-3.5 h-3.5"></i>
-            <span>Farzand yuborgan hisobot rasmi:</span>
+            <span>${isChild ? 'Yuborgan hisobot rasmingiz:' : 'Farzand yuborgan hisobot rasmi:'}</span>
           </div>
           <img src="${t.proof_photo_url}" class="rounded-lg max-h-36 w-full object-cover cursor-pointer" onclick="window.open('${t.proof_photo_url}', '_blank')" />
         </div>
       `;
     }
 
-    // Action buttons based on status
+    // Role-specific action buttons
     let actionButtons = "";
-    if (t.status === "completed_by_child") {
-      actionButtons = `
-        <div class="flex gap-2 mt-3 pt-2 border-t border-slate-800">
-          <button onclick="approveTask(${t.id})" class="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-bold transition shadow">
-            ✅ Tasdiqlash
-          </button>
-          <button onclick="rejectTask(${t.id})" class="px-3 py-1.5 bg-slate-800 hover:bg-red-600/30 text-red-400 border border-slate-700 rounded-lg text-xs font-medium transition">
-            ❌ Rad etish
-          </button>
-        </div>
-      `;
-    } else if (t.status === "pending" || t.status === "seen" || t.status === "scheduled") {
-      const seenBtn = t.status === "pending"
-        ? `<button onclick="markTaskSeen(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-blue-400 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
-             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-             <span>Ko'rdim</span>
-           </button>`
-        : `<div class="px-2 py-1 text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-             <i data-lucide="check" class="w-3.5 h-3.5"></i>
-             <span>Ko'rildi</span>
-           </div>`;
+    if (isChild) {
+      // CHILD ACTIONS
+      if (t.status === "pending" || t.status === "seen" || t.status === "scheduled") {
+        const seenBtn = (t.status === "pending")
+          ? `<button onclick="markTaskSeen(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-blue-400 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
+               <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+               <span>Ko'rdim</span>
+             </button>`
+          : `<div class="px-2 py-1 text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+               <i data-lucide="check" class="w-3.5 h-3.5"></i>
+               <span>Ko'rildi</span>
+             </div>`;
 
-      const schedBtn = `<button onclick="openScheduleModal(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-amber-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
-             <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-             <span>${t.promised_time ? t.promised_time : 'Vaqt tanlash'}</span>
-           </button>`;
+        const schedBtn = `<button onclick="openScheduleModal(${t.id})" class="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-amber-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition">
+               <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+               <span>${t.promised_time ? t.promised_time : 'Vaqt tanlash'}</span>
+             </button>`;
 
-      const proofBtn = `<button onclick="openProofModal(${t.id})" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow">
-             <i data-lucide="camera" class="w-4 h-4"></i>
-             <span>Bajarildi (Rasm yuborish)</span>
-           </button>`;
+        const proofBtn = `<button onclick="openProofModal(${t.id})" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow">
+               <i data-lucide="camera" class="w-4 h-4"></i>
+               <span>Bajarildi (Rasm yuborish)</span>
+             </button>`;
 
-      actionButtons = `
-        <div class="mt-3 pt-2 border-t border-slate-800 space-y-2">
-          <div class="flex gap-2">
-            ${seenBtn}
-            ${schedBtn}
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 space-y-2">
+            <div class="flex gap-2">
+              ${seenBtn}
+              ${schedBtn}
+            </div>
+            ${proofBtn}
           </div>
-          ${proofBtn}
-        </div>
-      `;
+        `;
+      } else if (t.status === "completed_by_child") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-center py-1">
+            <span class="text-xs text-amber-300 font-medium flex items-center justify-center gap-1.5">
+              <span>⏳</span> <span>Rasm hisoboti ota-onangizga yuborildi. Tasdiqlanishi kutilmoqda...</span>
+            </span>
+          </div>
+        `;
+      } else if (t.status === "approved") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-center py-1 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+            <span class="text-xs text-emerald-300 font-bold flex items-center justify-center gap-1.5">
+              <span>🎉</span> <span>Ota-onangiz tasdiqladi! +${(t.reward_coins || 1000).toLocaleString()} tanga berildi</span>
+            </span>
+          </div>
+        `;
+      } else if (t.status === "rejected") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 space-y-1.5">
+            <p class="text-xs text-red-300 text-center font-medium">❌ Ota-onangiz rad etdi. Qaytadan topshiring:</p>
+            <button onclick="openProofModal(${t.id})" class="w-full py-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow">
+              <i data-lucide="camera" class="w-4 h-4"></i>
+              <span>Qaytadan rasm yuborish</span>
+            </button>
+          </div>
+        `;
+      }
+    } else {
+      // PARENT ACTIONS
+      if (t.status === "completed_by_child") {
+        actionButtons = `
+          <div class="flex gap-2 mt-3 pt-2 border-t border-slate-800">
+            <button onclick="approveTask(${t.id})" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-lg flex items-center justify-center gap-1">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>Tasdiqlash (+tanga)</span>
+            </button>
+            <button onclick="rejectTask(${t.id})" class="px-3 py-2 bg-slate-800 hover:bg-red-600/30 text-red-400 border border-slate-700 active:scale-95 rounded-xl text-xs font-semibold transition">
+              Rad etish
+            </button>
+          </div>
+        `;
+      } else if (t.status === "pending") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>⏳ Farzand hali xabarni ko'rmadi</span>
+            <span class="text-amber-400 font-bold">+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+          </div>
+        `;
+      } else if (t.status === "seen") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-blue-400 flex items-center justify-between font-medium">
+            <span>👁 Farzand topshiriqni ko'rdi</span>
+            <span class="text-slate-400">Bajarilish kutilmoqda</span>
+          </div>
+        `;
+      } else if (t.status === "scheduled") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-amber-300 flex items-center justify-between font-medium">
+            <span>⏰ Farzand ${t.promised_time || 'vaqtda'} bajarishga va'da berdi</span>
+            <span class="text-emerald-400 font-bold">Jarayonda</span>
+          </div>
+        `;
+      } else if (t.status === "approved") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-emerald-400 flex items-center justify-between font-medium">
+            <span>🏆 Tasdiqlangan va tanga berilgan</span>
+            <span class="font-bold">+${(t.reward_coins || 1000).toLocaleString()} tanga</span>
+          </div>
+        `;
+      } else if (t.status === "rejected") {
+        actionButtons = `
+          <div class="mt-3 pt-2 border-t border-slate-800 text-[11px] text-red-400 flex items-center justify-between font-medium">
+            <span>❌ Rad etilgan</span>
+            <span class="text-slate-400">Farzand qayta topshirishi mumkin</span>
+          </div>
+        `;
+      }
     }
 
     return `
@@ -1918,22 +2221,42 @@ async function submitTaskProof() {
 }
 
 async function approveTask(taskId) {
-  haptic("medium");
+  haptic("success");
+  playCoinChime();
   try {
     if (isDemoMode) {
       const t = tasksList.find(x => x.id === taskId);
-      if (t) t.status = "approved";
-      renderTasksList();
-      showToast("Topshiriq tasdiqlandi (+tanga o'tkazildi)!");
+      if (t) {
+        t.status = "approved";
+        const coins = t.reward_coins || 1000;
+        childBalanceCoins += coins;
+        childBalanceSom = Math.round(childBalanceCoins * (coinRateSom / Math.max(1, coinRateCoins)));
+
+        const c = childrenList.find(ch => ch.id == currentChildId);
+        if (c) {
+          c.virtual_balance = childBalanceCoins;
+          c.virtual_money_som = childBalanceSom;
+        }
+
+        renderTasksList();
+        const cornerMoneyText = document.getElementById("childMoneyCornerText");
+        if (cornerMoneyText) cornerMoneyText.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+        const bannerMoney = document.getElementById("childBannerMoney");
+        if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${childBalanceSom.toLocaleString()} so'm pulingiz bor! (${childBalanceCoins.toLocaleString()} tanga)`;
+        const wMoney = document.getElementById("childWalletMoneyText");
+        if (wMoney) wMoney.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+      }
+      showToast("🏆 Topshiriq tasdiqlandi (+tanga o'tkazildi)!");
       return;
     }
 
     const res = await fetch(`/api/v1/webapp/task/${taskId}/approve`, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
-      haptic("success");
-      showToast("Topshiriq tasdiqlandi!");
+      playCoinChime();
+      showToast("🏆 Topshiriq tasdiqlandi (+tanga o'tkazildi)!");
       loadTasks();
+      if (currentChildId) updateLiveTelemetry(currentChildId);
     }
   } catch (e) {
     console.error("Approve task error:", e);
@@ -1947,17 +2270,93 @@ async function rejectTask(taskId) {
       const t = tasksList.find(x => x.id === taskId);
       if (t) t.status = "rejected";
       renderTasksList();
-      showToast("Topshiriq rad etildi.");
+      showToast("❌ Topshiriq rad etildi.");
       return;
     }
 
     const res = await fetch(`/api/v1/webapp/task/${taskId}/reject`, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
-      showToast("Topshiriq rad etildi.");
+      showToast("❌ Topshiriq rad etildi.");
       loadTasks();
     }
   } catch (e) {
     console.error("Reject task error:", e);
+  }
+}
+
+// CHILD FLOATING & SAFETY ACTION HANDLERS
+
+function triggerChildSOS() {
+  haptic("heavy");
+  playSirenSound();
+  const banner = document.getElementById("sosAlertBanner");
+  if (banner) {
+    banner.classList.remove("hidden");
+    const span = banner.querySelector("span");
+    if (span) span.textContent = "🚨 DIQQAT: SOS xavf signali ota-onangizga yuborildi!";
+  }
+  showToast("🚨 SOS XAVF SIGNALI YUBORILDI! Ota-onangizga geolokatsiyangiz bilan xabar ketdi!");
+
+  if (!isDemoMode && currentChildId) {
+    fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_sos_active: true })
+    }).catch(console.error);
+  }
+}
+
+function triggerChildCheckIn() {
+  haptic("medium");
+  playSuccessChime();
+  showToast("✅ «Men yetib keldim» deb ota-onangizga bildirishnoma yuborildi!");
+  if (!isDemoMode && currentChildId) {
+    fetch(`/api/v1/webapp/child/${currentChildId}/checkin`, {
+      method: "POST"
+    }).catch(console.error);
+  }
+}
+
+function navigateChildHome() {
+  haptic("light");
+  playPingSound();
+  let homeLat = 41.2995;
+  let homeLon = 69.2401;
+  const homeZone = geofencesList.find(z => (z.name && z.name.toLowerCase().includes("uy")));
+  if (homeZone) {
+    homeLat = homeZone.latitude;
+    homeLon = homeZone.longitude;
+  }
+  showToast("🏠 Uyga yo'l ochilmoqda...");
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${homeLat},${homeLon}&travelmode=walking`;
+  if (window.Telegram?.WebApp?.openLink) {
+    window.Telegram.WebApp.openLink(url);
+  } else {
+    window.open(url, "_blank");
+  }
+}
+
+function callParent() {
+  haptic("medium");
+  playPingSound();
+  if (confirm("Ota-onangiz bilan bog'lanmoqchimisiz?")) {
+    if (window.Telegram?.WebApp?.close) {
+      showToast("Ota-onangiz bilan Telegram chatga o'tilmoqda...");
+      window.Telegram.WebApp.close();
+    } else {
+      window.location.href = "tel:+998901234567";
+    }
+  }
+}
+
+function triggerRemoteSiren() {
+  haptic("heavy");
+  playSirenSound();
+  showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
+  if (!isDemoMode && currentChildId) {
+    fetch(`/api/v1/webapp/child/${currentChildId}/siren`, {
+      method: "POST"
+    }).catch(console.error);
   }
 }
