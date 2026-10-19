@@ -118,6 +118,9 @@ document.addEventListener("DOMContentLoaded", () => {
     lucide.createIcons();
   }
 
+  const savedTheme = localStorage.getItem("smart_tracker_theme") || "midnight";
+  setGlobalTheme(savedTheme, false);
+
   initMap();
   checkAuthenticationState();
 
@@ -475,8 +478,14 @@ function applyAuthenticatedUser(data) {
 
 function applyParentUI(data) {
   currentRole = "parent";
+  document.body.classList.remove("role-child");
+  document.body.classList.add("role-parent");
+
+  // Show parent header row, hide child header row
+  document.getElementById("parentHeaderRow")?.classList.remove("hidden");
+  document.getElementById("childHeaderRow")?.classList.add("hidden");
+
   document.getElementById("childWelcomeBanner")?.classList.add("hidden");
-  document.getElementById("childMoneyCorner")?.classList.add("hidden");
   document.getElementById("btnCoinRateCorner")?.classList.remove("hidden");
   document.getElementById("childFloatingActions")?.classList.add("hidden");
   document.getElementById("btnParentSiren")?.classList.remove("hidden");
@@ -489,6 +498,24 @@ function applyParentUI(data) {
   if (zonesTitle) zonesTitle.textContent = "Kerakli Joylar (Geozonalar)";
   const tasksTitle = document.getElementById("tasksModalTitle");
   if (tasksTitle) tasksTitle.textContent = "Farzandga Topshiriq Berish";
+
+  // Tab 1: Map
+  const tab1Icon = document.getElementById("tabIcon-map");
+  if (tab1Icon) tab1Icon.setAttribute("data-lucide", "map");
+  const tab1Label = document.getElementById("tabLabel-map");
+  if (tab1Label) tab1Label.textContent = "Xarita";
+
+  // Tab 2: Zones
+  const tab2Icon = document.getElementById("tabIcon-zones");
+  if (tab2Icon) tab2Icon.setAttribute("data-lucide", "map-pin");
+  const tab2Label = document.getElementById("tabLabel-zones");
+  if (tab2Label) tab2Label.textContent = "Joylar";
+
+  // Tab 3: Tasks
+  const tab3Icon = document.getElementById("tabIcon-tasks");
+  if (tab3Icon) tab3Icon.setAttribute("data-lucide", "check-square");
+  const tab3Label = document.getElementById("tabLabel-tasks");
+  if (tab3Label) tab3Label.textContent = "Vazifalar";
 
   // Tab 4 (History for Parent)
   const tab4Btn = document.getElementById("tabBtn-history");
@@ -518,8 +545,14 @@ function applyParentUI(data) {
 
 function applyChildUI(user) {
   currentRole = "child";
+  document.body.classList.remove("role-parent");
+  document.body.classList.add("role-child");
+
+  // Show child header row, hide parent header row
+  document.getElementById("parentHeaderRow")?.classList.add("hidden");
+  document.getElementById("childHeaderRow")?.classList.remove("hidden");
+
   document.getElementById("childWelcomeBanner")?.classList.remove("hidden");
-  document.getElementById("childMoneyCorner")?.classList.remove("hidden");
   document.getElementById("btnCoinRateCorner")?.classList.add("hidden");
   document.getElementById("childFloatingActions")?.classList.remove("hidden");
   document.getElementById("btnParentSiren")?.classList.add("hidden");
@@ -529,11 +562,29 @@ function applyChildUI(user) {
 
   // Titles
   const zonesTitle = document.getElementById("zonesModalTitle");
-  if (zonesTitle) zonesTitle.textContent = "Xavfsiz Hududlar (Uy, Maktab)";
+  if (zonesTitle) zonesTitle.textContent = "Mening Qal'alarim 🏰 (Xavfsiz Joylar)";
   const tasksTitle = document.getElementById("tasksModalTitle");
-  if (tasksTitle) tasksTitle.textContent = "Mening Vazifalarim";
+  if (tasksTitle) tasksTitle.textContent = "Mening Missiyalarim 🎯";
 
-  // Tab 4 (Hamyonim / Wallet for Child)
+  // Tab 1: Sarguzasht
+  const tab1Icon = document.getElementById("tabIcon-map");
+  if (tab1Icon) tab1Icon.setAttribute("data-lucide", "compass");
+  const tab1Label = document.getElementById("tabLabel-map");
+  if (tab1Label) tab1Label.textContent = "Sarguzasht";
+
+  // Tab 2: Qal'alarim
+  const tab2Icon = document.getElementById("tabIcon-zones");
+  if (tab2Icon) tab2Icon.setAttribute("data-lucide", "castle");
+  const tab2Label = document.getElementById("tabLabel-zones");
+  if (tab2Label) tab2Label.textContent = "Qal'alarim";
+
+  // Tab 3: Missiyalar
+  const tab3Icon = document.getElementById("tabIcon-tasks");
+  if (tab3Icon) tab3Icon.setAttribute("data-lucide", "trophy");
+  const tab3Label = document.getElementById("tabLabel-tasks");
+  if (tab3Label) tab3Label.textContent = "Missiyalar";
+
+  // Tab 4 (Hamyonim / Xazina for Child)
   const tab4Btn = document.getElementById("tabBtn-history");
   if (tab4Btn) {
     tab4Btn.setAttribute("onclick", "switchTab('wallet')");
@@ -543,7 +594,7 @@ function applyChildUI(user) {
     tab4Icon.setAttribute("data-lucide", "wallet");
   }
   const tab4Label = document.getElementById("tabLabel-history");
-  if (tab4Label) tab4Label.textContent = "Hamyonim";
+  if (tab4Label) tab4Label.textContent = "Xazina 🐷";
 
   // Demo Switcher Segmented Button Styling
   const pBtn = document.getElementById("btnDemoRoleParent");
@@ -556,14 +607,18 @@ function applyChildUI(user) {
   const moneyStr = (user.virtual_money_som || 0).toLocaleString();
   const coinsStr = (user.virtual_balance || 0).toLocaleString();
 
-  const cornerMoneyText = document.getElementById("childMoneyCornerText");
-  if (cornerMoneyText) cornerMoneyText.textContent = `${moneyStr} so'm`;
+  // Child Hero Bar Updates
+  const heroName = document.getElementById("childHeroName");
+  if (heroName) heroName.textContent = user.full_name || "Azizbek Qahramon";
+
+  const heroMoneyText = document.getElementById("childHeroMoneyText");
+  if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} so'm`;
 
   const bannerName = document.getElementById("childBannerName");
-  if (bannerName) bannerName.textContent = user.full_name || "Farzand hisobi";
+  if (bannerName) bannerName.textContent = "Bugungi sarguzasht";
 
   const bannerMoney = document.getElementById("childBannerMoney");
-  if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm pulingiz bor! (${coinsStr} tanga)`;
+  if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm bor! (${coinsStr} tanga)`;
 
   // Update modal-wallet piggy bank numbers
   const wMoney = document.getElementById("childWalletMoneyText");
@@ -730,6 +785,114 @@ function updateCoinRateBadgeUI(coins, som) {
   }
 }
 
+// =========================================================
+// THEME & DESIGN PALETTE ENGINE (Transforming Entire Site)
+// =========================================================
+
+let currentTheme = localStorage.getItem("smart_tracker_theme") || "midnight";
+
+const THEME_NAMES = {
+  galaxy: "🌌 Kosmik Neon",
+  midnight: "🛡 Taktik Qora",
+  comic: "🎮 Super Qahramon",
+  emerald: "🌿 Zümrad Tabiat",
+  sunset: "🌅 Oltin Quyosh",
+  daylight: "☀️ Yorug' Kunduz"
+};
+
+const THEME_HEADER_COLORS = {
+  galaxy: "#120a2c",
+  midnight: "#0b1120",
+  comic: "#101938",
+  emerald: "#082114",
+  sunset: "#221004",
+  daylight: "#ffffff"
+};
+
+function applyMapThemeTiles(themeName) {
+  if (isSatellite) return;
+  if (!map) return;
+
+  if (streetTileLayer && map.hasLayer(streetTileLayer)) {
+    try { map.removeLayer(streetTileLayer); } catch(e) {}
+  }
+
+  let tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  let attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
+
+  if (themeName === "midnight" || themeName === "galaxy") {
+    tileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  } else if (themeName === "daylight") {
+    tileUrl = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+  } else {
+    tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  }
+
+  streetTileLayer = L.tileLayer(tileUrl, {
+    maxZoom: 19,
+    subdomains: ["a", "b", "c", "d"],
+    attribution: attribution
+  }).addTo(map);
+}
+
+function setGlobalTheme(themeName, showNotification = true) {
+  if (!THEME_NAMES[themeName]) themeName = "midnight";
+  currentTheme = themeName;
+  localStorage.setItem("smart_tracker_theme", themeName);
+
+  document.body.classList.remove(
+    "theme-galaxy",
+    "theme-midnight",
+    "theme-comic",
+    "theme-emerald",
+    "theme-sunset",
+    "theme-daylight"
+  );
+  document.body.classList.add(`theme-${themeName}`);
+
+  document.querySelectorAll(".theme-option-btn").forEach((btn) => {
+    btn.classList.remove("ring-2", "ring-offset-2", "ring-offset-slate-900", "border-white");
+    const check = btn.querySelector(".theme-check");
+    if (check) check.classList.add("hidden");
+  });
+  const activeThemeBtn = document.getElementById(`themeBtn-${themeName}`);
+  if (activeThemeBtn) {
+    activeThemeBtn.classList.add("ring-2", "ring-offset-2", "ring-offset-slate-900", "border-white");
+    const check = activeThemeBtn.querySelector(".theme-check");
+    if (check) check.classList.remove("hidden");
+  }
+
+  applyMapThemeTiles(themeName);
+
+  if (tg) {
+    try {
+      const headerColor = THEME_HEADER_COLORS[themeName] || "#090d16";
+      if (tg.setHeaderColor) tg.setHeaderColor(headerColor);
+      if (tg.setBackgroundColor) tg.setBackgroundColor(headerColor);
+    } catch (e) {}
+  }
+
+  if (showNotification) {
+    haptic("medium");
+    playSuccessChime();
+    showToast(`🎨 Yangi dizayn: ${THEME_NAMES[themeName]}`);
+    closeThemeModal();
+  }
+}
+
+function openThemeModal() {
+  haptic("medium");
+  const modal = document.getElementById("modal-theme");
+  if (modal) modal.classList.remove("hidden");
+  setGlobalTheme(currentTheme, false);
+}
+
+function closeThemeModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-theme");
+  if (modal) modal.classList.add("hidden");
+}
+
 // Initialize Leaflet Map with CartoDB Voyager and Esri Satellite layers
 function initMap() {
   map = L.map("map", {
@@ -737,12 +900,8 @@ function initMap() {
     attributionControl: false,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
 
-  // 1. Street Layer: OpenStreetMap Standard (100% Free, No API Key Required)
-  streetTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    subdomains: ["a", "b", "c"],
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
+  // Apply map tiles according to active theme
+  applyMapThemeTiles(currentTheme);
 
   // 2. Satellite Layer: Esri World Imagery (High Resolution, Free)
   satelliteTileLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {

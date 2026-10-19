@@ -1,20 +1,235 @@
-/* Custom CSS for Smart Parental Tracker Mini App - Enhanced Edition */
+/* Custom CSS for Smart Parental Tracker Mini App - Dynamic Themed Edition */
+
+/* ========================================================= */
+/* 1. GLOBAL THEME ENGINE & PALETTES                         */
+/* ========================================================= */
 
 :root {
-  --primary-color: #3b82f6;
-  --success-color: #10b981;
-  --warning-color: #f59e0b;
-  --danger-color: #ef4444;
+  /* Default: Midnight Tactical */
+  --bg-main: #060911;
+  --bg-surface: #0b1120;
+  --bg-card: rgba(17, 26, 46, 0.92);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --pill-bg: #15223c;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.45);
+  --accent: #06b6d4;
+  --header-bg: rgba(11, 17, 32, 0.95);
+  --nav-bg: rgba(11, 17, 32, 0.95);
+  --tab-active-bg: rgba(59, 130, 246, 0.18);
+  --tab-active-color: #60a5fa;
+  --badge-bg: rgba(59, 130, 246, 0.2);
+  --badge-border: rgba(59, 130, 246, 0.4);
 }
+
+/* Theme 1: Galaxy Neon (Binafsharang Yulduzli Tun) */
+body.theme-galaxy {
+  --bg-main: #090516;
+  --bg-surface: #120a2c;
+  --bg-card: rgba(28, 15, 66, 0.92);
+  --bg-card-border: rgba(168, 85, 247, 0.35);
+  --pill-bg: #221252;
+  --text-main: #faf5ff;
+  --text-muted: #c084fc;
+  --primary: #a855f7;
+  --primary-glow: rgba(168, 85, 247, 0.55);
+  --accent: #ec4899;
+  --header-bg: rgba(18, 10, 44, 0.95);
+  --nav-bg: rgba(18, 10, 44, 0.95);
+  --tab-active-bg: rgba(168, 85, 247, 0.25);
+  --tab-active-color: #d8b4fe;
+  --badge-bg: rgba(168, 85, 247, 0.25);
+  --badge-border: rgba(168, 85, 247, 0.45);
+}
+
+/* Theme 2: Midnight Tactical (Professional Tungi Qora) */
+body.theme-midnight {
+  --bg-main: #060911;
+  --bg-surface: #0b1120;
+  --bg-card: rgba(17, 26, 46, 0.92);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --pill-bg: #15223c;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.45);
+  --accent: #06b6d4;
+  --header-bg: rgba(11, 17, 32, 0.95);
+  --nav-bg: rgba(11, 17, 32, 0.95);
+  --tab-active-bg: rgba(59, 130, 246, 0.18);
+  --tab-active-color: #60a5fa;
+  --badge-bg: rgba(59, 130, 246, 0.2);
+  --badge-border: rgba(59, 130, 246, 0.4);
+}
+
+/* Theme 3: Emerald Forest (Jonli Zümrad O'rmon) */
+body.theme-emerald {
+  --bg-main: #04120a;
+  --bg-surface: #082114;
+  --bg-card: rgba(14, 46, 29, 0.92);
+  --bg-card-border: rgba(16, 185, 129, 0.35);
+  --pill-bg: #143e27;
+  --text-main: #ecfdf5;
+  --text-muted: #6ee7b7;
+  --primary: #10b981;
+  --primary-glow: rgba(16, 185, 129, 0.5);
+  --accent: #14b8a6;
+  --header-bg: rgba(8, 33, 20, 0.95);
+  --nav-bg: rgba(8, 33, 20, 0.95);
+  --tab-active-bg: rgba(16, 185, 129, 0.25);
+  --tab-active-color: #34d399;
+  --badge-bg: rgba(16, 185, 129, 0.2);
+  --badge-border: rgba(16, 185, 129, 0.4);
+}
+
+/* Theme 4: Sunset Amber (Issiq Oltin Quyosh) */
+body.theme-sunset {
+  --bg-main: #130802;
+  --bg-surface: #221004;
+  --bg-card: rgba(48, 23, 8, 0.92);
+  --bg-card-border: rgba(245, 158, 11, 0.38);
+  --pill-bg: #42200b;
+  --text-main: #fffbeb;
+  --text-muted: #fcd34d;
+  --primary: #f59e0b;
+  --primary-glow: rgba(245, 158, 11, 0.5);
+  --accent: #f97316;
+  --header-bg: rgba(34, 16, 4, 0.95);
+  --nav-bg: rgba(34, 16, 4, 0.95);
+  --tab-active-bg: rgba(245, 158, 11, 0.25);
+  --tab-active-color: #fbbf24;
+  --badge-bg: rgba(245, 158, 11, 0.2);
+  --badge-border: rgba(245, 158, 11, 0.4);
+}
+
+/* Theme 5: Clean Daylight (Zamonaviy Yorug' Kunduz) */
+body.theme-daylight {
+  --bg-main: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.96);
+  --bg-card-border: rgba(203, 213, 225, 0.95);
+  --pill-bg: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --primary: #2563eb;
+  --primary-glow: rgba(37, 99, 235, 0.3);
+  --accent: #0284c7;
+  --header-bg: rgba(255, 255, 255, 0.96);
+  --nav-bg: rgba(255, 255, 255, 0.96);
+  --tab-active-bg: rgba(37, 99, 235, 0.12);
+  --tab-active-color: #1d4ed8;
+  --badge-bg: rgba(37, 99, 235, 0.12);
+  --badge-border: rgba(37, 99, 235, 0.35);
+}
+
+/* Theme 6: Comic Hero (Rang-barang Qahramon Pop) */
+body.theme-comic {
+  --bg-main: #090e1f;
+  --bg-surface: #101938;
+  --bg-card: rgba(22, 34, 76, 0.94);
+  --bg-card-border: rgba(250, 204, 21, 0.45);
+  --pill-bg: #1c2b5e;
+  --text-main: #ffffff;
+  --text-muted: #93c5fd;
+  --primary: #facc15;
+  --primary-glow: rgba(250, 204, 21, 0.6);
+  --accent: #f43f5e;
+  --header-bg: rgba(16, 25, 56, 0.96);
+  --nav-bg: rgba(16, 25, 56, 0.96);
+  --tab-active-bg: rgba(250, 204, 21, 0.22);
+  --tab-active-color: #fde047;
+  --badge-bg: rgba(250, 204, 21, 0.2);
+  --badge-border: rgba(250, 204, 21, 0.5);
+}
+
+/* ========================================================= */
+/* 2. DYNAMIC SITE-WIDE THEME OVERRIDES                      */
+/* ========================================================= */
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  background-color: #090d16;
+  background-color: var(--bg-main) !important;
+  color: var(--text-main) !important;
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+header {
+  background-color: var(--header-bg) !important;
+  border-color: var(--bg-card-border) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+nav {
+  background-color: var(--nav-bg) !important;
+  border-color: var(--bg-card-border) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Modal Bottom Sheets & Desktop Containers */
+.tab-panel > div,
+#modal-add-zone > div,
+#modal-add-task > div,
+#modal-task-schedule > div,
+#modal-task-proof > div,
+#authGateModal > div,
+#modal-coin-rate > div,
+#modal-theme > div {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--bg-card-border) !important;
+  color: var(--text-main) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Generic slate-900 / 800 overrides */
+.bg-slate-900,
+.bg-slate-900\/95,
+.bg-slate-900\/90 {
+  background-color: var(--bg-surface) !important;
+}
+
+.bg-slate-800,
+.bg-slate-800\/80,
+.bg-slate-800\/90 {
+  background-color: var(--pill-bg) !important;
+}
+
+.border-slate-800,
+.border-slate-700,
+.border-slate-700\/80 {
+  border-color: var(--bg-card-border) !important;
+}
+
+/* Daylight Light Theme Specific Text Fixes */
+body.theme-daylight .text-white,
+body.theme-daylight .text-slate-100 {
+  color: #0f172a !important;
+}
+
+body.theme-daylight .text-slate-200,
+body.theme-daylight .text-slate-300,
+body.theme-daylight .text-slate-400 {
+  color: #475569 !important;
+}
+
+body.theme-daylight input,
+body.theme-daylight select,
+body.theme-daylight textarea {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Nav Tab Active Indicator */
+.nav-tab.active {
+  color: var(--tab-active-color) !important;
+  background-color: var(--tab-active-bg) !important;
 }
 
 /* Map container filling available viewport */
@@ -22,10 +237,51 @@ body {
   height: 100%;
   width: 100%;
   z-index: 1;
-  background-color: #090d16;
+  background-color: var(--bg-main);
 }
 
-/* Pulsing radar effect for child marker */
+/* ========================================================= */
+/* 3. DISTINCT ROLE AESTHETICS (PARENT vs CHILD)             */
+/* ========================================================= */
+
+/* Role Child Layout: Playful, Gamified, Superhero */
+body.role-child {
+  --child-glow: 0 8px 24px var(--primary-glow);
+}
+
+body.role-child #childFloatingActions button {
+  border-radius: 20px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 2px 6px var(--primary-glow);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+body.role-child #childFloatingActions button:active {
+  transform: scale(0.92);
+}
+
+body.role-child #btnChildSOS {
+  box-shadow: 0 0 28px rgba(239, 68, 68, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.5) !important;
+  animation: child-sos-bounce 1.6s infinite ease-in-out;
+}
+
+@keyframes child-sos-bounce {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.05);
+  }
+}
+
+/* Role Parent Layout: Tactical, High-tech, Crisp */
+body.role-parent #floatingMapControls button {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* ========================================================= */
+/* 4. MAP MARKERS & RADAR ANIMATIONS                         */
+/* ========================================================= */
+
 .child-radar-marker {
   display: flex;
   justify-content: center;
@@ -34,18 +290,18 @@ body {
 }
 
 .child-avatar-pin {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   border: 3px solid #ffffff;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+  box-shadow: 0 4px 16px var(--primary-glow);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: 800;
+  font-size: 20px;
   z-index: 2;
   position: relative;
   transition: all 0.3s ease;
@@ -53,20 +309,20 @@ body {
 
 .child-pulse-ring {
   position: absolute;
-  width: 65px;
-  height: 65px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.45);
+  background: var(--primary-glow);
   animation: pulse-ring 2s infinite ease-out;
   z-index: 1;
 }
 
 .sos-pulse-ring {
   position: absolute;
-  width: 85px;
-  height: 85px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
-  background: rgba(239, 68, 68, 0.6);
+  background: rgba(239, 68, 68, 0.65);
   animation: sos-pulse-ring 0.9s infinite ease-out;
   z-index: 1;
 }
@@ -105,18 +361,18 @@ body {
 
 /* Custom Geofence labels */
 .geofence-tooltip {
-  background: rgba(15, 23, 42, 0.92) !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  color: white !important;
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--bg-card-border) !important;
+  color: var(--text-main) !important;
   font-size: 11px !important;
-  font-weight: 600 !important;
-  border-radius: 8px !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
   padding: 4px 10px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
 }
 
 .leaflet-tooltip-top:before {
-  border-top-color: rgba(15, 23, 42, 0.92) !important;
+  border-top-color: var(--bg-surface) !important;
 }
 
 /* Custom scrollbar for lists */
@@ -127,7 +383,7 @@ body {
   background: rgba(0, 0, 0, 0.05);
 }
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
 }
 
@@ -163,7 +419,7 @@ body {
 }
 
 /* ========================================================= */
-/* Hide Netlify Badge, Injected Drawer & Watermarks          */
+/* 5. HIDE NETLIFY BADGE & DRAWER WATERMARKS                 */
 /* ========================================================= */
 #nl-badge-frame,
 #nl-hud-frame,
@@ -232,10 +488,4 @@ button, input, select, textarea, a {
   .animate-slide-up {
     animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
-}
-
-/* Nav Tab Active Indicator */
-.nav-tab.active {
-  color: #3b82f6 !important;
-  background-color: rgba(59, 130, 246, 0.12);
 }
