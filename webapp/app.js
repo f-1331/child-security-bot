@@ -426,6 +426,7 @@ function enableChildDemoMode() {
 
   document.getElementById("emptyStateBanner").classList.add("hidden");
   document.getElementById("demoBadge")?.classList.remove("hidden");
+  document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
   if (window.lucide) lucide.createIcons();
 
@@ -448,6 +449,7 @@ function applyAuthenticatedUser(data) {
   currentRole = data.role;
   sessionStorage.removeItem("smart_tracker_demo_role");
   document.getElementById("demoBadge")?.classList.add("hidden");
+  document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
   document.getElementById("demoNoticeBanner")?.classList.add("hidden");
 
   if (data.role === "parent") {
@@ -677,6 +679,7 @@ function logoutSession() {
     authenticatedSession = null;
     isDemoMode = false;
     document.getElementById("demoBadge")?.classList.add("hidden");
+    document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
     document.getElementById("demoNoticeBanner")?.classList.add("hidden");
     showAuthGateModal();
     showToast("🚪 Hisobdan chiqildi");
@@ -956,7 +959,8 @@ async function loadData() {
     if (data.status === "success" && data.children && data.children.length > 0) {
       childrenList = data.children;
       isDemoMode = false;
-      document.getElementById("demoBadge").classList.add("hidden");
+      document.getElementById("demoBadge")?.classList.add("hidden");
+      document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
       document.getElementById("emptyStateBanner").classList.add("hidden");
 
       renderChildSelector();
@@ -1000,6 +1004,7 @@ function enableDemoMode() {
 
   document.getElementById("emptyStateBanner").classList.add("hidden");
   document.getElementById("demoBadge")?.classList.remove("hidden");
+  document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
 
   childrenList = [

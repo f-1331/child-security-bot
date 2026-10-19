@@ -22,7 +22,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 
   <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
   <script>
@@ -101,58 +101,92 @@
 
   <!-- TOP HEADER -->
   <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-2.5 sm:px-4 py-2 z-20 flex flex-col gap-1.5 shadow-lg safe-top">
+    <!-- 1. DEMO MODE NOTICE BANNER & INSTANT ROLE SWITCHER (Eng teparoqqa chiqarildi) -->
+    <div id="demoNoticeBanner" class="hidden bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-slate-950 px-2 sm:px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold shadow-lg">
+      <div class="flex items-center gap-1.5 min-w-0">
+        <span class="text-sm">🎮</span>
+        <span class="uppercase tracking-wider font-black text-[11px] truncate">Demo:</span>
+      </div>
+
+      <!-- Interactive Segmented Role Switcher -->
+      <div class="flex items-center bg-slate-950/30 p-0.5 rounded-xl border border-slate-950/20 text-[10px]">
+        <button id="btnDemoRoleParent" onclick="switchDemoRole('parent')" class="px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 bg-slate-900 text-blue-300 shadow">
+          <span>👨‍👩‍👧</span> <span>Ota-ona</span>
+        </button>
+        <button id="btnDemoRoleChild" onclick="switchDemoRole('child')" class="px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 text-slate-900 hover:text-white">
+          <span>👦</span> <span>Farzand</span>
+        </button>
+      </div>
+
+      <button onclick="showAuthGateModal()" class="px-2 sm:px-2.5 py-1 bg-slate-950 text-amber-300 hover:text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition active:scale-95 shadow shrink-0 flex items-center gap-1">
+        <i data-lucide="key" class="w-3 h-3"></i>
+        <span>Kodni kiritish</span>
+      </button>
+    </div>
+
     <!-- PARENT HEADER ROW (Visible in Parent Mode) -->
-    <div id="parentHeaderRow" class="flex items-center justify-between gap-1 sm:gap-2">
-      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
-        <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
-          <div id="childAvatar" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md text-xs sm:text-base border border-blue-400/40">
-            B
+    <div id="parentHeaderRow" class="flex flex-col gap-1.5">
+      <!-- 1-QATOR (TEPADA): Farzand ma'lumoti (chapda) va Demo indikatori (o'ngda) -->
+      <div class="flex items-center justify-between gap-1 sm:gap-2">
+        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
+            <div id="childAvatar" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-bold text-white shadow-md text-xs sm:text-base border border-blue-400/40">
+              B
+            </div>
+            <span id="onlineDot" class="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
           </div>
-          <span id="onlineDot" class="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
-        </div>
-        
-        <div class="min-w-0">
-          <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[110px] sm:max-w-[160px] truncate block">
-            <option value="">Farzand...</option>
-          </select>
-          <div class="flex items-center gap-1.5 mt-0.5">
-            <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 truncate">
+          
+          <div class="min-w-0">
+            <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[130px] sm:max-w-[180px] truncate block">
+              <option value="">Farzand...</option>
+            </select>
+            <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
               <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-              <span class="truncate">Jonli</span>
+              <span class="truncate">Jonli kuzatuv</span>
             </p>
-            <!-- Demo badge suppressed in header to prevent any collisions; Demo mode is fully shown in demoNoticeBanner below -->
-            <span id="demoBadge" class="hidden" style="display:none !important;"></span>
           </div>
+        </div>
+
+        <!-- TEPADA: Demo nishoni va Kod kiritish tugmasi -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span id="demoBadge" class="hidden items-center gap-1 text-[10px] sm:text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-1 rounded-lg font-black shadow-sm">
+            <span>🎮</span>
+            <span>Demo</span>
+          </span>
+          <button id="btnTopDemoAuth" onclick="showAuthGateModal()" class="hidden items-center gap-1 text-[10px] sm:text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold px-2 py-1 rounded-lg shadow transition active:scale-95">
+            <i data-lucide="key" class="w-3 h-3"></i>
+            <span>Kod</span>
+          </button>
         </div>
       </div>
 
-      <!-- Parent Telemetry Pills & Action Controls -->
-      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
-        <!-- Coin rate corner button (for Parent) -->
-        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
+      <!-- 2-QATOR (SAL PASTROQDA): Tangalar kursi, Telefon zaryadi, Ovoz rejimi, Dizayn va Chiqish -->
+      <div id="parentUtilityBar" class="flex items-center justify-between gap-1 pt-1 border-t border-slate-800/80">
+        <!-- Tangalarni kursini sozlash -->
+        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
           <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="coinRateCornerText" class="truncate">1k = 10k</span>
+          <span id="coinRateCornerText" class="truncate font-semibold">1k = 10k</span>
         </button>
 
-        <!-- Battery Pill -->
-        <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm shrink-0">
+        <!-- Telefon zaryadi -->
+        <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm shrink-0" title="Telefon zaryadi">
           <i id="batteryIcon" data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
           <span id="batteryText">--%</span>
         </div>
 
-        <!-- Sound Profile Pill (Hidden on mobile to keep top row spacious and prevent overlap) -->
-        <div id="soundPill" class="hidden sm:flex items-center gap-1 bg-slate-800 px-1.5 sm:px-2 py-1 rounded-full text-[10px] sm:text-xs font-medium text-slate-300 border border-slate-700 shadow-sm shrink-0" title="Ovoz rejimi">
+        <!-- Ovoz rejimi -->
+        <div id="soundPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-medium text-slate-300 border border-slate-700 shadow-sm shrink-0" title="Ovoz rejimi">
           <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-          <span id="soundText" class="hidden sm:inline">Oddiy</span>
+          <span id="soundText" class="inline">Oddiy</span>
         </div>
 
-        <!-- Theme Palette Button (Parent) -->
-        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn va ranglarni o'zgartirish">
+        <!-- Dizayn va ranglarni o'zgartirish -->
+        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn va ranglarni o'zgartirish">
           <i data-lucide="palette" class="w-3.5 h-3.5"></i>
         </button>
 
-        <!-- Logout / Switch Account Button -->
-        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-800 hover:bg-red-900/40 border border-slate-700 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Chiqish / Boshqa hisobga o'tish">
+        <!-- Chiqish / Boshqa hisobga o'tish -->
+        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-800 hover:bg-red-900/40 border border-slate-700 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Chiqish / Boshqa hisobga o'tish">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -223,29 +257,6 @@
         <span>🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!</span>
       </div>
       <button onclick="dismissSos()" class="p-1 text-white/80 hover:text-white text-base font-bold">×</button>
-    </div>
-
-    <!-- DEMO MODE NOTICE BANNER & INSTANT ROLE SWITCHER -->
-    <div id="demoNoticeBanner" class="hidden bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 text-slate-950 px-2 sm:px-3 py-1.5 rounded-xl flex items-center justify-between text-xs font-bold shadow-lg">
-      <div class="flex items-center gap-1.5 min-w-0">
-        <span class="text-sm">🎮</span>
-        <span class="uppercase tracking-wider font-black text-[11px] truncate">Demo:</span>
-      </div>
-
-      <!-- Interactive Segmented Role Switcher -->
-      <div class="flex items-center bg-slate-950/30 p-0.5 rounded-xl border border-slate-950/20 text-[10px]">
-        <button id="btnDemoRoleParent" onclick="switchDemoRole('parent')" class="px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 bg-slate-900 text-blue-300 shadow">
-          <span>👨‍👩‍👧</span> <span>Ota-ona</span>
-        </button>
-        <button id="btnDemoRoleChild" onclick="switchDemoRole('child')" class="px-2 sm:px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 text-slate-900 hover:text-white">
-          <span>👦</span> <span>Farzand</span>
-        </button>
-      </div>
-
-      <button onclick="showAuthGateModal()" class="px-2 sm:px-2.5 py-1 bg-slate-950 text-amber-300 hover:text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition active:scale-95 shadow shrink-0 flex items-center gap-1">
-        <i data-lucide="key" class="w-3 h-3"></i>
-        <span>Kodni kiritish</span>
-      </button>
     </div>
   </header>
 
@@ -977,6 +988,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
