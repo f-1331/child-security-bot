@@ -19,29 +19,78 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
+
+  <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
+  <script>
+    (function() {
+      try {
+        var ttl = 7 * 24 * 60 * 60 * 1000;
+        var now = Date.now();
+        localStorage.setItem("nl-hud:public:v1", "hidden:" + (now + ttl));
+        localStorage.setItem("nl-hud:owner-private:v1", "hidden");
+        localStorage.setItem("nl-hud:v1", "hidden");
+      } catch(e) {}
+    })();
+
+    // MutationObserver to remove Netlify badge iframe as soon as injected into DOM
+    (function() {
+      try {
+        var obs = new MutationObserver(function(mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            var added = mutations[i].addedNodes;
+            for (var j = 0; j < added.length; j++) {
+              var node = added[j];
+              if (node && node.nodeType === 1) {
+                if (node.id === "nl-badge-frame" || node.id === "nl-hud-frame" ||
+                    (node.tagName === "IFRAME" && (node.title === "Powered by Netlify" || (node.id && node.id.indexOf("nl-") === 0)))) {
+                  node.remove();
+                }
+              }
+            }
+          }
+        });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+      } catch(e) {}
+    })();
+  </script>
+
   <style>
-    /* Aggressively suppress Netlify badge, drawer, watermarks & deploy previews */
+    /* Complete suppression of Netlify badge, iframe, drawer, and HUD */
+    #nl-badge-frame,
+    #nl-hud-frame,
+    iframe[id^="nl-"],
+    iframe[title*="Netlify"],
+    iframe[title*="Powered by Netlify"],
+    iframe[srcdoc*="Netlify"],
+    iframe[srcdoc*="nl-"],
+    iframe[style*="2147483645"],
     netlify-drawer,
     #netlify-drawer,
     div#netlify-drawer,
     .netlify-badge,
     #netlify-badge,
     [data-netlify-deploy-id],
+    [data-netlify-site-id],
     [class*="netlify"],
     [id*="netlify"],
     a[href*="netlify.com"],
-    iframe[src*="netlify"] {
+    iframe[src*="netlify"],
+    script[src*="hud"] {
       display: none !important;
       visibility: hidden !important;
       opacity: 0 !important;
       pointer-events: none !important;
-      width: 0 !important;
-      height: 0 !important;
+      width: 0px !important;
+      height: 0px !important;
+      max-width: 0px !important;
+      max-height: 0px !important;
       position: fixed !important;
-      top: -9999px !important;
-      left: -9999px !important;
+      top: -99999px !important;
+      left: -99999px !important;
+      clip-path: path("M0 0Z") !important;
       overflow: hidden !important;
+      z-index: -99999 !important;
     }
   </style>
 </head>
@@ -195,8 +244,8 @@
       </button>
     </div>
 
-    <!-- Map Bottom Card: Address & Geofence Status (Safely kept away from bottom-right on mobile; neat floating card on desktop) -->
-    <div id="locationCard" class="absolute left-3.5 right-36 md:right-auto md:left-6 bottom-3 md:bottom-24 z-20 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-2xl flex items-center justify-between transition-all duration-200 md:max-w-sm">
+    <!-- Map Bottom Card: Address & Geofence Status (Full width on mobile, floating card on desktop) -->
+    <div id="locationCard" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 bottom-3 md:bottom-24 z-20 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl border border-slate-800 shadow-2xl flex items-center justify-between transition-all duration-200 md:max-w-sm">
       <div class="flex flex-col pr-2 min-w-0">
         <div class="flex items-center gap-1.5 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
           <i data-lucide="map-pin" class="w-3 h-3 text-blue-400"></i>
@@ -215,26 +264,26 @@
     </div>
   </main>
 
-  <!-- BOTTOM NAVIGATION BAR (Responsive: Mobile Bar + Desktop Floating Dock) -->
-  <nav class="bg-slate-900/95 backdrop-blur-md border-t md:border border-slate-800 pl-2 pr-36 md:pr-2 md:pl-2 py-2 z-30 grid grid-cols-4 gap-1 shadow-2xl safe-bottom md:fixed md:bottom-5 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[420px] md:rounded-2xl transition-all duration-300">
-    <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-blue-400 transition hover:bg-slate-800/60">
+  <!-- BOTTOM NAVIGATION BAR (Balanced full width on mobile, centered floating dock on desktop) -->
+  <nav class="bg-slate-900/95 backdrop-blur-md border-t md:border border-slate-800 px-2 sm:px-4 md:px-3 py-2 z-30 grid grid-cols-4 gap-1.5 shadow-2xl safe-bottom md:fixed md:bottom-5 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[420px] md:rounded-2xl transition-all duration-300">
+    <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active flex flex-col items-center py-1.5 px-1 rounded-xl text-blue-400 transition hover:bg-slate-800/60 active:scale-95">
       <i data-lucide="map" class="w-5 h-5"></i>
-      <span class="text-[9px] md:text-[11px] font-bold mt-1 truncate">Xarita</span>
+      <span class="text-[10px] sm:text-xs font-bold mt-1 truncate">Xarita</span>
     </button>
 
-    <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
+    <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab flex flex-col items-center py-1.5 px-1 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60 active:scale-95">
       <i data-lucide="map-pin" class="w-5 h-5"></i>
-      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Joylar</span>
+      <span class="text-[10px] sm:text-xs font-medium mt-1 truncate">Joylar</span>
     </button>
 
-    <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
+    <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab flex flex-col items-center py-1.5 px-1 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60 active:scale-95">
       <i data-lucide="check-square" class="w-5 h-5"></i>
-      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Vazifalar</span>
+      <span class="text-[10px] sm:text-xs font-medium mt-1 truncate">Vazifalar</span>
     </button>
 
-    <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab flex flex-col items-center py-1.5 px-0.5 md:px-3 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60">
+    <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab flex flex-col items-center py-1.5 px-1 rounded-xl text-slate-400 hover:text-slate-200 transition hover:bg-slate-800/60 active:scale-95">
       <i data-lucide="history" class="w-5 h-5"></i>
-      <span class="text-[9px] md:text-[11px] font-medium mt-1 truncate">Tarix</span>
+      <span class="text-[10px] sm:text-xs font-medium mt-1 truncate">Tarix</span>
     </button>
   </nav>
 

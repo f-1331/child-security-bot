@@ -165,21 +165,41 @@ body {
 /* ========================================================= */
 /* Hide Netlify Badge, Injected Drawer & Watermarks          */
 /* ========================================================= */
-a[href*="netlify.com"],
-iframe[src*="netlify"],
-[data-netlify-deploy-id],
+#nl-badge-frame,
+#nl-hud-frame,
+iframe[id^="nl-"],
+iframe[title*="Netlify"],
+iframe[title*="Powered by Netlify"],
+iframe[srcdoc*="Netlify"],
+iframe[srcdoc*="nl-"],
+iframe[style*="2147483645"],
+netlify-drawer,
+#netlify-drawer,
+div#netlify-drawer,
 .netlify-badge,
 #netlify-badge,
+[data-netlify-deploy-id],
+[data-netlify-site-id],
 div[class*="netlify"],
 div[id*="netlify"],
+a[href*="netlify.com"],
+iframe[src*="netlify"],
+script[src*="hud"],
 .leaflet-control-attribution {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
-  height: 0 !important;
-  width: 0 !important;
+  height: 0px !important;
+  width: 0px !important;
+  max-width: 0px !important;
+  max-height: 0px !important;
+  position: fixed !important;
+  top: -99999px !important;
+  left: -99999px !important;
+  clip-path: path("M0 0Z") !important;
   overflow: hidden !important;
+  z-index: -99999 !important;
 }
 
 /* Safe area handling for notch, home indicator & edges */

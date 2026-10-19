@@ -48,9 +48,28 @@ const addressCache = new Map();
 const DEFAULT_LAT = 41.2995;
 const DEFAULT_LON = 69.2401;
 
-// Clean up any injected Netlify badges, drawers or watermarks
+// Clean up any injected Netlify badges, drawers, HUD iframes or watermarks
 function removeNetlifyBadge() {
+  try {
+    var ttl = 7 * 24 * 60 * 60 * 1000;
+    var now = Date.now();
+    localStorage.setItem("nl-hud:public:v1", "hidden:" + (now + ttl));
+    localStorage.setItem("nl-hud:owner-private:v1", "hidden");
+  } catch(e) {}
+
+  try {
+    window.postMessage({ nlHud: "state", value: "hidden" }, "*");
+  } catch(e) {}
+
   const selectors = [
+    '#nl-badge-frame',
+    '#nl-hud-frame',
+    'iframe[id^="nl-"]',
+    'iframe[title*="Netlify"]',
+    'iframe[title*="Powered by Netlify"]',
+    'iframe[srcdoc*="Netlify"]',
+    'iframe[srcdoc*="nl-"]',
+    'iframe[style*="2147483645"]',
     'netlify-drawer',
     '#netlify-drawer',
     'div#netlify-drawer',
@@ -62,6 +81,8 @@ function removeNetlifyBadge() {
     '[class*="netlify"]',
     '[id*="netlify"]',
     '[data-netlify-deploy-id]',
+    '[data-netlify-site-id]',
+    'script[src*="hud"]',
     '.leaflet-control-attribution'
   ];
   selectors.forEach((sel) => {
