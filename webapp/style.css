@@ -144,6 +144,126 @@ body.theme-comic {
   --badge-border: rgba(250, 204, 21, 0.5);
 }
 
+/* Theme 7: Ocean Abyss (Chuqur Okean Firuza) */
+body.theme-ocean {
+  --bg-main: #03131e;
+  --bg-surface: #062338;
+  --bg-card: rgba(8, 42, 68, 0.94);
+  --bg-card-border: rgba(6, 182, 212, 0.38);
+  --pill-bg: #0b3454;
+  --text-main: #f0fdfa;
+  --text-muted: #67e8f9;
+  --primary: #06b6d4;
+  --primary-glow: rgba(6, 182, 212, 0.55);
+  --accent: #38bdf8;
+  --header-bg: rgba(6, 35, 56, 0.96);
+  --nav-bg: rgba(6, 35, 56, 0.96);
+  --tab-active-bg: rgba(6, 182, 212, 0.22);
+  --tab-active-color: #22d3ee;
+  --badge-bg: rgba(6, 182, 212, 0.2);
+  --badge-border: rgba(6, 182, 212, 0.45);
+}
+
+/* Theme 8: Sakura Dream (Pushti Bahor) */
+body.theme-sakura {
+  --bg-main: #180812;
+  --bg-surface: #2b0e20;
+  --bg-card: rgba(56, 19, 43, 0.94);
+  --bg-card-border: rgba(244, 114, 182, 0.4);
+  --pill-bg: #421834;
+  --text-main: #fdf2f8;
+  --text-muted: #f9a8d4;
+  --primary: #f472b6;
+  --primary-glow: rgba(244, 114, 182, 0.55);
+  --accent: #fb7185;
+  --header-bg: rgba(43, 14, 32, 0.96);
+  --nav-bg: rgba(43, 14, 32, 0.96);
+  --tab-active-bg: rgba(244, 114, 182, 0.22);
+  --tab-active-color: #fbcfe8;
+  --badge-bg: rgba(244, 114, 182, 0.2);
+  --badge-border: rgba(244, 114, 182, 0.45);
+}
+
+/* Theme 9: Cyberpunk 2077 (Kiber Neon Sariq) */
+body.theme-cyberpunk {
+  --bg-main: #0c0d12;
+  --bg-surface: #161822;
+  --bg-card: rgba(25, 28, 40, 0.94);
+  --bg-card-border: rgba(250, 204, 21, 0.5);
+  --pill-bg: #212534;
+  --text-main: #fef9c3;
+  --text-muted: #fef08a;
+  --primary: #eab308;
+  --primary-glow: rgba(234, 179, 8, 0.65);
+  --accent: #06b6d4;
+  --header-bg: rgba(22, 24, 34, 0.96);
+  --nav-bg: rgba(22, 24, 34, 0.96);
+  --tab-active-bg: rgba(234, 179, 8, 0.25);
+  --tab-active-color: #fde047;
+  --badge-bg: rgba(234, 179, 8, 0.2);
+  --badge-border: rgba(234, 179, 8, 0.5);
+}
+
+/* Theme 10: Crimson Magma (Olovli Magma) */
+body.theme-magma {
+  --bg-main: #140404;
+  --bg-surface: #240808;
+  --bg-card: rgba(50, 12, 12, 0.94);
+  --bg-card-border: rgba(239, 68, 68, 0.45);
+  --pill-bg: #3c1212;
+  --text-main: #fef2f2;
+  --text-muted: #fca5a5;
+  --primary: #ef4444;
+  --primary-glow: rgba(239, 68, 68, 0.6);
+  --accent: #f97316;
+  --header-bg: rgba(36, 8, 8, 0.96);
+  --nav-bg: rgba(36, 8, 8, 0.96);
+  --tab-active-bg: rgba(239, 68, 68, 0.25);
+  --tab-active-color: #f87171;
+  --badge-bg: rgba(239, 68, 68, 0.2);
+  --badge-border: rgba(239, 68, 68, 0.5);
+}
+
+/* Theme 11: Retro Arcade (8-Bit Piksel O'yin) */
+body.theme-arcade {
+  --bg-main: #0c0818;
+  --bg-surface: #180f30;
+  --bg-card: rgba(34, 21, 68, 0.94);
+  --bg-card-border: rgba(168, 85, 247, 0.45);
+  --pill-bg: #291a52;
+  --text-main: #fdf4ff;
+  --text-muted: #d8b4fe;
+  --primary: #c084fc;
+  --primary-glow: rgba(192, 132, 252, 0.6);
+  --accent: #22c55e;
+  --header-bg: rgba(24, 15, 48, 0.96);
+  --nav-bg: rgba(24, 15, 48, 0.96);
+  --tab-active-bg: rgba(192, 132, 252, 0.25);
+  --tab-active-color: #e9d5ff;
+  --badge-bg: rgba(192, 132, 252, 0.2);
+  --badge-border: rgba(192, 132, 252, 0.5);
+}
+
+/* Theme 12: Arctic Frost (Muzlik Arktika) */
+body.theme-frost {
+  --bg-main: #0b1522;
+  --bg-surface: #122238;
+  --bg-card: rgba(24, 46, 75, 0.92);
+  --bg-card-border: rgba(56, 189, 248, 0.4);
+  --pill-bg: #1d3656;
+  --text-main: #f0f9ff;
+  --text-muted: #7dd3fc;
+  --primary: #38bdf8;
+  --primary-glow: rgba(56, 189, 248, 0.55);
+  --accent: #93c5fd;
+  --header-bg: rgba(18, 34, 56, 0.96);
+  --nav-bg: rgba(18, 34, 56, 0.96);
+  --tab-active-bg: rgba(56, 189, 248, 0.22);
+  --tab-active-color: #bae6fd;
+  --badge-bg: rgba(56, 189, 248, 0.2);
+  --badge-border: rgba(56, 189, 248, 0.45);
+}
+
 /* ========================================================= */
 /* 2. DYNAMIC SITE-WIDE THEME OVERRIDES                      */
 /* ========================================================= */

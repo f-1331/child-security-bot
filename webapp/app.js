@@ -121,6 +121,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const savedTheme = localStorage.getItem("smart_tracker_theme") || "midnight";
   setGlobalTheme(savedTheme, false);
 
+  const savedLang = localStorage.getItem("smart_tracker_lang") || "uz_lat";
+  setGlobalLanguage(savedLang, false);
+
   initMap();
   checkAuthenticationState();
 
@@ -483,6 +486,13 @@ function applyParentUI(data) {
   document.body.classList.remove("role-child");
   document.body.classList.add("role-parent");
 
+  // Show parent view section (Map & Security HUD), hide child adventure view
+  const parentSection = document.getElementById("parentViewSection");
+  const childSection = document.getElementById("childViewSection");
+  if (parentSection) parentSection.classList.remove("hidden");
+  if (childSection) childSection.classList.add("hidden");
+  document.getElementById("btnChildBackFromMap")?.classList.add("hidden");
+
   // Show parent header row, hide child header row
   document.getElementById("parentHeaderRow")?.classList.remove("hidden");
   document.getElementById("childHeaderRow")?.classList.add("hidden");
@@ -495,29 +505,31 @@ function applyParentUI(data) {
   document.getElementById("btnAddZoneSection")?.classList.remove("hidden");
   document.getElementById("parentTaskActionSection")?.classList.remove("hidden");
 
+  const dict = I18N_STRINGS[currentLanguage] || I18N_STRINGS.uz_lat;
+
   // Titles
   const zonesTitle = document.getElementById("zonesModalTitle");
-  if (zonesTitle) zonesTitle.textContent = "Kerakli Joylar (Geozonalar)";
+  if (zonesTitle) zonesTitle.textContent = dict.zones_title || "Kerakli Joylar (Geozonalar)";
   const tasksTitle = document.getElementById("tasksModalTitle");
-  if (tasksTitle) tasksTitle.textContent = "Farzandga Topshiriq Berish";
+  if (tasksTitle) tasksTitle.textContent = dict.tasks_title || "Farzandga Topshiriq Berish";
 
   // Tab 1: Map
   const tab1Icon = document.getElementById("tabIcon-map");
   if (tab1Icon) tab1Icon.setAttribute("data-lucide", "map");
   const tab1Label = document.getElementById("tabLabel-map");
-  if (tab1Label) tab1Label.textContent = "Xarita";
+  if (tab1Label) tab1Label.textContent = dict.tab_map || "Xarita";
 
   // Tab 2: Zones
   const tab2Icon = document.getElementById("tabIcon-zones");
   if (tab2Icon) tab2Icon.setAttribute("data-lucide", "map-pin");
   const tab2Label = document.getElementById("tabLabel-zones");
-  if (tab2Label) tab2Label.textContent = "Joylar";
+  if (tab2Label) tab2Label.textContent = dict.tab_zones || "Joylar";
 
   // Tab 3: Tasks
   const tab3Icon = document.getElementById("tabIcon-tasks");
   if (tab3Icon) tab3Icon.setAttribute("data-lucide", "check-square");
   const tab3Label = document.getElementById("tabLabel-tasks");
-  if (tab3Label) tab3Label.textContent = "Vazifalar";
+  if (tab3Label) tab3Label.textContent = dict.tab_tasks || "Vazifalar";
 
   // Tab 4 (History for Parent)
   const tab4Btn = document.getElementById("tabBtn-history");
@@ -529,7 +541,11 @@ function applyParentUI(data) {
     tab4Icon.setAttribute("data-lucide", "history");
   }
   const tab4Label = document.getElementById("tabLabel-history");
-  if (tab4Label) tab4Label.textContent = "Tarix";
+  if (tab4Label) tab4Label.textContent = dict.tab_history || "Tarix";
+
+  // Tab 5: Settings
+  const tab5Label = document.getElementById("tabLabel-settings");
+  if (tab5Label) tab5Label.textContent = dict.tab_settings || "Dizayn & Til";
 
   // Demo Switcher Segmented Button Styling
   const pBtn = document.getElementById("btnDemoRoleParent");
@@ -542,6 +558,7 @@ function applyParentUI(data) {
   const sel = document.getElementById("childSelect");
   if (sel) sel.disabled = false;
 
+  if (map) setTimeout(() => map.invalidateSize(), 80);
   if (window.lucide) lucide.createIcons();
 }
 
@@ -549,6 +566,13 @@ function applyChildUI(user) {
   currentRole = "child";
   document.body.classList.remove("role-parent");
   document.body.classList.add("role-child");
+
+  // Show child adventure hub view, hide parent tactical map
+  const parentSection = document.getElementById("parentViewSection");
+  const childSection = document.getElementById("childViewSection");
+  if (parentSection) parentSection.classList.add("hidden");
+  if (childSection) childSection.classList.remove("hidden");
+  document.getElementById("btnChildBackFromMap")?.classList.add("hidden");
 
   // Show child header row, hide parent header row
   document.getElementById("parentHeaderRow")?.classList.add("hidden");
@@ -562,29 +586,31 @@ function applyChildUI(user) {
   document.getElementById("btnAddZoneSection")?.classList.add("hidden");
   document.getElementById("parentTaskActionSection")?.classList.add("hidden");
 
+  const dict = I18N_STRINGS[currentLanguage] || I18N_STRINGS.uz_lat;
+
   // Titles
   const zonesTitle = document.getElementById("zonesModalTitle");
-  if (zonesTitle) zonesTitle.textContent = "Mening Qal'alarim 🏰 (Xavfsiz Joylar)";
+  if (zonesTitle) zonesTitle.textContent = dict.safe_castles || "Mening Qal'alarim 🏰 (Xavfsiz Joylar)";
   const tasksTitle = document.getElementById("tasksModalTitle");
-  if (tasksTitle) tasksTitle.textContent = "Mening Missiyalarim 🎯";
+  if (tasksTitle) tasksTitle.textContent = dict.active_missions || "Mening Missiyalarim 🎯";
 
   // Tab 1: Sarguzasht
   const tab1Icon = document.getElementById("tabIcon-map");
   if (tab1Icon) tab1Icon.setAttribute("data-lucide", "compass");
   const tab1Label = document.getElementById("tabLabel-map");
-  if (tab1Label) tab1Label.textContent = "Sarguzasht";
+  if (tab1Label) tab1Label.textContent = dict.tab_adventure || "Sarguzasht";
 
   // Tab 2: Qal'alarim
   const tab2Icon = document.getElementById("tabIcon-zones");
   if (tab2Icon) tab2Icon.setAttribute("data-lucide", "castle");
   const tab2Label = document.getElementById("tabLabel-zones");
-  if (tab2Label) tab2Label.textContent = "Qal'alarim";
+  if (tab2Label) tab2Label.textContent = dict.tab_castles || "Qal'alarim";
 
   // Tab 3: Missiyalar
   const tab3Icon = document.getElementById("tabIcon-tasks");
   if (tab3Icon) tab3Icon.setAttribute("data-lucide", "trophy");
   const tab3Label = document.getElementById("tabLabel-tasks");
-  if (tab3Label) tab3Label.textContent = "Missiyalar";
+  if (tab3Label) tab3Label.textContent = dict.tab_missions || "Missiyalar";
 
   // Tab 4 (Hamyonim / Xazina for Child)
   const tab4Btn = document.getElementById("tabBtn-history");
@@ -596,7 +622,11 @@ function applyChildUI(user) {
     tab4Icon.setAttribute("data-lucide", "wallet");
   }
   const tab4Label = document.getElementById("tabLabel-history");
-  if (tab4Label) tab4Label.textContent = "Xazina 🐷";
+  if (tab4Label) tab4Label.textContent = dict.tab_treasure || "Xazina 🐷";
+
+  // Tab 5: Settings
+  const tab5Label = document.getElementById("tabLabel-settings");
+  if (tab5Label) tab5Label.textContent = dict.tab_settings || "Dizayn & Til";
 
   // Demo Switcher Segmented Button Styling
   const pBtn = document.getElementById("btnDemoRoleParent");
@@ -617,10 +647,25 @@ function applyChildUI(user) {
   if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} so'm`;
 
   const bannerName = document.getElementById("childBannerName");
-  if (bannerName) bannerName.textContent = "Bugungi sarguzasht";
+  if (bannerName) bannerName.textContent = dict.hero_adventure || "Bugungi sarguzasht";
 
   const bannerMoney = document.getElementById("childBannerMoney");
   if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm bor! (${coinsStr} tanga)`;
+
+  // Child Adventure Dashboard Card updates
+  const dashHeroName = document.getElementById("childDashboardHeroName");
+  if (dashHeroName) dashHeroName.textContent = user.full_name || "Azizbek Qahramon";
+
+  const portalMoney = document.getElementById("childPortalMoneyText");
+  if (portalMoney) portalMoney.textContent = `${moneyStr} so'm`;
+
+  const portalCoins = document.getElementById("childPortalCoinsText");
+  if (portalCoins) portalCoins.innerHTML = `<span>🪙</span> <span>${coinsStr} tanga</span>`;
+
+  const portalRate = document.getElementById("childPortalRateText");
+  if (portalRate) {
+    portalRate.textContent = `${(coinRateCoins/1000).toFixed(0)}k 🪙 = ${(coinRateSom/1000).toFixed(0)}k so'm`;
+  }
 
   // Update modal-wallet piggy bank numbers
   const wMoney = document.getElementById("childWalletMoneyText");
@@ -636,6 +681,10 @@ function applyChildUI(user) {
     sel.innerHTML = `<option value="${user.id}">${user.full_name || 'Mening hisobim'}</option>`;
     sel.disabled = true;
   }
+
+  // Populate dynamic cards on child dashboard
+  renderChildDashboardQuests();
+  renderChildDashboardCastles();
 
   if (window.lucide) lucide.createIcons();
 }
@@ -793,14 +842,235 @@ function updateCoinRateBadgeUI(coins, som) {
 // =========================================================
 
 let currentTheme = localStorage.getItem("smart_tracker_theme") || "midnight";
+let currentLanguage = localStorage.getItem("smart_tracker_lang") || "uz_lat";
+
+const I18N_STRINGS = {
+  uz_lat: {
+    tab_map: "Xarita",
+    tab_zones: "Joylar",
+    tab_tasks: "Vazifalar",
+    tab_history: "Tarix",
+    tab_settings: "Dizayn & Til",
+    tab_adventure: "Sarguzasht",
+    tab_castles: "Qal'alarim",
+    tab_missions: "Missiyalar",
+    tab_treasure: "Xazina",
+
+    live_tracking: "Jonli kuzatuv",
+    current_address: "Joriy Manzil",
+    route: "Yo'l",
+    zones_title: "Kerakli Joylar (Geozonalar)",
+    tasks_title: "Farzandga Topshiriq Berish",
+    history_title: "Bugungi Harakat Tarixi",
+    add_zone_btn: "Yangi kerakli joy qo'shish",
+    play_route_btn: "Harakatni animatsiyada ko'rish",
+    add_task_btn: "Yangi topshiriq berish",
+
+    hero_adventure: "Bugungi sarguzasht",
+    treasure_balance: "Jamg'arilgan naqd pulingiz:",
+    active_missions: "Bugungi Missiyalar & Vazifalar",
+    safe_castles: "Mening Qal'alarim (Xavfsiz Hududlar)",
+    sos_button: "XAVF SIGNALINI YOQISH (SOS)",
+    check_in: "Yetib keldim",
+    go_home: "Uyga yo'l",
+    call_parent: "Ota-onam",
+    view_adventure_map: "Sarguzasht xaritasini to'liq ochish",
+    seen_button: "Ko'rdim",
+    decide_time: "Bajarish vaqti",
+    send_photo: "Rasm yuborish",
+    wallet_title: "Mening Hamyonim & Jamg'armam",
+
+    settings_title: "Dizayn va Til Sozlamalari",
+    lang_heading: "🌐 Tilni tanlash",
+    theme_heading: "🎨 Dizayn Mavzulari (12 xil)",
+    theme_desc: "O'zingizga yoqqan dizaynni tanlang. U butun sayt, xarita va tugmalar ranglarini darhol o'zgartiradi:",
+    theme_applied: "Dizayn muvaffaqiyatli o'zgartirildi",
+    lang_applied: "Til muvaffaqiyatli o'zgartirildi",
+    close_btn: "Yopish"
+  },
+  uz_cyr: {
+    tab_map: "Харита",
+    tab_zones: "Жойлар",
+    tab_tasks: "Вазифалар",
+    tab_history: "Тарих",
+    tab_settings: "Дизайн & Тил",
+    tab_adventure: "Саргузашт",
+    tab_castles: "Қалъаларим",
+    tab_missions: "Миссиялар",
+    tab_treasure: "Хазина",
+
+    live_tracking: "Жонли кузатув",
+    current_address: "Жорий Манзил",
+    route: "Йўл",
+    zones_title: "Керакли Жойлар (Геозоналар)",
+    tasks_title: "Фарзандга Топшириқ Бериш",
+    history_title: "Бугунги Ҳаракат Тарихи",
+    add_zone_btn: "Янги керакли жой қўшиш",
+    play_route_btn: "Ҳаракатни анимацияда кўриш",
+    add_task_btn: "Янги топшириқ бериш",
+
+    hero_adventure: "Бугунги саргузашт",
+    treasure_balance: "Жамғарилган нақд пулингиз:",
+    active_missions: "Бугунги Миссиялар & Вазифалар",
+    safe_castles: "Менинг Қалъаларим (Хавфсиз Ҳудудлар)",
+    sos_button: "ХАВФ СИГНАЛИНИ ЁҚИШ (SOS)",
+    check_in: "Етиб келдим",
+    go_home: "Уйга йўл",
+    call_parent: "Ота-онам",
+    view_adventure_map: "Саргузашт харитасини тўлиқ очиш",
+    seen_button: "Кўрдим",
+    decide_time: "Бажариш вақти",
+    send_photo: "Расм юбориш",
+    wallet_title: "Менинг Ҳамёним & Жамғармам",
+
+    settings_title: "Дизайн ва Тил Созламалари",
+    lang_heading: "🌐 Тилни танлаш",
+    theme_heading: "🎨 Дизайн Мавзулари (12 хил)",
+    theme_desc: "Ўзингизга ёққан дизайнни танланг. У бутун сайт, харита ва тугмалар рангларини дарҳол ўзгартиради:",
+    theme_applied: "Дизайн муваффақиятли ўзгартирилди",
+    lang_applied: "Тил муваффақиятли ўзгартирилди",
+    close_btn: "Ёпиш"
+  },
+  ru: {
+    tab_map: "Карта",
+    tab_zones: "Места",
+    tab_tasks: "Задания",
+    tab_history: "История",
+    tab_settings: "Дизайн и Язык",
+    tab_adventure: "Приключение",
+    tab_castles: "Мои Замки",
+    tab_missions: "Миссии",
+    tab_treasure: "Копилка",
+
+    live_tracking: "Прямой эфир",
+    current_address: "Текущий адрес",
+    route: "Маршрут",
+    zones_title: "Безопасные зоны (Геозоны)",
+    tasks_title: "Поручить задание ребенку",
+    history_title: "История перемещений сегодня",
+    add_zone_btn: "Добавить безопасную зону",
+    play_route_btn: "Анимация маршрута",
+    add_task_btn: "Добавить новое задание",
+
+    hero_adventure: "Приключение сегодня",
+    treasure_balance: "Накопленные средства:",
+    active_missions: "Активные миссии и задания",
+    safe_castles: "Мои Замки (Безопасные зоны)",
+    sos_button: "СИГНАЛ ТРЕВОГИ (SOS)",
+    check_in: "Я добрался",
+    go_home: "Путь домой",
+    call_parent: "Позвонить родителям",
+    view_adventure_map: "Открыть карту приключений",
+    seen_button: "Просмотрено",
+    decide_time: "Время выполнения",
+    send_photo: "Отправить фотоотчет",
+    wallet_title: "Мой кошелек и копилка",
+
+    settings_title: "Настройки Дизайна и Языка",
+    lang_heading: "🌐 Выбор языка",
+    theme_heading: "🎨 Темы оформления (12 тем)",
+    theme_desc: "Выберите оформление по душе. Оно моментально преобразит весь сайт, карту и кнопки:",
+    theme_applied: "Тема успешно применена",
+    lang_applied: "Язык успешно изменен",
+    close_btn: "Закрыть"
+  },
+  en: {
+    tab_map: "Map",
+    tab_zones: "Places",
+    tab_tasks: "Tasks",
+    tab_history: "History",
+    tab_settings: "Design & Lang",
+    tab_adventure: "Adventure",
+    tab_castles: "My Castles",
+    tab_missions: "Missions",
+    tab_treasure: "Treasure",
+
+    live_tracking: "Live Tracking",
+    current_address: "Current Address",
+    route: "Route",
+    zones_title: "Safe Places (Geofences)",
+    tasks_title: "Assign Task to Child",
+    history_title: "Today's Travel History",
+    add_zone_btn: "Add New Safe Place",
+    play_route_btn: "Animate Travel Route",
+    add_task_btn: "Create New Task",
+
+    hero_adventure: "Today's Adventure",
+    treasure_balance: "Your Saved Pocket Money:",
+    active_missions: "Active Missions & Quests",
+    safe_castles: "My Castles (Safe Zones)",
+    sos_button: "TRIGGER SOS ALARM",
+    check_in: "I Arrived",
+    go_home: "Take Me Home",
+    call_parent: "Call Parents",
+    view_adventure_map: "Open Full Adventure Map",
+    seen_button: "I Saw This",
+    decide_time: "Pick Time",
+    send_photo: "Send Photo Proof",
+    wallet_title: "My Wallet & Piggy Bank",
+
+    settings_title: "Design & Language Settings",
+    lang_heading: "🌐 Choose Language",
+    theme_heading: "🎨 Design Themes (12 styles)",
+    theme_desc: "Choose a theme you like. It instantly transforms the entire site, map and buttons:",
+    theme_applied: "Theme applied successfully",
+    lang_applied: "Language changed successfully",
+    close_btn: "Close"
+  }
+};
+
+function setGlobalLanguage(lang, showToastMsg = true) {
+  if (!I18N_STRINGS[lang]) lang = "uz_lat";
+  currentLanguage = lang;
+  localStorage.setItem("smart_tracker_lang", lang);
+
+  const dict = I18N_STRINGS[lang];
+
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (dict[key]) {
+      el.textContent = dict[key];
+    }
+  });
+
+  document.querySelectorAll(".lang-option-btn").forEach(btn => {
+    btn.classList.remove("ring-2", "ring-offset-2", "ring-offset-slate-900", "border-white");
+    const check = btn.querySelector(".lang-check");
+    if (check) check.classList.add("hidden");
+  });
+  const activeLangBtn = document.getElementById(`langBtn-${lang}`);
+  if (activeLangBtn) {
+    activeLangBtn.classList.add("ring-2", "ring-offset-2", "ring-offset-slate-900", "border-white");
+    const check = activeLangBtn.querySelector(".lang-check");
+    if (check) check.classList.remove("hidden");
+  }
+
+  // Refresh active tab labels according to language & role
+  if (currentRole === "child") {
+    applyChildUI(authenticatedSession?.user || {});
+  } else {
+    applyParentUI(authenticatedSession || {});
+  }
+
+  if (showToastMsg) {
+    haptic("light");
+    showToast(`🌐 ${dict.lang_applied || 'Til yangilandi'}`);
+  }
+}
 
 const THEME_NAMES = {
   galaxy: "🌌 Kosmik Neon",
-  midnight: "🛡 Taktik Qora",
-  comic: "🎮 Super Qahramon",
+  midnight: "🛡️ Taktik Qora",
+  comic: "🦸 Super Qahramon",
   emerald: "🌿 Zümrad Tabiat",
   sunset: "🌅 Oltin Quyosh",
-  daylight: "☀️ Yorug' Kunduz"
+  daylight: "☀️ Yorug' Kunduz",
+  ocean: "🌊 Chuqur Okean",
+  sakura: "🌸 Pushti Sakura",
+  cyberpunk: "⚡ Kiberpank 2077",
+  magma: "🌋 Olovli Magma",
+  arcade: "🎮 Retro Piksel",
+  frost: "❄️ Muzlik Arktika"
 };
 
 const THEME_HEADER_COLORS = {
@@ -809,7 +1079,13 @@ const THEME_HEADER_COLORS = {
   comic: "#101938",
   emerald: "#082114",
   sunset: "#221004",
-  daylight: "#ffffff"
+  daylight: "#ffffff",
+  ocean: "#062338",
+  sakura: "#2b0e20",
+  cyberpunk: "#161822",
+  magma: "#240808",
+  arcade: "#180f30",
+  frost: "#122238"
 };
 
 function applyMapThemeTiles(themeName) {
@@ -823,9 +1099,9 @@ function applyMapThemeTiles(themeName) {
   let tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   let attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-  if (themeName === "midnight" || themeName === "galaxy") {
+  if (themeName === "midnight" || themeName === "galaxy" || themeName === "cyberpunk" || themeName === "magma" || themeName === "arcade") {
     tileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-  } else if (themeName === "daylight") {
+  } else if (themeName === "daylight" || themeName === "frost") {
     tileUrl = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
   } else {
     tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
@@ -844,12 +1120,9 @@ function setGlobalTheme(themeName, showNotification = true) {
   localStorage.setItem("smart_tracker_theme", themeName);
 
   document.body.classList.remove(
-    "theme-galaxy",
-    "theme-midnight",
-    "theme-comic",
-    "theme-emerald",
-    "theme-sunset",
-    "theme-daylight"
+    "theme-galaxy", "theme-midnight", "theme-comic", "theme-emerald",
+    "theme-sunset", "theme-daylight", "theme-ocean", "theme-sakura",
+    "theme-cyberpunk", "theme-magma", "theme-arcade", "theme-frost"
   );
   document.body.classList.add(`theme-${themeName}`);
 
@@ -879,21 +1152,30 @@ function setGlobalTheme(themeName, showNotification = true) {
     haptic("medium");
     playSuccessChime();
     showToast(`🎨 Yangi dizayn: ${THEME_NAMES[themeName]}`);
-    closeThemeModal();
+    closeSettingsModal();
   }
 }
 
-function openThemeModal() {
+function openSettingsModal() {
   haptic("medium");
-  const modal = document.getElementById("modal-theme");
+  const modal = document.getElementById("modal-settings");
   if (modal) modal.classList.remove("hidden");
   setGlobalTheme(currentTheme, false);
+  setGlobalLanguage(currentLanguage, false);
+}
+
+function closeSettingsModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-settings");
+  if (modal) modal.classList.add("hidden");
+}
+
+function openThemeModal() {
+  openSettingsModal();
 }
 
 function closeThemeModal() {
-  haptic("light");
-  const modal = document.getElementById("modal-theme");
-  if (modal) modal.classList.add("hidden");
+  closeSettingsModal();
 }
 
 // Initialize Leaflet Map with CartoDB Voyager and Esri Satellite layers
@@ -1230,6 +1512,8 @@ async function loadGeofences(childId) {
 }
 
 function renderFencesToMapAndList(fences) {
+  geofencesList = fences;
+  renderChildDashboardCastles();
   const container = document.getElementById("zonesListContainer");
   const colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
 
@@ -1548,15 +1832,115 @@ function switchTab(tabName) {
       loadTasks();
     }
   } else {
-    if (floatControls) floatControls.classList.remove("hidden");
-    if (childActions && currentRole === "child") {
-      childActions.classList.remove("hidden");
-    }
-    if (locCard) locCard.classList.remove("hidden");
-    if (map) {
-      setTimeout(() => map.invalidateSize(), 80);
+    // Tab 1 (Map for parent / Adventure Hub for child)
+    if (currentRole === "child") {
+      document.getElementById("childViewSection")?.classList.remove("hidden");
+      document.getElementById("parentViewSection")?.classList.add("hidden");
+      document.getElementById("btnChildBackFromMap")?.classList.add("hidden");
+      if (childActions) childActions.classList.remove("hidden");
+    } else {
+      document.getElementById("parentViewSection")?.classList.remove("hidden");
+      document.getElementById("childViewSection")?.classList.add("hidden");
+      if (floatControls) floatControls.classList.remove("hidden");
+      if (locCard) locCard.classList.remove("hidden");
+      if (map) {
+        setTimeout(() => map.invalidateSize(), 80);
+      }
     }
   }
+}
+
+function openChildMapModal() {
+  haptic("medium");
+  const childSec = document.getElementById("childViewSection");
+  const parentSec = document.getElementById("parentViewSection");
+  if (childSec) childSec.classList.add("hidden");
+  if (parentSec) parentSec.classList.remove("hidden");
+
+  let backBtn = document.getElementById("btnChildBackFromMap");
+  if (!backBtn && parentSec) {
+    backBtn = document.createElement("button");
+    backBtn.id = "btnChildBackFromMap";
+    backBtn.className = "absolute top-3.5 left-3.5 z-20 px-3 py-2 bg-gradient-to-r from-purple-700 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-xl border border-purple-400/50 flex items-center gap-1.5 active:scale-95 transition backdrop-blur";
+    backBtn.innerHTML = `<i data-lucide="arrow-left" class="w-4 h-4"></i> <span>Sarguzashtga qaytish</span>`;
+    backBtn.onclick = () => {
+      haptic("light");
+      switchTab("map");
+    };
+    parentSec.appendChild(backBtn);
+  }
+  if (backBtn) backBtn.classList.remove("hidden");
+
+  if (map) {
+    setTimeout(() => {
+      map.invalidateSize();
+      centerOnChild();
+    }, 100);
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function renderChildDashboardQuests() {
+  const container = document.getElementById("childDashboardTasksList");
+  if (!container) return;
+
+  const activeTasks = (tasksList && tasksList.length > 0)
+    ? tasksList.slice(0, 3)
+    : [
+        { id: 901, title: "Matematika darslarini bajarish", reward_coins: 5000, status: "pending" },
+        { id: 902, title: "Xonani tozalash va tartibga keltirish", reward_coins: 3000, status: "scheduled", promised_time: "30 daqiqadan keyin" },
+        { id: 903, title: "Ingliz tili yangi lug'at yodlash", reward_coins: 4000, status: "completed_by_child" }
+      ];
+
+  container.innerHTML = activeTasks.map(t => {
+    const coins = t.reward_coins || 1000;
+    const moneyEquivalent = Math.round(coins * (coinRateSom / Math.max(1, coinRateCoins)));
+    const statusText = t.status === "completed_by_child" ? "⏳ Tekshiruvda" : (t.status === "approved" ? "🏆 Bajarildi" : (t.status === "scheduled" ? "⏰ Rejalangan" : "⚡ Faol"));
+    const statusClass = t.status === "completed_by_child" ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : (t.status === "approved" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30");
+
+    return `
+      <div class="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center justify-between gap-2 hover:border-slate-700 transition">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="text-xs font-bold text-white truncate">${t.title || 'Missiya'}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${statusClass}">${statusText}</span>
+          </div>
+          <p class="text-[11px] text-amber-300 font-black flex items-center gap-1 mt-1">
+            <span>🪙 +${coins.toLocaleString()} tanga</span>
+            <span class="text-slate-400 font-normal text-[10px]">(≈ ${moneyEquivalent.toLocaleString()} so'm)</span>
+          </p>
+        </div>
+        <button onclick="switchTab('tasks')" class="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white rounded-xl text-xs font-bold shrink-0 transition active:scale-95 shadow">
+          Bajarish
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderChildDashboardCastles() {
+  const container = document.getElementById("childDashboardZonesList");
+  if (!container) return;
+
+  const castles = (geofencesList && geofencesList.length > 0)
+    ? geofencesList.slice(0, 4)
+    : [
+        { name: "Uyimiz (Bosh Qal'a)", radius_meters: 200 },
+        { name: "Maktab №45", radius_meters: 250 },
+        { name: "O'quv Markazi", radius_meters: 200 }
+      ];
+
+  const castleEmojis = ["🏰", "🏫", "🏡", "🥋", "📍"];
+
+  container.innerHTML = castles.map((c, i) => `
+    <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
+      <span class="text-xl shrink-0">${castleEmojis[i % castleEmojis.length]}</span>
+      <div class="min-w-0">
+        <p class="font-bold text-white text-xs truncate">${c.name}</p>
+        <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
+      </div>
+    </div>
+  `).join("");
 }
 
 function closeModal(tabName) {
@@ -1848,6 +2232,7 @@ function renderDemoTasks() {
 }
 
 function renderTasksList() {
+  renderChildDashboardQuests();
   const container = document.getElementById("tasksListContainer");
   if (!container) return;
 
