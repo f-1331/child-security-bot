@@ -286,6 +286,37 @@ async def get_parents_for_child(session: AsyncSession, child_id: int) -> List[Us
     return list(result.scalars().all())
 
 
+async def delete_child_profile(session: AsyncSession, parent_id: int, child_id: int) -> bool:
+    """Unlink and delete a child profile from parent's account and database."""
+    # 1. Delete link
+    result = await session.execute(
+        select(ParentChildLink).where(
+            ParentChildLink.parent_id == parent_id,
+            ParentChildLink.child_id == child_id
+        )
+    )
+    link = result.scalar_one_or_none()
+    if link:
+        await session.delete(link)
+        await session.flush()
+
+    # 2. Check if child is linked to any other parent
+    other_links = await session.execute(
+        select(ParentChildLink).where(ParentChildLink.child_id == child_id)
+    )
+    if not other_links.scalars().first():
+        child_user = await get_user(session, child_id)
+        if child_user:
+            await session.execute(delete(LocationLog).where(LocationLog.child_id == child_id))
+            await session.execute(delete(Task).where(Task.child_id == child_id))
+            await session.execute(delete(BatteryAlertLog).where(BatteryAlertLog.child_id == child_id))
+            await session.execute(delete(GeofenceState).where(GeofenceState.child_id == child_id))
+            await session.delete(child_user)
+            await session.flush()
+
+    return True
+
+
 async def log_location(
     session: AsyncSession,
     child_id: int,

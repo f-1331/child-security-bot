@@ -531,6 +531,7 @@ function enableChildDemoMode() {
   renderDemoGeofences();
   renderDemoHistory();
   renderDemoTasks();
+  initChildPermissionsAndTracking(2002);
   showToast("👦 Farzand demo rejimiga o'tildi");
 }
 
@@ -561,6 +562,7 @@ function applyAuthenticatedUser(data) {
 
     // Query fresh children list from server
     loadData();
+    connectWebSocket(parentId);
   } else if (data.role === "child") {
     currentChildId = data.user.id;
     coinRateCoins = data.user.coin_rate_coins || 1000;
@@ -569,6 +571,7 @@ function applyAuthenticatedUser(data) {
     childBalanceSom = data.user.virtual_money_som || 0;
     applyChildUI(data.user);
     loadChildSelfData(data.user);
+    initChildPermissionsAndTracking(data.user.id);
   }
 }
 
@@ -834,6 +837,15 @@ function logoutSession() {
     document.getElementById("demoBadge")?.classList.add("hidden");
     document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
     document.getElementById("demoNoticeBanner")?.classList.add("hidden");
+    if (childWatchId !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(childWatchId);
+      childWatchId = null;
+    }
+    if (appWebSocket) {
+      try { appWebSocket.close(); } catch (e) {}
+      appWebSocket = null;
+    }
+    clearInterval(childNotificationPollTimer);
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = "";
     showAuthGateModal();
@@ -3424,3 +3436,467 @@ function triggerRemoteSiren() {
     }).catch(console.error);
   }
 }
+
+// =========================================================
+// 1. DISTANCE CALCULATION HELPER (Haversine formula)
+// =========================================================
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// =========================================================
+// 2. PROFILNI O'CHIRISH (CRUD: Delete Child)
+// =========================================================
+function openDeleteChildModal() {
+  if (!currentChildId) {
+    showToast("⚠️ O'chirish uchun farzand tanlanmagan.");
+    return;
+  }
+  const child = childrenList.find((c) => c.id == currentChildId);
+  const nameText = document.getElementById("deleteChildNameText");
+  if (nameText) {
+    nameText.textContent = child ? (child.full_name || `Farzand #${currentChildId}`) : "Ushbu farzand";
+  }
+  const modal = document.getElementById("deleteChildModal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeDeleteChildModal() {
+  const modal = document.getElementById("deleteChildModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function confirmDeleteChild() {
+  if (!currentChildId) return;
+  const targetId = currentChildId;
+  const btn = document.getElementById("btnConfirmDeleteChild");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">O'chirilmoqda...</span>`;
+  }
+
+  try {
+    if (isDemoMode) {
+      childrenList = childrenList.filter((c) => c.id != targetId);
+      closeDeleteChildModal();
+      showToast("🗑️ Farzand muvaffaqiyatli o'chirildi (Demo)");
+      if (childrenList.length > 0) {
+        currentChildId = childrenList[0].id;
+        renderChildSelector();
+        selectChild(currentChildId);
+      } else {
+        currentChildId = null;
+        showEmptyState();
+      }
+      return;
+    }
+
+    const currentParentId = parentId || authenticatedSession?.user?.id;
+    const res = await fetch(`/api/v1/webapp/parent/${currentParentId}/child/${targetId}`, {
+      method: "DELETE"
+    });
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || "Farzandni o'chirishda xatolik yuz berdi");
+    }
+
+    closeDeleteChildModal();
+    showToast("✅ Farzand profili bazadan butunlay o'chirildi!");
+
+    // Update local state
+    childrenList = childrenList.filter((c) => c.id != targetId);
+    if (childrenList.length > 0) {
+      currentChildId = childrenList[0].id;
+      renderChildSelector();
+      selectChild(currentChildId);
+    } else {
+      currentChildId = null;
+      showEmptyState();
+    }
+  } catch (err) {
+    console.error("Delete child error:", err);
+    showToast("❌ " + (err.message || "Xatolik yuz berdi"));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Ha, o'chirilsin";
+    }
+  }
+}
+
+// =========================================================
+// 3. IKKI XIL KO'RISH REJIMI (PASSIV VS FAOL)
+// =========================================================
+
+// 1-TUGMA: 'Passiv monitoring' (Silent check)
+// Ota-ona bu tugmani bosganda serverdagi eng oxirgi jonli koordinata va ma'lumotlar ota-onaga ko'rinsin,
+// lekin farzand ekraniga hech qanday UI bildirishnoma (alert/notification) yuborilmasin!
+async function executeSilentCheck() {
+  haptic("light");
+  if (!currentChildId) {
+    showToast("⚠️ Iltimos, avval farzandni tanlang.");
+    return;
+  }
+
+  const btn = document.getElementById("btnSilentCheck");
+  if (btn) btn.classList.add("opacity-70", "animate-pulse");
+
+  try {
+    if (isDemoMode) {
+      if (currentMarker) {
+        map.flyTo(currentMarker.getLatLng(), 17, { duration: 1.2 });
+      }
+      showToast("👁️ Passiv monitoring: Jonli joylashuv olindi (Farzandga bildirishnoma yuborilmadi)");
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/silent-check`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || "Ma'lumotlarni olishda xatolik");
+    }
+
+    if (data.location && data.location.latitude && data.location.longitude) {
+      const lat = data.location.latitude;
+      const lng = data.location.longitude;
+      const child = childrenList.find((c) => c.id == currentChildId);
+      const name = child ? child.full_name : "Farzand";
+
+      renderChildMarker(lat, lng, name, child?.is_sos_active, data.location.battery_level);
+      map.flyTo([lat, lng], 17, { duration: 1.2 });
+      updateBatteryUI(data.location.battery_level, data.location.is_charging);
+      updateSoundUI(data.location.sound_mode);
+      resolveAddress(lat, lng);
+    }
+
+    showToast("👁️ Passiv monitoring: Jonli koordinatalar olindi (Farzandga bildirishnoma yuborilmadi)");
+  } catch (err) {
+    console.error("Silent check error:", err);
+    showToast("❌ " + (err.message || "Xatolik yuz berdi"));
+  } finally {
+    if (btn) btn.classList.remove("opacity-70", "animate-pulse");
+  }
+}
+
+// 2-TUGMA: 'Faol so'rov' (Active check)
+// Ota-ona 'Farzandning hozirgi joylashuvi' tugmasini bosganda jonli joylashuv ko'rinsin
+// va WebSocket orqali farzand ekraniga 'Ota-onangiz joylashuvingizni tekshirdi' degan bildirishnoma chiqsin!
+async function executeActiveCheck() {
+  haptic("medium");
+  if (!currentChildId) {
+    showToast("⚠️ Iltimos, avval farzandni tanlang.");
+    return;
+  }
+
+  const btn = document.getElementById("btnActiveCheck");
+  if (btn) btn.classList.add("opacity-70", "animate-pulse");
+
+  try {
+    if (isDemoMode) {
+      if (currentMarker) {
+        map.flyTo(currentMarker.getLatLng(), 17, { duration: 1.2 });
+      }
+      showToast("📍 Faol so'rov yuborildi: Farzand ekranida 'Ota-onangiz joylashuvingizni tekshirdi' xabari chiqdi!");
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/active-check`, {
+      method: "POST"
+    });
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || "Faol so'rov yuborishda xatolik");
+    }
+
+    if (data.location && data.location.latitude && data.location.longitude) {
+      const lat = data.location.latitude;
+      const lng = data.location.longitude;
+      const child = childrenList.find((c) => c.id == currentChildId);
+      const name = child ? child.full_name : "Farzand";
+
+      renderChildMarker(lat, lng, name, child?.is_sos_active, data.location.battery_level);
+      map.flyTo([lat, lng], 17, { duration: 1.2 });
+      updateBatteryUI(data.location.battery_level, data.location.is_charging);
+      updateSoundUI(data.location.sound_mode);
+      resolveAddress(lat, lng);
+    }
+
+    showToast("📍 Faol so'rov: Farzand ekraniga 'Ota-onangiz joylashuvingizni tekshirdi' xabarnomasi chiqdi!");
+  } catch (err) {
+    console.error("Active check error:", err);
+    showToast("❌ " + (err.message || "Xatolik yuz berdi"));
+  } finally {
+    if (btn) btn.classList.remove("opacity-70", "animate-pulse");
+  }
+}
+
+// =========================================================
+// 4. ONBOARDING RUXSATLARI & UZLUKSIZ JONLI JOYLASHUV
+// =========================================================
+
+let childWatchId = null;
+let lastSentLat = null;
+let lastSentLng = null;
+let lastSentTime = 0;
+let appWebSocket = null;
+let wsReconnectTimer = null;
+let childNotificationPollTimer = null;
+let activeBannerTimer = null;
+
+function initChildPermissionsAndTracking(childId) {
+  if (!childId) return;
+
+  // Connect real-time WebSocket for instant alerts
+  connectWebSocket(childId);
+
+  // Start HTTP fallback polling for active check alerts
+  startChildNotificationPolling(childId);
+
+  // Check if permissions were previously granted
+  const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
+  if (!granted) {
+    const modal = document.getElementById("childOnboardingModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
+  } else {
+    // Automatically start live GPS telemetry tracking
+    startChildLiveTracking(childId);
+  }
+}
+
+async function requestChildAllPermissions() {
+  haptic("medium");
+  const modal = document.getElementById("childOnboardingModal");
+  const btn = document.getElementById("btnGrantChildPermissions");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">Ruxsatlar faollashtirilmoqda...</span>`;
+  }
+
+  // 1. Request Camera and Video via navigator.mediaDevices.getUserMedia
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
+        .catch(() => null);
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    }
+  } catch (e) {
+    console.warn("Media permissions prompt note:", e);
+  }
+
+  // 2. Start continuous watchPosition GPS telemetry
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+  if (targetId) {
+    startChildLiveTracking(targetId);
+  }
+
+  localStorage.setItem("smart_tracker_child_permissions_granted", "true");
+
+  if (modal) modal.classList.add("hidden");
+  showToast("✅ Ruxsatlar berildi! Jonli GPS xavfsizlik monitoringi ishga tushdi 🛡️");
+}
+
+function startChildLiveTracking(childId) {
+  if (!("geolocation" in navigator)) {
+    console.warn("Geolocation API not supported on this device");
+    return;
+  }
+
+  if (childWatchId !== null) {
+    navigator.geolocation.clearWatch(childWatchId);
+    childWatchId = null;
+  }
+
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 5000
+  };
+
+  childWatchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      const { latitude, longitude, accuracy, speed } = pos.coords;
+      const now = Date.now();
+
+      // Update local child marker on map
+      renderChildMarker(latitude, longitude, "Men", false, null);
+
+      // Distance from last sent point in meters
+      const dist = (lastSentLat && lastSentLng)
+        ? calculateDistanceMeters(lastSentLat, lastSentLng, latitude, longitude)
+        : 999;
+
+      // Throttle: send if moved > 5 meters or at least once every 10 seconds
+      if (dist >= 5 || (now - lastSentTime) > 10000) {
+        lastSentTime = now;
+        lastSentLat = latitude;
+        lastSentLng = longitude;
+
+        const battery = await getDeviceBattery();
+        sendChildLiveTelemetry(childId, {
+          latitude,
+          longitude,
+          accuracy: accuracy || null,
+          speed: speed || 0,
+          battery_level: battery,
+          sound_mode: "normal"
+        });
+      }
+    },
+    (err) => {
+      console.warn("watchPosition telemetry error:", err);
+    },
+    options
+  );
+}
+
+async function sendChildLiveTelemetry(childId, payload) {
+  if (isDemoMode) return;
+  try {
+    // 1. Send via WebSocket if connected
+    if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
+      appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload }));
+    }
+
+    // 2. Post to backend live location telemetry endpoint
+    await fetch(`/api/v1/webapp/child/${childId}/location`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    // Silent catch, next watchPosition tick will retry
+  }
+}
+
+// =========================================================
+// 5. WEBSOCKET & CHILD ALERT BANNER DISPATCHER
+// =========================================================
+
+function connectWebSocket(userId) {
+  if (!userId) return;
+  if (appWebSocket && (appWebSocket.readyState === WebSocket.OPEN || appWebSocket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${window.location.host}/api/v1/webapp/ws/${userId}`;
+
+  try {
+    appWebSocket = new WebSocket(wsUrl);
+
+    appWebSocket.onopen = () => {
+      console.log("WebSocket connected for user:", userId);
+    };
+
+    appWebSocket.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleIncomingWebSocketMessage(msg);
+      } catch (e) {
+        console.error("WS message parse error:", e);
+      }
+    };
+
+    appWebSocket.onclose = () => {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(() => {
+        if (currentRole === "child" || currentRole === "parent") {
+          connectWebSocket(userId);
+        }
+      }, 5000);
+    };
+
+    appWebSocket.onerror = (err) => {
+      console.warn("WS error:", err);
+    };
+  } catch (e) {
+    console.warn("WS init error:", e);
+  }
+}
+
+function handleIncomingWebSocketMessage(msg) {
+  if (!msg) return;
+
+  // Active check alert for Child
+  if (msg.type === "active_check") {
+    showChildActiveCheckBanner(msg.time || new Date().toLocaleTimeString().slice(0, 5));
+  }
+
+  // Real-time location update received by Parent
+  if (msg.type === "child_location_update" && currentRole === "parent") {
+    if (msg.child_id == currentChildId) {
+      const child = childrenList.find((c) => c.id == currentChildId);
+      const name = child ? child.full_name : "Farzand";
+      renderChildMarker(msg.latitude, msg.longitude, name, child?.is_sos_active, msg.battery_level);
+      updateBatteryUI(msg.battery_level, msg.is_charging);
+      resolveAddress(msg.latitude, msg.longitude);
+    }
+  }
+}
+
+function startChildNotificationPolling(childId) {
+  clearInterval(childNotificationPollTimer);
+  childNotificationPollTimer = setInterval(() => {
+    if (currentRole === "child" && currentChildId) {
+      checkChildPendingNotifications(currentChildId);
+    }
+  }, 4000);
+}
+
+async function checkChildPendingNotifications(childId) {
+  if (isDemoMode) return;
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${childId}/notifications`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "success" && data.notifications && data.notifications.length > 0) {
+        for (const notif of data.notifications) {
+          if (notif.type === "active_check") {
+            showChildActiveCheckBanner(notif.time || new Date().toLocaleTimeString().slice(0, 5));
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+function showChildActiveCheckBanner(time) {
+  const banner = document.getElementById("childActiveCheckBanner");
+  const timeText = document.getElementById("childCheckTimeText");
+  if (timeText) timeText.textContent = time || new Date().toLocaleTimeString().slice(0, 5);
+  if (banner) {
+    banner.classList.remove("hidden");
+    haptic("success");
+    if (navigator.vibrate) {
+      try { navigator.vibrate([150, 80, 150]); } catch (e) {}
+    }
+    clearTimeout(activeBannerTimer);
+    activeBannerTimer = setTimeout(() => {
+      dismissChildActiveBanner();
+    }, 6000);
+  }
+}
+
+function dismissChildActiveBanner() {
+  const banner = document.getElementById("childActiveCheckBanner");
+  if (banner) banner.classList.add("hidden");
+}
+

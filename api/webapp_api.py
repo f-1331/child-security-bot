@@ -1,9 +1,11 @@
+import json
 import logging
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.types import FSInputFile
@@ -20,6 +22,47 @@ from bot.keyboards import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/webapp", tags=["WebApp"])
+
+
+class ConnectionManager:
+    """Manages real-time WebSocket connections between parents and children."""
+    def __init__(self):
+        self.active_connections: dict[int, set[WebSocket]] = defaultdict(set)
+
+    async def connect(self, user_id: int, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[user_id].add(websocket)
+
+    def disconnect(self, user_id: int, websocket: WebSocket):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+
+    async def send_to_user(self, user_id: int, message: dict):
+        if user_id in self.active_connections:
+            dead = []
+            for ws in list(self.active_connections[user_id]):
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    dead.append(ws)
+            for ws in dead:
+                self.active_connections[user_id].discard(ws)
+
+
+ws_manager = ConnectionManager()
+pending_child_notifications: dict[int, list[dict]] = defaultdict(list)
+
+
+class ChildLocationUpdate(BaseModel):
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+    accuracy: Optional[float] = None
+    speed: Optional[float] = None
+    battery_level: Optional[int] = None
+    is_charging: Optional[bool] = False
+    sound_mode: Optional[str] = "normal"
 
 
 class CreateGeofenceRequest(BaseModel):
@@ -825,5 +868,182 @@ async def parent_siren_endpoint(child_id: int, session: AsyncSession = Depends(g
             logger.error(f"Failed to send siren alert to child {child_id}: {e}")
 
     return {"status": "success", "child_id": child_id}
+
+
+# ---------------------------------------------------------
+# Real-Time WebSocket, Live Telemetry & Dual Check Modes
+# ---------------------------------------------------------
+
+@router.websocket("/ws/{user_id}")
+async def webapp_websocket_endpoint(websocket: WebSocket, user_id: int):
+    """Real-time bi-directional WebSocket connection for instant alerts and telemetry."""
+    await ws_manager.connect(user_id, websocket)
+    try:
+        while True:
+            raw_text = await websocket.receive_text()
+            try:
+                msg = json.loads(raw_text)
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        ws_manager.disconnect(user_id, websocket)
+    except Exception:
+        ws_manager.disconnect(user_id, websocket)
+
+
+@router.delete("/parent/{parent_id}/child/{child_id}")
+async def delete_child_profile_endpoint(
+    parent_id: int,
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Delete and completely unlink a child profile from parent account and database."""
+    success = await crud.delete_child_profile(session, parent_id, child_id)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Farzand profilini o'chirishda xatolik yuz berdi yoki topilmadi."
+        )
+    await session.commit()
+    return {
+        "status": "success",
+        "message": "Farzand profili muvaffaqiyatli o'chirildi",
+        "child_id": child_id
+    }
+
+
+@router.post("/child/{child_id}/location")
+async def update_child_live_location_endpoint(
+    child_id: int,
+    payload: ChildLocationUpdate,
+    session: AsyncSession = Depends(get_db)
+):
+    """Receive live telemetry from child's watchPosition and save to database."""
+    log = await crud.log_location(
+        session=session,
+        child_id=child_id,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        accuracy=payload.accuracy,
+        battery_level=payload.battery_level,
+        is_charging=payload.is_charging or False,
+        sound_mode=payload.sound_mode or "normal",
+        source="web_watch_position"
+    )
+    await session.commit()
+
+    # Broadcast updated location to parents via WebSocket
+    parents = await crud.get_parents_for_child(session, child_id)
+    telemetry_data = {
+        "type": "child_location_update",
+        "child_id": child_id,
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "accuracy": payload.accuracy,
+        "speed": payload.speed,
+        "battery_level": payload.battery_level,
+        "is_charging": payload.is_charging,
+        "recorded_at": log.recorded_at.isoformat() if log.recorded_at else datetime.now().isoformat()
+    }
+    for p in parents:
+        await ws_manager.send_to_user(p.id, telemetry_data)
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "recorded_at": log.recorded_at.isoformat() if log.recorded_at else None
+    }
+
+
+@router.post("/child/{child_id}/silent-check")
+async def silent_check_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Silent Check ('Passiv monitoring'):
+    Fetch latest live coordinates and telemetry for parent.
+    Strictly NO UI alert/notification is sent to child!
+    """
+    latest = await crud.get_latest_location(session, child_id)
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Farzand topilmadi")
+
+    return {
+        "status": "success",
+        "mode": "silent",
+        "child_id": child_id,
+        "full_name": child.full_name,
+        "location": {
+            "latitude": latest.latitude if latest else None,
+            "longitude": latest.longitude if latest else None,
+            "accuracy": latest.accuracy if latest else None,
+            "battery_level": latest.battery_level if latest else None,
+            "is_charging": latest.is_charging if latest else False,
+            "sound_mode": latest.sound_mode if latest else "normal",
+            "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None
+        } if latest else None,
+        "notification_sent_to_child": False
+    }
+
+
+@router.post("/child/{child_id}/active-check")
+async def active_check_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Active Check ('Faol so'rov'):
+    Fetch latest coordinates and send 'Ota-onangiz joylashuvingizni tekshirdi' alert to child screen.
+    """
+    latest = await crud.get_latest_location(session, child_id)
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Farzand topilmadi")
+
+    now_time = datetime.now().strftime("%H:%M")
+    alert_msg = {
+        "type": "active_check",
+        "title": "Joylashuv tekshiruvi 📍",
+        "message": "Ota-onangiz joylashuvingizni tekshirdi 📍",
+        "time": now_time,
+        "timestamp": datetime.now().isoformat()
+    }
+
+    # 1. Dispatch through real-time WebSocket
+    await ws_manager.send_to_user(child_id, alert_msg)
+
+    # 2. Add to pending notifications queue (for HTTP polling fallback)
+    pending_child_notifications[child_id].append(alert_msg)
+
+    return {
+        "status": "success",
+        "mode": "active",
+        "child_id": child_id,
+        "full_name": child.full_name,
+        "location": {
+            "latitude": latest.latitude if latest else None,
+            "longitude": latest.longitude if latest else None,
+            "accuracy": latest.accuracy if latest else None,
+            "battery_level": latest.battery_level if latest else None,
+            "is_charging": latest.is_charging if latest else False,
+            "sound_mode": latest.sound_mode if latest else "normal",
+            "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None
+        } if latest else None,
+        "notification_sent_to_child": True
+    }
+
+
+@router.get("/child/{child_id}/notifications")
+async def get_child_notifications_endpoint(child_id: int):
+    """Retrieve and clear pending notifications for child screen (HTTP polling fallback)."""
+    items = pending_child_notifications.pop(child_id, [])
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "notifications": items
+    }
+
 
 

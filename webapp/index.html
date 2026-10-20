@@ -138,14 +138,20 @@
             <span id="onlineDot" class="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
           </div>
           
-          <div class="min-w-0">
-            <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[130px] sm:max-w-[180px] truncate block">
-              <option value="">Farzand...</option>
-            </select>
-            <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
-              <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-              <span class="truncate">Jonli kuzatuv</span>
-            </p>
+          <div class="min-w-0 flex items-center gap-1.5">
+            <div>
+              <select id="childSelect" class="bg-slate-800 text-[11px] sm:text-xs font-bold text-white rounded-lg px-2 py-1 outline-none border border-slate-700 focus:border-blue-500 max-w-[110px] sm:max-w-[160px] truncate block">
+                <option value="">Farzand...</option>
+              </select>
+              <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                <span class="truncate">Jonli kuzatuv</span>
+              </p>
+            </div>
+            <!-- Profilni o'chirish tugmasi -->
+            <button id="btnDeleteChild" onclick="openDeleteChildModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-950/40 hover:bg-red-800/60 border border-red-500/40 text-red-400 hover:text-red-200 flex items-center justify-center transition active:scale-90 shrink-0 shadow-sm" title="Farzand profilini ro'yxatdan va bazadan butunlay o'chirish">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+            </button>
           </div>
         </div>
 
@@ -328,6 +334,31 @@
         <!-- Refresh Data -->
         <button id="btnRefresh" onclick="refreshAllData()" class="w-10 h-10 bg-slate-900/90 text-slate-300 hover:text-white rounded-full flex items-center justify-center shadow-lg border border-slate-700/80 active:scale-90 transition backdrop-blur" title="Yangilash">
           <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Dual Mode Monitoring Controls (1: Silent check, 2: Active check) -->
+      <div id="parentMonitoringBar" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 bottom-20 md:bottom-44 z-20 flex items-center gap-2 md:max-w-sm">
+        <!-- 1-tugma: Passiv monitoring (Silent check) -->
+        <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2 px-2.5 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-md rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
+          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
+            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+          </div>
+          <div class="text-left min-w-0">
+            <p class="text-[10px] sm:text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
+            <p class="text-[8px] sm:text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan tekshirish</p>
+          </div>
+        </button>
+
+        <!-- 2-tugma: Faol so'rov (Active check) -->
+        <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2 px-2.5 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-md rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
+          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
+            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+          </div>
+          <div class="text-left min-w-0">
+            <p class="text-[10px] sm:text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
+            <p class="text-[8px] sm:text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov (Xabar boradi)</p>
+          </div>
         </button>
       </div>
 
@@ -1407,7 +1438,95 @@
     </div>
   </div>
 
+  <!-- DELETE CHILD CONFIRMATION MODAL -->
+  <div id="deleteChildModal" class="hidden fixed inset-0 z-[2200] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-red-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <div class="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mx-auto mb-3 shadow-lg">
+        <i data-lucide="trash-2" class="w-7 h-7"></i>
+      </div>
+      <h3 class="text-base font-bold text-white">Farzand profilini o'chirish</h3>
+      <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+        Haqiqatan ham <b id="deleteChildNameText" class="text-red-400">Farzand</b> profilini ro'yxatdan va bazadan butunlay o'chirmoqchimisiz?
+      </p>
+      <div class="bg-red-950/40 border border-red-500/30 rounded-xl p-3 my-3 text-left">
+        <p class="text-[11px] text-red-300">
+          ⚠️ <b>Ogohlantirish:</b> Ushbu farzandning barcha joylashuv tarixi, topshiriqlari va xavfsizlik sozlamalari tiklab bo'lmas darajada o'chiriladi.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button onclick="closeDeleteChildModal()" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs font-semibold transition">
+          Bekor qilish
+        </button>
+        <button id="btnConfirmDeleteChild" onclick="confirmDeleteChild()" class="py-2.5 px-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-red-900/40">
+          Ha, o'chirilsin
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHILD ONBOARDING PERMISSIONS MODAL -->
+  <div id="childOnboardingModal" class="hidden fixed inset-0 z-[2400] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg border-2 border-white/80">
+        <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
+      </div>
+      <h3 class="text-base font-black text-white">Xavfsizlik Ruxsatnomalari 🛡️</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Sizning xavfsizligingizni ta'minlash va ota-onangiz bilan bog'lanish uchun quyidagi ruxsatlarni faollashtiring:
+      </p>
+
+      <div class="flex flex-col gap-2.5 my-4 text-left">
+        <!-- 1. Geolokatsiya -->
+        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white">Doimiy Jonli Joylashuv (GPS)</h4>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ota-onangiz har doim sizning xavfsiz joydaligingizni bilib turishi uchun fonda avtomatik yangilanadi.</p>
+          </div>
+        </div>
+
+        <!-- 2. Kamera va Video -->
+        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white">Kamera va Video (Surat/Video)</h4>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Topshiriqlarni rasmga olib yuborish va favqulodda vaziyatda tezkor video yuborish uchun.</p>
+          </div>
+        </div>
+      </div>
+
+      <button id="btnGrantChildPermissions" onclick="requestChildAllPermissions()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-2xl shadow-xl shadow-teal-500/20 transition flex items-center justify-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span>Ruxsat berish va Boshlash</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CHILD ACTIVE CHECK NOTIFICATION BANNER -->
+  <div id="childActiveCheckBanner" class="hidden fixed top-3 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-[2500] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-3.5 rounded-2xl shadow-2xl border border-white/20 animate-fade-in flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 text-white relative">
+      <i data-lucide="bell" class="w-5 h-5 animate-bounce"></i>
+      <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping"></span>
+    </div>
+    <div class="min-w-0 flex-1 text-left">
+      <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+        <span>Joylashuv tekshirildi</span>
+        <span class="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-full font-mono font-bold" id="childCheckTimeText">12:00</span>
+      </h4>
+      <p class="text-[11px] text-blue-100 font-semibold mt-0.5 truncate">
+        Ota-onangiz joylashuvingizni tekshirdi 📍
+      </p>
+    </div>
+    <button onclick="dismissChildActiveBanner()" class="text-white/70 hover:text-white p-1 rounded-lg">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+
   <!-- Application Logic -->
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
