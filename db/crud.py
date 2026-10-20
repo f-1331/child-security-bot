@@ -59,17 +59,28 @@ async def update_user_role(session: AsyncSession, user_id: int, role: str) -> Op
 
 
 async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
-    """Generate or retrieve a unique 6-character pairing code for a parent."""
+    """Generate or retrieve a unique 6-character permanent pairing code for a parent.
+    Also synchronizes web_access_code so one code controls the entire family.
+    """
     user = await get_user(session, parent_id)
     if not user:
         user, _ = await get_or_create_user(session, parent_id, role="parent")
 
     if user.pairing_code:
+        user.web_access_code = user.pairing_code
+        await session.flush()
         return user.pairing_code
 
-    # Generate 6-digit numeric code
+    if user.web_access_code:
+        user.pairing_code = user.web_access_code
+        user.pairing_code_created_at = datetime.now(timezone.utc)
+        await session.flush()
+        return user.web_access_code
+
+    # Generate permanent 6-digit numeric code
     code = "".join(random.choices(string.digits, k=6))
     user.pairing_code = code
+    user.web_access_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
     await session.flush()
     return code
@@ -87,10 +98,22 @@ async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Option
 
 
 async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
-    """Generate or retrieve a unique 6-digit access code for website login."""
+    """Generate or retrieve a permanent 6-digit access code for website login.
+    Parents and all their linked children share the same unified family code.
+    """
     user = await get_user(session, user_id)
     if not user:
         user, _ = await get_or_create_user(session, user_id)
+
+    if user.role == "parent":
+        return await generate_pairing_code(session, user_id)
+
+    if user.role == "child":
+        parents = await get_parents_for_child(session, user_id)
+        if parents and parents[0].pairing_code:
+            user.web_access_code = parents[0].pairing_code
+            await session.flush()
+            return parents[0].pairing_code
 
     if user.web_access_code:
         return user.web_access_code
@@ -104,7 +127,6 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
             await session.flush()
             return code
 
-    # Fallback with timestamp digits
     code = str(int(datetime.now().timestamp()))[-6:]
     user.web_access_code = code
     await session.flush()
@@ -112,17 +134,38 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
 
 
 async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optional[User]:
-    """Find user by web access code (or pairing code, or telegram ID fallback)."""
+    """Find user by web access code (or pairing code, or telegram ID fallback).
+    If code belongs to a child who is linked to a parent, resolve to the parent
+    so all linked children can be seen and managed together under one account.
+    """
     code_clean = code.strip().replace(" ", "").replace("-", "")
+
+    # 1. First prioritize parent user matching this code
+    result = await session.execute(
+        select(User).where(
+            (User.role == "parent") &
+            ((User.web_access_code == code_clean) | (User.pairing_code == code_clean))
+        )
+    )
+    parent = result.scalars().first()
+    if parent:
+        return parent
+
+    # 2. Check any user matching this code
     result = await session.execute(
         select(User).where(
             (User.web_access_code == code_clean) | (User.pairing_code == code_clean)
         )
     )
-    user = result.scalar_one_or_none()
+    user = result.scalars().first()
     if user:
+        if user.role == "child":
+            parents = await get_parents_for_child(session, user.id)
+            if parents:
+                return parents[0]
         return user
 
+    # 3. Direct Telegram ID fallback (used by Telegram WebApp auto-login)
     if code_clean.isdigit():
         try:
             uid = int(code_clean)

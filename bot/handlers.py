@@ -250,17 +250,20 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             )
             return
 
-        # Link child to parent
+        # Link child to parent and unify family web access code
         await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
-        child_web_code = await crud.generate_web_access_code(session, user_id)
+        family_code = await crud.generate_pairing_code(session, parent.id)
+        child = await crud.get_user(session, user_id)
+        if child:
+            child.web_access_code = family_code
         await session.commit()
         await state.clear()
 
         await message.answer(
             f"🎉 **Ajoyib! Ota-onangizga ({parent.full_name or 'Ota-ona'}) muvaffaqiyatli ulandingiz!**\n\n"
-            f"🔑 **Saytga (Web App) kirish kodingiz:** ` {child_web_code} `\n"
-            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n"
-            f"*(Saytga kirganda ushbu 6 xonali kodni kiriting)*\n\n"
+            f"🔑 **Yagona Oila va Sayt kodingiz:** ` {family_code} `\n"
+            f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
+            f"*(Ushbu yagona kod butun oilangiz uchun umumiy bo'lib, saytda barcha farzandlarni ko'rish va boshqarish imkonini beradi)*\n\n"
             f"Quyidagi xavfsizlik menyusi faollashtirildi:",
             reply_markup=get_child_main_keyboard(),
             parse_mode="Markdown"
@@ -1681,15 +1684,18 @@ async def on_show_pairing_code(message: Message, bot: Bot):
     parent_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         code = await crud.generate_pairing_code(session, parent_id)
-        web_code = await crud.generate_web_access_code(session, parent_id)
         await session.commit()
 
         bot_info = await bot.get_me()
         await message.answer(
-            f"🔑 **Farzandingizni ulash kodi:** ` {code} `\n\n"
-            f"💻 **Saytga (Web App) kirish kodingiz:** ` {web_code} `\n"
-            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
-            f"Ushbu ulanish kodini farzandingiz telefonida botga yuboring yoki quyidagi ulashish tugmasini bosing:",
+            f"🔑 **YAGONA OILA VA SAYT KODINGIZ:** ` {code} `\n\n"
+            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
+            f"1️⃣ **Farzandlarni ulash:**\n"
+            f"Har bir farzandingiz telefonida botga kirib, '👶 Farzandman'ni tanlaydi va ushbu ` {code} ` kodini kiritadi. 1-bola, 2-bola, 3-bola... barchasi shu bitta kod bilan sizga ulanadi.\n\n"
+            f"2️⃣ **Saytga (Web App) kirish:**\n"
+            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
+            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda ularning barchasini kuzatib, boshqara olasiz!\n\n"
+            f"Ulashish uchun quyidagi tugmani bosing:",
             reply_markup=get_pairing_share_keyboard(bot_info.username, code),
             parse_mode="Markdown"
         )
@@ -2182,13 +2188,17 @@ async def on_show_web_access_code(event: Message | CallbackQuery):
         if user.role == "parent":
             rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
             text = (
-                f"🔑 **SAYTGA (WEB APP) KIRISH KODINGIZ:**\n\n"
+                f"🔑 **YAGONA OILA VA SAYT (WEB APP) KODINGIZ:**\n\n"
                 f"🏷 Kodingiz: ` {web_code} `\n\n"
                 f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
+                f"✨ **Bu bitta kod barcha farzandlaringiz uchun yagona va doimiydir!**\n"
+                f"• Saytga ushbu kodni bir marta kiritsangiz, barcha ulangan farzandlaringiz bir vaqtda chiqadi.\n"
+                f"• Akkauntdan chiqib boshqa bola kodini kiritish umuman shart emas!\n\n"
                 f"👨‍👩‍👧 **Ota-ona imkoniyatlari:**\n"
-                f"• Farzandlaringiz joylashuvini jonli xaritada kuzatish\n"
+                f"• Barcha farzandlaringiz joylashuvini jonli xaritada kuzatish\n"
+                f"• Boladan bolaga bir bosish bilan osongina o'tish\n"
                 f"• Yangi topshiriqlar yuklash (foto/video biriktirish bilan)\n"
-                f"• Kerakli joylar (Geofence) belgilash\n"
+                f"• Kerakli xavfsiz joylar (Geofence) belgilash\n"
                 f"• Tangalar kursini sozlash (Hozir: {rate_coins:,} tanga = {rate_som:,} so'm)\n\n"
                 f"📌 Saytimizga kirganda ushbu 6 xonali kodni kiriting!"
             )
