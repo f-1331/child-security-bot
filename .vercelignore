@@ -1,0 +1,9 @@
+api
+bot
+db
+uploads
+*.py
+requirements.txt
+Dockerfile
+render.yaml
+parental_tracker.db

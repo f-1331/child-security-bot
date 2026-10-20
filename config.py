@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     BOT_TOKEN: str = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
-    WEBAPP_BASE_URL: str = "https://child-security-site.netlify.app"
+    WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
     TGCLOUD_APP_TOKEN: Optional[str] = "app8899084854:fQx23Fw3jvg07CZMwsRlO6T24EjFAvzoS4d4O24Uu9A"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000

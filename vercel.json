@@ -1,16 +1,13 @@
 {
+  "outputDirectory": "webapp",
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://child-security-site.onrender.com/api/:match*"
+      "source": "/api/(.*)",
+      "destination": "https://child-security-site.onrender.com/api/$1"
     },
     {
-      "source": "/uploads/:match*",
-      "destination": "https://child-security-site.onrender.com/uploads/:match*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/webapp/$1"
+      "source": "/uploads/(.*)",
+      "destination": "https://child-security-site.onrender.com/uploads/$1"
     }
   ],
   "headers": [
