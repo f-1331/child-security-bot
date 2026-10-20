@@ -1,24 +1,23 @@
 {
-  "outputDirectory": "webapp",
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://child-security-site.onrender.com/api/$1"
-    },
-    {
-      "source": "/uploads/(.*)",
-      "destination": "https://child-security-site.onrender.com/uploads/$1"
+      "src": "webapp/**",
+      "use": "@vercel/static"
     }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
+      "src": "/api/(.*)",
+      "dest": "https://child-security-site.onrender.com/api/$1"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "https://child-security-site.onrender.com/uploads/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/webapp/$1"
     }
   ]
 }
