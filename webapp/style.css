@@ -9,10 +9,10 @@
   --bg-main: #060911;
   --bg-surface: #0b1120;
   --bg-card: rgba(17, 26, 46, 0.92);
-  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --bg-card-border: rgba(59, 130, 246, 0.35);
   --pill-bg: #15223c;
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1;
   --primary: #3b82f6;
   --primary-glow: rgba(59, 130, 246, 0.45);
   --accent: #06b6d4;
@@ -29,10 +29,10 @@ body.theme-galaxy {
   --bg-main: #090516;
   --bg-surface: #120a2c;
   --bg-card: rgba(28, 15, 66, 0.92);
-  --bg-card-border: rgba(168, 85, 247, 0.35);
+  --bg-card-border: rgba(168, 85, 247, 0.45);
   --pill-bg: #221252;
   --text-main: #faf5ff;
-  --text-muted: #c084fc;
+  --text-muted: #d8b4fe;
   --primary: #a855f7;
   --primary-glow: rgba(168, 85, 247, 0.55);
   --accent: #ec4899;
@@ -49,10 +49,10 @@ body.theme-midnight {
   --bg-main: #060911;
   --bg-surface: #0b1120;
   --bg-card: rgba(17, 26, 46, 0.92);
-  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --bg-card-border: rgba(59, 130, 246, 0.35);
   --pill-bg: #15223c;
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1;
   --primary: #3b82f6;
   --primary-glow: rgba(59, 130, 246, 0.45);
   --accent: #06b6d4;
@@ -69,10 +69,10 @@ body.theme-emerald {
   --bg-main: #04120a;
   --bg-surface: #082114;
   --bg-card: rgba(14, 46, 29, 0.92);
-  --bg-card-border: rgba(16, 185, 129, 0.35);
+  --bg-card-border: rgba(16, 185, 129, 0.45);
   --pill-bg: #143e27;
   --text-main: #ecfdf5;
-  --text-muted: #6ee7b7;
+  --text-muted: #a7f3d0;
   --primary: #10b981;
   --primary-glow: rgba(16, 185, 129, 0.5);
   --accent: #14b8a6;
@@ -89,10 +89,10 @@ body.theme-sunset {
   --bg-main: #130802;
   --bg-surface: #221004;
   --bg-card: rgba(48, 23, 8, 0.92);
-  --bg-card-border: rgba(245, 158, 11, 0.38);
+  --bg-card-border: rgba(245, 158, 11, 0.45);
   --pill-bg: #42200b;
   --text-main: #fffbeb;
-  --text-muted: #fcd34d;
+  --text-muted: #fde68a;
   --primary: #f59e0b;
   --primary-glow: rgba(245, 158, 11, 0.5);
   --accent: #f97316;
@@ -129,10 +129,10 @@ body.theme-comic {
   --bg-main: #090e1f;
   --bg-surface: #101938;
   --bg-card: rgba(22, 34, 76, 0.94);
-  --bg-card-border: rgba(250, 204, 21, 0.45);
+  --bg-card-border: rgba(250, 204, 21, 0.5);
   --pill-bg: #1c2b5e;
   --text-main: #ffffff;
-  --text-muted: #93c5fd;
+  --text-muted: #bfdbfe;
   --primary: #facc15;
   --primary-glow: rgba(250, 204, 21, 0.6);
   --accent: #f43f5e;
@@ -149,10 +149,10 @@ body.theme-ocean {
   --bg-main: #03131e;
   --bg-surface: #062338;
   --bg-card: rgba(8, 42, 68, 0.94);
-  --bg-card-border: rgba(6, 182, 212, 0.38);
+  --bg-card-border: rgba(6, 182, 212, 0.45);
   --pill-bg: #0b3454;
   --text-main: #f0fdfa;
-  --text-muted: #67e8f9;
+  --text-muted: #a5f3fc;
   --primary: #06b6d4;
   --primary-glow: rgba(6, 182, 212, 0.55);
   --accent: #38bdf8;
@@ -169,10 +169,10 @@ body.theme-sakura {
   --bg-main: #180812;
   --bg-surface: #2b0e20;
   --bg-card: rgba(56, 19, 43, 0.94);
-  --bg-card-border: rgba(244, 114, 182, 0.4);
+  --bg-card-border: rgba(244, 114, 182, 0.45);
   --pill-bg: #421834;
   --text-main: #fdf2f8;
-  --text-muted: #f9a8d4;
+  --text-muted: #fbcfe8;
   --primary: #f472b6;
   --primary-glow: rgba(244, 114, 182, 0.55);
   --accent: #fb7185;
@@ -189,7 +189,7 @@ body.theme-cyberpunk {
   --bg-main: #0c0d12;
   --bg-surface: #161822;
   --bg-card: rgba(25, 28, 40, 0.94);
-  --bg-card-border: rgba(250, 204, 21, 0.5);
+  --bg-card-border: rgba(250, 204, 21, 0.55);
   --pill-bg: #212534;
   --text-main: #fef9c3;
   --text-muted: #fef08a;
@@ -209,10 +209,10 @@ body.theme-magma {
   --bg-main: #140404;
   --bg-surface: #240808;
   --bg-card: rgba(50, 12, 12, 0.94);
-  --bg-card-border: rgba(239, 68, 68, 0.45);
+  --bg-card-border: rgba(239, 68, 68, 0.5);
   --pill-bg: #3c1212;
   --text-main: #fef2f2;
-  --text-muted: #fca5a5;
+  --text-muted: #fecaca;
   --primary: #ef4444;
   --primary-glow: rgba(239, 68, 68, 0.6);
   --accent: #f97316;
@@ -229,10 +229,10 @@ body.theme-arcade {
   --bg-main: #0c0818;
   --bg-surface: #180f30;
   --bg-card: rgba(34, 21, 68, 0.94);
-  --bg-card-border: rgba(168, 85, 247, 0.45);
+  --bg-card-border: rgba(168, 85, 247, 0.5);
   --pill-bg: #291a52;
   --text-main: #fdf4ff;
-  --text-muted: #d8b4fe;
+  --text-muted: #f5d0fe;
   --primary: #c084fc;
   --primary-glow: rgba(192, 132, 252, 0.6);
   --accent: #22c55e;
@@ -248,11 +248,11 @@ body.theme-arcade {
 body.theme-frost {
   --bg-main: #0b1522;
   --bg-surface: #122238;
-  --bg-card: rgba(24, 46, 75, 0.92);
-  --bg-card-border: rgba(56, 189, 248, 0.4);
+  --bg-card: rgba(24, 46, 75, 0.94);
+  --bg-card-border: rgba(56, 189, 248, 0.45);
   --pill-bg: #1d3656;
   --text-main: #f0f9ff;
-  --text-muted: #7dd3fc;
+  --text-muted: #bae6fd;
   --primary: #38bdf8;
   --primary-glow: rgba(56, 189, 248, 0.55);
   --accent: #93c5fd;
@@ -300,50 +300,272 @@ nav {
 #modal-task-proof > div,
 #authGateModal > div,
 #modal-coin-rate > div,
-#modal-theme > div {
+#modal-theme > div,
+#modal-settings > div,
+#modal-wallet > div {
   background-color: var(--bg-surface) !important;
   border-color: var(--bg-card-border) !important;
   color: var(--text-main) !important;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Generic slate-900 / 800 overrides */
+/* Containers, Cards, and Surfaces across all themes */
+.bg-slate-950,
 .bg-slate-900,
 .bg-slate-900\/95,
-.bg-slate-900\/90 {
+.bg-slate-900\/90,
+.bg-slate-900\/80,
+.bg-slate-900\/60 {
   background-color: var(--bg-surface) !important;
 }
 
+.bg-slate-950\/80,
+.bg-slate-950\/60,
+.bg-slate-950\/40,
 .bg-slate-800,
+.bg-slate-800\/90,
 .bg-slate-800\/80,
-.bg-slate-800\/90 {
+.bg-slate-800\/60,
+.bg-slate-700,
+.bg-slate-700\/50 {
   background-color: var(--pill-bg) !important;
 }
 
+.border-slate-950,
 .border-slate-800,
 .border-slate-700,
-.border-slate-700\/80 {
+.border-slate-700\/80,
+.border-slate-700\/60 {
   border-color: var(--bg-card-border) !important;
 }
 
-/* Daylight Light Theme Specific Text Fixes */
-body.theme-daylight .text-white,
-body.theme-daylight .text-slate-100 {
+/* ========================================================= */
+/* UNIVERSAL TEXT CONTRAST ENGINE (FOR ALL 12 THEMES)         */
+/* ========================================================= */
+
+/* Main Text & Headings */
+.text-slate-100,
+.text-slate-200 {
+  color: var(--text-main) !important;
+}
+
+/* Muted / Secondary text (timestamps, descriptions, details) */
+.text-slate-300:not(button):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-blue"]):not([class*="bg-purple"]):not([class*="bg-indigo"]):not([class*="bg-red"]),
+.text-slate-400,
+.text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+/* Headings inherit main text color */
+h1:not(button *),
+h2:not(button *),
+h3:not(button *),
+h4:not(button *),
+#zonesModalTitle,
+#tasksModalTitle {
+  color: var(--text-main) !important;
+}
+
+/* Action Buttons with colored/gradient background MUST retain crisp white text */
+button.bg-blue-600,
+button.bg-blue-500,
+button.bg-emerald-600,
+button.bg-emerald-500,
+button.bg-red-600,
+button.bg-rose-600,
+button.bg-amber-600,
+button[class*="bg-gradient-to-r from-blue-"],
+button[class*="bg-gradient-to-r from-emerald-"],
+button[class*="bg-gradient-to-r from-red-"],
+button[class*="bg-gradient-to-r from-purple-"],
+#btnChildBigSOS,
+button.btn-primary {
+  color: #ffffff !important;
+}
+button.bg-blue-600 *,
+button.bg-emerald-600 *,
+button.bg-red-600 *,
+button.bg-rose-600 *,
+button.bg-amber-600 *,
+#btnChildBigSOS * {
+  color: #ffffff !important;
+}
+
+/* Form input elements */
+input,
+select,
+textarea {
+  background-color: var(--pill-bg) !important;
+  color: var(--text-main) !important;
+  border-color: var(--bg-card-border) !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.75;
+}
+
+/* Theme-adaptive secondary accent text in Child View cards */
+body.theme-emerald #childViewSection .text-purple-300,
+body.theme-emerald #childViewSection .text-purple-400 {
+  color: #a7f3d0 !important;
+}
+body.theme-sunset #childViewSection .text-purple-300,
+body.theme-sunset #childViewSection .text-purple-400 {
+  color: #fde68a !important;
+}
+body.theme-magma #childViewSection .text-purple-300,
+body.theme-magma #childViewSection .text-purple-400 {
+  color: #fecaca !important;
+}
+body.theme-ocean #childViewSection .text-purple-300,
+body.theme-ocean #childViewSection .text-purple-400 {
+  color: #a5f3fc !important;
+}
+body.theme-cyberpunk #childViewSection .text-purple-300,
+body.theme-cyberpunk #childViewSection .text-purple-400 {
+  color: #fef08a !important;
+}
+body.theme-frost #childViewSection .text-purple-300,
+body.theme-frost #childViewSection .text-purple-400 {
+  color: #bae6fd !important;
+}
+body.theme-arcade #childViewSection .text-purple-300,
+body.theme-arcade #childViewSection .text-purple-400 {
+  color: #f5d0fe !important;
+}
+
+/* ========================================================= */
+/* DAYLIGHT (LIGHT THEME) SPECIFIC HIGH-CONTRAST OVERRIDES    */
+/* ========================================================= */
+body.theme-daylight .text-white:not(button):not(button *):not([class*="from-"]):not(#btnChildBigSOS *) {
   color: #0f172a !important;
 }
 
-body.theme-daylight .text-slate-200,
+body.theme-daylight .text-slate-100,
+body.theme-daylight .text-slate-200 {
+  color: #0f172a !important;
+}
+
 body.theme-daylight .text-slate-300,
-body.theme-daylight .text-slate-400 {
+body.theme-daylight .text-slate-400,
+body.theme-daylight .text-slate-500 {
   color: #475569 !important;
+}
+
+/* High-contrast badges & monetary text in Daylight */
+body.theme-daylight .text-amber-200,
+body.theme-daylight .text-amber-300,
+body.theme-daylight .text-yellow-300,
+body.theme-daylight .text-yellow-400 {
+  color: #b45309 !important; /* Deep rich amber */
+}
+
+body.theme-daylight .text-emerald-300,
+body.theme-daylight .text-emerald-400 {
+  color: #047857 !important; /* Deep rich emerald */
+}
+
+body.theme-daylight .text-blue-300,
+body.theme-daylight .text-blue-400,
+body.theme-daylight .text-sky-300 {
+  color: #1d4ed8 !important; /* Deep rich blue */
+}
+
+body.theme-daylight .text-purple-300,
+body.theme-daylight .text-purple-400,
+body.theme-daylight .text-indigo-300,
+body.theme-daylight .text-indigo-400 {
+  color: #6d28d9 !important; /* Deep rich purple */
+}
+
+body.theme-daylight .text-rose-300,
+body.theme-daylight .text-rose-400,
+body.theme-daylight .text-red-300,
+body.theme-daylight .text-red-400 {
+  color: #b91c1c !important; /* Deep rich red */
+}
+
+body.theme-daylight .text-cyan-300,
+body.theme-daylight .text-cyan-400 {
+  color: #0e7490 !important; /* Deep rich cyan */
+}
+
+/* Soft tinted pill backgrounds in Daylight */
+body.theme-daylight .bg-amber-500\/15,
+body.theme-daylight .bg-amber-500\/20,
+body.theme-daylight .bg-amber-500\/25 {
+  background-color: #fef3c7 !important;
+  border-color: #fde68a !important;
+}
+
+body.theme-daylight .bg-emerald-500\/15,
+body.theme-daylight .bg-emerald-500\/20,
+body.theme-daylight .bg-emerald-950\/30 {
+  background-color: #d1fae5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+body.theme-daylight .bg-blue-500\/15,
+body.theme-daylight .bg-blue-500\/20 {
+  background-color: #dbeafe !important;
+  border-color: #bfdbfe !important;
+}
+
+body.theme-daylight .bg-purple-600\/20,
+body.theme-daylight .bg-purple-500\/20 {
+  background-color: #f3e8ff !important;
+  border-color: #e9d5ff !important;
 }
 
 body.theme-daylight input,
 body.theme-daylight select,
 body.theme-daylight textarea {
-  background-color: #f1f5f9 !important;
+  background-color: #f8fafc !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
+}
+
+select option {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+}
+
+body.theme-daylight select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Daylight battery pills */
+body.theme-daylight .bg-emerald-900\/40,
+body.theme-daylight .bg-emerald-900\/50 {
+  background-color: #d1fae5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+body.theme-daylight .bg-amber-900\/40,
+body.theme-daylight .bg-amber-900\/50 {
+  background-color: #fef3c7 !important;
+  border-color: #fde68a !important;
+}
+
+body.theme-daylight .bg-red-900\/40,
+body.theme-daylight .bg-red-900\/50 {
+  background-color: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+/* Transform Child View gradient cards to clean daylight cards */
+body.theme-daylight #childViewSection > div:not(:last-child) {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+}
+
+body.theme-daylight #childViewSection > div:not(:last-child) h2,
+body.theme-daylight #childViewSection > div:not(:last-child) h3,
+body.theme-daylight #childViewSection > div:not(:last-child) h4 {
+  color: #0f172a !important;
 }
 
 /* Nav Tab Active Indicator */
