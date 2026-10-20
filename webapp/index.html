@@ -7,8 +7,8 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Child Security Bot - Bolalar Nazorati</title>
-  <link rel="icon" type="image/png" href="favicon.png?v=15" />
-  <link rel="apple-touch-icon" href="favicon.png?v=15" />
+  <link rel="icon" type="image/png" href="favicon.png?v=16" />
+  <link rel="apple-touch-icon" href="favicon.png?v=16" />
   
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -24,7 +24,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
 
   <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
   <script>
@@ -253,12 +253,15 @@
     </div>
 
     <!-- Urgent SOS Alert Banner (Hidden by default) -->
-    <div id="sosAlertBanner" class="hidden bg-gradient-to-r from-red-600 to-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center justify-between shadow-lg animate-pulse">
-      <div class="flex items-center gap-2">
-        <i data-lucide="alert-triangle" class="w-4 h-4 text-white"></i>
-        <span>🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!</span>
+    <div id="sosAlertBanner" class="hidden bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-between shadow-xl animate-pulse border border-white/30">
+      <div class="flex items-center gap-2 overflow-hidden mr-2">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-white shrink-0 animate-bounce"></i>
+        <span class="truncate">🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!</span>
       </div>
-      <button onclick="dismissSos()" class="p-1 text-white/80 hover:text-white text-base font-bold">×</button>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="resolveCurrentSos()" class="px-2.5 py-1 bg-white text-red-700 hover:bg-red-50 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm transition active:scale-95">To'xtatish</button>
+        <button onclick="dismissSos()" class="p-1 text-white/80 hover:text-white text-base font-bold leading-none" title="Yopish">×</button>
+      </div>
     </div>
   </header>
 
@@ -1347,7 +1350,59 @@
     </div>
   </div>
 
+  <!-- SLIDING / POPUP MODAL: SOS ACTIVE (Emergency Screen for Child) -->
+  <div id="modal-sos-active" class="hidden fixed inset-0 z-[1200] bg-red-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-gradient-to-b from-red-900 via-slate-900 to-black border-2 border-red-500 rounded-3xl p-6 w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-fade-in relative overflow-hidden">
+      <!-- Background glowing pulse effect -->
+      <div class="absolute -top-16 -left-16 w-48 h-48 bg-red-600/30 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+      <div class="absolute -bottom-16 -right-16 w-48 h-48 bg-rose-600/30 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+
+      <!-- Pulsing Shield Icon -->
+      <div class="relative mb-4">
+        <div class="w-20 h-20 rounded-full bg-red-600/30 animate-ping absolute inset-0"></div>
+        <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center shadow-lg shadow-red-600/50 relative border-2 border-white/80">
+          <i data-lucide="shield-alert" class="w-10 h-10 text-white animate-bounce"></i>
+        </div>
+      </div>
+
+      <h3 class="text-xl font-black text-white tracking-wide mb-1">🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI!</h3>
+      <p class="text-xs text-red-200 font-medium mb-4">
+        Ota-onangizga favqulodda ogohlantirish, jonli geolokatsiyangiz va batareya holatingiz yetkazildi.
+      </p>
+
+      <!-- Reassurance Card -->
+      <div class="w-full bg-red-950/60 border border-red-500/40 rounded-2xl p-3 mb-4 text-left">
+        <p class="text-[11px] text-rose-100 flex items-center gap-2 mb-1.5 font-bold">
+          <i data-lucide="radio" class="w-4 h-4 text-red-400 shrink-0 animate-pulse"></i>
+          <span>Xavfsizlik tizimi nazoratda</span>
+        </p>
+        <p class="text-[10px] text-rose-200/80 leading-relaxed">
+          Iltimos, tinchlaning va xavfsiz joyda turing. Ota-onangiz tez orada siz bilan bog'lanadi.
+        </p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="w-full flex flex-col gap-2.5">
+        <button onclick="callParent()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
+          <i data-lucide="phone-call" class="w-4 h-4"></i>
+          <span>📞 Ota-onaga qo'ng'iroq qilish</span>
+        </button>
+
+        <button onclick="openParentChat()" class="w-full py-2.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs rounded-xl border border-slate-600 flex items-center justify-center gap-2 transition">
+          <i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>
+          <span>💬 Telegram orqali yozish</span>
+        </button>
+
+        <!-- Safe / Resolve SOS Button -->
+        <button onclick="cancelChildSOS()" class="w-full mt-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-900/50 flex items-center justify-center gap-2 transition border border-emerald-400/50">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>✅ Hammasi yaxshi / Xavf o'tdi (To'xtatish)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Application Logic -->
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

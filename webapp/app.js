@@ -23,6 +23,56 @@ let coinRateCoins = 1000;
 let coinRateSom = 10000;
 let childBalanceCoins = 0;
 let childBalanceSom = 0;
+let parentPhone = null;
+let parentName = null;
+let lastSosAlertState = false;
+
+// High-accuracy device GPS acquisition
+async function getDeviceLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      resolve(null);
+    }, 4000);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timer);
+        resolve({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+      },
+      (err) => {
+        clearTimeout(timer);
+        console.warn("Geolocation query error:", err);
+        resolve(null);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 4000,
+        maximumAge: 5000,
+      }
+    );
+  });
+}
+
+// Device battery status acquisition
+async function getDeviceBattery() {
+  try {
+    if (navigator.getBattery) {
+      const b = await navigator.getBattery();
+      return Math.round(b.level * 100);
+    }
+  } catch (e) {
+    // Battery API not supported or restricted
+  }
+  return null;
+}
 
 // Map & Layers
 let map = null;
@@ -685,6 +735,13 @@ function applyChildUI(user) {
   // Populate dynamic cards on child dashboard
   renderChildDashboardQuests();
   renderChildDashboardCastles();
+
+  if (user.parent_phone) parentPhone = user.parent_phone;
+  if (user.parent_name) parentName = user.parent_name;
+  if (user.is_sos_active) {
+    const sosModal = document.getElementById("modal-sos-active");
+    if (sosModal) sosModal.classList.remove("hidden");
+  }
 
   if (window.lucide) lucide.createIcons();
 }
@@ -1787,16 +1844,52 @@ function formatTimeAgo(isoString) {
 // SOS Alert Banner handling
 function toggleSosBanner(isActive) {
   const banner = document.getElementById("sosAlertBanner");
+  if (!banner) return;
+
   if (isActive) {
     banner.classList.remove("hidden");
-    haptic("medium");
+    if (!lastSosAlertState) {
+      haptic("heavy");
+      playSirenSound();
+      showToast("🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!");
+    }
+    lastSosAlertState = true;
   } else {
     banner.classList.add("hidden");
+    lastSosAlertState = false;
   }
 }
 
 function dismissSos() {
-  document.getElementById("sosAlertBanner").classList.add("hidden");
+  const banner = document.getElementById("sosAlertBanner");
+  if (banner) banner.classList.add("hidden");
+}
+
+async function resolveCurrentSos() {
+  haptic("medium");
+  const banner = document.getElementById("sosAlertBanner");
+  if (banner) banner.classList.add("hidden");
+  lastSosAlertState = false;
+
+  if (!isDemoMode && currentChildId) {
+    try {
+      await fetch(`/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      showToast("✅ Farzand SOS xavf signali to'xtatildi.");
+    } catch (e) {
+      console.error("Resolve SOS error:", e);
+    }
+  } else {
+    showToast("✅ (Demo) SOS signali to'xtatildi.");
+  }
+
+  // Restore marker to normal pulse
+  if (childMarker) {
+    const pos = childMarker.getLatLng();
+    renderChildMarker(pos.lat, pos.lng, "Farzand", false, null);
+  }
 }
 
 // Bottom tab switching
@@ -3002,24 +3095,142 @@ async function rejectTask(taskId) {
 
 // CHILD FLOATING & SAFETY ACTION HANDLERS
 
-function triggerChildSOS() {
+async function triggerChildSOS() {
   haptic("heavy");
   playSirenSound();
-  const banner = document.getElementById("sosAlertBanner");
-  if (banner) {
-    banner.classList.remove("hidden");
-    const span = banner.querySelector("span");
-    if (span) span.textContent = "🚨 DIQQAT: SOS xavf signali ota-onangizga yuborildi!";
+
+  // Show emergency active screen on child device
+  const modal = document.getElementById("modal-sos-active");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) window.lucide.createIcons();
   }
-  showToast("🚨 SOS XAVF SIGNALI YUBORILDI! Ota-onangizga geolokatsiyangiz bilan xabar ketdi!");
+
+  showToast("🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI! Ota-onangizga xabar ketmoqda...");
+
+  // Coordinates fallback
+  let fallbackLat = DEFAULT_LAT;
+  let fallbackLon = DEFAULT_LON;
+  if (childMarker) {
+    const pos = childMarker.getLatLng();
+    fallbackLat = pos.lat;
+    fallbackLon = pos.lng;
+  }
+
+  let finalLat = fallbackLat;
+  let finalLon = fallbackLon;
+  let finalAcc = null;
+  let battery = null;
+
+  try {
+    const [geo, batt] = await Promise.all([
+      getDeviceLocation(),
+      getDeviceBattery(),
+    ]);
+    if (geo) {
+      finalLat = geo.latitude;
+      finalLon = geo.longitude;
+      finalAcc = geo.accuracy;
+    }
+    if (batt !== null) {
+      battery = batt;
+    }
+  } catch (e) {
+    console.warn("GPS/Battery acquisition error:", e);
+  }
+
+  // Find child name for marker
+  const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
+  const cName = cObj.full_name || "Farzand";
+
+  // Pulse red radar marker on map immediately
+  if (finalLat && finalLon) {
+    renderChildMarker(finalLat, finalLon, cName, true, battery);
+    if (map) map.flyTo([finalLat, finalLon], 16, { animate: true, duration: 1 });
+  }
+
+  const payload = {
+    is_sos_active: true,
+    latitude: finalLat,
+    longitude: finalLon,
+    accuracy: finalAcc,
+    battery_level: battery,
+  };
 
   if (!isDemoMode && currentChildId) {
-    fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_sos_active: true })
-    }).catch(console.error);
+    try {
+      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data && data.status === "success") {
+        showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
+      }
+    } catch (err) {
+      console.error("SOS dispatch error:", err);
+      showToast("⚠️ SOS signali yuborildi (tarmoq tekshirilmoqda)");
+    }
+  } else {
+    showToast("🚨 (Demo) SOS signali faollashtirildi!");
   }
+}
+
+async function cancelChildSOS() {
+  haptic("medium");
+  const modal = document.getElementById("modal-sos-active");
+  if (modal) modal.classList.add("hidden");
+
+  showToast("✅ Xavf bartaraf etildi. Ota-onangizga xabar yetkazilmoqda...");
+
+  if (!isDemoMode && currentChildId) {
+    try {
+      await fetch(`/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      showToast("✅ SOS xavf signali to'xtatildi.");
+    } catch (e) {
+      console.error("Cancel SOS error:", e);
+    }
+  } else {
+    showToast("✅ (Demo) SOS signali to'xtatildi.");
+  }
+
+  // Restore marker to non-SOS
+  if (childMarker) {
+    const pos = childMarker.getLatLng();
+    const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
+    renderChildMarker(pos.lat, pos.lng, cObj.full_name || "Farzand", false, null);
+  }
+}
+
+function callParent() {
+  haptic("heavy");
+  playPingSound();
+  if (parentPhone) {
+    const clean = parentPhone.replace(/[\s\-]/g, "");
+    window.location.href = `tel:${clean}`;
+    return;
+  }
+  if (window.Telegram?.WebApp?.close) {
+    showToast("Ota-onangiz bilan Telegram chatga o'tilmoqda...");
+    window.Telegram.WebApp.close();
+  } else {
+    window.location.href = "tel:+998901234567";
+  }
+}
+
+function openParentChat() {
+  haptic("medium");
+  if (window.Telegram?.WebApp) {
+    if (typeof window.Telegram.WebApp.close === "function") {
+      window.Telegram.WebApp.close();
+      return;
+    }
+  }
+  showToast("Telegram chatga o'ting.");
 }
 
 function triggerChildCheckIn() {
@@ -3049,19 +3260,6 @@ function navigateChildHome() {
     window.Telegram.WebApp.openLink(url);
   } else {
     window.open(url, "_blank");
-  }
-}
-
-function callParent() {
-  haptic("medium");
-  playPingSound();
-  if (confirm("Ota-onangiz bilan bog'lanmoqchimisiz?")) {
-    if (window.Telegram?.WebApp?.close) {
-      showToast("Ota-onangiz bilan Telegram chatga o'tilmoqda...");
-      window.Telegram.WebApp.close();
-    } else {
-      window.location.href = "tel:+998901234567";
-    }
   }
 }
 

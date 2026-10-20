@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
@@ -10,7 +11,11 @@ from aiogram.types import FSInputFile
 from db.database import get_db
 import db.crud as crud
 from api import telemetry
-from bot.keyboards import get_child_task_action_keyboard, get_task_approval_keyboard
+from bot.keyboards import (
+    get_child_task_action_keyboard,
+    get_task_approval_keyboard,
+    get_sos_alert_parent_keyboard,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,14 @@ class CreateGeofenceRequest(BaseModel):
 
 class AuthCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
+
+
+class ChildSOSRequest(BaseModel):
+    is_sos_active: bool = True
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    battery_level: Optional[int] = None
 
 
 @router.post("/auth/code")
@@ -221,6 +234,9 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
     rate_coins, rate_som = await crud.get_coin_rate_for_user(session, child_id)
     money_som = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
     latest = await crud.get_latest_location(session, child_id)
+    parents = await crud.get_parents_for_child(session, child_id)
+    parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
+    parent_name = parents[0].full_name if parents and parents[0].full_name else None
 
     return {
         "status": "success",
@@ -233,6 +249,8 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "coin_rate_coins": rate_coins,
             "coin_rate_som": rate_som,
             "is_sos_active": child.is_sos_active,
+            "parent_phone": parent_phone,
+            "parent_name": parent_name,
             "location": {
                 "latitude": latest.latitude if latest else None,
                 "longitude": latest.longitude if latest else None,
@@ -647,24 +665,124 @@ async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get
 
 
 @router.post("/child/{child_id}/sos")
-async def child_sos_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
-    """Trigger SOS emergency alert from child WebApp and notify all linked parents."""
+async def child_sos_endpoint(
+    child_id: int,
+    payload: Optional[ChildSOSRequest] = None,
+    session: AsyncSession = Depends(get_db)
+):
+    """Trigger SOS emergency alert from child WebApp and notify all linked parents with live GPS coordinates."""
+    await crud.set_child_sos(session, child_id, True)
+
+    lat = payload.latitude if payload and payload.latitude is not None else None
+    lon = payload.longitude if payload and payload.longitude is not None else None
+    battery_lvl = payload.battery_level if payload and payload.battery_level is not None else None
+    accuracy = payload.accuracy if payload and payload.accuracy is not None else None
+
+    # If coordinates were submitted with the emergency dispatch, log them
+    if lat is not None and lon is not None:
+        try:
+            await crud.log_location(
+                session=session,
+                child_id=child_id,
+                latitude=lat,
+                longitude=lon,
+                accuracy=accuracy,
+                battery_level=battery_lvl,
+                source="webapp_sos"
+            )
+        except Exception as loc_e:
+            logger.error(f"Failed to record SOS coordinates: {loc_e}")
+
+    latest_loc = await crud.get_latest_location(session, child_id)
+    if lat is None and latest_loc:
+        lat = latest_loc.latitude
+        lon = latest_loc.longitude
+    if battery_lvl is None and latest_loc:
+        battery_lvl = latest_loc.battery_level
+
     child = await crud.get_user(session, child_id)
     child_name = child.full_name if child else f"Farzand #{child_id}"
     parents = await crud.get_parents_for_child(session, child_id)
+    await session.commit()
 
     if telemetry.telegram_bot and parents:
+        now_str = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
+        battery_info = f"{battery_lvl}%" if battery_lvl is not None else "Noma'lum"
+        loc_coords = f"{lat}, {lon}" if (lat is not None and lon is not None) else "Mavjud emas"
+        maps_link = (
+            f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+            if (lat is not None and lon is not None) else None
+        )
+
+        parent_alert = (
+            f"🚨🚨🚨 **FAVQULODDA VAZIYAT (SOS)!** 🚨🚨🚨\n\n"
+            f"Farzandingiz **{child_name}** WebApp orqali xavf signalini yoqdi!\n\n"
+            f"🕒 Vaqt: **{now_str}**\n"
+            f"🔋 Batareya: **{battery_info}**\n"
+            + (f"📍 Koordinata: `{loc_coords}`\n🗺 Xaritada: [Google Maps orqali ochish]({maps_link})\n\n" if maps_link else "\n")
+            + f"⚠️ **DIQQAT:** Farzandingiz bilan zudlik bilan bog'laning yoki xaritada tekshiring!"
+        )
+
         for p in parents:
             try:
                 await telemetry.telegram_bot.send_message(
                     chat_id=p.id,
-                    text=f"🚨 **SHOSHILINCH SOS SIGNAL!**\n\nFarzandingiz **{child_name}** WebApp orqali SOS xavf signalini yoqdi!\nIltimos, zudlik bilan farzandingiz bilan bog'laning yoki xaritada lokatsiyasini ko'ring.",
+                    text=parent_alert,
+                    reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
                     parse_mode="Markdown"
                 )
+                if lat is not None and lon is not None:
+                    await telemetry.telegram_bot.send_location(
+                        chat_id=p.id,
+                        latitude=lat,
+                        longitude=lon
+                    )
             except Exception as e:
                 logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
 
-    return {"status": "success", "child_id": child_id, "notified_parents": len(parents)}
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "is_sos_active": True,
+        "notified_parents": len(parents),
+        "latitude": lat,
+        "longitude": lon,
+        "battery_level": battery_lvl
+    }
+
+
+@router.post("/child/{child_id}/sos/cancel")
+async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Cancel/resolve SOS emergency alert and notify all linked parents."""
+    await crud.set_child_sos(session, child_id, False)
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child else f"Farzand #{child_id}"
+    parents = await crud.get_parents_for_child(session, child_id)
+    await session.commit()
+
+    if telemetry.telegram_bot:
+        if parents:
+            for p in parents:
+                try:
+                    await telemetry.telegram_bot.send_message(
+                        chat_id=p.id,
+                        text=f"✅ **XAVF BARTARAF ETILDI!**\n\nFarzandingiz **{child_name}** SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.",
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify parent {p.id} of SOS cancellation: {e}")
+
+        if child:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=child.id,
+                    text="✅ SOS xavf signali to'xtatildi. Hammasi joyida ekanligidan xursandmiz!",
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                pass
+
+    return {"status": "success", "child_id": child_id, "is_sos_active": False}
 
 
 @router.post("/child/{child_id}/checkin")

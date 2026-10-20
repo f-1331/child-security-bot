@@ -347,6 +347,10 @@ def get_child_sos_call_keyboard(parent_phone: Optional[str] = None) -> InlineKey
 def get_sos_alert_parent_keyboard(child_id: int, lat: Optional[float] = None, lon: Optional[float] = None) -> InlineKeyboardMarkup:
     """Action buttons sent to parent during an SOS emergency."""
     buttons = []
+    if settings.MINI_APP_URL:
+        buttons.append([
+            InlineKeyboardButton(text="📱 WebApp Xaritasida Ko'rish", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+        ])
     if lat is not None and lon is not None:
         google_maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
         buttons.append([
