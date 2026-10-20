@@ -2142,17 +2142,28 @@ async function refreshAllData() {
   }, 600);
 }
 
-// Toast notification helper
+// Toast notification helper (Non-blocking floating pill at top of screen)
+let activeToastTimer = null;
+
 function showToast(message) {
-  if (tg && tg.showPopup) {
-    tg.showPopup({ message: message });
-    return;
+  const oldToast = document.getElementById("appGlobalToast");
+  if (oldToast) {
+    clearTimeout(activeToastTimer);
+    oldToast.remove();
   }
+
   const toast = document.createElement("div");
-  toast.className = "fixed bottom-16 left-1/2 -translate-x-1/2 z-[999] bg-slate-900/95 text-white text-xs px-4 py-2 rounded-2xl shadow-2xl border border-slate-700/80 animate-fade-in font-medium backdrop-blur-md";
+  toast.id = "appGlobalToast";
+  toast.className = "app-toast-pill";
   toast.textContent = message;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
+
+  activeToastTimer = setTimeout(() => {
+    toast.classList.add("toast-leaving");
+    setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, 280);
+  }, 2300);
 }
 
 

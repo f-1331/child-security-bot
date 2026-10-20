@@ -844,3 +844,68 @@ button, input, select, textarea, a {
     animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
+
+/* ========================================================= */
+/* SLEEK FLOATING NOTIFICATION TOAST PILL (Top-Center)       */
+/* ========================================================= */
+
+.app-toast-pill {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top, 16px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 9px 18px;
+  background-color: var(--bg-surface, rgba(15, 23, 42, 0.96));
+  color: var(--text-main, #ffffff) !important;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  white-space: nowrap;
+  border-radius: 9999px;
+  border: 1px solid var(--bg-card-border, rgba(59, 130, 246, 0.45));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 16px var(--primary-glow, rgba(59, 130, 246, 0.3));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  pointer-events: none;
+  animation: toastDropIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toastDropIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.app-toast-pill.toast-leaving {
+  animation: toastFlyOut 0.28s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes toastFlyOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.92);
+  }
+}
+
+body.theme-daylight .app-toast-pill {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15) !important;
+}
