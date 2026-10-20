@@ -1092,26 +1092,32 @@ function applyMapThemeTiles(themeName) {
   if (isSatellite) return;
   if (!map) return;
 
-  if (streetTileLayer && map.hasLayer(streetTileLayer)) {
-    try { map.removeLayer(streetTileLayer); } catch(e) {}
+  const mapEl = document.getElementById("map");
+
+  // OpenStreetMap Standard - 100% Free, No CartoDB watermarks, No API key required
+  if (!streetTileLayer) {
+    streetTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      subdomains: ["a", "b", "c"],
+      attribution: '&copy; OpenStreetMap'
+    });
   }
 
-  let tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-  let attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
-
-  if (themeName === "midnight" || themeName === "galaxy" || themeName === "cyberpunk" || themeName === "magma" || themeName === "arcade") {
-    tileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-  } else if (themeName === "daylight" || themeName === "frost") {
-    tileUrl = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-  } else {
-    tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  if (!map.hasLayer(streetTileLayer)) {
+    streetTileLayer.addTo(map);
   }
 
-  streetTileLayer = L.tileLayer(tileUrl, {
-    maxZoom: 19,
-    subdomains: ["a", "b", "c", "d"],
-    attribution: attribution
-  }).addTo(map);
+  // Adjust dark/light tile styling via CSS filters on the map container
+  if (mapEl) {
+    mapEl.classList.remove("map-dark-tiles", "map-cyber-tiles", "map-light-tiles");
+    if (themeName === "midnight" || themeName === "galaxy" || themeName === "magma" || themeName === "arcade") {
+      mapEl.classList.add("map-dark-tiles");
+    } else if (themeName === "cyberpunk") {
+      mapEl.classList.add("map-cyber-tiles");
+    } else {
+      mapEl.classList.add("map-light-tiles");
+    }
+  }
 }
 
 function setGlobalTheme(themeName, showNotification = true) {
@@ -1176,7 +1182,7 @@ function closeThemeModal() {
   closeSettingsModal();
 }
 
-// Initialize Leaflet Map with CartoDB Voyager and Esri Satellite layers
+// Initialize Leaflet Map with OpenStreetMap and Esri Satellite layers
 function initMap() {
   map = L.map("map", {
     zoomControl: false,
@@ -1210,10 +1216,14 @@ function initMap() {
 function toggleMapLayer() {
   haptic("medium");
   const btn = document.getElementById("btnMapLayer");
+  const mapEl = document.getElementById("map");
   isSatellite = !isSatellite;
 
   if (isSatellite) {
-    map.removeLayer(streetTileLayer);
+    if (mapEl) mapEl.classList.remove("map-dark-tiles", "map-cyber-tiles");
+    if (streetTileLayer && map.hasLayer(streetTileLayer)) {
+      map.removeLayer(streetTileLayer);
+    }
     satelliteTileLayer.addTo(map);
     satelliteLabelsLayer.addTo(map);
     btn.classList.add("text-yellow-400");
@@ -1222,7 +1232,7 @@ function toggleMapLayer() {
   } else {
     map.removeLayer(satelliteTileLayer);
     map.removeLayer(satelliteLabelsLayer);
-    streetTileLayer.addTo(map);
+    applyMapThemeTiles(currentTheme);
     btn.classList.remove("text-yellow-400");
     btn.classList.add("text-emerald-400");
     showToast("🗺 Standart xarita yoqildi");

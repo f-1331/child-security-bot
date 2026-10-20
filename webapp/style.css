@@ -360,6 +360,19 @@ body.theme-daylight textarea {
   background-color: var(--bg-main);
 }
 
+/* 100% Free OpenStreetMap Dark Mode Tile Filter (Eliminates CartoDB watermarks completely) */
+#map.map-dark-tiles .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(92%);
+}
+
+#map.map-cyber-tiles .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(2.2) hue-rotate(195deg) saturate(0.4) brightness(0.75);
+}
+
+#map.map-light-tiles .leaflet-tile-pane {
+  filter: none !important;
+}
+
 /* ========================================================= */
 /* 3. DISTINCT ROLE AESTHETICS (PARENT vs CHILD)             */
 /* ========================================================= */
