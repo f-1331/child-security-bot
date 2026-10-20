@@ -181,6 +181,12 @@
           <span id="coinRateCornerText" class="truncate font-semibold">1k = 10k</span>
         </button>
 
+        <!-- Hamkor ota-ona taklifi (Ona ↔ Ota) -->
+        <button onclick="openParentInviteSpouseModal()" class="flex items-center gap-1 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Ikkinchi ota-onani taklif qilish (Ona ↔ Ota)">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span class="truncate font-semibold">Hamkor ota-ona</span>
+        </button>
+
         <!-- Telefon zaryadi -->
         <div id="batteryPill" class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg text-[10px] sm:text-xs font-semibold text-emerald-400 border border-slate-700 shadow-sm shrink-0" title="Telefon zaryadi">
           <i id="batteryIcon" data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
@@ -411,6 +417,23 @@
           <p class="text-[9px] font-bold text-amber-400 leading-tight">5 kun</p>
           <p class="text-[7px] sm:text-[8px] text-slate-400 leading-tight">Seriya</p>
         </div>
+      </div>
+
+      <!-- 1.5. Ota-onamni taklif qilish (Farzand -> Ota-ona) -->
+      <div class="p-3.5 sm:p-4 rounded-3xl bg-gradient-to-r from-blue-950/70 via-indigo-950/70 to-slate-900 border border-blue-500/30 shadow-xl flex items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/40 text-blue-300 flex items-center justify-center text-lg shrink-0">
+            👨‍👩‍👧
+          </div>
+          <div class="min-w-0">
+            <h4 class="text-xs sm:text-sm font-bold text-white truncate">Ota-onamni taklif qilish</h4>
+            <p class="text-[10px] text-blue-200/80 truncate">Xavfsizligingiz uchun ota-onangizni ulab oling</p>
+          </div>
+        </div>
+        <button onclick="openChildInviteParentModal()" class="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+          <span>Ulashish</span>
+        </button>
       </div>
 
       <!-- 2. Piggy Bank & Treasury Card (Pul & Tangalar) -->
@@ -1526,7 +1549,80 @@
     </button>
   </div>
 
+  <!-- MODAL: CHILD INVITE PARENT -->
+  <div id="childInviteParentModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-blue-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="closeChildInviteParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <div class="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
+        👨‍👩‍👧
+      </div>
+      <h3 class="text-base font-bold text-white">Ota-onangizni taklif qilish</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Xavfsizligingizni kuzatib turishi va sizga topshiriqlar berishi uchun ushbu taklif havolasini ota-onangizga yuboring:
+      </p>
+
+      <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
+        <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+          🔗 Tezkor Telegram ulanish havolasi:
+        </label>
+        <div class="flex items-center gap-1.5">
+          <input id="childInviteLinkInput" readonly class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl outline-none font-mono truncate" value="Havola yuklanmoqda..." />
+          <button onclick="copyChildInviteLink()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-bold shrink-0 transition" title="Nusxalash">
+            Nusxa
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-3 text-left mb-3.5">
+        <p class="text-[11px] text-indigo-300">
+          🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code id="childOwnCodeText" class="font-mono font-bold text-amber-300 bg-black/40 px-1.5 py-0.5 rounded">------</code>
+        </p>
+        <p class="text-[9px] text-slate-400 mt-0.5">Ushbu kod faqat o'zingizning sarguzasht profilingizga kirish uchun kerak.</p>
+      </div>
+
+      <button id="btnShareChildInviteTg" onclick="shareChildInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        <span>Telegram orqali ota-onamga yuborish</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: PARENT INVITE SPOUSE / CO-PARENT -->
+  <div id="parentInviteSpouseModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="closeParentInviteSpouseModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <div class="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
+        👨‍👩‍👧
+      </div>
+      <h3 class="text-base font-bold text-white">Hamkor ota-onani taklif qilish</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Turmush o'rtog'ingiz (dada yoki oyi) ham bolalarni birgalikda kuzatishi uchun ushbu taklif havolasini yuboring. Ular botga kirishi bilan barcha farzandlar unga ham ulanadi:
+      </p>
+
+      <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
+        <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+          🔗 Hamkor ota-ona ulanish havolasi:
+        </label>
+        <div class="flex items-center gap-1.5">
+          <input id="parentInviteLinkInput" readonly class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl outline-none font-mono truncate" value="Havola yuklanmoqda..." />
+          <button onclick="copyParentInviteLink()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-bold shrink-0 transition" title="Nusxalash">
+            Nusxa
+          </button>
+        </div>
+      </div>
+
+      <button id="btnShareParentInviteTg" onclick="shareParentInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-900/40 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        <span>Turmush o'rtog'imga yuborish</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Application Logic -->
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

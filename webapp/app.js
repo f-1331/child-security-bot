@@ -3900,3 +3900,131 @@ function dismissChildActiveBanner() {
   if (banner) banner.classList.add("hidden");
 }
 
+// =========================================================
+// 6. INVITATION LOGIC: CHILD INVITES PARENT & CO-PARENT (Ona <-> Ota)
+// =========================================================
+
+let childCurrentInviteLink = "";
+let parentCurrentInviteLink = "";
+
+async function openChildInviteParentModal() {
+  haptic("light");
+  const modal = document.getElementById("childInviteParentModal");
+  const linkInput = document.getElementById("childInviteLinkInput");
+  const codeText = document.getElementById("childOwnCodeText");
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+
+  // Pre-fill or fetch from backend
+  const fallbackCode = authenticatedSession?.user?.web_access_code || "------";
+  if (codeText) codeText.textContent = fallbackCode;
+
+  try {
+    if (isDemoMode) {
+      childCurrentInviteLink = `https://t.me/ChildSecurityBot?start=link_child_2002`;
+      if (linkInput) linkInput.value = childCurrentInviteLink;
+      if (codeText) codeText.textContent = "202401";
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/invite-info`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "success") {
+        childCurrentInviteLink = data.invite_link;
+        if (linkInput) linkInput.value = data.invite_link;
+        if (codeText) codeText.textContent = data.web_access_code || fallbackCode;
+      }
+    }
+  } catch (e) {
+    console.warn("Child invite info load error:", e);
+  }
+}
+
+function closeChildInviteParentModal() {
+  const modal = document.getElementById("childInviteParentModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function copyChildInviteLink() {
+  if (!childCurrentInviteLink) return;
+  navigator.clipboard.writeText(childCurrentInviteLink).then(() => {
+    haptic("light");
+    showToast("📋 Ulanish havolasi nusxalandi!");
+  }).catch(() => {
+    showToast("Nusxa olindi");
+  });
+}
+
+function shareChildInviteToTelegram() {
+  if (!childCurrentInviteLink) return;
+  const shareText = encodeURIComponent("Dada/Oyi, men Child Security botiga ulanyapman. Xavfsizligimni kuzatib turishingiz uchun ushbu havolani bosing!");
+  const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(childCurrentInviteLink)}&text=${shareText}`;
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    window.Telegram.WebApp.openTelegramLink(tgUrl);
+  } else {
+    window.open(tgUrl, "_blank");
+  }
+}
+
+async function openParentInviteSpouseModal() {
+  haptic("light");
+  const modal = document.getElementById("parentInviteSpouseModal");
+  const linkInput = document.getElementById("parentInviteLinkInput");
+  const targetId = parentId || authenticatedSession?.user?.id;
+
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+
+  try {
+    if (isDemoMode) {
+      parentCurrentInviteLink = `https://t.me/ChildSecurityBot?start=coparent_1001`;
+      if (linkInput) linkInput.value = parentCurrentInviteLink;
+      return;
+    }
+
+    const res = await fetch(`/api/v1/webapp/parent/${targetId}/coparent-invite-info`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "success") {
+        parentCurrentInviteLink = data.invite_link;
+        if (linkInput) linkInput.value = data.invite_link;
+      }
+    }
+  } catch (e) {
+    console.warn("Parent coparent invite info load error:", e);
+  }
+}
+
+function closeParentInviteSpouseModal() {
+  const modal = document.getElementById("parentInviteSpouseModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function copyParentInviteLink() {
+  if (!parentCurrentInviteLink) return;
+  navigator.clipboard.writeText(parentCurrentInviteLink).then(() => {
+    haptic("light");
+    showToast("📋 Hamkor havolasi nusxalandi!");
+  }).catch(() => {
+    showToast("Nusxa olindi");
+  });
+}
+
+function shareParentInviteToTelegram() {
+  if (!parentCurrentInviteLink) return;
+  const shareText = encodeURIComponent("Assalomu alaykum! Farzandlarimizni birgalikda kuzatishimiz uchun ushbu oilaviy havolani bosing.");
+  const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(parentCurrentInviteLink)}&text=${shareText}`;
+  if (window.Telegram?.WebApp?.openTelegramLink) {
+    window.Telegram.WebApp.openTelegramLink(tgUrl);
+  } else {
+    window.open(tgUrl, "_blank");
+  }
+}
+

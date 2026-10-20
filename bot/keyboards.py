@@ -48,19 +48,22 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="➕ Farzand ulash (Kodi)")
         ],
         [
+            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish"),
+            KeyboardButton(text="🔑 Saytga kirish kodi")
+        ],
+        [
             KeyboardButton(text="📋 Vazifalar va Tangalar"),
             KeyboardButton(text="💰 Tangalar kursini sozlash")
         ],
         [
-            KeyboardButton(text="🔑 Saytga kirish kodi"),
-            KeyboardButton(text="📊 Bugungi hisobot")
+            KeyboardButton(text="📊 Bugungi hisobot"),
+            KeyboardButton(text="📞 Oila kontaktlari")
         ],
         [
-            KeyboardButton(text="📞 Oila kontaktlari"),
-            KeyboardButton(text="ℹ️ Yordam")
+            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish")
         ],
         [
-            KeyboardButton(text="🔄 Rolni o'zgartirish"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -88,14 +91,17 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📞 Ota-onamga qo'ng'iroq"),
-            KeyboardButton(text="📋 Vazifalarim va Tangalar")
+            KeyboardButton(text="👨‍👩‍👧 Ota-onamni taklif qilish")
         ],
         [
             KeyboardButton(text="🔑 Saytga kirish kodi"),
-            KeyboardButton(text="🔄 Rolni o'zgartirish")
+            KeyboardButton(text="📋 Vazifalarim va Tangalar")
         ],
         [
-            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish"),
+            KeyboardButton(text="ℹ️ Yordam")
+        ],
+        [
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]

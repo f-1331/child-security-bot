@@ -98,16 +98,94 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             username=username
         )
 
-        # Check if deep-link pairing code was passed: /start pair_123456
+        # Check deep-link pairing code
         args = command.args
-        if args and args.startswith("pair_"):
-            pairing_code = args.replace("pair_", "").strip()
-            parent = await crud.get_parent_by_pairing_code(session, pairing_code)
-            if parent:
-                await crud.update_user_role(session, user_id, "child")
-                await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
-                child_web_code = await crud.generate_web_access_code(session, user_id)
-                await session.commit()
+        if args:
+            # 1. Child invited Parent: /start link_child_12345 or /start child_12345
+            if args.startswith("link_child_") or args.startswith("child_"):
+                try:
+                    target_child_id = int(args.replace("link_child_", "").replace("child_", "").strip())
+                    child_user = await crud.get_user(session, target_child_id)
+                    if child_user:
+                        await crud.update_user_role(session, user_id, "parent")
+                        await crud.link_parent_child(session, user_id, target_child_id, nickname=child_user.full_name)
+                        parent_code = await crud.generate_pairing_code(session, user_id)
+                        await session.commit()
+
+                        await message.answer(
+                            f"🎉 **Tabriklaymiz! Farzandingiz muvaffaqiyatli ulandi!**\n\n"
+                            f"👦 Farzand: **{child_user.full_name or 'Farzandingiz'}**\n"
+                            f"🔑 **Sizning oilaviy sayt kodingiz:** ` {parent_code} `\n"
+                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                            f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz.",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
+
+                        try:
+                            await bot.send_message(
+                                chat_id=target_child_id,
+                                text=(
+                                    f"🎉 **Ajoyib yangilik!**\n\n"
+                                    f"Ota-onangiz (**{full_name}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
+                                ),
+                                reply_markup=get_child_main_keyboard(),
+                                parse_mode="Markdown"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify child about parent link: {e}")
+                        return
+                except Exception as e:
+                    logger.error(f"Failed to process child invite deep link: {e}")
+
+            # 2. Mother invited Father (Co-parent invitation): /start coparent_12345 or /start parent_12345
+            elif args.startswith("coparent_") or args.startswith("parent_"):
+                try:
+                    primary_parent_id = int(args.replace("coparent_", "").replace("parent_", "").strip())
+                    if primary_parent_id != user_id:
+                        primary_parent = await crud.get_user(session, primary_parent_id)
+                        linked_children = await crud.link_co_parent(session, primary_parent_id, user_id)
+                        co_parent_code = await crud.generate_pairing_code(session, user_id)
+                        await session.commit()
+
+                        child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in linked_children]) or "barcha farzandlar"
+
+                        await message.answer(
+                            f"🎉 **Ajoyib! Siz oilaviy monitoring guruhiga muvaffaqiyatli qo'shildingiz!**\n\n"
+                            f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
+                            f"👶 Biriktirilgan farzandlar ({len(linked_children)} nafar): **{child_names}**\n\n"
+                            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
+                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                            f"Endi siz ham barcha farzandlaringiz joylashuvini birgalikda kuzatishingiz va topshiriqlar berishingiz mumkin.",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
+
+                        try:
+                            await bot.send_message(
+                                chat_id=primary_parent_id,
+                                text=(
+                                    f"🎉 **Oilangizga ikkinchi ota-ona qo'shildi!**\n\n"
+                                    f"👤 Hamkor: **{full_name}**\n\n"
+                                    f"Endi ikkalangiz ham farzandlaringiz xavfsizligini birgalikda kuzatishingiz mumkin. 🛡️"
+                                ),
+                                reply_markup=get_parent_main_keyboard(primary_parent_id),
+                                parse_mode="Markdown"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify primary parent: {e}")
+                        return
+                except Exception as e:
+                    logger.error(f"Failed to process coparent invite: {e}")
+
+            elif args.startswith("pair_"):
+                pairing_code = args.replace("pair_", "").strip()
+                parent = await crud.get_parent_by_pairing_code(session, pairing_code)
+                if parent:
+                    await crud.update_user_role(session, user_id, "child")
+                    await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
+                    child_web_code = await crud.generate_web_access_code(session, user_id)
+                    await session.commit()
 
                 # Notify child
                 await message.answer(
@@ -250,20 +328,18 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             )
             return
 
-        # Link child to parent and unify family web access code
+        # Link child to parent
         await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
-        family_code = await crud.generate_pairing_code(session, parent.id)
-        child = await crud.get_user(session, user_id)
-        if child:
-            child.web_access_code = family_code
+        child_web_code = await crud.generate_web_access_code(session, user_id)
+        parent_code = await crud.generate_pairing_code(session, parent.id)
         await session.commit()
         await state.clear()
 
         await message.answer(
             f"🎉 **Ajoyib! Ota-onangizga ({parent.full_name or 'Ota-ona'}) muvaffaqiyatli ulandingiz!**\n\n"
-            f"🔑 **Yagona Oila va Sayt kodingiz:** ` {family_code} `\n"
+            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {child_web_code} `\n"
             f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
-            f"*(Ushbu yagona kod butun oilangiz uchun umumiy bo'lib, saytda barcha farzandlarni ko'rish va boshqarish imkonini beradi)*\n\n"
+            f"*(Saytga ushbu o'zingizning shaxsiy kodingiz bilan kirsangiz, sizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi)*\n\n"
             f"Quyidagi xavfsizlik menyusi faollashtirildi:",
             reply_markup=get_child_main_keyboard(),
             parse_mode="Markdown"
@@ -2206,15 +2282,16 @@ async def on_show_web_access_code(event: Message | CallbackQuery):
             rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
             money_som = crud.calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
             text = (
-                f"🔑 **SAYTGA (WEB APP) KIRISH KODINGIZ:**\n\n"
+                f"🔑 **FARZANDNING SHAXSIY SAYT (WEB APP) KODINGIZ:**\n\n"
                 f"🏷 Kodingiz: ` {web_code} `\n\n"
                 f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
                 f"👦 **Farzand imkoniyatlari:**\n"
-                f"• Ota-onangiz bergan topshiriqlarni ko'rish\n"
+                f"• Saytga ushbu 6 xonali shaxsiy kodingiz bilan kirasiz\n"
+                f"• O'zingizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi\n"
                 f"• 'Ko'rdim' va 'Shu vaqtda bajaraman' deb vaqt belgilash\n"
                 f"• Topshiriqni bajarib rasm yuborish va tangalarga ega bo'lish\n"
                 f"• Sizda hozir: **{user.virtual_balance:,} tanga** ({money_som:,} so'm) mavjud\n\n"
-                f"📌 Saytimizga kirganda ushbu 6 xonali kodni kiriting!"
+                f"📌 Saytimizga kirganda ushbu kodingizni kiriting!"
             )
 
         await message.answer(text, parse_mode="Markdown")
@@ -2365,3 +2442,78 @@ async def on_custom_coin_rate_entered(message: Message, state: FSMContext, bot: 
         f"Farzandlaringiz hisobida ushbu kurs bo'yicha hisob-kitob qilinadi.",
         parse_mode="Markdown"
     )
+
+
+# ---------------------------------------------------------
+# Ota-onani taklif qilish (Farzand -> Ota-ona) &
+# Hamkor ota-onani taklif qilish (Ona <-> Ota) Handlers
+# ---------------------------------------------------------
+
+@router.message(F.text == "👨‍👩‍👧 Ota-onamni taklif qilish")
+async def on_child_invite_parent(message: Message, bot: Bot):
+    """Child invites father/mother to monitor their safety."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role != "child":
+            await message.answer("Ushbu tugma farzandlar hisobi uchun mo'ljallangan.")
+            return
+
+        bot_info = await bot.get_me()
+        invite_link = f"https://t.me/{bot_info.username}?start=link_child_{user_id}"
+        web_code = await crud.generate_web_access_code(session, user_id)
+        await session.commit()
+
+        share_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Ota-onamga yuborish (Telegram)",
+                    url=f"https://t.me/share/url?url={invite_link}&text=Dada/Oyi,%20men%20Child%20Security%20botiga%20ulanyapman.%20Xavfsizligimni%20kuzatib%20turishingiz%20uchun%20ushbu%20havolani%20bosing!"
+                )
+            ]
+        ])
+
+        await message.answer(
+            f"👨‍👩‍👧 **OTA-ONANGIZNI TAKLIF QILISH**\n\n"
+            f"Ota-onangiz sizning xavfsizligingizni kuzatib turishi va sizga topshiriqlar berishi uchun quyidagi taklif havolasini ularga yuboring:\n\n"
+            f"🔗 **Tezkor ulanish havolasi:**\n{invite_link}\n\n"
+            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {web_code} `\n\n"
+            f"*(Ota-onangiz ushbu havolani bosishi bilanoq bot orqali sizga avtomatik ulanadi!)*",
+            reply_markup=share_kb,
+            parse_mode="Markdown"
+        )
+
+
+@router.message(F.text == "👨‍👩‍👧 Ikkinchi ota-onani taklif qilish")
+async def on_parent_invite_coparent(message: Message, bot: Bot):
+    """Parent invites spouse (second parent: Mother <-> Father) to co-monitor all children."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role != "parent":
+            await message.answer("Ushbu tugma faqat ota-onalar uchun mo'ljallangan.")
+            return
+
+        bot_info = await bot.get_me()
+        invite_link = f"https://t.me/{bot_info.username}?start=coparent_{user_id}"
+        children = await crud.get_children_for_parent(session, user_id)
+
+        share_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Turmush o'rtog'imga yuborish (Telegram)",
+                    url=f"https://t.me/share/url?url={invite_link}&text=Assalomu%20alaykum!%20Farzandlarimizni%20birgalikda%20kuzatishimiz%20uchun%20ushbu%20oilaviy%20havolani%20bosing."
+                )
+            ]
+        ])
+
+        await message.answer(
+            f"👨‍👩‍👧 **IKKINCHI OTA-ONANI (HAMKORNI) TAKLIF QILISH**\n\n"
+            f"Turmush o'rtog'ingiz (dada yoki oyi) ham farzandlaringizni birgalikda kuzatishi uchun ushbu taklif havolasini yuboring:\n\n"
+            f"🔗 **Hamkor ota-ona havolasi:**\n{invite_link}\n\n"
+            f"👶 **Biriktiriladigan farzandlar soni:** {len(children)} nafar\n\n"
+            f"*(Turmush o'rtog'ingiz ushbu havolani bosishi bilan oilangizdagi barcha bolalar unga ham avtomatik biriktiriladi va ikkalangiz ham to'liq monitoring qila olasizlar)*",
+            reply_markup=share_kb,
+            parse_mode="Markdown"
+        )
+

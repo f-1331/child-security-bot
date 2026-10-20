@@ -99,7 +99,8 @@ async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Option
 
 async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
     """Generate or retrieve a permanent 6-digit access code for website login.
-    Parents and all their linked children share the same unified family code.
+    Parents get their unified family code (pairing_code).
+    Children get their OWN DISTINCT personal access code so they can log into their child account.
     """
     user = await get_user(session, user_id)
     if not user:
@@ -108,21 +109,20 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
     if user.role == "parent":
         return await generate_pairing_code(session, user_id)
 
-    if user.role == "child":
-        parents = await get_parents_for_child(session, user_id)
-        if parents and parents[0].pairing_code:
-            user.web_access_code = parents[0].pairing_code
-            await session.flush()
-            return parents[0].pairing_code
-
+    # For Child: Check if child already has their distinct code
     if user.web_access_code:
-        return user.web_access_code
+        parents = await get_parents_for_child(session, user_id)
+        parent_codes = {p.pairing_code for p in parents if p.pairing_code}
+        if user.web_access_code not in parent_codes:
+            return user.web_access_code
 
-    # Generate unique 6-digit code
-    for _ in range(10):
+    # Generate unique 6-digit code specifically for this child
+    for _ in range(20):
         code = "".join(random.choices(string.digits, k=6))
-        existing = await get_user_by_web_access_code(session, code)
-        if not existing:
+        existing = await session.execute(
+            select(User).where((User.web_access_code == code) | (User.pairing_code == code))
+        )
+        if not existing.scalars().first():
             user.web_access_code = code
             await session.flush()
             return code
@@ -135,34 +135,25 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
 
 async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optional[User]:
     """Find user by web access code (or pairing code, or telegram ID fallback).
-    If code belongs to a child who is linked to a parent, resolve to the parent
-    so all linked children can be seen and managed together under one account.
+    - If code belongs to a Child, returns the Child (child account opens).
+    - If code belongs to a Parent, returns the Parent (all children load together).
     """
     code_clean = code.strip().replace(" ", "").replace("-", "")
 
-    # 1. First prioritize parent user matching this code
+    # 1. Match directly on web_access_code
     result = await session.execute(
-        select(User).where(
-            (User.role == "parent") &
-            ((User.web_access_code == code_clean) | (User.pairing_code == code_clean))
-        )
-    )
-    parent = result.scalars().first()
-    if parent:
-        return parent
-
-    # 2. Check any user matching this code
-    result = await session.execute(
-        select(User).where(
-            (User.web_access_code == code_clean) | (User.pairing_code == code_clean)
-        )
+        select(User).where(User.web_access_code == code_clean)
     )
     user = result.scalars().first()
     if user:
-        if user.role == "child":
-            parents = await get_parents_for_child(session, user.id)
-            if parents:
-                return parents[0]
+        return user
+
+    # 2. Match on pairing_code (e.g. parent's pairing code)
+    result = await session.execute(
+        select(User).where(User.pairing_code == code_clean)
+    )
+    user = result.scalars().first()
+    if user:
         return user
 
     # 3. Direct Telegram ID fallback (used by Telegram WebApp auto-login)
@@ -176,6 +167,39 @@ async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optio
             pass
 
     return None
+
+
+async def link_co_parent(session: AsyncSession, primary_parent_id: int, new_parent_id: int) -> List[User]:
+    """Link a second parent (e.g. mother invites father or vice-versa) to all existing children."""
+    new_parent = await get_user(session, new_parent_id)
+    if not new_parent:
+        new_parent, _ = await get_or_create_user(session, new_parent_id, role="parent")
+    else:
+        new_parent.role = "parent"
+
+    await generate_pairing_code(session, new_parent_id)
+
+    children = await get_children_for_parent(session, primary_parent_id)
+    for child in children:
+        await link_parent_child(session, new_parent_id, child.id, nickname=child.full_name)
+
+    await session.flush()
+    return children
+
+
+async def link_child_to_parent_by_invite(session: AsyncSession, child_id: int, parent_id: int) -> Tuple[User, bool]:
+    """Child invites parent: link parent to child and ensure parent role."""
+    parent = await get_user(session, parent_id)
+    if not parent:
+        parent, _ = await get_or_create_user(session, parent_id, role="parent")
+    else:
+        if parent.role != "child":
+            parent.role = "parent"
+
+    child = await get_user(session, child_id)
+    link, is_new = await link_parent_child(session, parent_id, child_id, nickname=child.full_name if child else None)
+    await session.flush()
+    return parent, is_new
 
 
 async def update_coin_rate(

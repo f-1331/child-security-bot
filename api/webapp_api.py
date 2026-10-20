@@ -1046,4 +1046,62 @@ async def get_child_notifications_endpoint(child_id: int):
     }
 
 
+@router.get("/child/{child_id}/invite-info")
+async def get_child_invite_info(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Retrieve invite link for child to invite mother/father."""
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Farzand topilmadi")
+
+    web_code = await crud.generate_web_access_code(session, child_id)
+    await session.commit()
+
+    bot_username = "ChildSecurityBot"
+    if telemetry.telegram_bot:
+        try:
+            bot_me = await telemetry.telegram_bot.get_me()
+            bot_username = bot_me.username or bot_username
+        except Exception:
+            pass
+
+    invite_link = f"https://t.me/{bot_username}?start=link_child_{child_id}"
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "child_name": child.full_name or "Farzand",
+        "web_access_code": web_code,
+        "invite_link": invite_link,
+        "share_url": f"https://t.me/share/url?url={invite_link}&text=Dada/Oyi,%20men%20Child%20Security%20botiga%20ulanyapman.%20Xavfsizligimni%20kuzatib%20turishingiz%20uchun%20ushbu%20havolani%20bosing!"
+    }
+
+
+@router.get("/parent/{parent_id}/coparent-invite-info")
+async def get_coparent_invite_info(parent_id: int, session: AsyncSession = Depends(get_db)):
+    """Retrieve invite link for parent to invite second parent (spouse)."""
+    parent = await crud.get_user(session, parent_id)
+    if not parent:
+        raise HTTPException(status_code=404, detail="Ota-ona topilmadi")
+
+    children = await crud.get_children_for_parent(session, parent_id)
+
+    bot_username = "ChildSecurityBot"
+    if telemetry.telegram_bot:
+        try:
+            bot_me = await telemetry.telegram_bot.get_me()
+            bot_username = bot_me.username or bot_username
+        except Exception:
+            pass
+
+    invite_link = f"https://t.me/{bot_username}?start=coparent_{parent_id}"
+    return {
+        "status": "success",
+        "parent_id": parent_id,
+        "parent_name": parent.full_name or "Ota-ona",
+        "children_count": len(children),
+        "invite_link": invite_link,
+        "share_url": f"https://t.me/share/url?url={invite_link}&text=Assalomu%20alaykum!%20Farzandlarimizni%20birgalikda%20kuzatishimiz%20uchun%20ushbu%20oilaviy%20havolani%20bosing."
+    }
+
+
+
 
