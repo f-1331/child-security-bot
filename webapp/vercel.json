@@ -1,0 +1,23 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://child-security-site.onrender.com/api/:match*"
+    },
+    {
+      "source": "/uploads/:match*",
+      "destination": "https://child-security-site.onrender.com/uploads/:match*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ]
+}
