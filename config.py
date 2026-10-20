@@ -60,7 +60,7 @@ class Settings(BaseSettings):
         """URL for Telegram WebApp button with cache-busting version parameter."""
         base = self.RESOLVED_WEBAPP_URL
         sep = "&" if "?" in base else "?"
-        return f"{base}{sep}v=16"
+        return f"{base}{sep}v=17"
 
     @property
     def BASE_DIR(self) -> Path:

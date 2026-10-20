@@ -302,7 +302,7 @@ function playPingSound() {
 }
 
 // Check session in localStorage or URL
-function checkAuthenticationState() {
+async function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
   const qCode = urlParams.get("code");
 
@@ -310,18 +310,36 @@ function checkAuthenticationState() {
   if (qCode) {
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = qCode;
-    submitAuthCode();
+    await submitAuthCode();
     return;
   }
 
   // 2. Check localStorage session (User previously authenticated with code)
   const stored = localStorage.getItem("smart_tracker_session");
+  const storedCode = localStorage.getItem("smart_tracker_auth_code");
   if (stored) {
     try {
       const data = JSON.parse(stored);
       if (data && data.user && data.role) {
         hideAuthGateModal();
         applyAuthenticatedUser(data);
+
+        // Silent background refresh to keep children and balance up to date
+        if (storedCode) {
+          fetch("/api/v1/webapp/auth/code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: storedCode })
+          })
+            .then((r) => r.json())
+            .then((fresh) => {
+              if (fresh && fresh.status === "success") {
+                localStorage.setItem("smart_tracker_session", JSON.stringify(fresh));
+                applyAuthenticatedUser(fresh);
+              }
+            })
+            .catch(() => {});
+        }
         return;
       }
     } catch (e) {
@@ -329,7 +347,27 @@ function checkAuthenticationState() {
     }
   }
 
-  // 3. Check if user previously chosen Demo mode in this session
+  // 3. Telegram WebApp auto-authentication by user ID if available
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (tgUser && tgUser.id) {
+    try {
+      const tgRes = await fetch("/api/v1/webapp/auth/code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: String(tgUser.id) })
+      });
+      const tgData = await tgRes.json();
+      if (tgData && tgData.status === "success") {
+        localStorage.setItem("smart_tracker_session", JSON.stringify(tgData));
+        localStorage.setItem("smart_tracker_auth_code", String(tgUser.id));
+        hideAuthGateModal();
+        applyAuthenticatedUser(tgData);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 4. Check if user previously chosen Demo mode in this session
   const demoRole = sessionStorage.getItem("smart_tracker_demo_role");
   if (demoRole) {
     hideAuthGateModal();
@@ -341,8 +379,7 @@ function checkAuthenticationState() {
     return;
   }
 
-  // 4. Default for all new visitors (including Telegram Mini App):
-  // ALWAYS show auth gate modal with 6-digit code prompt and Demo options!
+  // 5. Default: Only prompt for code if not authenticated
   showAuthGateModal();
 }
 
@@ -368,7 +405,7 @@ function hideAuthGateModal() {
 
 async function submitAuthCode() {
   const codeInput = document.getElementById("inputAuthCode");
-  const code = codeInput ? codeInput.value.trim() : "";
+  const code = codeInput ? codeInput.value.trim().replace(/\s+/g, "").replace(/-/g, "") : "";
   const errorText = document.getElementById("authErrorText");
   const errorMsg = document.getElementById("authErrorMsg");
   const btn = document.getElementById("btnSubmitAuthCode");
@@ -405,8 +442,9 @@ async function submitAuthCode() {
       throw new Error(data.detail || "Kiritilgan kod noto'g'ri yoki mavjud emas.");
     }
 
-    // Save session
+    // Save session & code persistently
     localStorage.setItem("smart_tracker_session", JSON.stringify(data));
+    localStorage.setItem("smart_tracker_auth_code", code);
     sessionStorage.removeItem("smart_tracker_demo_role");
     haptic("success");
     hideAuthGateModal();
@@ -514,12 +552,15 @@ function applyAuthenticatedUser(data) {
 
     if (data.children && data.children.length > 0) {
       childrenList = data.children;
-      renderChildSelector();
       currentChildId = childrenList[0].id;
+      renderChildSelector();
       selectChild(currentChildId);
     } else {
       showEmptyState();
     }
+
+    // Query fresh children list from server
+    loadData();
   } else if (data.role === "child") {
     currentChildId = data.user.id;
     coinRateCoins = data.user.coin_rate_coins || 1000;
@@ -781,12 +822,20 @@ function logoutSession() {
   haptic("medium");
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
     localStorage.removeItem("smart_tracker_session");
+    localStorage.removeItem("smart_tracker_auth_code");
     sessionStorage.removeItem("smart_tracker_demo_role");
     authenticatedSession = null;
     isDemoMode = false;
+    currentChildId = null;
+    parentId = null;
+    childrenList = [];
+    tasksList = [];
+    geofencesList = [];
     document.getElementById("demoBadge")?.classList.add("hidden");
     document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
     document.getElementById("demoNoticeBanner")?.classList.add("hidden");
+    const input = document.getElementById("inputAuthCode");
+    if (input) input.value = "";
     showAuthGateModal();
     showToast("🚪 Hisobdan chiqildi");
   }
@@ -1394,33 +1443,91 @@ function enableDemoMode() {
   showToast("👨‍👩‍👧 Ota-ona demo rejimiga o'tildi");
 }
 
-// Populate child select dropdown
+// Populate child select dropdown & multi-child visual pill bar
 function renderChildSelector() {
   const select = document.getElementById("childSelect");
-  select.innerHTML = childrenList
-    .map((c) => `<option value="${c.id}">${c.full_name || "Farzand #" + c.id}</option>`)
-    .join("");
+  const multiBar = document.getElementById("parentMultiChildBar");
 
-  select.addEventListener("change", (e) => {
-    haptic("light");
-    currentChildId = e.target.value;
-    selectChild(currentChildId);
-  });
+  if (select) {
+    select.innerHTML = childrenList
+      .map((c) => `<option value="${c.id}">${c.full_name || "Farzand #" + c.id}</option>`)
+      .join("");
+    if (currentChildId) {
+      select.value = currentChildId;
+    }
+    select.onchange = (e) => {
+      haptic("light");
+      selectChild(parseInt(e.target.value));
+    };
+  }
+
+  // Visual Multi-Child Quick Switcher Bar
+  if (multiBar) {
+    if (childrenList.length > 1) {
+      multiBar.classList.remove("hidden");
+      multiBar.innerHTML = childrenList
+        .map((c) => {
+          const isSelected = c.id == currentChildId;
+          const initial = (c.full_name || "B").charAt(0).toUpperCase();
+          const activeClass = isSelected
+            ? "bg-blue-600 text-white shadow-md border-blue-400 ring-2 ring-blue-400/40 font-black scale-[1.02]"
+            : "bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700/80 border-slate-700 font-bold opacity-85";
+          const sosIndicator = c.is_sos_active
+            ? `<span class="w-2 h-2 rounded-full bg-red-500 animate-ping shrink-0"></span>`
+            : `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>`;
+
+          return `
+            <button
+              type="button"
+              onclick="selectChild(${c.id})"
+              class="px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 ${activeClass}"
+            >
+              <span class="w-4 h-4 rounded-full bg-slate-950/60 text-[9px] flex items-center justify-center font-black">${initial}</span>
+              <span class="truncate max-w-[110px]">${c.full_name || 'Farzand'}</span>
+              ${sosIndicator}
+            </button>
+          `;
+        })
+        .join("");
+    } else {
+      multiBar.classList.add("hidden");
+    }
+  }
 }
 
 // Select active child and load telemetry
 async function selectChild(childId) {
-  const child = childrenList.find((c) => c.id == childId);
+  if (!childId) return;
+  currentChildId = parseInt(childId);
+
+  const child = childrenList.find((c) => c.id == currentChildId);
   if (!child) return;
 
+  const select = document.getElementById("childSelect");
+  if (select && select.value != currentChildId) {
+    select.value = currentChildId;
+  }
+
   const initial = (child.full_name || "B").charAt(0).toUpperCase();
-  document.getElementById("childAvatar").textContent = initial;
+  const avatar = document.getElementById("childAvatar");
+  if (avatar) avatar.textContent = initial;
 
   toggleSosBanner(child.is_sos_active);
 
-  await updateLiveTelemetry(childId);
-  await loadGeofences(childId);
-  await loadRouteHistory(childId);
+  // Re-highlight active child pill
+  renderChildSelector();
+
+  // If child location is known, immediately center & render marker
+  const loc = child.latest_location || child.location;
+  if (loc && loc.latitude && loc.longitude) {
+    renderChildMarker(loc.latitude, loc.longitude, child.full_name, child.is_sos_active, loc.battery_level);
+    if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
+  }
+
+  await updateLiveTelemetry(currentChildId);
+  await loadGeofences(currentChildId);
+  await loadRouteHistory(currentChildId);
+  await loadTasks();
 }
 
 // Fetch live telemetry for child
@@ -1989,13 +2096,35 @@ function renderChildDashboardQuests() {
   const container = document.getElementById("childDashboardTasksList");
   if (!container) return;
 
+  if (!isDemoMode && (!tasksList || tasksList.length === 0)) {
+    container.innerHTML = `
+      <div class="p-3.5 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center">
+        <span class="text-xl">🎯</span>
+        <p class="text-xs font-bold text-slate-300 mt-1">Hozircha topshiriqlar yo'q</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi</p>
+      </div>
+    `;
+    return;
+  }
+
   const activeTasks = (tasksList && tasksList.length > 0)
     ? tasksList.slice(0, 3)
-    : [
+    : (isDemoMode ? [
         { id: 901, title: "Matematika darslarini bajarish", reward_coins: 5000, status: "pending" },
         { id: 902, title: "Xonani tozalash va tartibga keltirish", reward_coins: 3000, status: "scheduled", promised_time: "30 daqiqadan keyin" },
         { id: 903, title: "Ingliz tili yangi lug'at yodlash", reward_coins: 4000, status: "completed_by_child" }
-      ];
+      ] : []);
+
+  if (activeTasks.length === 0) {
+    container.innerHTML = `
+      <div class="p-3.5 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center">
+        <span class="text-xl">🎯</span>
+        <p class="text-xs font-bold text-slate-300 mt-1">Hozircha topshiriqlar yo'q</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi</p>
+      </div>
+    `;
+    return;
+  }
 
   container.innerHTML = activeTasks.map(t => {
     const coins = t.reward_coins || 1000;
@@ -2031,13 +2160,35 @@ function renderChildDashboardCastles() {
   const container = document.getElementById("childDashboardZonesList");
   if (!container) return;
 
+  if (!isDemoMode && (!geofencesList || geofencesList.length === 0)) {
+    container.innerHTML = `
+      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
+        <span class="text-lg">🛡️</span>
+        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
+        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
+      </div>
+    `;
+    return;
+  }
+
   const places = (geofencesList && geofencesList.length > 0)
     ? geofencesList.slice(0, 4)
-    : [
+    : (isDemoMode ? [
         { name: "Uyimiz (Asosiy Baza 🏡)", radius_meters: 200 },
         { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
         { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
-      ];
+      ] : []);
+
+  if (places.length === 0) {
+    container.innerHTML = `
+      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
+        <span class="text-lg">🛡️</span>
+        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
+        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
+      </div>
+    `;
+    return;
+  }
 
   const placeEmojis = ["🏡", "🏫", "📚", "🥋", "📍", "🛡️"];
 

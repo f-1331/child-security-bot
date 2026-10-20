@@ -46,7 +46,7 @@ class ChildSOSRequest(BaseModel):
 @router.post("/auth/code")
 async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSession = Depends(get_db)):
     """Verify web access code or pairing code and return authenticated user context."""
-    code = payload.code.strip()
+    code = payload.code.strip().replace(" ", "").replace("-", "")
     user = await crud.get_user_by_web_access_code(session, code)
     if not user:
         raise HTTPException(
@@ -115,11 +115,15 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
         "user": {
             "id": user.id,
             "full_name": user.full_name or "Farzand",
+            "username": user.username,
             "role": "child",
             "virtual_balance": user.virtual_balance,
             "virtual_money_som": money_som,
             "coin_rate_coins": rate_coins,
             "coin_rate_som": rate_som,
+            "is_sos_active": user.is_sos_active,
+            "parent_phone": parent.phone_number if parent and parent.phone_number else None,
+            "parent_name": parent.full_name if parent and parent.full_name else None,
             "web_access_code": user.web_access_code or code,
             "location": {
                 "latitude": latest.latitude if latest else None,
@@ -132,7 +136,8 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
         },
         "parent": {
             "id": parent.id,
-            "full_name": parent.full_name or "Ota-ona"
+            "full_name": parent.full_name or "Ota-ona",
+            "phone_number": parent.phone_number if parent else None
         } if parent else None
     }
 

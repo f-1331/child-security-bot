@@ -59,12 +59,15 @@ async def update_user_role(session: AsyncSession, user_id: int, role: str) -> Op
 
 
 async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
-    """Generate a unique 6-character pairing code for a parent."""
+    """Generate or retrieve a unique 6-character pairing code for a parent."""
     user = await get_user(session, parent_id)
     if not user:
         user, _ = await get_or_create_user(session, parent_id, role="parent")
 
-    # Generate 6-digit numeric or alphanumeric code
+    if user.pairing_code:
+        return user.pairing_code
+
+    # Generate 6-digit numeric code
     code = "".join(random.choices(string.digits, k=6))
     user.pairing_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
@@ -109,14 +112,27 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
 
 
 async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optional[User]:
-    """Find user by web access code (or pairing code fallback)."""
-    code_clean = code.strip()
+    """Find user by web access code (or pairing code, or telegram ID fallback)."""
+    code_clean = code.strip().replace(" ", "").replace("-", "")
     result = await session.execute(
         select(User).where(
             (User.web_access_code == code_clean) | (User.pairing_code == code_clean)
         )
     )
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    if code_clean.isdigit():
+        try:
+            uid = int(code_clean)
+            user_by_id = await get_user(session, uid)
+            if user_by_id:
+                return user_by_id
+        except Exception:
+            pass
+
+    return None
 
 
 async def update_coin_rate(

@@ -1,7 +1,8 @@
+import html
 import logging
 from datetime import datetime, timezone
 from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import Command, CommandStart, CommandObject
+from aiogram.filters import Command, CommandStart, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -1521,18 +1522,15 @@ async def on_skip_task_media(callback: CallbackQuery, state: FSMContext, bot: Bo
 # Parent Children List & Pairing Code
 # ---------------------------------------------------------
 
-@router.message(F.text == "👶 Farzandlarim")
-async def on_list_children_pressed(message: Message):
-    parent_id = message.from_user.id
+async def _build_children_list_message(parent_id: int):
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
-            await message.answer(
+            return (
                 "Sizga hali hech qanday farzand hisobi ulanmagan.\n"
                 "Farzand ulash uchun **'➕ Farzand ulash (Kodi)'** tugmasini bosing.",
-                parse_mode="Markdown"
+                None
             )
-            return
 
         text = f"👶 **Ulangan farzandlar ro'yxati ({len(children)} nafar):**\n\n"
         buttons = []
@@ -1543,8 +1541,11 @@ async def on_list_children_pressed(message: Message):
             charging = "🔌 (Quvvatlanmoqda)" if latest_loc and latest_loc.is_charging else ""
             status = "🚨 SOS FAVQULODDA!" if ch.is_sos_active else "🟢 Faol"
 
+            safe_name = (ch.full_name or "Farzand").replace("*", "").replace("_", "")
+            safe_user = ch.username.replace("_", "\\_") if ch.username else "yo'q"
+
             text += (
-                f"👤 **{ch.full_name or 'Farzand'}** (@{ch.username or 'yoq'})\n"
+                f"👤 **{safe_name}** (@{safe_user})\n"
                 f"• Holat: **{status}**\n"
                 f"• Batareya: **{battery}** {charging}\n"
                 f"• Balans: **{ch.virtual_balance:,} tanga**\n\n"
@@ -1552,16 +1553,34 @@ async def on_list_children_pressed(message: Message):
 
             buttons.append([
                 InlineKeyboardButton(
-                    text=f"🔍 {ch.full_name} boshqaruvi",
+                    text=f"🔍 {safe_name} boshqaruvi",
                     callback_data=f"child_view:{ch.id}"
                 )
             ])
 
-        await message.answer(
-            text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-            parse_mode="Markdown"
-        )
+        return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+@router.message(StateFilter("*"), F.text.in_(["👶 Farzandlarim", "Farzandlarim", "/farzandlarim", "farzandlarim"]))
+async def on_list_children_pressed(message: Message, state: FSMContext):
+    await state.clear()
+    text, reply_markup = await _build_children_list_message(message.from_user.id)
+    try:
+        await message.answer(text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception as e:
+        logger.warning(f"Markdown send failed for children list, falling back to plain text: {e}")
+        await message.answer(text, reply_markup=reply_markup)
+
+
+@router.callback_query(F.data == "list_children")
+async def on_list_children_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    text, reply_markup = await _build_children_list_message(callback.from_user.id)
+    try:
+        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception:
+        await callback.message.answer(text, reply_markup=reply_markup)
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("child_view:"))
@@ -1577,20 +1596,83 @@ async def on_child_view_details(callback: CallbackQuery):
 
         battery = f"{latest_loc.battery_level}%" if latest_loc and latest_loc.battery_level is not None else "Noma'lum"
         time_str = latest_loc.recorded_at.strftime("%H:%M:%S") if latest_loc and latest_loc.recorded_at else "Hali yangilanmagan"
+        charging = "🔌 (Quvvatlanmoqda)" if latest_loc and latest_loc.is_charging else ""
+        sound_mode = latest_loc.sound_mode if latest_loc and latest_loc.sound_mode else "normal"
+        sound_text = "🔊 Ovozli" if sound_mode == "normal" else ("📳 Vibratsiya" if sound_mode == "vibrate" else "🔇 Ovoz o'chiq")
+
+        safe_name = (child.full_name or "Farzand").replace("*", "").replace("_", "")
 
         text = (
-            f"👤 **Farzand:** {child.full_name}\n"
+            f"👤 **Farzand:** {safe_name}\n"
             f"🆔 ID: `{child.id}`\n"
-            f"🔋 Batareya: **{battery}**\n"
+            f"🔋 Batareya: **{battery}** {charging}\n"
+            f"🔔 Ovoz holati: **{sound_text}**\n"
             f"🕒 Oxirgi signal: **{time_str}**\n"
             f"💰 Tangalar balansi: **{child.virtual_balance:,} tanga**\n"
         )
 
-        await callback.message.edit_text(
-            text,
-            reply_markup=get_child_details_keyboard(child_id),
-            parse_mode="Markdown"
-        )
+        try:
+            await callback.message.edit_text(
+                text,
+                reply_markup=get_child_details_keyboard(child_id),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            await callback.message.answer(
+                text,
+                reply_markup=get_child_details_keyboard(child_id)
+            )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("battery_child:"))
+async def on_child_battery_callback(callback: CallbackQuery):
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        latest_loc = await crud.get_latest_location(session, child_id)
+
+        if not child:
+            await callback.answer("Farzand topilmadi.", show_alert=True)
+            return
+
+        safe_name = (child.full_name or "Farzand").replace("*", "").replace("_", "")
+        if not latest_loc:
+            text = f"🔋 **{safe_name}** telefonidan hali batareya ma'lumoti kelmagan."
+        else:
+            batt = f"{latest_loc.battery_level}%" if latest_loc.battery_level is not None else "Noma'lum"
+            chg = "Ha 🔌" if latest_loc.is_charging else "Yo'q 🔋"
+            snd = "Oddiy (Ovozli)" if latest_loc.sound_mode == "normal" else ("Vibratsiya" if latest_loc.sound_mode == "vibrate" else "Ovozsiz")
+            time_str = latest_loc.recorded_at.strftime("%d.%m.%Y, %H:%M:%S") if latest_loc.recorded_at else "Noma'lum"
+            text = (
+                f"🔋 **{safe_name} — Telefon holati:**\n\n"
+                f"• Quvvat (Batareya): **{batt}**\n"
+                f"• Quvvatlanmoqda: **{chg}**\n"
+                f"• Ovoz rejimi: **{snd}**\n"
+                f"• Oxirgi yangilanish: **{time_str}**\n"
+            )
+
+        back_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Farzand boshqaruviga qaytish", callback_data=f"child_view:{child_id}")],
+            [InlineKeyboardButton(text="👶 Farzandlar ro'yxatiga qaytish", callback_data="list_children")]
+        ])
+
+        try:
+            await callback.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(text, reply_markup=back_kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("add_zone:"))
+async def on_child_add_zone_callback(callback: CallbackQuery, state: FSMContext):
+    child_id = int(callback.data.split(":")[1])
+    await state.set_state(KerakliJoyAddState.waiting_for_name)
+    await state.update_data(target_child_id=child_id)
+    await callback.message.answer(
+        "🏷 **Farzandingiz uchun yangi kerakli joy nomini kiriting:**\n(Masalan: _'Maktab №45'_, _'Uyimiz'_, _'Ingliz tili kursi'_)",
+        parse_mode="Markdown"
+    )
     await callback.answer()
 
 
