@@ -590,7 +590,7 @@ function applyChildUI(user) {
 
   // Titles
   const zonesTitle = document.getElementById("zonesModalTitle");
-  if (zonesTitle) zonesTitle.textContent = dict.safe_castles || "Mening Qal'alarim 🏰 (Xavfsiz Joylar)";
+  if (zonesTitle) zonesTitle.textContent = dict.safe_castles || "Mening Xavfsiz Makonlarim 🛡️";
   const tasksTitle = document.getElementById("tasksModalTitle");
   if (tasksTitle) tasksTitle.textContent = dict.active_missions || "Mening Missiyalarim 🎯";
 
@@ -600,11 +600,11 @@ function applyChildUI(user) {
   const tab1Label = document.getElementById("tabLabel-map");
   if (tab1Label) tab1Label.textContent = dict.tab_adventure || "Sarguzasht";
 
-  // Tab 2: Qal'alarim
+  // Tab 2: Makonlarim (Xavfsiz hududlar)
   const tab2Icon = document.getElementById("tabIcon-zones");
-  if (tab2Icon) tab2Icon.setAttribute("data-lucide", "castle");
+  if (tab2Icon) tab2Icon.setAttribute("data-lucide", "shield-check");
   const tab2Label = document.getElementById("tabLabel-zones");
-  if (tab2Label) tab2Label.textContent = dict.tab_castles || "Qal'alarim";
+  if (tab2Label) tab2Label.textContent = dict.tab_castles || "Makonlarim";
 
   // Tab 3: Missiyalar
   const tab3Icon = document.getElementById("tabIcon-tasks");
@@ -852,7 +852,7 @@ const I18N_STRINGS = {
     tab_history: "Tarix",
     tab_settings: "Dizayn & Til",
     tab_adventure: "Sarguzasht",
-    tab_castles: "Qal'alarim",
+    tab_castles: "Makonlarim",
     tab_missions: "Missiyalar",
     tab_treasure: "Xazina",
 
@@ -869,7 +869,7 @@ const I18N_STRINGS = {
     hero_adventure: "Bugungi sarguzasht",
     treasure_balance: "Jamg'arilgan naqd pulingiz:",
     active_missions: "Bugungi Missiyalar & Vazifalar",
-    safe_castles: "Mening Qal'alarim (Xavfsiz Hududlar)",
+    safe_castles: "Mening Xavfsiz Makonlarim 🛡️",
     sos_button: "XAVF SIGNALINI YOQISH (SOS)",
     check_in: "Yetib keldim",
     go_home: "Uyga yo'l",
@@ -895,7 +895,7 @@ const I18N_STRINGS = {
     tab_history: "Тарих",
     tab_settings: "Дизайн & Тил",
     tab_adventure: "Саргузашт",
-    tab_castles: "Қалъаларим",
+    tab_castles: "Маконларим",
     tab_missions: "Миссиялар",
     tab_treasure: "Хазина",
 
@@ -912,7 +912,7 @@ const I18N_STRINGS = {
     hero_adventure: "Бугунги саргузашт",
     treasure_balance: "Жамғарилган нақд пулингиз:",
     active_missions: "Бугунги Миссиялар & Вазифалар",
-    safe_castles: "Менинг Қалъаларим (Хавфсиз Ҳудудлар)",
+    safe_castles: "Менинг Хавфсиз Маконларим 🛡️",
     sos_button: "ХАВФ СИГНАЛИНИ ЁҚИШ (SOS)",
     check_in: "Етиб келдим",
     go_home: "Уйга йўл",
@@ -938,7 +938,7 @@ const I18N_STRINGS = {
     tab_history: "История",
     tab_settings: "Дизайн и Язык",
     tab_adventure: "Приключение",
-    tab_castles: "Мои Замки",
+    tab_castles: "Мои Места",
     tab_missions: "Миссии",
     tab_treasure: "Копилка",
 
@@ -955,7 +955,7 @@ const I18N_STRINGS = {
     hero_adventure: "Приключение сегодня",
     treasure_balance: "Накопленные средства:",
     active_missions: "Активные миссии и задания",
-    safe_castles: "Мои Замки (Безопасные зоны)",
+    safe_castles: "Мои Безопасные Места 🛡️",
     sos_button: "СИГНАЛ ТРЕВОГИ (SOS)",
     check_in: "Я добрался",
     go_home: "Путь домой",
@@ -981,7 +981,7 @@ const I18N_STRINGS = {
     tab_history: "History",
     tab_settings: "Design & Lang",
     tab_adventure: "Adventure",
-    tab_castles: "My Castles",
+    tab_castles: "My Places",
     tab_missions: "Missions",
     tab_treasure: "Treasure",
 
@@ -998,7 +998,7 @@ const I18N_STRINGS = {
     hero_adventure: "Today's Adventure",
     treasure_balance: "Your Saved Pocket Money:",
     active_missions: "Active Missions & Quests",
-    safe_castles: "My Castles (Safe Zones)",
+    safe_castles: "My Safe Havens 🛡️",
     sos_button: "TRIGGER SOS ALARM",
     check_in: "I Arrived",
     go_home: "Take Me Home",
@@ -1928,19 +1928,19 @@ function renderChildDashboardCastles() {
   const container = document.getElementById("childDashboardZonesList");
   if (!container) return;
 
-  const castles = (geofencesList && geofencesList.length > 0)
+  const places = (geofencesList && geofencesList.length > 0)
     ? geofencesList.slice(0, 4)
     : [
-        { name: "Uyimiz (Bosh Qal'a)", radius_meters: 200 },
-        { name: "Maktab №45", radius_meters: 250 },
-        { name: "O'quv Markazi", radius_meters: 200 }
+        { name: "Uyimiz (Asosiy Baza 🏡)", radius_meters: 200 },
+        { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
+        { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
       ];
 
-  const castleEmojis = ["🏰", "🏫", "🏡", "🥋", "📍"];
+  const placeEmojis = ["🏡", "🏫", "📚", "🥋", "📍", "🛡️"];
 
-  container.innerHTML = castles.map((c, i) => `
+  container.innerHTML = places.map((c, i) => `
     <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
-      <span class="text-xl shrink-0">${castleEmojis[i % castleEmojis.length]}</span>
+      <span class="text-xl shrink-0">${placeEmojis[i % placeEmojis.length]}</span>
       <div class="min-w-0">
         <p class="font-bold text-white text-xs truncate">${c.name}</p>
         <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
