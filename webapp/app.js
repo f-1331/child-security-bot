@@ -344,7 +344,17 @@ async function checkAuthenticationState() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code: storedCode })
           })
-            .then((r) => r.json())
+            .then(async (r) => {
+              if (r.status === 404 || r.status === 401) {
+                // User role changed or access code was revoked on server
+                localStorage.removeItem("smart_tracker_session");
+                localStorage.removeItem("smart_tracker_auth_code");
+                localStorage.removeItem("smart_tracker_role");
+                showAuthGateModal();
+                return null;
+              }
+              return r.json();
+            })
             .then((fresh) => {
               if (fresh && fresh.status === "success") {
                 localStorage.setItem("smart_tracker_session", JSON.stringify(fresh));
@@ -1390,6 +1400,20 @@ function closeThemeModal() {
 
 // Initialize Leaflet Map with OpenStreetMap and Esri Satellite layers
 function initMap() {
+  if (map) {
+    try {
+      map.remove();
+    } catch (e) {
+      console.warn("Map cleanup error:", e);
+    }
+    map = null;
+  }
+  const mapContainer = document.getElementById("map");
+  if (!mapContainer) return;
+  if (mapContainer._leaflet_id) {
+    delete mapContainer._leaflet_id;
+  }
+
   map = L.map("map", {
     zoomControl: false,
     attributionControl: false,
@@ -1692,14 +1716,21 @@ async function updateLiveTelemetry(childId) {
 
 // Reverse Geocoding with Nominatim & Cache
 async function resolveAddress(lat, lon) {
-  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
+    const el = document.getElementById("addressText");
+    if (el) el.textContent = "Joylashuv kutilmoqda";
+    return;
+  }
+  const numLat = Number(lat);
+  const numLon = Number(lon);
+  const key = `${numLat.toFixed(4)},${numLon.toFixed(4)}`;
   if (addressCache.has(key)) {
     document.getElementById("addressText").textContent = addressCache.get(key);
     return;
   }
 
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLon}&zoom=18&addressdetails=1`, {
       headers: { "Accept-Language": "uz,ru,en" },
     });
     const data = await res.json();
@@ -1716,11 +1747,14 @@ async function resolveAddress(lat, lon) {
     // Fallback to coordinates
   }
 
-  document.getElementById("addressText").textContent = `Koordinata: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  document.getElementById("addressText").textContent = `Koordinata: ${numLat.toFixed(5)}, ${numLon.toFixed(5)}`;
 }
 
 // Render or move pulsing radar child marker
 function renderChildMarker(lat, lon, name, isSos, battery) {
+  if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
+    return;
+  }
   const initial = (name || "B").charAt(0).toUpperCase();
   const pulseClass = isSos ? "sos-pulse-ring" : "child-pulse-ring";
   const pinBg = isSos ? "bg-red-600" : "bg-gradient-to-tr from-blue-700 to-indigo-500";
@@ -1901,6 +1935,10 @@ async function loadRouteHistory(childId) {
 }
 
 function renderHistoryToMapAndList(points) {
+  if (routePolyline && map) {
+    try { map.removeLayer(routePolyline); } catch (e) {}
+    routePolyline = null;
+  }
   const container = document.getElementById("historyListContainer");
   const latlngs = points.map((p) => [p.latitude, p.longitude]);
 
@@ -2098,6 +2136,12 @@ async function resolveCurrentSos() {
   if (banner) banner.classList.add("hidden");
   lastSosAlertState = false;
 
+  const child = childrenList.find((c) => c.id == currentChildId);
+  if (child) {
+    child.is_sos_active = false;
+  }
+  renderChildrenSwitcher();
+
   if (!isDemoMode && currentChildId) {
     try {
       await fetch(`/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
@@ -2115,7 +2159,7 @@ async function resolveCurrentSos() {
   // Restore marker to normal pulse
   if (childMarker) {
     const pos = childMarker.getLatLng();
-    renderChildMarker(pos.lat, pos.lng, "Farzand", false, null);
+    renderChildMarker(pos.lat, pos.lng, child?.full_name || "Farzand", false, child?.location?.battery_level || null);
   }
 }
 
@@ -2860,7 +2904,10 @@ function renderTasksList() {
         <div>
           <div class="flex items-start justify-between gap-2">
             <h3 class="text-xs font-bold text-white">${t.title}</h3>
-            ${statusBadge}
+            <div class="flex items-center gap-1.5 shrink-0">
+              ${statusBadge}
+              ${!isChild ? `<button onclick="deleteTask(${t.id})" class="p-1 text-slate-400 hover:text-red-400 active:scale-90 transition rounded-lg hover:bg-red-500/10" title="Vazifani o'chirish"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
+            </div>
           </div>
           ${t.description ? `<p class="text-[11px] text-slate-300 mt-1">${t.description}</p>` : ''}
           <div class="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-700/60">
@@ -2882,6 +2929,33 @@ function renderTasksList() {
   }).join("");
 
   if (window.lucide) lucide.createIcons();
+}
+
+async function deleteTask(taskId) {
+  haptic("medium");
+  if (!confirm("Haqiqatan ham ushbu vazifani o'chirmoqchimisiz?")) return;
+
+  if (isDemoMode) {
+    tasksList = tasksList.filter(t => t.id != taskId);
+    renderTasksList();
+    showToast("🗑 Vazifa o'chirildi (Demo)");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/webapp/task/${taskId}?parent_id=${parentId}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.status === "success") {
+      tasksList = tasksList.filter(t => t.id != taskId);
+      renderTasksList();
+      showToast("🗑 Vazifa muvaffaqiyatli o'chirildi");
+    } else {
+      showToast("⚠️ Vazifani o'chirishda xatolik yuz berdi");
+    }
+  } catch (err) {
+    console.error("Delete task error:", err);
+    showToast("⚠️ Server bilan aloqa uzildi");
+  }
 }
 
 function openAddTaskModal() {
@@ -3847,8 +3921,11 @@ function startChildLiveTracking(childId) {
       const { latitude, longitude, accuracy, speed } = pos.coords;
       const now = Date.now();
 
+      // Check if child currently has active SOS
+      const isSos = (authenticatedSession?.user?.is_sos_active) || (document.getElementById("modal-sos-active") && !document.getElementById("modal-sos-active").classList.contains("hidden")) || false;
+
       // Update local child marker on map
-      renderChildMarker(latitude, longitude, "Men", false, null);
+      renderChildMarker(latitude, longitude, "Men", isSos, null);
 
       // Distance from last sent point in meters
       const dist = (lastSentLat && lastSentLng)
@@ -3947,12 +4024,65 @@ function connectWebSocket(userId) {
 function handleIncomingWebSocketMessage(msg) {
   if (!msg) return;
 
-  // Active check alert for Child
+  // 1. Active check alert for Child
   if (msg.type === "active_check") {
     showChildActiveCheckBanner(msg.time || new Date().toLocaleTimeString().slice(0, 5));
+    return;
   }
 
-  // Real-time location update received by Parent
+  // 2. SOS Alert received by Parent
+  if (msg.type === "sos_alert" && currentRole === "parent") {
+    const child = childrenList.find((c) => c.id == msg.child_id);
+    if (child) {
+      child.is_sos_active = true;
+    }
+    renderChildrenSwitcher();
+
+    if (msg.child_id == currentChildId) {
+      toggleSosBanner(true);
+      if (msg.latitude && msg.longitude) {
+        renderChildMarker(msg.latitude, msg.longitude, child ? child.full_name : "Farzand", true, msg.battery_level);
+        updateBatteryUI(msg.battery_level, msg.is_charging);
+        if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1 });
+      }
+    } else {
+      showToast(`🚨 DIQQAT: ${msg.child_name || 'Farzandingiz'} SOS xavf signalini yoqdi!`);
+      playSirenSound();
+      haptic("heavy");
+    }
+    return;
+  }
+
+  // 3. SOS Resolved received by Parent or Child
+  if (msg.type === "sos_resolved") {
+    if (currentRole === "parent") {
+      const child = childrenList.find((c) => c.id == msg.child_id);
+      if (child) {
+        child.is_sos_active = false;
+      }
+      renderChildrenSwitcher();
+
+      if (msg.child_id == currentChildId) {
+        toggleSosBanner(false);
+        showToast("✅ Xavf bartaraf etildi (SOS to'xtatildi)");
+        if (childMarker) {
+          const pos = childMarker.getLatLng();
+          renderChildMarker(pos.lat, pos.lng, child?.full_name || "Farzand", false, child?.location?.battery_level || null);
+        }
+      }
+    } else if (currentRole === "child") {
+      const modal = document.getElementById("modal-sos-active");
+      if (modal) modal.classList.add("hidden");
+      if (childMarker) {
+        const pos = childMarker.getLatLng();
+        renderChildMarker(pos.lat, pos.lng, "Men", false, null);
+      }
+      showToast("✅ SOS xavf signali to'xtatildi.");
+    }
+    return;
+  }
+
+  // 4. Real-time location update received by Parent
   if (msg.type === "child_location_update" && currentRole === "parent") {
     if (msg.child_id == currentChildId) {
       const child = childrenList.find((c) => c.id == currentChildId);
@@ -3961,6 +4091,22 @@ function handleIncomingWebSocketMessage(msg) {
       updateBatteryUI(msg.battery_level, msg.is_charging);
       resolveAddress(msg.latitude, msg.longitude);
     }
+    return;
+  }
+
+  // 5. Child deleted update received by Parent
+  if (msg.type === "child_deleted" && currentRole === "parent") {
+    childrenList = childrenList.filter((c) => c.id != msg.child_id);
+    renderChildrenSwitcher();
+    if (currentChildId == msg.child_id) {
+      if (childrenList.length > 0) {
+        switchChild(childrenList[0].id);
+      } else {
+        showToast("ℹ️ Barcha farzand hisoblari o'chirildi");
+        window.location.reload();
+      }
+    }
+    return;
   }
 }
 

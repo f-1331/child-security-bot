@@ -13,6 +13,7 @@ from aiogram.types import FSInputFile
 from db.database import get_db
 import db.crud as crud
 from api import telemetry
+from bot.geofence import evaluate_geofences_and_notify
 from bot.keyboards import (
     get_child_task_action_keyboard,
     get_task_approval_keyboard,
@@ -395,14 +396,21 @@ async def delete_geofence_endpoint(
 @router.post("/upload")
 async def upload_file_endpoint(file: UploadFile = File(...)):
     """Upload media file (photo or video) for task assignment or proof."""
+    ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp"}
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Faqat rasm yoki video fayllari qabul qilinadi")
+
     uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
-    ext = Path(file.filename or "").suffix.lower()
+    contents = await file.read()
+    if len(contents) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Fayl hajmi 25 MB dan oshmasligi kerak")
+
     unique_filename = f"{uuid.uuid4().hex}{ext if ext else '.jpg'}"
     target_path = uploads_dir / unique_filename
 
-    contents = await file.read()
     with open(target_path, "wb") as f:
         f.write(contents)
 
@@ -716,6 +724,20 @@ async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get
     return {"status": "success", "task_id": task_id, "status": "rejected"}
 
 
+@router.delete("/task/{task_id}")
+async def delete_task_endpoint(
+    task_id: int,
+    parent_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """Delete a task."""
+    success = await crud.delete_task(session, task_id, parent_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Vazifa topilmadi yoki o'chirishga ruxsat yo'q")
+    await session.commit()
+    return {"status": "success", "task_id": task_id}
+
+
 @router.post("/child/{child_id}/sos")
 async def child_sos_endpoint(
     child_id: int,
@@ -837,6 +859,17 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
             except Exception:
                 pass
 
+    # Broadcast SOS resolved event to parents via WebSocket
+    for p in parents:
+        try:
+            await ws_manager.send_to_user(p.id, {
+                "type": "sos_resolved",
+                "child_id": child_id,
+                "is_sos_active": False
+            })
+        except Exception as ws_err:
+            logger.error(f"Failed to broadcast SOS resolution via WS: {ws_err}")
+
     return {"status": "success", "child_id": child_id, "is_sos_active": False}
 
 
@@ -914,6 +947,16 @@ async def delete_child_profile_endpoint(
             detail="Farzand profilini o'chirishda xatolik yuz berdi yoki topilmadi."
         )
     await session.commit()
+
+    # Inform parent via WebSocket so UI immediately refreshes
+    try:
+        await ws_manager.send_to_user(parent_id, {
+            "type": "child_deleted",
+            "child_id": child_id
+        })
+    except Exception:
+        pass
+
     return {
         "status": "success",
         "message": "Farzand profili muvaffaqiyatli o'chirildi",
@@ -939,6 +982,64 @@ async def update_child_live_location_endpoint(
         sound_mode=payload.sound_mode or "normal",
         source="web_watch_position"
     )
+
+    child = await crud.get_user(session, child_id)
+    if child and telemetry.telegram_bot:
+        # 1. Geofence boundary evaluation (Safe zone entry/exit)
+        try:
+            await evaluate_geofences_and_notify(
+                bot=telemetry.telegram_bot,
+                session=session,
+                child=child,
+                lat=payload.latitude,
+                lon=payload.longitude
+            )
+        except Exception as geofence_err:
+            logger.error(f"Geofence evaluation error: {geofence_err}")
+
+        # 2. Battery alert check (< 20%)
+        if payload.battery_level is not None and payload.battery_level <= 20 and not payload.is_charging:
+            try:
+                should_alert = await crud.check_and_update_battery_alert(
+                    session=session,
+                    child_id=child_id,
+                    battery_level=payload.battery_level
+                )
+                if should_alert:
+                    parents = await crud.get_parents_for_child(session, child_id)
+                    child_name = child.full_name or f"Farzand ID:{child.id}"
+                    alert_msg = (
+                        f"🪫 **OGOHLANTIRISH: QUVVAT KAM QOLDI!**\n\n"
+                        f"👤 Farzandingiz: **{child_name}**\n"
+                        f"🔋 Batareya darajasi: **{payload.battery_level}%**\n"
+                        f"⚡ Holat: Quvvatlanmayapti\n\n"
+                        f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
+                    )
+                    for p in parents:
+                        try:
+                            await telemetry.telegram_bot.send_message(
+                                chat_id=p.id,
+                                text=alert_msg,
+                                parse_mode="Markdown"
+                            )
+                        except Exception:
+                            pass
+            except Exception as batt_err:
+                logger.error(f"Battery alert check error: {batt_err}")
+
+        # 3. Active SOS push
+        if child.is_sos_active:
+            parents = await crud.get_parents_for_child(session, child_id)
+            for p in parents:
+                try:
+                    await telemetry.telegram_bot.send_location(
+                        chat_id=p.id,
+                        latitude=payload.latitude,
+                        longitude=payload.longitude
+                    )
+                except Exception:
+                    pass
+
     await session.commit()
 
     # Broadcast updated location to parents via WebSocket

@@ -342,6 +342,10 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
 @router.message(ChildLinkState.waiting_for_code)
 async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
     """Process pairing code entered manually by child."""
+    if not message.text:
+        await message.answer("⚠️ Iltimos, ulanish kodini matn ko'rinishida yuboring (masalan: `123456`):")
+        return
+
     code = message.text.strip().replace(" ", "")
     user_id = message.from_user.id
     full_name = message.from_user.full_name
@@ -566,6 +570,10 @@ async def on_add_new_kerakli_joy_click(callback: CallbackQuery, state: FSMContex
 
 @router.message(KerakliJoyAddState.waiting_for_name)
 async def on_kerakli_joy_name_entered(message: Message, state: FSMContext):
+    if not message.text or not message.text.strip():
+        await message.answer("⚠️ Iltimos, joy nomini matn ko'rinishida kiriting (masalan: _'Maktab'_, _'Uyimiz'_):", parse_mode="Markdown")
+        return
+
     name = message.text.strip()
     await state.update_data(name=name)
     await state.set_state(KerakliJoyAddState.waiting_for_location)
@@ -587,6 +595,15 @@ async def on_kerakli_joy_location_received(message: Message, state: FSMContext):
     await message.answer(
         "📏 **Ushbu joy radiusi (qamrovi)ni tanlang:**",
         reply_markup=get_radius_selection_keyboard()
+    )
+
+
+@router.message(KerakliJoyAddState.waiting_for_location)
+async def on_kerakli_joy_location_fallback(message: Message):
+    await message.answer(
+        "📍 **Iltimos, geolokatsiya yuboring!**\n\n"
+        "Buning uchun Telegram'dagi qisqich (📎) tugmasini bosing va **Joylashuv (Location)** ni tanlab yuboring.",
+        parse_mode="Markdown"
     )
 
 
@@ -833,6 +850,22 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
             except Exception as e:
                 logger.error(f"Failed to send SOS to parent {parent.id}: {e}")
 
+        # Broadcast SOS alert to parents connected to WebApp
+        try:
+            from api.webapp_api import ws_manager
+            for parent in parents:
+                await ws_manager.send_to_user(parent.id, {
+                    "type": "sos_alert",
+                    "child_id": child_id,
+                    "child_name": child_name,
+                    "latitude": latest_loc.latitude if latest_loc else None,
+                    "longitude": latest_loc.longitude if latest_loc else None,
+                    "battery_level": latest_loc.battery_level if latest_loc else None,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+        except Exception as ws_err:
+            logger.error(f"Failed to broadcast SOS to WebApp: {ws_err}")
+
         phone_hint = (
             f"📞 **Ota-onangiz bilan bog'lanish:**\n"
             f"Telefon: `{parent_phone}` *(Qo'ng'iroq qilish uchun ustiga bosing)*\n\n"
@@ -869,6 +902,18 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
                 )
             except Exception:
                 pass
+
+        # Broadcast SOS resolution to parents connected to WebApp
+        try:
+            from api.webapp_api import ws_manager
+            for p in parents:
+                await ws_manager.send_to_user(p.id, {
+                    "type": "sos_resolved",
+                    "child_id": child_id,
+                    "is_sos_active": False
+                })
+        except Exception:
+            pass
 
     await callback.message.edit_text("✅ Xavfsizlik tiklandi va ota-onangizga xabar berildi.")
     await callback.answer()
@@ -992,6 +1037,15 @@ async def on_phone_entered(message: Message, state: FSMContext):
         f"Endi farzandingiz **🚨 SOS** xavf tugmasini bosganida darhol sizga bir bosishda qo'ng'iroq qila oladi! 🛡️",
         reply_markup=get_parent_main_keyboard(parent_id),
         parse_mode="Markdown"
+    )
+
+
+@router.message(PhoneSaveState.waiting_for_phone)
+async def on_phone_invalid_media(message: Message):
+    await message.answer(
+        "📱 **Iltimos, telefon raqamingizni yuboring!**\n\n"
+        "Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
+        reply_markup=get_contact_request_keyboard()
     )
 
 
@@ -1608,7 +1662,15 @@ async def on_start_create_task(callback: CallbackQuery, state: FSMContext):
 
 @router.message(TaskCreateState.waiting_for_title)
 async def on_task_title_entered(message: Message, state: FSMContext):
+    if not message.text or not message.text.strip():
+        await message.answer("⚠️ Iltimos, vazifa nomini matn ko'rinishida kiriting (masalan: _'Kitob o'qish'_):", parse_mode="Markdown")
+        return
+
     title = message.text.strip()
+    if len(title) > 200:
+        await message.answer("⚠️ Vazifa nomi juda uzun (maksimal 200 ta belgi). Iltimos, qisqaroq nom kiriting:")
+        return
+
     await state.update_data(title=title)
     await state.set_state(TaskCreateState.waiting_for_reward)
 
@@ -1620,10 +1682,21 @@ async def on_task_title_entered(message: Message, state: FSMContext):
 
 @router.message(TaskCreateState.waiting_for_reward)
 async def on_task_reward_entered(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("⚠️ Iltimos, mukofot miqdorini butun son bilan kiriting (masalan: `5000`):")
+        return
+
     try:
         reward = int(message.text.strip().replace(" ", "").replace(",", ""))
     except ValueError:
         await message.answer("Iltimos, faqat butun son kiriting (masalan: `5000`):")
+        return
+
+    if reward <= 0:
+        await message.answer("⚠️ Mukofot miqdori 0 dan katta bo'lishi kerak. Iltimos, qaytadan kiriting (masalan: `5000`):")
+        return
+    if reward > 100_000_000:
+        await message.answer("⚠️ Mukofot miqdori juda katta (maksimal: 100,000,000). Iltimos, qaytadan kiriting:")
         return
 
     await state.update_data(reward=reward)
@@ -2027,9 +2100,11 @@ async def on_delete_child_do(callback: CallbackQuery, bot: Bot):
 @router.callback_query(F.data.startswith("resolve_sos:"))
 async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         await crud.set_child_sos(session, child_id, False)
         child = await crud.get_user(session, child_id)
+        parents = await crud.get_parents_for_child(session, child_id)
         await session.commit()
 
         if child:
@@ -2041,6 +2116,19 @@ async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
                 )
             except Exception:
                 pass
+
+        # Broadcast SOS resolution to WebApp
+        try:
+            from api.webapp_api import ws_manager
+            target_ids = {p.id for p in parents} | {parent_id}
+            for pid in target_ids:
+                await ws_manager.send_to_user(pid, {
+                    "type": "sos_resolved",
+                    "child_id": child_id,
+                    "is_sos_active": False
+                })
+        except Exception:
+            pass
 
     await callback.message.edit_text("✅ SOS signali bekor qilindi.")
     await callback.answer()
@@ -2398,6 +2486,10 @@ async def on_logout_step2(callback: CallbackQuery, state: FSMContext, bot: Bot):
 @router.message(LogoutState.waiting_for_confirm)
 async def on_logout_code_entered(message: Message, state: FSMContext, bot: Bot):
     """Process Level 2 manual code entry."""
+    if not message.text:
+        await message.answer("⚠️ Iltimos, tasdiqlash kodini matn ko'rinishida kiriting:")
+        return
+
     user_code = message.text.strip()
     state_data = await state.get_data()
     expected_code = state_data.get("confirm_code")
@@ -2638,6 +2730,10 @@ async def on_custom_coin_rate_prompt(callback: CallbackQuery, state: FSMContext)
 
 @router.message(CoinRateState.waiting_for_custom_rate)
 async def on_custom_coin_rate_entered(message: Message, state: FSMContext, bot: Bot):
+    if not message.text:
+        await message.answer("⚠️ Iltimos, kursni raqam ko'rinishida yozib yuboring (masalan: `15000`):")
+        return
+
     text = message.text.strip()
     if text.lower() in ["/cancel", "bekor", "cancel"]:
         await state.clear()

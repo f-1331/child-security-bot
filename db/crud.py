@@ -335,6 +335,7 @@ async def delete_child_profile(session: AsyncSession, parent_id: int, child_id: 
             await session.execute(delete(Task).where(Task.child_id == child_id))
             await session.execute(delete(BatteryAlertLog).where(BatteryAlertLog.child_id == child_id))
             await session.execute(delete(GeofenceState).where(GeofenceState.child_id == child_id))
+            await session.execute(delete(Geofence).where(Geofence.child_id == child_id))
             await session.delete(child_user)
             await session.flush()
 
@@ -450,7 +451,11 @@ async def get_active_geofences_for_child(session: AsyncSession, child_id: int) -
 
 
 async def delete_geofence(session: AsyncSession, geofence_id: int, parent_id: int) -> bool:
-    """Delete a geofence by ID if owned by parent."""
+    """Delete a geofence by ID if owned by parent, cleaning up related states."""
+    # Remove associated geofence tracking states first
+    await session.execute(
+        delete(GeofenceState).where(GeofenceState.geofence_id == geofence_id)
+    )
     result = await session.execute(
         delete(Geofence).where(
             Geofence.id == geofence_id,
@@ -666,6 +671,18 @@ async def reject_task(session: AsyncSession, task_id: int) -> Optional[Task]:
     return task
 
 
+async def delete_task(session: AsyncSession, task_id: int, parent_id: Optional[int] = None) -> bool:
+    """Delete a task by ID, optionally verifying parent ownership."""
+    task = await get_task_by_id(session, task_id)
+    if not task:
+        return False
+    if parent_id and task.parent_id != parent_id:
+        return False
+    await session.delete(task)
+    await session.flush()
+    return True
+
+
 async def reset_user_role(session: AsyncSession, user_id: int) -> Tuple[bool, List[int]]:
     """
     Reset user role back to 'unassigned', clearing pairing code and links.
@@ -694,5 +711,7 @@ async def reset_user_role(session: AsyncSession, user_id: int) -> Tuple[bool, Li
     user.role = "unassigned"
     user.pairing_code = None
     user.pairing_code_created_at = None
+    user.web_access_code = None
+    user.is_sos_active = False
     await session.flush()
     return True, notified_ids

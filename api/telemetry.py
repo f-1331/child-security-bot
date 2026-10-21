@@ -112,6 +112,28 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
 
     await session.commit()
 
+    # 5. Broadcast live telemetry update to parents viewing WebApp
+    try:
+        from api.webapp_api import ws_manager
+        parents = await crud.get_parents_for_child(session, payload.child_id)
+        if parents:
+            ws_telemetry = {
+                "type": "child_location_update",
+                "child_id": payload.child_id,
+                "latitude": payload.lat,
+                "longitude": payload.lon,
+                "accuracy": payload.accuracy,
+                "speed": None,
+                "battery_level": payload.battery_level,
+                "is_charging": payload.is_charging,
+                "sound_mode": payload.sound_mode,
+                "recorded_at": loc_entry.recorded_at.isoformat() if loc_entry and loc_entry.recorded_at else None
+            }
+            for p in parents:
+                await ws_manager.send_to_user(p.id, ws_telemetry)
+    except Exception as ws_err:
+        logger.error(f"Failed to broadcast telemetry via WebSocket: {ws_err}")
+
     return {
         "status": "success",
         "message": "Telemetry processed successfully",

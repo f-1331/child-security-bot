@@ -11,8 +11,11 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     """
     Calculate the great circle distance between two points
     on the earth (specified in decimal degrees).
-    Returns distance in meters.
+    Returns distance in meters. Safe against None and numerical overflow.
     """
+    if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
+        return 999999999.0
+
     R = 6371000.0  # Earth radius in meters
 
     phi1 = math.radians(lat1)
@@ -24,7 +27,8 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
         math.sin(delta_phi / 2.0) ** 2
         + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
     )
-    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    a = min(1.0, max(0.0, a))
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
 
     return R * c
 
@@ -41,6 +45,9 @@ async def evaluate_geofences_and_notify(
     Detects entry and exit transitions and dispatches instant Telegram alerts to parents.
     """
     events: List[Dict[str, Any]] = []
+    if lat is None or lon is None:
+        return events
+
     active_fences = await crud.get_active_geofences_for_child(session, child.id)
     if not active_fences:
         return events
@@ -50,6 +57,9 @@ async def evaluate_geofences_and_notify(
     now_str = datetime.now().strftime("%H:%M")
 
     for fence in active_fences:
+        if fence.latitude is None or fence.longitude is None:
+            continue
+
         dist = haversine_distance(lat, lon, fence.latitude, fence.longitude)
         is_inside_now = dist <= fence.radius_meters
 
