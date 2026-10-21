@@ -2342,6 +2342,7 @@ function switchTab(tabName) {
   const floatControls = document.getElementById("floatingMapControls");
   const childActions = document.getElementById("childFloatingActions");
   const locCard = document.getElementById("locationCard");
+  const parentBar = document.getElementById("parentMonitoringBar");
 
   if (tabName !== "map") {
     const targetModal = document.getElementById(`modal-${tabName}`);
@@ -2349,6 +2350,7 @@ function switchTab(tabName) {
     if (floatControls) floatControls.classList.add("hidden");
     if (childActions) childActions.classList.add("hidden");
     if (locCard) locCard.classList.add("hidden");
+    if (parentBar) parentBar.classList.add("hidden");
     if (tabName === "tasks") {
       loadTasks();
     }
@@ -2373,6 +2375,7 @@ function switchTab(tabName) {
       document.getElementById("childViewSection")?.classList.add("hidden");
       if (floatControls) floatControls.classList.remove("hidden");
       if (locCard) locCard.classList.remove("hidden");
+      document.getElementById("parentMonitoringBar")?.classList.remove("hidden");
       if (map) {
         setTimeout(() => map.invalidateSize(), 80);
       }
@@ -2566,6 +2569,7 @@ function openAddZoneModal() {
   if (floatControls) floatControls.classList.add("hidden");
   const locCard = document.getElementById("locationCard");
   if (locCard) locCard.classList.add("hidden");
+  document.getElementById("parentMonitoringBar")?.classList.add("hidden");
 
   const center = map.getCenter();
   const radius = parseFloat(document.getElementById("inputZoneRadius").value);
@@ -2584,6 +2588,7 @@ function closeAddZoneModal() {
   if (floatControls) floatControls.classList.remove("hidden");
   const locCard = document.getElementById("locationCard");
   if (locCard) locCard.classList.remove("hidden");
+  document.getElementById("parentMonitoringBar")?.classList.remove("hidden");
 }
 
 function applyZonePreset(namePrefix, radius) {
