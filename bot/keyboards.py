@@ -48,11 +48,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="➕ Farzand ulash (Kodi)")
         ],
         [
-            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish"),
-            KeyboardButton(text="🔑 Saytga kirish kodi")
+            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish")
         ],
         [
-            KeyboardButton(text="📋 Vazifalar va Tangalar"),
+            KeyboardButton(text="🔑 Saytga kirish kodi"),
             KeyboardButton(text="💰 Tangalar kursini sozlash")
         ],
         [

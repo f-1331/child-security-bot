@@ -5,8 +5,19 @@ if (tg) {
   try {
     tg.ready();
     tg.expand();
+    if (typeof tg.disableVerticalSwipes === "function") {
+      tg.disableVerticalSwipes();
+    }
+    if (typeof tg.enableClosingConfirmation === "function") {
+      tg.enableClosingConfirmation();
+    }
     if (tg.setHeaderColor) tg.setHeaderColor("#090d16");
     if (tg.setBackgroundColor) tg.setBackgroundColor("#090d16");
+    if (typeof tg.onEvent === "function") {
+      tg.onEvent("viewportChanged", () => {
+        if (map) map.invalidateSize();
+      });
+    }
   } catch (e) {
     console.warn("Telegram WebApp initialization error:", e);
   }
@@ -191,6 +202,10 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("orientationchange", () => {
     if (map) setTimeout(() => map.invalidateSize(), 200);
   });
+
+  // Mobile phone ergonomics: backdrop dismiss & Telegram native BackButton
+  initBackdropDismissListeners();
+  setupTelegramBackButton();
 });
 
 // Trigger haptic feedback when Telegram WebApp is available
@@ -417,6 +432,7 @@ async function checkAuthenticationState() {
 }
 
 function showAuthGateModal(targetRole = null) {
+  setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("authGateModal");
   if (!modal) return;
 
@@ -454,6 +470,7 @@ function showAuthGateModal(targetRole = null) {
 }
 
 function hideAuthGateModal() {
+  setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("authGateModal");
   if (modal) modal.classList.add("hidden");
   window._pendingTargetRole = null;
@@ -953,6 +970,7 @@ function logoutSession() {
 
 // Coin Rate Settings Modal functions
 function openCoinRateModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("modal-coin-rate");
   if (!modal) return;
@@ -972,6 +990,7 @@ function openCoinRateModal() {
 }
 
 function closeCoinRateModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("modal-coin-rate");
   if (modal) modal.classList.add("hidden");
@@ -1066,7 +1085,7 @@ const I18N_STRINGS = {
     tab_zones: "Joylar",
     tab_tasks: "Vazifalar",
     tab_history: "Tarix",
-    tab_settings: "Dizayn & Til",
+    tab_settings: "Dizayn",
     tab_adventure: "Sarguzasht",
     tab_castles: "Makonlarim",
     tab_missions: "Missiyalar",
@@ -1109,7 +1128,7 @@ const I18N_STRINGS = {
     tab_zones: "Жойлар",
     tab_tasks: "Вазифалар",
     tab_history: "Тарих",
-    tab_settings: "Дизайн & Тил",
+    tab_settings: "Дизайн",
     tab_adventure: "Саргузашт",
     tab_castles: "Маконларим",
     tab_missions: "Миссиялар",
@@ -1152,7 +1171,7 @@ const I18N_STRINGS = {
     tab_zones: "Места",
     tab_tasks: "Задания",
     tab_history: "История",
-    tab_settings: "Дизайн и Язык",
+    tab_settings: "Дизайн",
     tab_adventure: "Приключение",
     tab_castles: "Мои Места",
     tab_missions: "Миссии",
@@ -1195,7 +1214,7 @@ const I18N_STRINGS = {
     tab_zones: "Places",
     tab_tasks: "Tasks",
     tab_history: "History",
-    tab_settings: "Design & Lang",
+    tab_settings: "Design",
     tab_adventure: "Adventure",
     tab_castles: "My Places",
     tab_missions: "Missions",
@@ -1379,11 +1398,13 @@ function setGlobalTheme(themeName, showNotification = true) {
 }
 
 function openSettingsModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
   switchTab("settings");
 }
 
 function closeSettingsModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("modal-settings");
   if (modal) modal.classList.add("hidden");
@@ -1417,6 +1438,8 @@ function initMap() {
   map = L.map("map", {
     zoomControl: false,
     attributionControl: false,
+    tap: false,
+    touchZoom: true,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
 
   // Apply map tiles according to active theme
@@ -2234,7 +2257,9 @@ function switchTab(tabName) {
       setGlobalTheme(currentTheme, false);
       setGlobalLanguage(currentLanguage, false);
     }
+    updateTelegramBackButton();
   } else {
+    updateTelegramBackButton();
     // Tab 1 (Map for parent / Adventure Hub for child)
     if (currentRole === "child") {
       document.getElementById("childViewSection")?.classList.remove("hidden");
@@ -2399,10 +2424,12 @@ function closeModal(tabName) {
   const modal = document.getElementById(`modal-${tabName}`);
   if (modal) modal.classList.add("hidden");
   switchTab("map");
+  updateTelegramBackButton();
 }
 
 // Add Kerakli Joy Modal & Presets
 function openAddZoneModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
   const modal = document.getElementById("modal-add-zone");
   modal.classList.remove("hidden");
@@ -2418,6 +2445,7 @@ function openAddZoneModal() {
 }
 
 function closeAddZoneModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   document.getElementById("modal-add-zone").classList.add("hidden");
   if (previewCircle) {
@@ -2986,12 +3014,14 @@ async function deleteTask(taskId) {
 }
 
 function openAddTaskModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
   document.getElementById("modal-add-task").classList.remove("hidden");
   clearTaskMedia();
 }
 
 function closeAddTaskModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   document.getElementById("modal-add-task").classList.add("hidden");
   clearTaskMedia();
@@ -3273,6 +3303,7 @@ function updateTaskRewardPreview(coinsVal) {
 }
 
 function closeScheduleModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   activeScheduleTaskId = null;
   document.getElementById("modal-task-schedule").classList.add("hidden");
@@ -3325,6 +3356,7 @@ function openProofModal(taskId) {
 }
 
 function closeProofModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   activeProofTaskId = null;
   selectedProofPhotoFile = null;
@@ -3668,6 +3700,7 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
 // 2. PROFILNI O'CHIRISH (CRUD: Delete Child)
 // =========================================================
 function openDeleteChildModal() {
+  setTimeout(updateTelegramBackButton, 50);
   if (!currentChildId) {
     showToast("⚠️ O'chirish uchun farzand tanlanmagan.");
     return;
@@ -3685,6 +3718,7 @@ function openDeleteChildModal() {
 }
 
 function closeDeleteChildModal() {
+  setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("deleteChildModal");
   if (modal) modal.classList.add("hidden");
 }
@@ -4263,6 +4297,7 @@ let childCurrentInviteLink = "";
 let parentCurrentInviteLink = "";
 
 async function openChildInviteParentModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("childInviteParentModal");
   const linkInput = document.getElementById("childInviteLinkInput");
@@ -4301,6 +4336,7 @@ async function openChildInviteParentModal() {
 }
 
 function closeChildInviteParentModal() {
+  setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("childInviteParentModal");
   if (modal) modal.classList.add("hidden");
 }
@@ -4327,6 +4363,7 @@ function shareChildInviteToTelegram() {
 }
 
 async function openParentInviteSpouseModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("parentInviteSpouseModal");
   const linkInput = document.getElementById("parentInviteLinkInput");
@@ -4358,6 +4395,7 @@ async function openParentInviteSpouseModal() {
 }
 
 function closeParentInviteSpouseModal() {
+  setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("parentInviteSpouseModal");
   if (modal) modal.classList.add("hidden");
 }
@@ -4383,3 +4421,131 @@ function shareParentInviteToTelegram() {
   }
 }
 
+
+// =========================================================
+// MOBILE PHONE ERGONOMICS & TELEGRAM BACKBUTTON INTEGRATION
+// =========================================================
+
+function setupTelegramBackButton() {
+  if (!tg || !tg.BackButton) return;
+  try {
+    tg.BackButton.onClick(() => {
+      handleTelegramBackPress();
+    });
+  } catch (e) {}
+}
+
+function handleTelegramBackPress() {
+  haptic("light");
+  const modalPriority = [
+    { id: "childOnboardingModal", close: () => { const m = document.getElementById("childOnboardingModal"); if (m) m.classList.add("hidden"); } },
+    { id: "deleteChildModal", close: closeDeleteChildModal },
+    { id: "childInviteParentModal", close: closeChildInviteParentModal },
+    { id: "parentInviteSpouseModal", close: closeParentInviteSpouseModal },
+    { id: "modal-sos-active", close: () => { const m = document.getElementById("modal-sos-active"); if (m) m.classList.add("hidden"); } },
+    { id: "modal-task-proof", close: closeProofModal },
+    { id: "modal-task-schedule", close: closeScheduleModal },
+    { id: "modal-add-task", close: closeAddTaskModal },
+    { id: "modal-add-zone", close: closeAddZoneModal },
+    { id: "modal-coin-rate", close: closeCoinRateModal },
+    { id: "modal-settings", close: closeSettingsModal },
+    { id: "modal-wallet", close: () => closeModal("wallet") },
+    { id: "modal-history", close: () => closeModal("history") },
+    { id: "modal-tasks", close: () => closeModal("tasks") },
+    { id: "modal-zones", close: () => closeModal("zones") },
+    { id: "authGateModal", close: hideAuthGateModal }
+  ];
+
+  for (const item of modalPriority) {
+    const el = document.getElementById(item.id);
+    if (el && !el.classList.contains("hidden")) {
+      item.close();
+      updateTelegramBackButton();
+      return;
+    }
+  }
+
+  const backBtn = document.getElementById("btnChildBackFromMap");
+  if (backBtn && !backBtn.classList.contains("hidden")) {
+    switchTab("map");
+    updateTelegramBackButton();
+    return;
+  }
+
+  const activeTab = document.querySelector(".nav-tab.active");
+  if (activeTab && activeTab.id !== "tabBtn-map") {
+    switchTab("map");
+    updateTelegramBackButton();
+    return;
+  }
+
+  updateTelegramBackButton();
+}
+
+function updateTelegramBackButton() {
+  if (!tg || !tg.BackButton) return;
+  try {
+    const modalIds = [
+      "modal-zones",
+      "modal-history",
+      "modal-tasks",
+      "modal-wallet",
+      "modal-settings",
+      "modal-add-zone",
+      "modal-add-task",
+      "modal-task-schedule",
+      "modal-task-proof",
+      "modal-coin-rate",
+      "deleteChildModal",
+      "childOnboardingModal",
+      "childInviteParentModal",
+      "parentInviteSpouseModal",
+      "modal-sos-active"
+    ];
+    const hasOpenModal = modalIds.some(id => {
+      const el = document.getElementById(id);
+      return el && !el.classList.contains("hidden");
+    });
+
+    const activeTab = document.querySelector(".nav-tab.active");
+    const isNonMapTab = activeTab && activeTab.id !== "tabBtn-map";
+    const childMapOpen = !document.getElementById("btnChildBackFromMap")?.classList.contains("hidden");
+
+    if (hasOpenModal || isNonMapTab || childMapOpen) {
+      tg.BackButton.show();
+    } else {
+      tg.BackButton.hide();
+    }
+  } catch (e) {}
+}
+
+function initBackdropDismissListeners() {
+  const modalList = [
+    { id: "modal-zones", close: () => closeModal("zones") },
+    { id: "modal-history", close: () => closeModal("history") },
+    { id: "modal-tasks", close: () => closeModal("tasks") },
+    { id: "modal-wallet", close: () => closeModal("wallet") },
+    { id: "modal-settings", close: closeSettingsModal },
+    { id: "modal-add-zone", close: closeAddZoneModal },
+    { id: "modal-add-task", close: closeAddTaskModal },
+    { id: "modal-task-schedule", close: closeScheduleModal },
+    { id: "modal-task-proof", close: closeProofModal },
+    { id: "modal-coin-rate", close: closeCoinRateModal },
+    { id: "deleteChildModal", close: closeDeleteChildModal },
+    { id: "childInviteParentModal", close: closeChildInviteParentModal },
+    { id: "parentInviteSpouseModal", close: closeParentInviteSpouseModal }
+  ];
+
+  modalList.forEach(item => {
+    const el = document.getElementById(item.id);
+    if (el) {
+      el.addEventListener("click", (e) => {
+        if (e.target === el) {
+          haptic("light");
+          item.close();
+          updateTelegramBackButton();
+        }
+      });
+    }
+  });
+}

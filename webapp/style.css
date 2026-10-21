@@ -814,27 +814,65 @@ script[src*="hud"],
 }
 
 /* Safe area handling for notch, home indicator & edges */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
 .safe-top {
-  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
 }
 
 .safe-bottom {
-  padding-bottom: max(0.5rem, calc(0.5rem + env(safe-area-inset-bottom, 0px)));
+  padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
 }
 
-/* Touch optimization for mobile */
-button, input, select, textarea, a {
+/* Touch optimization and native feel for mobile */
+button, input, select, textarea, a, .nav-tab {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Prevent auto-zoom on iOS Safari when tapping inputs */
+/* Navigation tabs touch target ergonomics */
+.nav-tab {
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Momentum smooth scrolling on iOS and mobile browsers */
+.overflow-y-auto,
+.overflow-x-auto,
+.custom-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Utility: hide scrollbars while allowing touch panning */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Prevent auto-zoom on iOS Safari when tapping inputs & ensure mobile accessibility */
 @media (max-width: 640px) {
-  input[type="text"],
-  input[type="number"],
+  input,
   select,
   textarea {
     font-size: 16px !important;
+  }
+
+  /* Bottom sheet max height on compact phones */
+  .tab-panel > div {
+    max-height: calc(88dvh - env(safe-area-inset-top, 0px)) !important;
   }
 }
 
