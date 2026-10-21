@@ -188,14 +188,14 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
                 "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None,
             "walk_safe": {
-                "active": child.walk_safe_active or False,
-                "destination": child.walk_safe_destination or "Uyga",
-                "duration": child.walk_safe_duration or 20,
-                "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None,
+                "active": user.walk_safe_active or False,
+                "destination": user.walk_safe_destination or "Uyga",
+                "duration": user.walk_safe_duration or 20,
+                "deadline": format_utc_iso(user.walk_safe_deadline) if user.walk_safe_deadline else None,
             },
             "wishlist": {
-                "title": child.wishlist_title or "Yangi Velosiped 🚲",
-                "target_som": child.wishlist_target_som or 600000,
+                "title": user.wishlist_title or "Yangi Velosiped 🚲",
+                "target_som": user.wishlist_target_som or 600000,
             }
         },
         "parent": {
@@ -333,7 +333,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
                 "active": child.walk_safe_active or False,
                 "destination": child.walk_safe_destination or "Uyga",
                 "duration": child.walk_safe_duration or 20,
-                "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None,
+                "deadline": format_utc_iso(child.walk_safe_deadline) if child.walk_safe_deadline else None,
             },
             "wishlist": {
                 "title": child.wishlist_title or "Yangi Velosiped 🚲",
@@ -1208,7 +1208,7 @@ async def active_check_endpoint(
         "title": "Joylashuv tekshiruvi 📍",
         "message": "Ota-onangiz joylashuvingizni tekshirdi 📍",
         "time": now_time,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": format_utc_iso(datetime.now(timezone.utc))
     }
 
     # 1. Dispatch through real-time WebSocket
@@ -1435,7 +1435,7 @@ async def start_walk_safe_endpoint(
             "child_id": child_id,
             "duration_minutes": payload.duration_minutes,
             "destination": dest,
-            "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None
+            "deadline": format_utc_iso(child.walk_safe_deadline) if child.walk_safe_deadline else None
         })
 
     return {
@@ -1443,7 +1443,7 @@ async def start_walk_safe_endpoint(
         "child_id": child_id,
         "duration_minutes": payload.duration_minutes,
         "destination": dest,
-        "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None
+        "deadline": format_utc_iso(child.walk_safe_deadline) if child.walk_safe_deadline else None
     }
 
 
@@ -1462,7 +1462,7 @@ async def checkin_walk_safe_endpoint(
         await ws_manager.send_to_user(p.id, {
             "type": "walk_safe_checkin",
             "child_id": child_id,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": format_utc_iso(datetime.now(timezone.utc))
         })
 
     return {"status": "success", "child_id": child_id, "message": "Check-in accepted"}

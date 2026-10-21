@@ -551,7 +551,10 @@ async def check_and_update_battery_alert(
         return True
 
     # If alerted more than 2 hours ago or dropped by 5%
-    time_diff = (now - log.last_alerted_at).total_seconds()
+    last_alert = log.last_alerted_at
+    if last_alert and last_alert.tzinfo is None:
+        last_alert = last_alert.replace(tzinfo=timezone.utc)
+    time_diff = (now - last_alert).total_seconds() if last_alert else 999999
     if time_diff > 7200 or (log.last_alerted_level - battery_level >= 5):
         log.last_alerted_level = battery_level
         log.last_alerted_at = now
@@ -825,7 +828,10 @@ async def get_active_walk_safe(session: AsyncSession, child_id: int) -> Optional
     if not child or not child.walk_safe_active or not child.walk_safe_deadline:
         return None
     now = datetime.now(timezone.utc)
-    remaining_seconds = int((child.walk_safe_deadline - now).total_seconds())
+    ws_deadline = child.walk_safe_deadline
+    if ws_deadline and ws_deadline.tzinfo is None:
+        ws_deadline = ws_deadline.replace(tzinfo=timezone.utc)
+    remaining_seconds = int((ws_deadline - now).total_seconds()) if ws_deadline else 0
     is_expired = remaining_seconds <= 0
     return {
         "is_active": True,

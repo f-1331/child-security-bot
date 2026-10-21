@@ -2410,6 +2410,21 @@ function openChildMapModal() {
   if (window.lucide) lucide.createIcons();
 }
 
+function closeChildMapModal() {
+  haptic("light");
+  const childSec = document.getElementById("childViewSection");
+  const parentSec = document.getElementById("parentViewSection");
+  if (childSec) childSec.classList.remove("hidden");
+  if (parentSec) parentSec.classList.add("hidden");
+
+  const backBtn = document.getElementById("btnChildBackFromMap");
+  if (backBtn) backBtn.classList.add("hidden");
+
+  updateTelegramBackButton();
+  if (window.lucide) lucide.createIcons();
+}
+window.closeChildMapModal = closeChildMapModal;
+
 function renderChildDashboardQuests() {
   const container = document.getElementById("childDashboardTasksList");
   if (!container) return;

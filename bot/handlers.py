@@ -984,7 +984,7 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
                     "latitude": latest_loc.latitude if latest_loc else None,
                     "longitude": latest_loc.longitude if latest_loc else None,
                     "battery_level": latest_loc.battery_level if latest_loc else None,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
         except Exception as ws_err:
             logger.error(f"Failed to broadcast SOS to WebApp: {ws_err}")
@@ -1038,8 +1038,15 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
         except Exception:
             pass
 
-    await callback.message.edit_text("✅ Xavfsizlik tiklandi va ota-onangizga xabar berildi.")
-    await callback.answer()
+    telemetry.last_sos_alert_map.pop(child_id, None)
+    try:
+        await callback.message.edit_text("✅ Xavfsizlik tiklandi va ota-onangizga xabar berildi.")
+    except Exception:
+        pass
+    try:
+        await callback.answer()
+    except Exception:
+        pass
 
 
 @router.message(F.text == "📞 Ota-onamga qo'ng'iroq")
@@ -2324,8 +2331,14 @@ async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
         except Exception:
             pass
 
-    await callback.message.edit_text("✅ SOS signali bekor qilindi.")
-    await callback.answer()
+    try:
+        await callback.message.edit_text("✅ SOS signali bekor qilindi.")
+    except Exception:
+        pass
+    try:
+        await callback.answer("✅ SOS signali to'xtatildi.", show_alert=False)
+    except Exception:
+        pass
 
 
 @router.message(F.text == "ℹ️ Yordam")
