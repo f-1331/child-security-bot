@@ -851,7 +851,13 @@ async def child_sos_endpoint(
     parents = await crud.get_parents_for_child(session, child_id)
     await session.commit()
 
-    if telemetry.telegram_bot and parents:
+    # Rate limiting / Debounce: Prevent duplicate SOS Telegram alerts within 15 seconds
+    now_utc = datetime.now(timezone.utc)
+    last_sos = telemetry.last_sos_alert_map.get(child_id)
+    is_duplicate_sos = bool(last_sos and (now_utc - last_sos) < timedelta(seconds=15))
+
+    if telemetry.telegram_bot and parents and not is_duplicate_sos:
+        telemetry.last_sos_alert_map[child_id] = now_utc
         now_str = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
         battery_info = f"{battery_lvl}%" if battery_lvl is not None else "Noma'lum"
         loc_coords = f"{lat}, {lon}" if (lat is not None and lon is not None) else "Mavjud emas"
@@ -904,6 +910,7 @@ async def child_sos_endpoint(
 async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
     """Cancel/resolve SOS emergency alert and notify all linked parents."""
     await crud.set_child_sos(session, child_id, False)
+    telemetry.last_sos_alert_map.pop(child_id, None)
     child = await crud.get_user(session, child_id)
     child_name = child.full_name if child else f"Farzand #{child_id}"
     parents = await crud.get_parents_for_child(session, child_id)
@@ -1123,18 +1130,7 @@ async def update_child_live_location_endpoint(
             except Exception as batt_err:
                 logger.error(f"Battery alert check error: {batt_err}")
 
-        # 3. Active SOS push
-        if child.is_sos_active:
-            parents = await crud.get_parents_for_child(session, child_id)
-            for p in parents:
-                try:
-                    await telemetry.telegram_bot.send_location(
-                        chat_id=p.id,
-                        latitude=payload.latitude,
-                        longitude=payload.longitude
-                    )
-                except Exception:
-                    pass
+        # 3. Active SOS push: Handled exclusively by SOS trigger endpoint to avoid duplicate Telegram location balloons
 
     await session.commit()
 

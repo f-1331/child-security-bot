@@ -955,6 +955,7 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
 
         parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
+        telemetry.last_sos_alert_map[child_id] = datetime.now(timezone.utc)
         for parent in parents:
             try:
                 await bot.send_message(
@@ -1239,14 +1240,18 @@ async def on_location_received(message: Message, bot: Bot):
             lon=lon
         )
 
-        # If child in SOS, forward to parents
+        # If child in SOS, forward to parents with 60s cooldown to prevent duplicate balloons
         if user.is_sos_active:
-            parents = await crud.get_parents_for_child(session, user_id)
-            for p in parents:
-                try:
-                    await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
-                except Exception:
-                    pass
+            now_utc = datetime.now(timezone.utc)
+            last_loc_sent = telemetry.last_sos_alert_map.get(user_id)
+            if not last_loc_sent or (now_utc - last_loc_sent) > timedelta(seconds=60):
+                telemetry.last_sos_alert_map[user_id] = now_utc
+                parents = await crud.get_parents_for_child(session, user_id)
+                for p in parents:
+                    try:
+                        await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
+                    except Exception:
+                        pass
 
         # Broadcast live telemetry to connected parents via WebSocket
         try:
@@ -2289,6 +2294,7 @@ async def on_delete_child_do(callback: CallbackQuery, bot: Bot):
 async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
     child_id = int(callback.data.split(":")[1])
     parent_id = callback.from_user.id
+    telemetry.last_sos_alert_map.pop(child_id, None)
     async with AsyncSessionLocal() as session:
         await crud.set_child_sos(session, child_id, False)
         child = await crud.get_user(session, child_id)

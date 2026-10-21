@@ -19,6 +19,9 @@ telegram_bot: Optional[Bot] = None
 # Speed alert rate-limiting map: child_id -> datetime of last alert
 last_speed_alert_map: dict[int, datetime] = {}
 
+# SOS alert rate-limiting map: child_id -> datetime of last SOS alert (prevents duplicate triggers)
+last_sos_alert_map: dict[int, datetime] = {}
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot
@@ -130,19 +133,6 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         lat=payload.lat,
         lon=payload.lon
     )
-
-    # 4. If child is in active SOS state, alert parents with latest pin
-    if child.is_sos_active and telegram_bot:
-        parents = await crud.get_parents_for_child(session, payload.child_id)
-        for p in parents:
-            try:
-                await telegram_bot.send_location(
-                    chat_id=p.id,
-                    latitude=payload.lat,
-                    longitude=payload.lon
-                )
-            except Exception as e:
-                logger.error(f"Failed to push SOS update to parent {p.id}: {e}")
 
     await session.commit()
 

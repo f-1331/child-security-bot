@@ -3614,93 +3614,125 @@ async function rejectTask(taskId) {
 
 // CHILD FLOATING & SAFETY ACTION HANDLERS
 
+let isSosTriggering = false;
+let lastSosTriggerTimestamp = 0;
+
 async function triggerChildSOS() {
-  haptic("heavy");
-  playSirenSound();
-
-  // Show emergency active screen on child device
-  const modal = document.getElementById("modal-sos-active");
-  if (modal) {
-    modal.classList.remove("hidden");
-    if (window.lucide) window.lucide.createIcons();
+  const now = Date.now();
+  if (isSosTriggering || (now - lastSosTriggerTimestamp < 8000)) {
+    console.warn("SOS allaqachon faollashtirilmoqda, takroriy bosish bekor qilindi.");
+    return;
   }
+  isSosTriggering = true;
+  lastSosTriggerTimestamp = now;
 
-  showToast("🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI! Ota-onangizga xabar ketmoqda...");
-
-  // Coordinates fallback
-  let fallbackLat = DEFAULT_LAT;
-  let fallbackLon = DEFAULT_LON;
-  if (childMarker) {
-    const pos = childMarker.getLatLng();
-    fallbackLat = pos.lat;
-    fallbackLon = pos.lng;
+  const btnBig = document.getElementById("btnChildBigSOS");
+  if (btnBig) {
+    btnBig.classList.add("pointer-events-none", "opacity-80");
   }
-
-  let finalLat = fallbackLat;
-  let finalLon = fallbackLon;
-  let finalAcc = null;
-  let battery = null;
 
   try {
-    const [geo, batt] = await Promise.all([
-      getDeviceLocation(),
-      getDeviceBattery(),
-    ]);
-    if (geo) {
-      finalLat = geo.latitude;
-      finalLon = geo.longitude;
-      finalAcc = geo.accuracy;
+      haptic("heavy");
+      playSirenSound();
+  
+    // Show emergency active screen on child device
+    const modal = document.getElementById("modal-sos-active");
+    if (modal) {
+      modal.classList.remove("hidden");
+      if (window.lucide) window.lucide.createIcons();
     }
-    if (batt !== null) {
-      battery = batt;
+  
+    showToast("🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI! Ota-onangizga xabar ketmoqda...");
+  
+    // Coordinates fallback
+    let fallbackLat = DEFAULT_LAT;
+    let fallbackLon = DEFAULT_LON;
+    if (childMarker) {
+      const pos = childMarker.getLatLng();
+      fallbackLat = pos.lat;
+      fallbackLon = pos.lng;
     }
-  } catch (e) {
-    console.warn("GPS/Battery acquisition error:", e);
-  }
-
-  // Find child name for marker
-  const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
-  const cName = cObj.full_name || "Farzand";
-
-  // Pulse red radar marker on map immediately
-  if (finalLat && finalLon) {
-    renderChildMarker(finalLat, finalLon, cName, true, battery);
-    if (map) map.flyTo([finalLat, finalLon], 16, { animate: true, duration: 1 });
-  }
-
-  const payload = {
-    is_sos_active: true,
-    latitude: finalLat,
-    longitude: finalLon,
-    accuracy: finalAcc,
-    battery_level: battery,
-  };
-
-  if (!isDemoMode && currentChildId) {
-    // Feature 2: 5-second ambient audio recording in background
-    recordAndUploadSOSAudio(currentChildId);
+  
+    let finalLat = fallbackLat;
+    let finalLon = fallbackLon;
+    let finalAcc = null;
+    let battery = null;
+  
     try {
-      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (data && data.status === "success") {
-        if (data.parent_phone) parentPhone = data.parent_phone;
-        showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
+      const [geo, batt] = await Promise.all([
+        getDeviceLocation(),
+        getDeviceBattery(),
+      ]);
+      if (geo) {
+        finalLat = geo.latitude;
+        finalLon = geo.longitude;
+        finalAcc = geo.accuracy;
       }
-    } catch (err) {
-      console.error("SOS dispatch error:", err);
-      showToast("⚠️ SOS signali yuborildi (tarmoq tekshirilmoqda)");
+      if (batt !== null) {
+        battery = batt;
+      }
+    } catch (e) {
+      console.warn("GPS/Battery acquisition error:", e);
     }
-  } else {
-    showToast("🚨 (Demo) SOS signali faollashtirildi!");
+  
+    // Find child name for marker
+    const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
+    const cName = cObj.full_name || "Farzand";
+  
+    // Pulse red radar marker on map immediately
+    if (finalLat && finalLon) {
+      renderChildMarker(finalLat, finalLon, cName, true, battery);
+      if (map) map.flyTo([finalLat, finalLon], 16, { animate: true, duration: 1 });
+    }
+  
+    const payload = {
+      is_sos_active: true,
+      latitude: finalLat,
+      longitude: finalLon,
+      accuracy: finalAcc,
+      battery_level: battery,
+    };
+  
+    if (!isDemoMode && currentChildId) {
+      // Feature 2: 5-second ambient audio recording in background
+      recordAndUploadSOSAudio(currentChildId);
+      try {
+        const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data && data.status === "success") {
+          if (data.parent_phone) parentPhone = data.parent_phone;
+          showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
+        }
+      } catch (err) {
+        console.error("SOS dispatch error:", err);
+        showToast("⚠️ SOS signali yuborildi (tarmoq tekshirilmoqda)");
+      }
+    } else {
+      showToast("🚨 (Demo) SOS signali faollashtirildi!");
+    }
+    } finally {
+    setTimeout(() => {
+      isSosTriggering = false;
+      const btn = document.getElementById("btnChildBigSOS");
+      if (btn) {
+        btn.classList.remove("pointer-events-none", "opacity-80");
+      }
+    }, 4000);
   }
 }
 
 async function cancelChildSOS() {
   haptic("medium");
+  isSosTriggering = false;
+  lastSosTriggerTimestamp = 0;
+  const btnBig = document.getElementById("btnChildBigSOS");
+  if (btnBig) {
+    btnBig.classList.remove("pointer-events-none", "opacity-80");
+  }
   const modal = document.getElementById("modal-sos-active");
   if (modal) modal.classList.add("hidden");
 
