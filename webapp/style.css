@@ -1,275 +1,334 @@
-/* Custom CSS for Smart Parental Tracker Mini App - Dynamic Themed Edition */
+/* ==========================================================================
+   CHILD SECURITY BOT - PREMIUM APPLE HIG / LINEAR DESIGN SYSTEM
+   Ultra-refined Glassmorphism, Dynamic Island HUD, Tactile Mobile Ergonomics
+   ========================================================================== */
 
-/* ========================================================= */
-/* 1. GLOBAL THEME ENGINE & PALETTES                         */
-/* ========================================================= */
-
+/* --------------------------------------------------------------------------
+   1. GLOBAL THEME ENGINE & PALETTES (12 DYNAMIC THEMES)
+   -------------------------------------------------------------------------- */
 :root {
   /* Default: Midnight Tactical */
-  --bg-main: #060911;
-  --bg-surface: #0b1120;
-  --bg-card: rgba(17, 26, 46, 0.92);
-  --bg-card-border: rgba(59, 130, 246, 0.35);
-  --pill-bg: #15223c;
+  --bg-main: #06080e;
+  --bg-surface: #0c101b;
+  --bg-card: rgba(15, 22, 38, 0.78);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --glass-bg: rgba(12, 17, 30, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65);
+  --pill-bg: rgba(23, 33, 56, 0.85);
   --text-main: #f8fafc;
-  --text-muted: #cbd5e1;
+  --text-muted: #94a3b8;
   --primary: #3b82f6;
   --primary-glow: rgba(59, 130, 246, 0.45);
   --accent: #06b6d4;
-  --header-bg: rgba(11, 17, 32, 0.95);
-  --nav-bg: rgba(11, 17, 32, 0.95);
-  --tab-active-bg: rgba(59, 130, 246, 0.18);
+  --header-bg: rgba(8, 12, 22, 0.82);
+  --nav-bg: rgba(8, 12, 22, 0.85);
+  --tab-active-bg: rgba(59, 130, 246, 0.2);
   --tab-active-color: #60a5fa;
-  --badge-bg: rgba(59, 130, 246, 0.2);
-  --badge-border: rgba(59, 130, 246, 0.4);
+  --badge-bg: rgba(59, 130, 246, 0.18);
+  --badge-border: rgba(59, 130, 246, 0.35);
 }
 
-/* Theme 1: Galaxy Neon (Binafsharang Yulduzli Tun) */
+/* Theme 1: Galaxy Neon */
 body.theme-galaxy {
-  --bg-main: #090516;
-  --bg-surface: #120a2c;
-  --bg-card: rgba(28, 15, 66, 0.92);
-  --bg-card-border: rgba(168, 85, 247, 0.45);
-  --pill-bg: #221252;
+  --bg-main: #070412;
+  --bg-surface: #100824;
+  --bg-card: rgba(24, 13, 52, 0.78);
+  --bg-card-border: rgba(168, 85, 247, 0.35);
+  --glass-bg: rgba(20, 10, 44, 0.75);
+  --glass-border: rgba(168, 85, 247, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(16, 5, 36, 0.8);
+  --pill-bg: rgba(36, 18, 76, 0.85);
   --text-main: #faf5ff;
-  --text-muted: #d8b4fe;
+  --text-muted: #c084fc;
   --primary: #a855f7;
-  --primary-glow: rgba(168, 85, 247, 0.55);
+  --primary-glow: rgba(168, 85, 247, 0.5);
   --accent: #ec4899;
-  --header-bg: rgba(18, 10, 44, 0.95);
-  --nav-bg: rgba(18, 10, 44, 0.95);
+  --header-bg: rgba(12, 6, 28, 0.82);
+  --nav-bg: rgba(12, 6, 28, 0.85);
   --tab-active-bg: rgba(168, 85, 247, 0.25);
-  --tab-active-color: #d8b4fe;
-  --badge-bg: rgba(168, 85, 247, 0.25);
-  --badge-border: rgba(168, 85, 247, 0.45);
+  --tab-active-color: #e9d5ff;
+  --badge-bg: rgba(168, 85, 247, 0.22);
+  --badge-border: rgba(168, 85, 247, 0.4);
 }
 
-/* Theme 2: Midnight Tactical (Professional Tungi Qora) */
+/* Theme 2: Midnight Tactical */
 body.theme-midnight {
-  --bg-main: #060911;
-  --bg-surface: #0b1120;
-  --bg-card: rgba(17, 26, 46, 0.92);
-  --bg-card-border: rgba(59, 130, 246, 0.35);
-  --pill-bg: #15223c;
+  --bg-main: #06080e;
+  --bg-surface: #0c101b;
+  --bg-card: rgba(15, 22, 38, 0.78);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --glass-bg: rgba(12, 17, 30, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65);
+  --pill-bg: rgba(23, 33, 56, 0.85);
   --text-main: #f8fafc;
-  --text-muted: #cbd5e1;
+  --text-muted: #94a3b8;
   --primary: #3b82f6;
   --primary-glow: rgba(59, 130, 246, 0.45);
   --accent: #06b6d4;
-  --header-bg: rgba(11, 17, 32, 0.95);
-  --nav-bg: rgba(11, 17, 32, 0.95);
-  --tab-active-bg: rgba(59, 130, 246, 0.18);
+  --header-bg: rgba(8, 12, 22, 0.82);
+  --nav-bg: rgba(8, 12, 22, 0.85);
+  --tab-active-bg: rgba(59, 130, 246, 0.2);
   --tab-active-color: #60a5fa;
-  --badge-bg: rgba(59, 130, 246, 0.2);
-  --badge-border: rgba(59, 130, 246, 0.4);
+  --badge-bg: rgba(59, 130, 246, 0.18);
+  --badge-border: rgba(59, 130, 246, 0.35);
 }
 
-/* Theme 3: Emerald Forest (Jonli Zümrad O'rmon) */
+/* Theme 3: Emerald Forest */
 body.theme-emerald {
-  --bg-main: #04120a;
-  --bg-surface: #082114;
-  --bg-card: rgba(14, 46, 29, 0.92);
-  --bg-card-border: rgba(16, 185, 129, 0.45);
-  --pill-bg: #143e27;
+  --bg-main: #030e07;
+  --bg-surface: #071c10;
+  --bg-card: rgba(10, 36, 21, 0.78);
+  --bg-card-border: rgba(16, 185, 129, 0.35);
+  --glass-bg: rgba(8, 28, 16, 0.75);
+  --glass-border: rgba(16, 185, 129, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 16px 40px -8px rgba(3, 16, 8, 0.8);
+  --pill-bg: rgba(16, 50, 30, 0.85);
   --text-main: #ecfdf5;
-  --text-muted: #a7f3d0;
+  --text-muted: #6ee7b7;
   --primary: #10b981;
-  --primary-glow: rgba(16, 185, 129, 0.5);
+  --primary-glow: rgba(16, 185, 129, 0.48);
   --accent: #14b8a6;
-  --header-bg: rgba(8, 33, 20, 0.95);
-  --nav-bg: rgba(8, 33, 20, 0.95);
-  --tab-active-bg: rgba(16, 185, 129, 0.25);
-  --tab-active-color: #34d399;
+  --header-bg: rgba(6, 22, 13, 0.82);
+  --nav-bg: rgba(6, 22, 13, 0.85);
+  --tab-active-bg: rgba(16, 185, 129, 0.22);
+  --tab-active-color: #a7f3d0;
   --badge-bg: rgba(16, 185, 129, 0.2);
-  --badge-border: rgba(16, 185, 129, 0.4);
+  --badge-border: rgba(16, 185, 129, 0.38);
 }
 
-/* Theme 4: Sunset Amber (Issiq Oltin Quyosh) */
+/* Theme 4: Sunset Amber */
 body.theme-sunset {
-  --bg-main: #130802;
-  --bg-surface: #221004;
-  --bg-card: rgba(48, 23, 8, 0.92);
-  --bg-card-border: rgba(245, 158, 11, 0.45);
-  --pill-bg: #42200b;
+  --bg-main: #100602;
+  --bg-surface: #1e0c04;
+  --bg-card: rgba(40, 18, 7, 0.78);
+  --bg-card-border: rgba(245, 158, 11, 0.35);
+  --glass-bg: rgba(30, 13, 5, 0.75);
+  --glass-border: rgba(245, 158, 11, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 7, 2, 0.8);
+  --pill-bg: rgba(56, 25, 9, 0.85);
   --text-main: #fffbeb;
-  --text-muted: #fde68a;
+  --text-muted: #fcd34d;
   --primary: #f59e0b;
-  --primary-glow: rgba(245, 158, 11, 0.5);
+  --primary-glow: rgba(245, 158, 11, 0.48);
   --accent: #f97316;
-  --header-bg: rgba(34, 16, 4, 0.95);
-  --nav-bg: rgba(34, 16, 4, 0.95);
-  --tab-active-bg: rgba(245, 158, 11, 0.25);
-  --tab-active-color: #fbbf24;
+  --header-bg: rgba(24, 10, 3, 0.82);
+  --nav-bg: rgba(24, 10, 3, 0.85);
+  --tab-active-bg: rgba(245, 158, 11, 0.22);
+  --tab-active-color: #fde68a;
   --badge-bg: rgba(245, 158, 11, 0.2);
-  --badge-border: rgba(245, 158, 11, 0.4);
+  --badge-border: rgba(245, 158, 11, 0.38);
 }
 
-/* Theme 5: Clean Daylight (Zamonaviy Yorug' Kunduz) */
+/* Theme 5: Clean Daylight (Light iOS Modern) */
 body.theme-daylight {
-  --bg-main: #f1f5f9;
+  --bg-main: #f8fafc;
   --bg-surface: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.96);
-  --bg-card-border: rgba(203, 213, 225, 0.95);
-  --pill-bg: #e2e8f0;
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --bg-card-border: rgba(203, 213, 225, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(226, 232, 240, 0.9);
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 14px 34px -6px rgba(15, 23, 42, 0.08);
+  --pill-bg: rgba(241, 245, 249, 0.9);
   --text-main: #0f172a;
-  --text-muted: #475569;
+  --text-muted: #64748b;
   --primary: #2563eb;
-  --primary-glow: rgba(37, 99, 235, 0.3);
+  --primary-glow: rgba(37, 99, 235, 0.25);
   --accent: #0284c7;
-  --header-bg: rgba(255, 255, 255, 0.96);
-  --nav-bg: rgba(255, 255, 255, 0.96);
+  --header-bg: rgba(255, 255, 255, 0.88);
+  --nav-bg: rgba(255, 255, 255, 0.88);
   --tab-active-bg: rgba(37, 99, 235, 0.12);
   --tab-active-color: #1d4ed8;
-  --badge-bg: rgba(37, 99, 235, 0.12);
-  --badge-border: rgba(37, 99, 235, 0.35);
+  --badge-bg: rgba(37, 99, 235, 0.1);
+  --badge-border: rgba(37, 99, 235, 0.25);
 }
 
-/* Theme 6: Comic Hero (Rang-barang Qahramon Pop) */
+/* Theme 6: Comic Hero */
 body.theme-comic {
-  --bg-main: #090e1f;
-  --bg-surface: #101938;
-  --bg-card: rgba(22, 34, 76, 0.94);
-  --bg-card-border: rgba(250, 204, 21, 0.5);
-  --pill-bg: #1c2b5e;
+  --bg-main: #070b1a;
+  --bg-surface: #0e152e;
+  --bg-card: rgba(18, 28, 62, 0.8);
+  --bg-card-border: rgba(250, 204, 21, 0.4);
+  --glass-bg: rgba(15, 23, 52, 0.78);
+  --glass-border: rgba(250, 204, 21, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.7);
+  --pill-bg: rgba(26, 40, 88, 0.85);
   --text-main: #ffffff;
-  --text-muted: #bfdbfe;
+  --text-muted: #93c5fd;
   --primary: #facc15;
-  --primary-glow: rgba(250, 204, 21, 0.6);
+  --primary-glow: rgba(250, 204, 21, 0.55);
   --accent: #f43f5e;
-  --header-bg: rgba(16, 25, 56, 0.96);
-  --nav-bg: rgba(16, 25, 56, 0.96);
+  --header-bg: rgba(12, 19, 42, 0.84);
+  --nav-bg: rgba(12, 19, 42, 0.86);
   --tab-active-bg: rgba(250, 204, 21, 0.22);
-  --tab-active-color: #fde047;
-  --badge-bg: rgba(250, 204, 21, 0.2);
-  --badge-border: rgba(250, 204, 21, 0.5);
+  --tab-active-color: #fef08a;
+  --badge-bg: rgba(250, 204, 21, 0.18);
+  --badge-border: rgba(250, 204, 21, 0.4);
 }
 
-/* Theme 7: Ocean Abyss (Chuqur Okean Firuza) */
+/* Theme 7: Ocean Abyss */
 body.theme-ocean {
-  --bg-main: #03131e;
-  --bg-surface: #062338;
-  --bg-card: rgba(8, 42, 68, 0.94);
-  --bg-card-border: rgba(6, 182, 212, 0.45);
-  --pill-bg: #0b3454;
+  --bg-main: #020e18;
+  --bg-surface: #051c2e;
+  --bg-card: rgba(7, 34, 56, 0.78);
+  --bg-card-border: rgba(6, 182, 212, 0.35);
+  --glass-bg: rgba(6, 27, 44, 0.75);
+  --glass-border: rgba(6, 182, 212, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(2, 12, 20, 0.8);
+  --pill-bg: rgba(10, 44, 72, 0.85);
   --text-main: #f0fdfa;
-  --text-muted: #a5f3fc;
+  --text-muted: #67e8f9;
   --primary: #06b6d4;
-  --primary-glow: rgba(6, 182, 212, 0.55);
+  --primary-glow: rgba(6, 182, 212, 0.5);
   --accent: #38bdf8;
-  --header-bg: rgba(6, 35, 56, 0.96);
-  --nav-bg: rgba(6, 35, 56, 0.96);
-  --tab-active-bg: rgba(6, 182, 212, 0.22);
-  --tab-active-color: #22d3ee;
-  --badge-bg: rgba(6, 182, 212, 0.2);
-  --badge-border: rgba(6, 182, 212, 0.45);
+  --header-bg: rgba(4, 20, 32, 0.82);
+  --nav-bg: rgba(4, 20, 32, 0.85);
+  --tab-active-bg: rgba(6, 182, 212, 0.2);
+  --tab-active-color: #a5f3fc;
+  --badge-bg: rgba(6, 182, 212, 0.18);
+  --badge-border: rgba(6, 182, 212, 0.35);
 }
 
-/* Theme 8: Sakura Dream (Pushti Bahor) */
+/* Theme 8: Sakura Dream */
 body.theme-sakura {
-  --bg-main: #180812;
-  --bg-surface: #2b0e20;
-  --bg-card: rgba(56, 19, 43, 0.94);
-  --bg-card-border: rgba(244, 114, 182, 0.45);
-  --pill-bg: #421834;
+  --bg-main: #14060f;
+  --bg-surface: #220b1a;
+  --bg-card: rgba(45, 15, 35, 0.78);
+  --bg-card-border: rgba(244, 114, 182, 0.35);
+  --glass-bg: rgba(34, 11, 26, 0.75);
+  --glass-border: rgba(244, 114, 182, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 5, 14, 0.8);
+  --pill-bg: rgba(60, 20, 46, 0.85);
   --text-main: #fdf2f8;
-  --text-muted: #fbcfe8;
+  --text-muted: #f472b6;
   --primary: #f472b6;
-  --primary-glow: rgba(244, 114, 182, 0.55);
+  --primary-glow: rgba(244, 114, 182, 0.5);
   --accent: #fb7185;
-  --header-bg: rgba(43, 14, 32, 0.96);
-  --nav-bg: rgba(43, 14, 32, 0.96);
+  --header-bg: rgba(26, 8, 20, 0.82);
+  --nav-bg: rgba(26, 8, 20, 0.85);
   --tab-active-bg: rgba(244, 114, 182, 0.22);
   --tab-active-color: #fbcfe8;
-  --badge-bg: rgba(244, 114, 182, 0.2);
-  --badge-border: rgba(244, 114, 182, 0.45);
+  --badge-bg: rgba(244, 114, 182, 0.18);
+  --badge-border: rgba(244, 114, 182, 0.38);
 }
 
-/* Theme 9: Cyberpunk 2077 (Kiber Neon Sariq) */
+/* Theme 9: Cyberpunk 2077 */
 body.theme-cyberpunk {
-  --bg-main: #0c0d12;
-  --bg-surface: #161822;
-  --bg-card: rgba(25, 28, 40, 0.94);
-  --bg-card-border: rgba(250, 204, 21, 0.55);
-  --pill-bg: #212534;
+  --bg-main: #0a0b10;
+  --bg-surface: #12141e;
+  --bg-card: rgba(20, 23, 34, 0.8);
+  --bg-card-border: rgba(250, 204, 21, 0.45);
+  --glass-bg: rgba(16, 18, 28, 0.78);
+  --glass-border: rgba(250, 204, 21, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8);
+  --pill-bg: rgba(28, 32, 48, 0.85);
   --text-main: #fef9c3;
-  --text-muted: #fef08a;
+  --text-muted: #facc15;
   --primary: #eab308;
-  --primary-glow: rgba(234, 179, 8, 0.65);
+  --primary-glow: rgba(234, 179, 8, 0.55);
   --accent: #06b6d4;
-  --header-bg: rgba(22, 24, 34, 0.96);
-  --nav-bg: rgba(22, 24, 34, 0.96);
-  --tab-active-bg: rgba(234, 179, 8, 0.25);
-  --tab-active-color: #fde047;
-  --badge-bg: rgba(234, 179, 8, 0.2);
-  --badge-border: rgba(234, 179, 8, 0.5);
+  --header-bg: rgba(14, 16, 24, 0.84);
+  --nav-bg: rgba(14, 16, 24, 0.86);
+  --tab-active-bg: rgba(234, 179, 8, 0.22);
+  --tab-active-color: #fef08a;
+  --badge-bg: rgba(234, 179, 8, 0.18);
+  --badge-border: rgba(234, 179, 8, 0.4);
 }
 
-/* Theme 10: Crimson Magma (Olovli Magma) */
+/* Theme 10: Crimson Magma */
 body.theme-magma {
-  --bg-main: #140404;
-  --bg-surface: #240808;
-  --bg-card: rgba(50, 12, 12, 0.94);
-  --bg-card-border: rgba(239, 68, 68, 0.5);
-  --pill-bg: #3c1212;
+  --bg-main: #100303;
+  --bg-surface: #1e0606;
+  --bg-card: rgba(42, 10, 10, 0.78);
+  --bg-card-border: rgba(239, 68, 68, 0.4);
+  --glass-bg: rgba(30, 8, 8, 0.75);
+  --glass-border: rgba(239, 68, 68, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 3, 3, 0.8);
+  --pill-bg: rgba(56, 14, 14, 0.85);
   --text-main: #fef2f2;
-  --text-muted: #fecaca;
+  --text-muted: #f87171;
   --primary: #ef4444;
-  --primary-glow: rgba(239, 68, 68, 0.6);
+  --primary-glow: rgba(239, 68, 68, 0.55);
   --accent: #f97316;
-  --header-bg: rgba(36, 8, 8, 0.96);
-  --nav-bg: rgba(36, 8, 8, 0.96);
-  --tab-active-bg: rgba(239, 68, 68, 0.25);
-  --tab-active-color: #f87171;
+  --header-bg: rgba(24, 6, 6, 0.82);
+  --nav-bg: rgba(24, 6, 6, 0.85);
+  --tab-active-bg: rgba(239, 68, 68, 0.24);
+  --tab-active-color: #fca5a5;
   --badge-bg: rgba(239, 68, 68, 0.2);
-  --badge-border: rgba(239, 68, 68, 0.5);
+  --badge-border: rgba(239, 68, 68, 0.4);
 }
 
-/* Theme 11: Retro Arcade (8-Bit Piksel O'yin) */
+/* Theme 11: Retro Arcade */
 body.theme-arcade {
-  --bg-main: #0c0818;
-  --bg-surface: #180f30;
-  --bg-card: rgba(34, 21, 68, 0.94);
-  --bg-card-border: rgba(168, 85, 247, 0.5);
-  --pill-bg: #291a52;
+  --bg-main: #090614;
+  --bg-surface: #140c26;
+  --bg-card: rgba(28, 17, 54, 0.8);
+  --bg-card-border: rgba(192, 132, 252, 0.4);
+  --glass-bg: rgba(22, 13, 44, 0.75);
+  --glass-border: rgba(192, 132, 252, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(12, 5, 24, 0.8);
+  --pill-bg: rgba(38, 23, 74, 0.85);
   --text-main: #fdf4ff;
-  --text-muted: #f5d0fe;
+  --text-muted: #d8b4fe;
   --primary: #c084fc;
-  --primary-glow: rgba(192, 132, 252, 0.6);
+  --primary-glow: rgba(192, 132, 252, 0.55);
   --accent: #22c55e;
-  --header-bg: rgba(24, 15, 48, 0.96);
-  --nav-bg: rgba(24, 15, 48, 0.96);
-  --tab-active-bg: rgba(192, 132, 252, 0.25);
-  --tab-active-color: #e9d5ff;
+  --header-bg: rgba(16, 9, 32, 0.82);
+  --nav-bg: rgba(16, 9, 32, 0.85);
+  --tab-active-bg: rgba(192, 132, 252, 0.24);
+  --tab-active-color: #f3e8ff;
   --badge-bg: rgba(192, 132, 252, 0.2);
-  --badge-border: rgba(192, 132, 252, 0.5);
+  --badge-border: rgba(192, 132, 252, 0.4);
 }
 
-/* Theme 12: Arctic Frost (Muzlik Arktika) */
+/* Theme 12: Arctic Frost */
 body.theme-frost {
-  --bg-main: #0b1522;
-  --bg-surface: #122238;
-  --bg-card: rgba(24, 46, 75, 0.94);
-  --bg-card-border: rgba(56, 189, 248, 0.45);
-  --pill-bg: #1d3656;
+  --bg-main: #08101a;
+  --bg-surface: #0e1c2e;
+  --bg-card: rgba(18, 36, 60, 0.78);
+  --bg-card-border: rgba(56, 189, 248, 0.35);
+  --glass-bg: rgba(14, 28, 48, 0.75);
+  --glass-border: rgba(56, 189, 248, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(4, 14, 26, 0.8);
+  --pill-bg: rgba(24, 48, 80, 0.85);
   --text-main: #f0f9ff;
-  --text-muted: #bae6fd;
+  --text-muted: #7dd3fc;
   --primary: #38bdf8;
-  --primary-glow: rgba(56, 189, 248, 0.55);
+  --primary-glow: rgba(56, 189, 248, 0.5);
   --accent: #93c5fd;
-  --header-bg: rgba(18, 34, 56, 0.96);
-  --nav-bg: rgba(18, 34, 56, 0.96);
-  --tab-active-bg: rgba(56, 189, 248, 0.22);
+  --header-bg: rgba(10, 20, 34, 0.82);
+  --nav-bg: rgba(10, 20, 34, 0.85);
+  --tab-active-bg: rgba(56, 189, 248, 0.2);
   --tab-active-color: #bae6fd;
-  --badge-bg: rgba(56, 189, 248, 0.2);
-  --badge-border: rgba(56, 189, 248, 0.45);
+  --badge-bg: rgba(56, 189, 248, 0.18);
+  --badge-border: rgba(56, 189, 248, 0.35);
 }
 
-/* ========================================================= */
-/* 2. DYNAMIC SITE-WIDE THEME OVERRIDES                      */
-/* ========================================================= */
+/* --------------------------------------------------------------------------
+   2. CORE BASE & TYPOGRAPHY ENGINE (APPLE SF PRO / LINEAR STACK)
+   -------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", -system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   background-color: var(--bg-main) !important;
@@ -277,22 +336,65 @@ body {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.35s ease;
+  letter-spacing: -0.015em;
 }
 
+/* Subtle ambient mesh light in dark mode */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 240px;
+  background: radial-gradient(ellipse at 50% -20%, var(--primary-glow) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+/* --------------------------------------------------------------------------
+   3. APPLE GLASSMORPHISM & DEPTH CONTAINERS
+   -------------------------------------------------------------------------- */
+.ios-glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), var(--glass-shadow);
+  border-radius: 24px;
+}
+
+.ios-glass-pill {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-radius: 9999px;
+}
+
+/* Universal Card, Header, and Nav Glass overrides */
 header {
-  background-color: var(--header-bg) !important;
-  border-color: var(--bg-card-border) !important;
+  background: var(--header-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.45) !important;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-nav {
-  background-color: var(--nav-bg) !important;
-  border-color: var(--bg-card-border) !important;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+nav#mainNavBar {
+  background: var(--nav-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 28px !important;
 }
 
-/* Modal Bottom Sheets & Desktop Containers */
+/* Modal Bottom Sheets & Surface Containers */
 .tab-panel > div,
 #modal-add-zone > div,
 #modal-add-task > div,
@@ -302,14 +404,23 @@ nav {
 #modal-coin-rate > div,
 #modal-theme > div,
 #modal-settings > div,
-#modal-wallet > div {
-  background-color: var(--bg-surface) !important;
-  border-color: var(--bg-card-border) !important;
+#modal-wallet > div,
+#modal-walk-safe > div,
+#modal-edit-wishlist > div,
+#childOnboardingModal > div,
+#childInviteParentModal > div,
+#parentInviteSpouseModal > div,
+#deleteChildModal > div {
+  background: var(--bg-surface) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 24px 60px -8px rgba(0, 0, 0, 0.75) !important;
   color: var(--text-main) !important;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Containers, Cards, and Surfaces across all themes */
+/* Dynamic Surfaces */
 .bg-slate-950,
 .bg-slate-900,
 .bg-slate-900\/95,
@@ -336,245 +447,295 @@ nav {
 .border-slate-700,
 .border-slate-700\/80,
 .border-slate-700\/60 {
-  border-color: var(--bg-card-border) !important;
+  border-color: var(--glass-border) !important;
 }
 
-/* ========================================================= */
-/* UNIVERSAL TEXT CONTRAST ENGINE (FOR ALL 12 THEMES)         */
-/* ========================================================= */
-
-/* Main Text & Headings */
-.text-slate-100,
-.text-slate-200 {
-  color: var(--text-main) !important;
+/* --------------------------------------------------------------------------
+   4. DYNAMIC ISLAND & FLOATING LIVE STATUS CAPSULES
+   -------------------------------------------------------------------------- */
+.dynamic-island {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Muted / Secondary text (timestamps, descriptions, details) */
-.text-slate-300:not(button):not([class*="bg-amber"]):not([class*="bg-emerald"]):not([class*="bg-blue"]):not([class*="bg-purple"]):not([class*="bg-indigo"]):not([class*="bg-red"]),
-.text-slate-400,
-.text-slate-500 {
-  color: var(--text-muted) !important;
+.dynamic-island:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
 }
 
-/* Headings inherit main text color */
-h1:not(button *),
-h2:not(button *),
-h3:not(button *),
-h4:not(button *),
-#zonesModalTitle,
-#tasksModalTitle {
-  color: var(--text-main) !important;
+.dynamic-island-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: dynamic-pulse 2s infinite ease-in-out;
 }
 
-/* Action Buttons with colored/gradient background MUST retain crisp white text */
-button.bg-blue-600,
-button.bg-blue-500,
-button.bg-emerald-600,
-button.bg-emerald-500,
-button.bg-red-600,
-button.bg-rose-600,
-button.bg-amber-600,
-button[class*="bg-gradient-to-r from-blue-"],
-button[class*="bg-gradient-to-r from-emerald-"],
-button[class*="bg-gradient-to-r from-red-"],
-button[class*="bg-gradient-to-r from-purple-"],
-#btnChildBigSOS,
-button.btn-primary {
-  color: #ffffff !important;
-}
-button.bg-blue-600 *,
-button.bg-emerald-600 *,
-button.bg-red-600 *,
-button.bg-rose-600 *,
-button.bg-amber-600 *,
-#btnChildBigSOS * {
-  color: #ffffff !important;
+@keyframes dynamic-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
 }
 
-/* Form input elements */
-input,
-select,
-textarea {
-  background-color: var(--pill-bg) !important;
-  color: var(--text-main) !important;
-  border-color: var(--bg-card-border) !important;
-}
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-muted) !important;
-  opacity: 0.75;
-}
-
-/* Theme-adaptive secondary accent text in Child View cards */
-body.theme-emerald #childViewSection .text-purple-300,
-body.theme-emerald #childViewSection .text-purple-400 {
-  color: #a7f3d0 !important;
-}
-body.theme-sunset #childViewSection .text-purple-300,
-body.theme-sunset #childViewSection .text-purple-400 {
-  color: #fde68a !important;
-}
-body.theme-magma #childViewSection .text-purple-300,
-body.theme-magma #childViewSection .text-purple-400 {
-  color: #fecaca !important;
-}
-body.theme-ocean #childViewSection .text-purple-300,
-body.theme-ocean #childViewSection .text-purple-400 {
-  color: #a5f3fc !important;
-}
-body.theme-cyberpunk #childViewSection .text-purple-300,
-body.theme-cyberpunk #childViewSection .text-purple-400 {
-  color: #fef08a !important;
-}
-body.theme-frost #childViewSection .text-purple-300,
-body.theme-frost #childViewSection .text-purple-400 {
-  color: #bae6fd !important;
-}
-body.theme-arcade #childViewSection .text-purple-300,
-body.theme-arcade #childViewSection .text-purple-400 {
-  color: #f5d0fe !important;
+/* --------------------------------------------------------------------------
+   5. FLOATING MAP CONTROLS DOCK (RIGHT SIDEBAR)
+   -------------------------------------------------------------------------- */
+.floating-glass-dock {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 14px 34px -4px rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* ========================================================= */
-/* DAYLIGHT (LIGHT THEME) SPECIFIC HIGH-CONTRAST OVERRIDES    */
-/* ========================================================= */
-body.theme-daylight .text-white:not(button):not(button *):not([class*="from-"]):not(#btnChildBigSOS *) {
-  color: #0f172a !important;
+.floating-glass-dock button {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-body.theme-daylight .text-slate-100,
-body.theme-daylight .text-slate-200 {
-  color: #0f172a !important;
+.floating-glass-dock button:active {
+  transform: scale(0.88);
+  background: rgba(255, 255, 255, 0.14);
 }
 
-body.theme-daylight .text-slate-300,
-body.theme-daylight .text-slate-400,
-body.theme-daylight .text-slate-500 {
-  color: #475569 !important;
+/* --------------------------------------------------------------------------
+   6. FIND MY / LIFE360 STYLE FLOATING STATUS CARD (PARENT SCREEN)
+   -------------------------------------------------------------------------- */
+#locationCard {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 16px 40px -6px rgba(0, 0, 0, 0.65) !important;
+  border-radius: 26px !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* High-contrast badges & monetary text in Daylight */
-body.theme-daylight .text-amber-200,
-body.theme-daylight .text-amber-300,
-body.theme-daylight .text-yellow-300,
-body.theme-daylight .text-yellow-400 {
-  color: #b45309 !important; /* Deep rich amber */
+#locationCard:hover {
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
-body.theme-daylight .text-emerald-300,
-body.theme-daylight .text-emerald-400 {
-  color: #047857 !important; /* Deep rich emerald */
+/* --------------------------------------------------------------------------
+   7. GAMIFIED CHILD HERO PORTAL & REVOLUT <18 AESTHETIC
+   -------------------------------------------------------------------------- */
+.child-hero-banner {
+  background: linear-gradient(135deg, rgba(30, 20, 60, 0.85) 0%, rgba(15, 22, 45, 0.85) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 14px 34px -4px rgba(12, 6, 28, 0.65);
+  border-radius: 26px;
+  position: relative;
+  overflow: hidden;
 }
 
-body.theme-daylight .text-blue-300,
-body.theme-daylight .text-blue-400,
-body.theme-daylight .text-sky-300 {
-  color: #1d4ed8 !important; /* Deep rich blue */
+.child-hero-banner::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+  pointer-events: none;
 }
 
-body.theme-daylight .text-purple-300,
-body.theme-daylight .text-purple-400,
-body.theme-daylight .text-indigo-300,
-body.theme-daylight .text-indigo-400 {
-  color: #6d28d9 !important; /* Deep rich purple */
+/* Level XP Shimmer Progress Bar */
+.xp-progress-bar {
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 9999px;
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-body.theme-daylight .text-rose-300,
-body.theme-daylight .text-rose-400,
-body.theme-daylight .text-red-300,
-body.theme-daylight .text-red-400 {
-  color: #b91c1c !important; /* Deep rich red */
+.xp-progress-fill {
+  background: linear-gradient(90deg, #f59e0b, #ec4899, #a855f7);
+  height: 100%;
+  border-radius: 9999px;
+  position: relative;
 }
 
-body.theme-daylight .text-cyan-300,
-body.theme-daylight .text-cyan-400 {
-  color: #0e7490 !important; /* Deep rich cyan */
+.xp-progress-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: shimmer-stream 2.2s infinite ease-in-out;
 }
 
-/* Soft tinted pill backgrounds in Daylight */
-body.theme-daylight .bg-amber-500\/15,
-body.theme-daylight .bg-amber-500\/20,
-body.theme-daylight .bg-amber-500\/25 {
-  background-color: #fef3c7 !important;
-  border-color: #fde68a !important;
+@keyframes shimmer-stream {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
-body.theme-daylight .bg-emerald-500\/15,
-body.theme-daylight .bg-emerald-500\/20,
-body.theme-daylight .bg-emerald-950\/30 {
-  background-color: #d1fae5 !important;
-  border-color: #a7f3d0 !important;
+/* Orzular Qutisi (Wishlist Vault Card) */
+.wishlist-vault-card {
+  background: linear-gradient(135deg, rgba(8, 36, 26, 0.82) 0%, rgba(12, 24, 38, 0.82) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 16px 36px -4px rgba(4, 20, 14, 0.65);
+  border-radius: 26px;
 }
 
-body.theme-daylight .bg-blue-500\/15,
-body.theme-daylight .bg-blue-500\/20 {
-  background-color: #dbeafe !important;
-  border-color: #bfdbfe !important;
+/* Tactile SOS Emergency Shield */
+.sos-shield-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 18px 12px;
 }
 
-body.theme-daylight .bg-purple-600\/20,
-body.theme-daylight .bg-purple-500\/20 {
-  background-color: #f3e8ff !important;
-  border-color: #e9d5ff !important;
+.sos-shield-pulse-ring {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.22);
+  animation: sos-radar-wave 2s infinite cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
 }
 
-body.theme-daylight input,
-body.theme-daylight select,
-body.theme-daylight textarea {
-  background-color: #f8fafc !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+.sos-shield-pulse-ring-outer {
+  position: absolute;
+  width: 165px;
+  height: 165px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  animation: sos-radar-wave 2s infinite cubic-bezier(0.16, 1, 0.3, 1) 0.5s;
+  pointer-events: none;
 }
 
-select option {
-  background-color: var(--bg-surface) !important;
-  color: var(--text-main) !important;
+@keyframes sos-radar-wave {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
 }
 
-body.theme-daylight select option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
+#btnChildBigSOS {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 32px rgba(239, 68, 68, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.6) !important;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
 }
 
-/* Daylight battery pills */
-body.theme-daylight .bg-emerald-900\/40,
-body.theme-daylight .bg-emerald-900\/50 {
-  background-color: #d1fae5 !important;
-  border-color: #a7f3d0 !important;
+#btnChildBigSOS:active {
+  transform: scale(0.92);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), inset 0 2px 8px rgba(0, 0, 0, 0.5) !important;
 }
 
-body.theme-daylight .bg-amber-900\/40,
-body.theme-daylight .bg-amber-900\/50 {
-  background-color: #fef3c7 !important;
-  border-color: #fde68a !important;
+/* --------------------------------------------------------------------------
+   8. MOBILE TACTILE INTERACTIONS & HAPTIC BUTTON PHYSICS
+   -------------------------------------------------------------------------- */
+button, input, select, textarea, a, .nav-tab {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-body.theme-daylight .bg-red-900\/40,
-body.theme-daylight .bg-red-900\/50 {
-  background-color: #fee2e2 !important;
-  border-color: #fca5a5 !important;
+/* Spring Tactile feedback on all buttons */
+button:not(#btnChildBigSOS):not(.nav-tab):active {
+  transform: scale(0.95);
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Transform Child View gradient cards to clean daylight cards */
-body.theme-daylight #childViewSection > div:not(:last-child) {
-  background: #ffffff !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06) !important;
+/* Navigation Tabs Active State */
+.nav-tab {
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 18px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-body.theme-daylight #childViewSection > div:not(:last-child) h2,
-body.theme-daylight #childViewSection > div:not(:last-child) h3,
-body.theme-daylight #childViewSection > div:not(:last-child) h4 {
-  color: #0f172a !important;
-}
-
-/* Nav Tab Active Indicator */
 .nav-tab.active {
   color: var(--tab-active-color) !important;
-  background-color: var(--tab-active-bg) !important;
 }
 
-/* Map container filling available viewport */
+.nav-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  width: 14px;
+  height: 3px;
+  background-color: var(--primary);
+  border-radius: 9999px;
+  box-shadow: 0 0 8px var(--primary-glow);
+  animation: tabDotGrow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tabDotGrow {
+  from { width: 0px; opacity: 0; }
+  to { width: 14px; opacity: 1; }
+}
+
+/* Safe areas */
+.safe-top {
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+}
+
+.safe-bottom {
+  padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
+}
+
+/* Smooth momentum scrolling */
+.overflow-y-auto,
+.overflow-x-auto,
+.custom-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. RADAR MARKERS & MAP TILES
+   -------------------------------------------------------------------------- */
 #map {
   height: 100%;
   width: 100%;
@@ -582,7 +743,6 @@ body.theme-daylight #childViewSection > div:not(:last-child) h4 {
   background-color: var(--bg-main);
 }
 
-/* 100% Free OpenStreetMap Dark Mode Tile Filter (Eliminates CartoDB watermarks completely) */
 #map.map-dark-tiles .leaflet-tile-pane {
   filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(92%);
 }
@@ -595,48 +755,6 @@ body.theme-daylight #childViewSection > div:not(:last-child) h4 {
   filter: none !important;
 }
 
-/* ========================================================= */
-/* 3. DISTINCT ROLE AESTHETICS (PARENT vs CHILD)             */
-/* ========================================================= */
-
-/* Role Child Layout: Playful, Gamified, Superhero */
-body.role-child {
-  --child-glow: 0 8px 24px var(--primary-glow);
-}
-
-body.role-child #childFloatingActions button {
-  border-radius: 20px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4), 0 2px 6px var(--primary-glow);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
-}
-
-body.role-child #childFloatingActions button:active {
-  transform: scale(0.92);
-}
-
-body.role-child #btnChildSOS {
-  box-shadow: 0 0 28px rgba(239, 68, 68, 0.7), inset 0 2px 4px rgba(255, 255, 255, 0.5) !important;
-  animation: child-sos-bounce 1.6s infinite ease-in-out;
-}
-
-@keyframes child-sos-bounce {
-  0%, 100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-4px) scale(1.05);
-  }
-}
-
-/* Role Parent Layout: Tactical, High-tech, Crisp */
-body.role-parent #floatingMapControls button {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-}
-
-/* ========================================================= */
-/* 4. MAP MARKERS & RADAR ANIMATIONS                         */
-/* ========================================================= */
-
 .child-radar-marker {
   display: flex;
   justify-content: center;
@@ -645,12 +763,12 @@ body.role-parent #floatingMapControls button {
 }
 
 .child-avatar-pin {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--primary), var(--accent));
   border: 3px solid #ffffff;
-  box-shadow: 0 4px 16px var(--primary-glow);
+  box-shadow: 0 6px 20px var(--primary-glow);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -664,86 +782,54 @@ body.role-parent #floatingMapControls button {
 
 .child-pulse-ring {
   position: absolute;
-  width: 68px;
-  height: 68px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
   background: var(--primary-glow);
-  animation: pulse-ring 2s infinite ease-out;
+  animation: pulse-ring 2.2s infinite ease-out;
   z-index: 1;
 }
 
 .sos-pulse-ring {
   position: absolute;
-  width: 90px;
-  height: 90px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   background: rgba(239, 68, 68, 0.65);
-  animation: sos-pulse-ring 0.9s infinite ease-out;
+  animation: sos-pulse-ring 0.85s infinite ease-out;
   z-index: 1;
 }
 
 @keyframes pulse-ring {
-  0% {
-    transform: scale(0.6);
-    opacity: 0.95;
-  }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
+  0% { transform: scale(0.6); opacity: 0.95; }
+  100% { transform: scale(1.6); opacity: 0; }
 }
 
 @keyframes sos-pulse-ring {
-  0% {
-    transform: scale(0.6);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2.0);
-    opacity: 0;
-  }
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.0); opacity: 0; }
 }
 
-/* Animated replay dot */
-.replay-marker-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #f59e0b;
-  border: 3px solid #ffffff;
-  box-shadow: 0 0 10px #f59e0b;
-}
-
-/* Custom Geofence labels */
 .geofence-tooltip {
   background: var(--bg-surface) !important;
-  border: 1px solid var(--bg-card-border) !important;
+  border: 1px solid var(--glass-border) !important;
   color: var(--text-main) !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  border-radius: 10px !important;
-  padding: 4px 10px !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 12px !important;
+  padding: 5px 12px !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(16px);
 }
 
 .leaflet-tooltip-top:before {
   border-top-color: var(--bg-surface) !important;
 }
 
-/* Custom scrollbar for lists */
-.custom-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scroll::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-}
-.custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-/* Modal animations */
-@keyframes slideUp {
+/* --------------------------------------------------------------------------
+   10. MODAL BOTTOM SHEET ANIMATIONS & ACCESSIBILITY
+   -------------------------------------------------------------------------- */
+@keyframes slideUpSpring {
   from {
     transform: translateY(100%);
     opacity: 0;
@@ -755,13 +841,13 @@ body.role-parent #floatingMapControls button {
 }
 
 .animate-slide-up {
-  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slideUpSpring 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes modalScaleIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(8px);
+    transform: scale(0.96) translateY(10px);
   }
   to {
     opacity: 1;
@@ -770,123 +856,41 @@ body.role-parent #floatingMapControls button {
 }
 
 .animate-fade-in {
-  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ========================================================= */
-/* 5. HIDE NETLIFY BADGE & DRAWER WATERMARKS                 */
-/* ========================================================= */
-#nl-badge-frame,
-#nl-hud-frame,
-iframe[id^="nl-"],
-iframe[title*="Netlify"],
-iframe[title*="Powered by Netlify"],
-iframe[srcdoc*="Netlify"],
-iframe[srcdoc*="nl-"],
-iframe[style*="2147483645"],
-netlify-drawer,
-#netlify-drawer,
-div#netlify-drawer,
-.netlify-badge,
-#netlify-badge,
-[data-netlify-deploy-id],
-[data-netlify-site-id],
-div[class*="netlify"],
-div[id*="netlify"],
-a[href*="netlify.com"],
-iframe[src*="netlify"],
-script[src*="hud"],
-.leaflet-control-attribution {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  height: 0px !important;
-  width: 0px !important;
-  max-width: 0px !important;
-  max-height: 0px !important;
-  position: fixed !important;
-  top: -99999px !important;
-  left: -99999px !important;
-  clip-path: path("M0 0Z") !important;
-  overflow: hidden !important;
-  z-index: -99999 !important;
-}
-
-/* Safe area handling for notch, home indicator & edges */
-:root {
-  --sat: env(safe-area-inset-top, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
-  --sal: env(safe-area-inset-left, 0px);
-  --sar: env(safe-area-inset-right, 0px);
-}
-
-.safe-top {
-  padding-top: max(8px, env(safe-area-inset-top, 0px));
-}
-
-.safe-bottom {
-  padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
-}
-
-/* Touch optimization and native feel for mobile */
-button, input, select, textarea, a, .nav-tab {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Navigation tabs touch target ergonomics */
-.nav-tab {
-  min-height: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Momentum smooth scrolling on iOS and mobile browsers */
-.overflow-y-auto,
-.overflow-x-auto,
-.custom-scroll {
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Utility: hide scrollbars while allowing touch panning */
-.no-scrollbar::-webkit-scrollbar {
-  display: none !important;
-  width: 0px !important;
-  height: 0px !important;
-}
-.no-scrollbar {
-  -ms-overflow-style: none !important;
-  scrollbar-width: none !important;
-}
-
-/* Prevent auto-zoom on iOS Safari when tapping inputs & ensure mobile accessibility */
+/* iOS Bottom sheet max height & responsive handling */
 @media (max-width: 640px) {
-  input,
-  select,
-  textarea {
+  input, select, textarea {
     font-size: 16px !important;
   }
-
-  /* Bottom sheet max height on compact phones */
   .tab-panel > div {
     max-height: calc(88dvh - env(safe-area-inset-top, 0px)) !important;
   }
 }
 
-/* Desktop & tablet adaptations */
-@media (min-width: 768px) {
-  .animate-slide-up {
-    animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
+/* Daylight Light Theme High Contrast */
+body.theme-daylight .text-white:not(button):not(button *):not([class*="from-"]):not(#btnChildBigSOS *) {
+  color: #0f172a !important;
+}
+body.theme-daylight .text-slate-100,
+body.theme-daylight .text-slate-200 {
+  color: #0f172a !important;
+}
+body.theme-daylight .text-slate-300,
+body.theme-daylight .text-slate-400,
+body.theme-daylight .text-slate-500 {
+  color: #475569 !important;
+}
+body.theme-daylight input,
+body.theme-daylight select,
+body.theme-daylight textarea {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
 }
 
-/* ========================================================= */
-/* SLEEK FLOATING NOTIFICATION TOAST PILL (Top-Center)       */
-/* ========================================================= */
-
+/* Universal Toast Pill */
 .app-toast-pill {
   position: fixed;
   top: max(16px, env(safe-area-inset-top, 16px));
@@ -909,21 +913,15 @@ button, input, select, textarea, a, .nav-tab {
   border-radius: 9999px;
   border: 1px solid var(--bg-card-border, rgba(59, 130, 246, 0.45));
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), 0 0 16px var(--primary-glow, rgba(59, 130, 246, 0.3));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   pointer-events: none;
   animation: toastDropIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes toastDropIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -20px) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
+  from { opacity: 0; transform: translate(-50%, -20px) scale(0.92); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .app-toast-pill.toast-leaving {
@@ -931,19 +929,23 @@ button, input, select, textarea, a, .nav-tab {
 }
 
 @keyframes toastFlyOut {
-  from {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translate(-50%, -18px) scale(0.92);
-  }
+  from { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -18px) scale(0.92); }
 }
 
-body.theme-daylight .app-toast-pill {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15) !important;
+/* Watermark Suppression */
+#nl-badge-frame, #nl-hud-frame, iframe[id^="nl-"], iframe[title*="Netlify"],
+iframe[title*="Powered by Netlify"], iframe[srcdoc*="Netlify"], netlify-drawer,
+#netlify-drawer, div#netlify-drawer, .netlify-badge, #netlify-badge,
+[data-netlify-deploy-id], .leaflet-control-attribution {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0px !important;
+  width: 0px !important;
+  position: fixed !important;
+  top: -99999px !important;
+  left: -99999px !important;
+  z-index: -99999 !important;
 }

@@ -2131,13 +2131,16 @@ function toggleRouteHistory() {
 function updateBatteryUI(level, isCharging) {
   const pill = document.getElementById("batteryPill");
   const text = document.getElementById("batteryText");
+  const dynBatText = document.getElementById("dynamicIslandBatteryText");
 
   if (level === null || level === undefined) {
-    text.textContent = "--%";
+    if (text) text.textContent = "--%";
+    if (dynBatText) dynBatText.textContent = "--%";
     return;
   }
 
-  text.textContent = `${level}%`;
+  if (text) text.textContent = `${level}%`;
+  if (dynBatText) dynBatText.textContent = `${level}%`;
 
   if (isCharging) {
     pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
@@ -2173,10 +2176,14 @@ function formatTimeAgo(isoString) {
 // SOS Alert Banner handling
 function toggleSosBanner(isActive) {
   const banner = document.getElementById("sosAlertBanner");
+  const dynIslandText = document.getElementById("dynamicIslandText");
+  const dynIslandDot = document.getElementById("dynamicIslandDot");
   if (!banner) return;
 
   if (isActive) {
     banner.classList.remove("hidden");
+    if (dynIslandText) dynIslandText.textContent = "🚨 SOS FAVQULODDA!";
+    if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot bg-red-500 animate-ping";
     if (!lastSosAlertState) {
       haptic("heavy");
       playSirenSound();
@@ -2186,6 +2193,10 @@ function toggleSosBanner(isActive) {
   } else {
     banner.classList.add("hidden");
     lastSosAlertState = false;
+    if (dynIslandText && !walkSafeActive) {
+      dynIslandText.textContent = "Jonli GPS faol";
+      if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot";
+    }
   }
 }
 
@@ -4697,6 +4708,8 @@ async function recordAndUploadSOSAudio(childId) {
 function updateSpeedUI(speed) {
   const badge = document.getElementById("speedBadge");
   const val = document.getElementById("speedValue");
+  const dynIslandText = document.getElementById("dynamicIslandText");
+  const dynIslandDot = document.getElementById("dynamicIslandDot");
   if (!badge || !val) return;
 
   const kmh = Math.round(Number(speed) || 0);
@@ -4704,13 +4717,20 @@ function updateSpeedUI(speed) {
     val.textContent = `${kmh} km/h`;
     if (kmh >= 30) {
       badge.className = "text-[9px] bg-rose-500/25 text-rose-300 border border-rose-500/50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 animate-pulse shadow-sm";
+      if (dynIslandText) dynIslandText.textContent = `🚗 ${kmh} km/h (Tezlik!)`;
+      if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot bg-amber-400";
     } else {
       badge.className = "text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1";
+      if (dynIslandText && !walkSafeActive) dynIslandText.textContent = `🚗 ${kmh} km/h`;
     }
     badge.classList.remove("hidden");
     if (window.lucide) window.lucide.createIcons();
   } else {
     badge.classList.add("hidden");
+    if (dynIslandText && !walkSafeActive && !lastSosAlertState) {
+      dynIslandText.textContent = "Jonli GPS faol";
+      if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot";
+    }
   }
 }
 
@@ -4852,6 +4872,14 @@ function updateWalkSafeCountdownDisplay() {
     parentText.textContent = `${timeStr} qoldi (${walkSafeDestination})`;
   }
 
+  // Dynamic Island status pill
+  const dynIslandText = document.getElementById("dynamicIslandText");
+  const dynIslandDot = document.getElementById("dynamicIslandDot");
+  if (dynIslandText) {
+    dynIslandText.textContent = `🚶‍♂️ ${timeStr} (${walkSafeDestination})`;
+    if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot bg-amber-400";
+  }
+
   if (diffSec <= 0) {
     clearInterval(walkSafeTimer);
     if (currentRole === "child") {
@@ -4905,6 +4933,12 @@ async function childWalkSafeComplete() {
 
   const childBar = document.getElementById("childActiveWalkSafeBar");
   if (childBar) childBar.classList.add("hidden");
+  const dynIslandText = document.getElementById("dynamicIslandText");
+  const dynIslandDot = document.getElementById("dynamicIslandDot");
+  if (dynIslandText) {
+    dynIslandText.textContent = "Jonli GPS faol";
+    if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot";
+  }
 
   const cardSub = document.getElementById("walkSafeCardSubtext");
   if (cardSub) cardSub.textContent = "Meni kuzatib turing (Xavfsiz yetib olish)";
@@ -4945,6 +4979,12 @@ function renderParentWalkSafeBanner(walkSafe) {
     banner.classList.add("hidden");
     walkSafeActive = false;
     clearInterval(walkSafeTimer);
+    const dynIslandText = document.getElementById("dynamicIslandText");
+    const dynIslandDot = document.getElementById("dynamicIslandDot");
+    if (dynIslandText && !lastSosAlertState) {
+      dynIslandText.textContent = "Jonli GPS faol";
+      if (dynIslandDot) dynIslandDot.className = "dynamic-island-dot";
+    }
   }
 }
 
