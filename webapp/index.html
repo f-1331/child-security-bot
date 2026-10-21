@@ -24,7 +24,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=41" />
+  <link rel="stylesheet" href="style.css?v=42" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -412,51 +412,56 @@
         </button>
       </div>
 
-      <!-- 1. Standalone Tactical Monitoring Bar (Floats comfortably HIGHER UP on the map) -->
-      <div id="parentMonitoringBar" style="bottom: calc(212px + max(14px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex items-center gap-2 md:max-w-md">
-        <!-- 1-tugma: Passiv monitoring (Silent check) -->
-        <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2 px-2.5 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
-          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
-            <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-          </div>
-          <div class="text-left min-w-0">
-            <p class="text-[10px] sm:text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
-            <p class="text-[8px] sm:text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan tekshirish</p>
-          </div>
-        </button>
-
-        <!-- 2-tugma: Faol so'rov (Active check) -->
-        <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2 px-2.5 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
-          <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
-            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
-          </div>
-          <div class="text-left min-w-0">
-            <p class="text-[10px] sm:text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
-            <p class="text-[8px] sm:text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov (Xabar boradi)</p>
-          </div>
-        </button>
-      </div>
-
-      <!-- 2. Location & Address Card (Positioned right above bottom navigation dock) -->
-      <div id="locationCard" style="bottom: calc(80px + max(10px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 p-3 rounded-2xl md:max-w-md shadow-2xl flex items-center justify-between gap-2">
-        <div class="min-w-0 flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
-            <i data-lucide="map-pin" class="w-4 h-4"></i>
-          </div>
-          <div class="min-w-0">
-            <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-              <span data-i18n="current_address">Joriy Manzil</span>
-              <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
-            </div>
-            <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
-            <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
-          </div>
-        </div>
+      <!-- Combined Parent Floating Controls & Location Deck (Flex column physically guarantees ZERO overlap!) -->
+      <div id="parentBottomContainer" style="bottom: calc(78px + max(12px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex flex-col gap-2.5 md:max-w-md pointer-events-none">
         
-        <button onclick="openExternalNavigation()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md shrink-0" title="Marshrut ochish">
-          <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
-          <span data-i18n="route">Yo'l</span>
-        </button>
+        <!-- 1. Passiv monitoring va Hozirgi joylashuvi (Tugmalar doim toza va ochiq!) -->
+        <div id="parentMonitoringBar" class="pointer-events-auto flex items-center gap-2">
+          <!-- Passiv monitoring (Silent check) -->
+          <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2.5 px-3 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
+            <div class="w-7 h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </div>
+            <div class="text-left min-w-0">
+              <p class="text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
+              <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
+            </div>
+          </button>
+
+          <!-- Faol so'rov (Active check) -->
+          <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group shadow-blue-500/20" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
+            <div class="w-7 h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
+              <i data-lucide="crosshair" class="w-4 h-4"></i>
+            </div>
+            <div class="text-left min-w-0">
+              <p class="text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
+              <p class="text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- 2. Joriy Manzil kartasi (Doim tugmalarning tagida, hech qachon ustiga chiqmaydi!) -->
+        <div id="locationCard" class="pointer-events-auto p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-2.5">
+          <div class="min-w-0 flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                <span data-i18n="current_address">Joriy Manzil</span>
+                <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
+              </div>
+              <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
+              <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
+            </div>
+          </div>
+          
+          <button onclick="openExternalNavigation()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md shrink-0" title="Marshrut ochish">
+            <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+            <span data-i18n="route">Yo'l</span>
+          </button>
+        </div>
+
       </div>
     </div>
 
@@ -1657,8 +1662,8 @@
     </div>
   </div>
 
-  <!-- CHILD ACTIVE CHECK NOTIFICATION BANNER -->
-  <div id="childActiveCheckBanner" class="hidden fixed top-3 left-3 right-3 sm:left-auto sm:right-6 sm:w-96 z-[2500] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-3.5 rounded-2xl shadow-2xl border border-white/20 animate-fade-in flex items-center gap-3">
+  <!-- CHILD ACTIVE CHECK NOTIFICATION BANNER (Positioned below header, fully readable) -->
+  <div id="childActiveCheckBanner" style="top: calc(84px + max(8px, env(safe-area-inset-top, 0px)));" class="hidden fixed left-3.5 right-3.5 sm:left-auto sm:right-6 sm:w-96 z-[2500] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-4 rounded-2xl shadow-2xl border border-white/30 animate-fade-in flex items-center gap-3">
     <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 text-white relative">
       <i data-lucide="bell" class="w-5 h-5 animate-bounce"></i>
       <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping"></span>
@@ -1668,11 +1673,11 @@
         <span>Joylashuv tekshirildi</span>
         <span class="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-full font-mono font-bold" id="childCheckTimeText">12:00</span>
       </h4>
-      <p class="text-[11px] text-blue-100 font-semibold mt-0.5 truncate">
+      <p class="text-xs text-blue-100 font-semibold mt-0.5 leading-snug">
         Ota-onangiz joylashuvingizni tekshirdi 📍
       </p>
     </div>
-    <button onclick="dismissChildActiveBanner()" class="text-white/70 hover:text-white p-1 rounded-lg">
+    <button onclick="dismissChildActiveBanner()" class="text-white/80 hover:text-white p-1 rounded-lg shrink-0">
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
   </div>
@@ -1901,6 +1906,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

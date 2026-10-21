@@ -2759,7 +2759,7 @@ function showToast(message) {
     setTimeout(() => {
       if (toast.parentNode) toast.remove();
     }, 280);
-  }, 2300);
+  }, 4000);
 }
 
 
