@@ -199,43 +199,87 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 except Exception as e:
                     logger.error(f"Failed to process coparent invite: {e}")
 
-            elif args.startswith("pair_"):
+            elif args.startswith("pair_") or (args.strip().isdigit() and len(args.strip()) == 6):
                 pairing_code = args.replace("pair_", "").strip()
                 parent = await crud.get_parent_by_pairing_code(session, pairing_code)
                 if parent:
+                    user.role = "child"
+                    user.full_name = full_name
+                    user.username = username
                     await crud.update_user_role(session, user_id, "child")
                     await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
                     child_web_code = await crud.generate_web_access_code(session, user_id)
                     await session.commit()
 
-                # Notify child
-                await message.answer(
-                    f"🎉 **Tabriklaymiz!**\n\n"
-                    f"Siz **{parent.full_name or 'Ota-onangiz'}** hisobiga muvaffaqiyatli ulandingiz.\n\n"
-                    f"🔑 **Saytga (Web App) kirish kodingiz:** ` {child_web_code} `\n"
-                    f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n"
-                    f"*(Saytga kirganda ushbu 6 xonali kodni kiriting)*\n\n"
-                    f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
-                    reply_markup=get_child_main_keyboard(),
-                    parse_mode="Markdown"
-                )
-
-                # Notify parent
-                try:
-                    await bot.send_message(
-                        chat_id=parent.id,
-                        text=(
-                            f"🎉 **Yangi farzand ulandi!**\n\n"
-                            f"👤 Ismi: **{full_name}**\n"
-                            f"🆔 ID: `{user_id}`\n\n"
-                            f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin."
-                        ),
-                        reply_markup=get_parent_main_keyboard(parent.id),
-                        parse_mode="Markdown"
+                    # Notify child with safe HTML
+                    safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
+                    await message.answer(
+                        f"🎉 <b>Tabriklaymiz!</b>\n\n"
+                        f"Siz <b>{safe_parent_name}</b> hisobiga muvaffaqiyatli ulandingiz.\n\n"
+                        f"🔑 <b>Saytga (Web App) kirish kodingiz:</b> <code>{child_web_code}</code>\n"
+                        f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                        f"<i>(Saytga kirganda ushbu 6 xonali shaxsiy kodingizni kiriting)</i>\n\n"
+                        f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
+                        reply_markup=get_child_main_keyboard(),
+                        parse_mode="HTML"
                     )
-                except Exception as e:
-                    logger.error(f"Failed to notify parent about new child link: {e}")
-                return
+
+                    # Notify parent with requested format:
+                    safe_child_name = html.escape(full_name or "Farzand")
+                    safe_child_username = f"@{html.escape(username)}" if username else "Mavjud emas"
+
+                    parent_notify_html = (
+                        f"🎉 <b>Yangi farzand muvaffaqiyatli ulandi!</b>\n\n"
+                        f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
+                        f"🔹 <b>Foydalanuvchi nomi:</b> {safe_child_username}\n"
+                        f"🔹 <b>Ismi (Nick):</b> {safe_child_name}\n"
+                        f"🆔 <b>ID:</b> <code>{user_id}</code>\n\n"
+                        f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin. 🛡️"
+                    )
+
+                    try:
+                        await bot.send_message(
+                            chat_id=parent.id,
+                            text=parent_notify_html,
+                            reply_markup=get_parent_main_keyboard(parent.id),
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        logger.error(f"HTML send failed, fallback to plain text: {e}")
+                        raw_parent_notify = (
+                            f"🎉 Yangi farzand muvaffaqiyatli ulandi!\n\n"
+                            f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
+                            f"🔹 Foydalanuvchi nomi: {f'@{username}' if username else 'Mavjud emas'}\n"
+                            f"🔹 Ismi (Nick): {full_name or 'Farzand'}\n"
+                            f"🆔 ID: {user_id}\n\n"
+                            f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin. 🛡️"
+                        )
+                        await bot.send_message(
+                            chat_id=parent.id,
+                            text=raw_parent_notify,
+                            reply_markup=get_parent_main_keyboard(parent.id)
+                        )
+
+                    # Also notify WebApp parent dashboard in real-time
+                    try:
+                        from api.webapp_api import ws_manager
+                        await ws_manager.send_to_user(parent.id, {
+                            "type": "child_linked",
+                            "child_id": user_id,
+                            "full_name": full_name,
+                            "username": username
+                        })
+                    except Exception:
+                        pass
+                    return
+                else:
+                    await message.answer(
+                        "❌ <b>Ulanish kodi noto'g'ri yoki eskirgan!</b>\n\n"
+                        "Iltimos, ota-onangiz bergan 6 xonali ulanish kodini qayta tekshirib kiring:",
+                        reply_markup=get_role_selection_keyboard(),
+                        parse_mode="HTML"
+                    )
+                    return
 
         # If user is already assigned a role
         if user.role == "parent":
@@ -371,37 +415,76 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             )
             return
 
-        # Link child to parent
+        # Ensure child user role & profile in DB
+        child_user = await crud.get_user(session, user_id)
+        if child_user:
+            child_user.role = "child"
+            child_user.full_name = full_name
+            child_user.username = username
+        await crud.update_user_role(session, user_id, "child")
         await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
         child_web_code = await crud.generate_web_access_code(session, user_id)
-        parent_code = await crud.generate_pairing_code(session, parent.id)
         await session.commit()
         await state.clear()
 
+        safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
         await message.answer(
-            f"🎉 **Ajoyib! Ota-onangizga ({parent.full_name or 'Ota-ona'}) muvaffaqiyatli ulandingiz!**\n\n"
-            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {child_web_code} `\n"
-            f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
-            f"*(Saytga ushbu o'zingizning shaxsiy kodingiz bilan kirsangiz, sizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi)*\n\n"
+            f"🎉 <b>Ajoyib! Ota-onangizga ({safe_parent_name}) muvaffaqiyatli ulandingiz!</b>\n\n"
+            f"🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code>{child_web_code}</code>\n"
+            f"🌐 <b>Sayt manzili:</b> {settings.WEBAPP_BASE_URL}\n\n"
+            f"<i>(Saytga ushbu o'zingizning shaxsiy kodingiz bilan kirsangiz, sizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi)</i>\n\n"
             f"Quyidagi xavfsizlik menyusi faollashtirildi:",
             reply_markup=get_child_main_keyboard(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
+        )
+
+        # Notify parent with requested format:
+        safe_child_name = html.escape(full_name or "Farzand")
+        safe_child_username = f"@{html.escape(username)}" if username else "Mavjud emas"
+
+        parent_notify_text = (
+            f"🎉 <b>Yangi farzand muvaffaqiyatli ulandi!</b>\n\n"
+            f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
+            f"🔹 <b>Foydalanuvchi nomi:</b> {safe_child_username}\n"
+            f"🔹 <b>Ismi (Nick):</b> {safe_child_name}\n"
+            f"🆔 <b>ID:</b> <code>{user_id}</code>\n\n"
+            f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz. 🛡️"
         )
 
         try:
             await bot.send_message(
                 chat_id=parent.id,
-                text=(
-                    f"🎉 **Yangi farzand muvaffaqiyatli ulandi!**\n\n"
-                    f"👤 Farzand: **{full_name}**\n"
-                    f"🆔 Telegram ID: `{user_id}`\n\n"
-                    f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz."
-                ),
+                text=parent_notify_text,
                 reply_markup=get_parent_main_keyboard(parent.id),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
-            logger.error(f"Failed to notify parent about code link: {e}")
+            logger.error(f"HTML send failed, fallback plain text to parent: {e}")
+            raw_text = (
+                f"🎉 Yangi farzand muvaffaqiyatli ulandi!\n\n"
+                f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
+                f"🔹 Foydalanuvchi nomi: {f'@{username}' if username else 'Mavjud emas'}\n"
+                f"🔹 Ismi (Nick): {full_name or 'Farzand'}\n"
+                f"🆔 ID: {user_id}\n\n"
+                f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz. 🛡️"
+            )
+            await bot.send_message(
+                chat_id=parent.id,
+                text=raw_text,
+                reply_markup=get_parent_main_keyboard(parent.id)
+            )
+
+        # Also broadcast to WebApp parent dashboard in real-time
+        try:
+            from api.webapp_api import ws_manager
+            await ws_manager.send_to_user(parent.id, {
+                "type": "child_linked",
+                "child_id": user_id,
+                "full_name": full_name,
+                "username": username
+            })
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------
@@ -467,13 +550,14 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
         except Exception as e:
             logger.warn(f"Failed to ping child for location: {e}")
 
+        safe_child_name = html.escape(child.full_name or "Farzand")
         await bot.send_message(
             chat_id=chat_id,
             text=(
-                f"📍 **{child.full_name}** hali birorta ham joylashuv yubormagan.\n\n"
+                f"📍 <b>{safe_child_name}</b> hali birorta ham joylashuv yubormagan.\n\n"
                 f"Farzandingiz telefoniga joylashuvni yangilash haqida eslatma yuborildi."
             ),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
         return
 
@@ -488,8 +572,9 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
             min_dist = dist
             current_zone = fence.name
 
-    if current_zone:
-        zone_str = f"✅ **'{current_zone}'** hududida (markazdan {int(min_dist)}m)"
+    safe_zone = html.escape(current_zone) if current_zone else None
+    if safe_zone:
+        zone_str = f"✅ <b>'{safe_zone}'</b> hududida (markazdan {int(min_dist)}m)"
     else:
         zone_str = "📍 Kerakli joylar chegarasidan tashqarida (yo'lda)"
 
@@ -508,20 +593,35 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
         logger.error(f"Failed to send native location pin: {e}")
 
     # 2. Send detailed status card
+    safe_child_name = html.escape(child.full_name or "Farzand")
     card_text = (
-        f"👤 Farzand: **{child.full_name}**\n"
-        f"🕒 Oxirgi signal: **{time_str}**\n"
-        f"🔋 Batareya: **{battery_str}** {charging_icon}\n"
+        f"👤 Farzand: <b>{safe_child_name}</b>\n"
+        f"🕒 Oxirgi signal: <b>{time_str}</b>\n"
+        f"🔋 Batareya: <b>{battery_str}</b> {charging_icon}\n"
         f"📍 Joylashuv: {zone_str}\n"
-        f"📌 Koordinata: `{latest_loc.latitude:.5f}, {latest_loc.longitude:.5f}`"
+        f"📌 Koordinata: <code>{latest_loc.latitude:.5f}, {latest_loc.longitude:.5f}</code>"
     )
 
-    await bot.send_message(
-        chat_id=chat_id,
-        text=card_text,
-        reply_markup=get_location_actions_keyboard(latest_loc.latitude, latest_loc.longitude, child.id),
-        parse_mode="Markdown"
-    )
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=card_text,
+            reply_markup=get_location_actions_keyboard(latest_loc.latitude, latest_loc.longitude, child.id),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"HTML send failed for location card: {e}")
+        await bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"👤 Farzand: {child.full_name or 'Farzand'}\n"
+                f"🕒 Oxirgi signal: {time_str}\n"
+                f"🔋 Batareya: {battery_str} {charging_icon}\n"
+                f"📍 Joylashuv: {zone_str}\n"
+                f"📌 Koordinata: {latest_loc.latitude:.5f}, {latest_loc.longitude:.5f}"
+            ),
+            reply_markup=get_location_actions_keyboard(latest_loc.latitude, latest_loc.longitude, child.id)
+        )
 
     # Ping child's bot that parent saw location
     try:
@@ -1841,19 +1941,20 @@ async def _build_children_list_message(parent_id: int):
             charging = "🔌 (Quvvatlanmoqda)" if latest_loc and latest_loc.is_charging else ""
             status = "🚨 SOS FAVQULODDA!" if ch.is_sos_active else "🟢 Faol"
 
-            safe_name = (ch.full_name or "Farzand").replace("*", "").replace("_", "")
-            safe_user = ch.username.replace("_", "\\_") if ch.username else "yo'q"
+            safe_name = html.escape(ch.full_name or "Farzand")
+            safe_user = f"@{html.escape(ch.username)}" if ch.username else "yo'q"
 
             text += (
-                f"👤 **{safe_name}** (@{safe_user})\n"
-                f"• Holat: **{status}**\n"
-                f"• Batareya: **{battery}** {charging}\n"
-                f"• Balans: **{ch.virtual_balance:,} tanga**\n\n"
+                f"👤 <b>{safe_name}</b> ({safe_user})\n"
+                f"• Holat: <b>{status}</b>\n"
+                f"• Batareya: <b>{battery}</b> {charging}\n"
+                f"• Balans: <b>{ch.virtual_balance:,} tanga</b>\n\n"
             )
 
+            btn_title = (ch.full_name or "Farzand")[:24]
             buttons.append([
                 InlineKeyboardButton(
-                    text=f"🔍 {safe_name} boshqaruvi",
+                    text=f"🔍 {btn_title} boshqaruvi",
                     callback_data=f"child_view:{ch.id}"
                 )
             ])
@@ -1866,7 +1967,7 @@ async def on_list_children_pressed(message: Message, state: FSMContext):
     await state.clear()
     text, reply_markup = await _build_children_list_message(message.from_user.id)
     try:
-        await message.answer(text, reply_markup=reply_markup, parse_mode="Markdown")
+        await message.answer(text, reply_markup=reply_markup, parse_mode="HTML")
     except Exception as e:
         logger.warning(f"Markdown send failed for children list, falling back to plain text: {e}")
         await message.answer(text, reply_markup=reply_markup)
@@ -1877,7 +1978,7 @@ async def on_list_children_callback(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     text, reply_markup = await _build_children_list_message(callback.from_user.id)
     try:
-        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
     except Exception:
         await callback.message.answer(text, reply_markup=reply_markup)
     await callback.answer()
@@ -2090,7 +2191,7 @@ async def on_delete_child_do(callback: CallbackQuery, bot: Bot):
         # Return to children list
         text, reply_markup = await _build_children_list_message(parent_id)
         try:
-            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
         except Exception:
             await callback.message.answer(text, reply_markup=reply_markup)
     else:

@@ -87,10 +87,13 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
 
 
 async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Optional[User]:
-    """Find parent by their pairing code."""
+    """Find parent by their pairing code or web access code."""
+    if not code:
+        return None
+    clean_code = str(code).strip().replace(" ", "")
     result = await session.execute(
         select(User).where(
-            User.pairing_code == code.strip(),
+            (User.pairing_code == clean_code) | (User.web_access_code == clean_code),
             User.role == "parent"
         )
     )
@@ -255,7 +258,14 @@ async def link_parent_child(
     child_id: int,
     nickname: Optional[str] = None
 ) -> Tuple[ParentChildLink, bool]:
-    """Link parent and child together."""
+    """Link parent and child together, ensuring child role and nickname."""
+    child_user = await get_user(session, child_id)
+    if child_user:
+        child_user.role = "child"
+        if nickname and (not child_user.full_name or child_user.full_name == "Farzand"):
+            child_user.full_name = nickname
+        await session.flush()
+
     result = await session.execute(
         select(ParentChildLink).where(
             ParentChildLink.parent_id == parent_id,

@@ -4108,6 +4108,26 @@ function handleIncomingWebSocketMessage(msg) {
     }
     return;
   }
+
+  // 6. Child linked update received by Parent
+  if (msg.type === "child_linked" && currentRole === "parent") {
+    showToast(`🎉 Yangi farzand (${msg.full_name || 'Farzand'}) muvaffaqiyatli ulandi!`);
+    if (parentId) {
+      fetch(`/api/v1/webapp/parent/${parentId}/children`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.status === "success" && data.children) {
+            childrenList = data.children;
+            renderChildrenSwitcher();
+            if (!currentChildId && childrenList.length > 0) {
+              switchChild(childrenList[0].id);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+    return;
+  }
 }
 
 function startChildNotificationPolling(childId) {
