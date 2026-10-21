@@ -301,7 +301,20 @@ function playPingSound() {
   } catch (e) {}
 }
 
-// Check session in localStorage or URL
+// Persistent Auth Prompt Controls (User requested: max 2 prompts, never prompt again unless switching roles)
+const AUTH_PROMPT_KEY = "smart_tracker_auth_prompt_count";
+const MAX_AUTO_AUTH_PROMPTS = 2;
+
+function getAuthPromptCount() {
+  return parseInt(localStorage.getItem(AUTH_PROMPT_KEY) || "0", 10);
+}
+
+function incrementAuthPromptCount() {
+  const current = getAuthPromptCount();
+  localStorage.setItem(AUTH_PROMPT_KEY, String(current + 1));
+}
+
+// Check session in localStorage, URL, or persistent role
 async function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
   const qCode = urlParams.get("code");
@@ -360,6 +373,8 @@ async function checkAuthenticationState() {
       if (tgData && tgData.status === "success") {
         localStorage.setItem("smart_tracker_session", JSON.stringify(tgData));
         localStorage.setItem("smart_tracker_auth_code", String(tgUser.id));
+        localStorage.setItem("smart_tracker_role", tgData.role);
+        localStorage.setItem(AUTH_PROMPT_KEY, "2");
         hideAuthGateModal();
         applyAuthenticatedUser(tgData);
         return;
@@ -367,40 +382,93 @@ async function checkAuthenticationState() {
     } catch (e) {}
   }
 
-  // 4. Check if user previously chosen Demo mode in this session
-  const demoRole = sessionStorage.getItem("smart_tracker_demo_role");
-  if (demoRole) {
-    hideAuthGateModal();
-    if (demoRole === "child") {
+  // 4. Check prompt count: Prompt code AT MOST 2 TIMES!
+  // After 2 times, NEVER ask automatically on entry or reload again.
+  const promptCount = getAuthPromptCount();
+  const savedRole = localStorage.getItem("smart_tracker_role") || "parent";
+
+  if (promptCount < MAX_AUTO_AUTH_PROMPTS) {
+    incrementAuthPromptCount();
+    if (savedRole === "child") {
       enableChildDemoMode();
     } else {
       enableDemoMode();
     }
-    return;
+    showAuthGateModal();
+  } else {
+    // Already asked 2 times -> never bother the user on entry again!
+    hideAuthGateModal();
+    if (savedRole === "child") {
+      enableChildDemoMode();
+    } else {
+      enableDemoMode();
+    }
   }
-
-  // 5. Default: Only prompt for code if not authenticated
-  showAuthGateModal();
 }
 
-function showAuthGateModal() {
+function showAuthGateModal(targetRole = null) {
   const modal = document.getElementById("authGateModal");
-  if (modal) {
-    modal.classList.remove("hidden");
-    const closeBtn = document.getElementById("btnCloseAuthGate");
-    if (closeBtn) {
-      if (isDemoMode || authenticatedSession) closeBtn.classList.remove("hidden");
-      else closeBtn.classList.add("hidden");
+  if (!modal) return;
+
+  modal.classList.remove("hidden");
+
+  // Close button is ALWAYS visible so user is never locked out
+  const closeBtn = document.getElementById("btnCloseAuthGate");
+  if (closeBtn) closeBtn.classList.remove("hidden");
+
+  const input = document.getElementById("inputAuthCode");
+  const modalTitle = document.getElementById("authModalTitle");
+  const modalSub = document.getElementById("authModalSub");
+
+  if (targetRole) {
+    window._pendingTargetRole = targetRole;
+    if (modalTitle) {
+      modalTitle.textContent = targetRole === "child" ? "👦 Farzand hisobiga o'tish" : "👨‍👩‍👧 Ota-ona hisobiga o'tish";
     }
-    const input = document.getElementById("inputAuthCode");
-    if (input) setTimeout(() => input.focus(), 200);
-    if (window.lucide) lucide.createIcons();
+    if (modalSub) {
+      modalSub.textContent = targetRole === "child"
+        ? "Farzandingizning 6 xonali shaxsiy sayt kodini kiriting:"
+        : "Ota-onaning 6 xonali oilaviy sayt kodini kiriting:";
+    }
+  } else {
+    window._pendingTargetRole = null;
+    if (modalTitle) modalTitle.textContent = "Child Security Bot";
+    if (modalSub) modalSub.textContent = "Bolalar xavfsizligi va rag'batlantirish platformasi";
   }
+
+  if (input) {
+    input.value = "";
+    setTimeout(() => input.focus(), 200);
+  }
+  if (window.lucide) lucide.createIcons();
 }
 
 function hideAuthGateModal() {
   const modal = document.getElementById("authGateModal");
   if (modal) modal.classList.add("hidden");
+  window._pendingTargetRole = null;
+
+  // If not authenticated and not in demo mode, ensure active role is visible
+  if (!authenticatedSession && !isDemoMode) {
+    const role = localStorage.getItem("smart_tracker_role") || "parent";
+    if (role === "child") {
+      enableChildDemoMode();
+    } else {
+      enableDemoMode();
+    }
+  }
+}
+
+// User explicitly switches roles (e.g. from parent to child or vice versa)
+function promptRoleSwitch(targetRole) {
+  haptic("medium");
+  if (targetRole === currentRole) {
+    showToast(`Siz allaqachon ${targetRole === 'child' ? 'Farzand' : 'Ota-ona'} rejimidamisiz.`);
+    return;
+  }
+
+  // Open the code prompt specifically asking for the code for the target role!
+  showAuthGateModal(targetRole);
 }
 
 async function submitAuthCode() {
@@ -412,7 +480,7 @@ async function submitAuthCode() {
 
   if (!code || code.length < 4) {
     if (errorText) errorText.classList.remove("hidden");
-    if (errorMsg) errorMsg.textContent = "Iltimos, Telegram bot bergan kodni kiriting.";
+    if (errorMsg) errorMsg.textContent = "Iltimos, 6 xonali kodni kiriting.";
     return;
   }
 
@@ -430,9 +498,15 @@ async function submitAuthCode() {
     });
 
     if (res.status === 404 && (code === "123456" || code === "000000" || code.toLowerCase() === "demo")) {
-      sessionStorage.setItem("smart_tracker_demo_role", "parent");
+      const target = window._pendingTargetRole || "parent";
+      localStorage.setItem("smart_tracker_role", target);
+      localStorage.setItem(AUTH_PROMPT_KEY, "2");
       hideAuthGateModal();
-      enableDemoMode();
+      if (target === "child") {
+        enableChildDemoMode();
+      } else {
+        enableDemoMode();
+      }
       showToast("🎮 Namuna (Demo) rejimiga kirildi!");
       return;
     }
@@ -445,7 +519,9 @@ async function submitAuthCode() {
     // Save session & code persistently
     localStorage.setItem("smart_tracker_session", JSON.stringify(data));
     localStorage.setItem("smart_tracker_auth_code", code);
-    sessionStorage.removeItem("smart_tracker_demo_role");
+    localStorage.setItem("smart_tracker_role", data.role);
+    localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Never prompt automatically on reload again
+
     haptic("success");
     hideAuthGateModal();
     applyAuthenticatedUser(data);
@@ -466,8 +542,9 @@ async function submitAuthCode() {
 
 function startDemoMode(role) {
   haptic("medium");
+  localStorage.setItem("smart_tracker_role", role);
+  localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Do not prompt on future reloads
   hideAuthGateModal();
-  sessionStorage.setItem("smart_tracker_demo_role", role);
   if (role === "child") {
     enableChildDemoMode();
   } else {
@@ -477,17 +554,14 @@ function startDemoMode(role) {
 
 function switchDemoRole(newRole) {
   haptic("medium");
-  sessionStorage.setItem("smart_tracker_demo_role", newRole);
-  if (newRole === "child") {
-    enableChildDemoMode();
-  } else {
-    enableDemoMode();
-  }
+  // Prompt for code when switching role as user requested!
+  promptRoleSwitch(newRole);
 }
 
 function enableChildDemoMode() {
   currentRole = "child";
   isDemoMode = true;
+  localStorage.setItem("smart_tracker_role", "child");
   parentId = null;
   currentChildId = 2002;
   coinRateCoins = 1000;
@@ -826,6 +900,8 @@ function logoutSession() {
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
     localStorage.removeItem("smart_tracker_session");
     localStorage.removeItem("smart_tracker_auth_code");
+    localStorage.removeItem("smart_tracker_role");
+    localStorage.removeItem(AUTH_PROMPT_KEY);
     sessionStorage.removeItem("smart_tracker_demo_role");
     authenticatedSession = null;
     isDemoMode = false;
@@ -1380,12 +1456,21 @@ async function loadData() {
       document.getElementById("childSelect").value = currentChildId;
       await selectChild(currentChildId);
     } else {
-      // No linked children yet -> Auto start interactive demo mode so map is active and fully functional
-      enableDemoMode();
+      if (authenticatedSession) {
+        childrenList = [];
+        renderChildSelector();
+        showEmptyState();
+      } else {
+        enableDemoMode();
+      }
     }
   } catch (err) {
     console.warn("Backend API not reachable or static Netlify host, loading interactive demo mode:", err);
-    enableDemoMode();
+    if (authenticatedSession) {
+      showEmptyState();
+    } else {
+      enableDemoMode();
+    }
   }
 }
 
@@ -1406,6 +1491,7 @@ function enableDemoMode() {
   haptic("success");
   isDemoMode = true;
   currentRole = "parent";
+  localStorage.setItem("smart_tracker_role", "parent");
   parentId = 1001;
   coinRateCoins = 1000;
   coinRateSom = 10000;
