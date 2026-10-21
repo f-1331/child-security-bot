@@ -243,6 +243,9 @@ async def main():
         dp = Dispatcher(storage=MemoryStorage())
         dp.include_router(bot_router)
 
+        from bot.scheduler import run_nightly_and_walksafe_worker
+        tasks.append(asyncio.create_task(run_nightly_and_walksafe_worker(bot)))
+
         tasks.append(asyncio.create_task(start_uvicorn(server)))
         tasks.append(asyncio.create_task(start_bot(bot, dp)))
     else:

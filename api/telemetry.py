@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -15,6 +16,9 @@ router = APIRouter(prefix="/api/v1", tags=["Telemetry"])
 # Global bot instance holder that can be set from main.py
 telegram_bot: Optional[Bot] = None
 
+# Speed alert rate-limiting map: child_id -> datetime of last alert
+last_speed_alert_map: dict[int, datetime] = {}
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot
@@ -25,6 +29,7 @@ class TelemetryPayload(BaseModel):
     child_id: int = Field(..., description="Telegram ID of the child")
     lat: float = Field(..., description="Latitude coordinate", ge=-90.0, le=90.0)
     lon: float = Field(..., description="Longitude coordinate", ge=-180.0, le=180.0)
+    speed: Optional[float] = Field(None, description="Current movement speed in km/h")
     battery_level: Optional[int] = Field(None, description="Battery percentage (0-100)", ge=0, le=100)
     is_charging: bool = Field(False, description="Whether phone is plugged into charger")
     sound_mode: str = Field("normal", description="Phone sound mode: normal, vibrate, silent")
@@ -36,8 +41,8 @@ class TelemetryPayload(BaseModel):
 async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = Depends(get_db)):
     """
     Receive background telemetry pings from child's device:
-    GPS coordinates, battery level, charging status, sound profile.
-    Automatically verifies battery threshold and geofence boundary events.
+    GPS coordinates, speed, battery level, charging status, sound profile.
+    Automatically verifies battery threshold, speed limits, and geofence boundary events.
     """
     child = await crud.get_user(session, payload.child_id)
     if not child:
@@ -53,6 +58,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         latitude=payload.lat,
         longitude=payload.lon,
         accuracy=payload.accuracy,
+        speed=payload.speed,
         battery_level=payload.battery_level,
         is_charging=payload.is_charging,
         sound_mode=payload.sound_mode,
@@ -87,6 +93,34 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                     battery_alert_triggered = True
                 except Exception as e:
                     logger.error(f"Failed to dispatch battery alert to parent {p.id}: {e}")
+
+    # 2.5 Speed Alert Check (Transport movement >= 30 km/h)
+    speed_alert_triggered = False
+    if payload.speed is not None and payload.speed >= 30.0 and telegram_bot:
+        now = datetime.now(timezone.utc)
+        last_alert_time = last_speed_alert_map.get(payload.child_id)
+        if not last_alert_time or (now - last_alert_time) > timedelta(minutes=15):
+            parents = await crud.get_parents_for_child(session, payload.child_id)
+            child_name = child.full_name or f"Farzand ID:{child.id}"
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.lat},{payload.lon}"
+            speed_msg = (
+                f"🚗 **TEZLIK OGOHLANTIRISHI!**\n\n"
+                f"👤 Farzandingiz: **{child_name}**\n"
+                f"🚀 Harakat tezligi: **{payload.speed:.0f} km/soat**\n"
+                f"📍 Holat: **Avtomobil yoki jamoat transportida harakatlanmoqda**\n\n"
+                f"🗺 [Xaritada ko'rish (Google Maps)]({maps_url})"
+            )
+            for p in parents:
+                try:
+                    await telegram_bot.send_message(
+                        chat_id=p.id,
+                        text=speed_msg,
+                        parse_mode="Markdown"
+                    )
+                    speed_alert_triggered = True
+                except Exception as e:
+                    logger.error(f"Failed to dispatch speed alert to parent {p.id}: {e}")
+            last_speed_alert_map[payload.child_id] = now
 
     # 3. Geofence Boundary Check (Entry / Exit transitions)
     geofence_events = await evaluate_geofences_and_notify(
@@ -123,7 +157,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                 "latitude": payload.lat,
                 "longitude": payload.lon,
                 "accuracy": payload.accuracy,
-                "speed": None,
+                "speed": payload.speed,
                 "battery_level": payload.battery_level,
                 "is_charging": payload.is_charging,
                 "sound_mode": payload.sound_mode,

@@ -54,13 +54,27 @@ async def init_db() -> None:
         new_user_columns = [
             ("coin_rate_coins", "INTEGER DEFAULT 1000"),
             ("coin_rate_som", "INTEGER DEFAULT 10000"),
-            ("web_access_code", "VARCHAR(20)")
+            ("web_access_code", "VARCHAR(20)"),
+            ("wishlist_title", "VARCHAR(200)"),
+            ("wishlist_target_som", "INTEGER DEFAULT 0"),
+            ("walk_safe_active", "BOOLEAN DEFAULT 0"),
+            ("walk_safe_deadline", "TIMESTAMP"),
+            ("walk_safe_duration", "INTEGER DEFAULT 0"),
+            ("walk_safe_destination", "VARCHAR(100)"),
+            ("walk_safe_started_at", "TIMESTAMP"),
+            ("walk_safe_last_checkin", "TIMESTAMP")
         ]
         for col_name, col_type in new_user_columns:
             try:
                 await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
             except Exception:
                 pass
+
+        # Safe automatic migration for LocationLog columns
+        try:
+            await conn.execute(text("ALTER TABLE location_logs ADD COLUMN speed FLOAT DEFAULT 0.0"))
+        except Exception:
+            pass
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

@@ -24,7 +24,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=28" />
+  <link rel="stylesheet" href="style.css?v=29" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -194,6 +194,10 @@
       <!-- 2-QATOR (SAL PASTROQDA): Tangalar kursi, Telefon zaryadi, Ovoz rejimi, Dizayn va Chiqish -->
       <div id="parentUtilityBar" class="flex items-center justify-between gap-1 pt-1 border-t border-slate-800/80 overflow-x-auto no-scrollbar">
         <!-- Tangalarni kursini sozlash -->
+        <button id="btnParentDailyReport" onclick="openDailyReportModal()" class="flex items-center gap-1 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span class="truncate font-semibold">Hisobot</span>
+        </button>
         <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
           <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
           <span id="coinRateCornerText" class="truncate font-semibold">1k = 10k</span>
@@ -335,6 +339,15 @@
       <!-- Live Map Canvas -->
       <div id="map" class="w-full h-full"></div>
 
+      <!-- Parent View Active Walk Safe Monitoring Banner -->
+      <div id="parentWalkSafeBanner" class="hidden absolute top-3.5 left-3.5 z-20 bg-gradient-to-r from-amber-950/95 via-slate-900 to-slate-900 border border-amber-500/50 text-amber-200 px-3 py-1.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold backdrop-blur-md animate-pulse">
+        <span class="text-base">🚶‍♂️</span>
+        <div class="leading-tight">
+          <p class="text-[9px] text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
+          <p id="parentWalkSafeText" class="text-xs text-white font-bold">14:20 qoldi (Uyga qaytish)</p>
+        </div>
+      </div>
+
       <!-- Floating Map Controls (Top-Right) -->
       <div id="floatingMapControls" class="absolute right-3 top-3 z-20 flex flex-col gap-1.5 sm:gap-2 transition-opacity duration-200">
         <!-- Remote Siren / Ping Child Phone (Parent only) -->
@@ -399,6 +412,7 @@
           <div class="flex items-center gap-1.5 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
             <i data-lucide="map-pin" class="w-3 h-3 text-blue-400"></i>
             <span data-i18n="current_address">Joriy Manzil</span>
+            <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-md font-bold ml-1">🚗 0 km/h</span>
           </div>
           <p id="addressText" class="text-xs font-semibold text-slate-100 truncate mt-0.5">Manzil aniqlanmoqda...</p>
           <span id="zoneStatusText" class="text-[11px] text-emerald-400 font-medium truncate mt-0.5">Kerakli joylar tekshirilmoqda</span>
@@ -417,6 +431,24 @@
     <!-- 2. CHILD VIEW SECTION: GAMIFIED ADVENTURE PORTAL (Bola)   -->
     <!-- ========================================================= -->
     <div id="childViewSection" class="hidden relative w-full h-full overflow-y-auto custom-scroll p-3 sm:p-5 flex flex-col gap-3.5 pb-28">
+      <!-- Child Active Walk Safe Live Floating Bar (When countdown is running) -->
+      <div id="childActiveWalkSafeBar" class="hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-3 py-2 rounded-2xl flex items-center justify-between shadow-xl border border-white/40 animate-pulse">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl shrink-0">🚶‍♂️</span>
+          <div class="min-w-0">
+            <p class="text-[9px] font-black uppercase tracking-wider text-slate-950">Xavfsiz Yo'l Faol</p>
+            <p id="childWalkSafeCountdown" class="text-xs font-black text-white truncate">19:45 qoldi (Uyga qaytish)</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="childWalkSafeCheckIn()" class="px-2.5 py-1 bg-slate-950 text-amber-300 hover:text-white rounded-lg text-[10px] font-black transition active:scale-95 shadow">
+            👍 Yaxshiman
+          </button>
+          <button onclick="childWalkSafeComplete()" class="px-2.5 py-1 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-[10px] font-black transition active:scale-95 shadow">
+            ✅ Yetib keldim
+          </button>
+        </div>
+      </div>
       <!-- 1. Hero Adventure Banner -->
       <div class="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-purple-950/70 via-indigo-950/60 to-slate-900 border border-purple-500/40 shadow-xl flex items-center justify-between gap-2.5">
         <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -546,6 +578,23 @@
         </button>
       </div>
 
+      <!-- 5.5. Walk Safe Mode ("Xavfsiz Yo'l" Taymeri) -->
+      <div id="walkSafeChildCard" class="p-3.5 sm:p-4 rounded-3xl bg-gradient-to-r from-amber-950/80 via-slate-900 to-indigo-950/70 border border-amber-500/40 shadow-xl flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-xl sm:text-2xl shadow-md border border-amber-300/40 shrink-0">
+            🚶‍♂️
+          </div>
+          <div class="min-w-0">
+            <h4 class="text-xs sm:text-sm font-black text-white truncate">Xavfsiz Yo'l Taymeri</h4>
+            <p id="walkSafeCardSubtext" class="text-[10px] sm:text-[11px] text-amber-300 font-semibold mt-0.5 truncate">Meni kuzatib turing (Uyga qaytish)</p>
+          </div>
+        </div>
+        <button id="btnOpenWalkSafeModal" onclick="openWalkSafeModal()" class="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 active:scale-95 text-slate-950 rounded-xl text-xs font-black shrink-0 shadow-lg transition flex items-center gap-1.5">
+          <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+          <span>Boshlash</span>
+        </button>
+      </div>
+
       <!-- 6. Big Red Emergency SOS Shield (Xavfsizlik Pulti) -->
       <div class="p-4 rounded-3xl bg-gradient-to-r from-red-950/80 via-rose-900/70 to-slate-900 border border-red-500/50 shadow-2xl flex flex-col gap-3">
         <div class="flex items-center gap-2 text-rose-300">
@@ -654,11 +703,15 @@
         </button>
       </div>
 
-      <!-- Route Playback Control -->
+      <!-- Route Playback Control & Daily Report -->
       <div class="my-3 flex gap-2">
         <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-md">
           <i data-lucide="play" class="w-4 h-4"></i>
-          <span>Harakatni animatsiyada ko'rish</span>
+          <span>Harakatni ko'rish</span>
+        </button>
+        <button id="btnOpenDailyReportFromHistory" onclick="openDailyReportModal()" class="py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
+          <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-400"></i>
+          <span>Hisobot</span>
         </button>
       </div>
 
@@ -703,18 +756,25 @@
         </p>
       </div>
 
-      <!-- Target Savings Goal Progress Bar -->
-      <div class="p-3.5 bg-slate-800/80 border border-slate-700/80 rounded-2xl mb-3">
-        <div class="flex justify-between items-center text-xs font-semibold mb-1.5">
-          <span class="text-slate-200 flex items-center gap-1">
-            <span>🎯</span> <span>Maqsad: Yangi Velosiped 🚲</span>
-          </span>
-          <span class="text-emerald-400 font-bold">60%</span>
+      <!-- Orzular Qutisi (Dynamic Dream Goal Progress Bar) -->
+      <div class="p-3.5 bg-gradient-to-r from-emerald-950/70 via-slate-900 to-indigo-950/70 border border-emerald-500/40 rounded-2xl mb-3 shadow-md">
+        <div class="flex justify-between items-center text-xs font-bold mb-1.5">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-base shrink-0">🎯</span>
+            <span id="wishlistTitleText" class="text-white truncate">Maqsad: Yangi Velosiped 🚲</span>
+            <button onclick="openEditWishlistModal()" class="p-1 text-emerald-400 hover:text-emerald-200 transition shrink-0" title="Maqsadni o'zgartirish">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <span id="wishlistPercentBadge" class="text-emerald-400 font-black text-xs shrink-0">0%</span>
         </div>
-        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-700">
-          <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 60%"></div>
+        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-700/80">
+          <div id="wishlistProgressBar" class="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
-        <p class="text-[11px] text-slate-400 mt-1.5">Yana 4 ta topshiriqni bajarsangiz, maqsadingizga erishasiz!</p>
+        <div class="flex justify-between items-center text-[10px] sm:text-[11px] text-slate-300 mt-1.5">
+          <span id="wishlistMoneyProgress">0 / 600,000 so'm</span>
+          <span id="wishlistRemainingText" class="text-emerald-300 font-semibold">Yuklanmoqda...</span>
+        </div>
       </div>
 
       <!-- Motivation / Badges Achievements -->
@@ -1647,7 +1707,157 @@
     </div>
   </div>
 
+
+  <!-- MODAL: START WALK SAFE (Child sets duration & destination) -->
+  <div id="modal-walk-safe" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="text-lg">🚶‍♂️</span>
+          <span>Xavfsiz Yo'l Taymeri</span>
+        </h3>
+        <button onclick="closeWalkSafeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200/90 leading-relaxed">
+        💡 Maktab, kurs yoki do'kondan uyga qaytayotganda taymerni yoqing. Ota-onangiz sizni xaritada kuzatib turadi va vaqti-vaqti bilan ahvolingizni so'raydi.
+      </div>
+
+      <!-- Destination Presets -->
+      <div class="py-2.5 space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">🎯 Qayerga boryapsiz?</label>
+          <div class="grid grid-cols-2 gap-1.5 mb-2">
+            <button type="button" onclick="setWalkSafeDestination('Uyga qaytish 🏠')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🏠 Uyga qaytish</button>
+            <button type="button" onclick="setWalkSafeDestination('Maktabga borish 🏫')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🏫 Maktabga</button>
+            <button type="button" onclick="setWalkSafeDestination('O'quv markaziga 📚')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">📚 O'quv markaziga</button>
+            <button type="button" onclick="setWalkSafeDestination('Sport mashg'ulotiga ⚽')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⚽ Sportga</button>
+          </div>
+          <input id="inputWalkSafeDestination" type="text" value="Uyga qaytish 🏠" placeholder="Yo'nalish nomi..." class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-400 font-bold" />
+        </div>
+
+        <!-- Duration Presets -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-bold text-slate-300">⏱ Rejalashtirilgan vaqt:</label>
+            <span id="walkSafeDurationDisplay" class="text-xs font-black text-amber-400">20 daqiqa</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1.5 mb-2">
+            <button type="button" onclick="setWalkSafeDuration(10)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">10 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(20)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">20 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(30)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">30 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(45)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">45 daq</button>
+          </div>
+          <input id="inputWalkSafeSlider" type="range" min="5" max="90" step="5" value="20" oninput="setWalkSafeDuration(this.value)" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeWalkSafeModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnStartWalkSafeConfirm" onclick="confirmStartWalkSafe()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 active:scale-95 text-slate-950 text-xs font-black rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+          <span>Boshlash</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL: WALK SAFE CHECK-IN ("Ahvolingiz yaxshimi?") -->
+  <div id="modal-walk-safe-checkin" class="hidden fixed inset-0 z-[1100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <div class="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg animate-bounce">
+        🔔
+      </div>
+      <h3 class="text-base font-black text-white">Hammasi joyidami?</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Siz hozir «Xavfsiz yo'l» rejimidasiz. Barchasi yaxshi ekanini ota-onangizga bildirish uchun tasdiqlang:
+      </p>
+      <div class="mt-4 flex flex-col gap-2">
+        <button onclick="confirmWalkSafeCheckInModal()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>✅ Ha, hammasi yaxshi!</span>
+        </button>
+        <button onclick="triggerChildSOS()" class="w-full py-2.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 font-bold text-xs rounded-xl border border-red-500/40 transition">
+          🚨 Yordam kerak (SOS)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT WISHLIST / ORZULAR QUTISI -->
+  <div id="modal-edit-wishlist" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="text-lg">🎯</span>
+          <span>Orzular Qutisi & Maqsad</span>
+        </h3>
+        <button onclick="closeEditWishlistModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-200/90 leading-relaxed">
+        💡 Qanday orzungiz bor? Uni maqsad qilib qo'ying. Foydali topshiriqlarni bajarganingiz sari jamg'armaniz to'lib boradi!
+      </div>
+
+      <!-- Wishlist Presets -->
+      <div class="py-2.5 space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Tezkor namunalar:</label>
+          <div class="grid grid-cols-2 gap-1.5 mb-2">
+            <button type="button" onclick="setWishlistPreset('Yangi Velosiped 🚲', 600000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🚲 Velosiped (600k)</button>
+            <button type="button" onclick="setWishlistPreset('Futbol to'pi ⚽', 150000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⚽ Futbol to'pi (150k)</button>
+            <button type="button" onclick="setWishlistPreset('Tezkor Konki ⛸️', 350000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⛸️ Konki (350k)</button>
+            <button type="button" onclick="setWishlistPreset('Kitoblar to'plami 📚', 100000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">📚 Kitoblar (100k)</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Orzuingiz nomi:</label>
+          <input id="inputWishlistTitle" type="text" placeholder="Masalan: Yangi Velosiped 🚲" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 font-bold" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Narxi (so'mda):</label>
+          <input id="inputWishlistTargetSom" type="number" step="10000" min="5000" value="600000" class="w-full bg-slate-800 border border-slate-700 text-amber-400 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 font-bold" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeEditWishlistModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSaveWishlistConfirm" onclick="saveWishlistConfirm()" class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 active:scale-95 text-white text-xs font-black rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Saqlash</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING MODAL: DAILY SAFETY REPORT (Mobile Bottom Sheet / Desktop Centered) -->
+  <div id="modal-daily-report" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom overflow-y-auto custom-scroll">
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="bar-chart-2" class="w-5 h-5 text-indigo-400"></i>
+          <h2 class="text-sm font-bold text-white">Kunlik Xavfsizlik Hisoboti</h2>
+        </div>
+        <button onclick="closeDailyReportModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="dailyReportContent" class="py-3 space-y-3">
+        <p class="text-center text-xs text-slate-400 py-6">Hisobot yuklanmoqda...</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Application Logic -->
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>

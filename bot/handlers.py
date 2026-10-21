@@ -859,7 +859,7 @@ async def on_battery_status_pressed(message: Message):
 
 @router.message(F.text == "📊 Bugungi hisobot")
 async def on_daily_summary_pressed(message: Message):
-    """Parent checks summary of movements today."""
+    """Parent checks summary of movements and daily safety statistics today."""
     parent_id = message.from_user.id
 
     async with AsyncSessionLocal() as session:
@@ -868,24 +868,46 @@ async def on_daily_summary_pressed(message: Message):
             await message.answer("Sizga hali farzand ulanmagan.")
             return
 
-        text = "📊 **Bugungi harakat hisoboti:**\n\n"
-
         for ch in children:
-            logs = await crud.get_location_history_today(session, ch.id, limit=200)
-            text += f"👤 **{ch.full_name}:**\n"
-            text += f"• Qayd etilgan nuqtalar: **{len(logs)} ta**\n"
-            if logs:
-                first = logs[0]
-                last = logs[-1]
-                text += f"• Birinchi signal: {first.recorded_at.strftime('%H:%M')}\n"
-                text += f"• Oxirgi signal: {last.recorded_at.strftime('%H:%M')}\n"
-                if last.battery_level is not None:
-                    text += f"• Hozirgi batareya: **{last.battery_level}%**\n"
-            else:
-                text += "• Bugun hali harakat qayd etilmagan.\n"
-            text += "\n"
+            rep = await crud.generate_daily_safety_report(session, ch.id)
+            c_name = html.escape(rep["child_name"])
 
-        await message.answer(text, parse_mode="Markdown")
+            zones_list = rep["visited_zones"]
+            if zones_list:
+                zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
+                est_time = sum(z["est_minutes"] for z in zones_list)
+                hours = est_time // 60
+                mins = est_time % 60
+                time_str = f"{hours} soat {mins} daqiqa" if hours > 0 else f"{mins} daqiqa"
+            else:
+                zones_str = "Hali qayd etilmagan"
+                time_str = "0 daqiqa"
+
+            wishlist = rep.get("wishlist") or {}
+            w_title = html.escape(wishlist.get("title") or "Orzu")
+            w_prog = wishlist.get("progress_percent", 0)
+            w_cur = wishlist.get("current_som", 0)
+            w_tgt = wishlist.get("target_som", 0)
+
+            batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
+            spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
+
+            report_msg = (
+                f"📊 <b>KUNLIK XAVFSIZLIK VA HARAKAT HISOBOTI</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 <b>Farzand:</b> {c_name}\n\n"
+                f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
+                f"   └ {zones_str}\n\n"
+                f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
+                f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {rep['total_distance_km']} km ({rep['points_count']} ta signal)\n"
+                f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
+                f"🔋 <b>Hozirgi batareya:</b> {batt_str}\n\n"
+                f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
+                f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
+            )
+            await message.answer(report_msg, parse_mode="HTML")
 
 
 # ---------------------------------------------------------

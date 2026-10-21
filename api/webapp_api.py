@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, WebSocket, WebSocketDisconnect
@@ -172,11 +172,22 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
             "location": {
                 "latitude": latest.latitude if latest else None,
                 "longitude": latest.longitude if latest else None,
+                "speed": latest.speed if latest else 0.0,
                 "battery_level": latest.battery_level if latest else None,
                 "is_charging": latest.is_charging if latest else False,
                 "sound_mode": latest.sound_mode if latest else "normal",
                 "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
-            } if latest else None
+            } if latest else None,
+            "walk_safe": {
+                "active": child.walk_safe_active or False,
+                "destination": child.walk_safe_destination or "Uyga",
+                "duration": child.walk_safe_duration or 20,
+                "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None,
+            },
+            "wishlist": {
+                "title": child.wishlist_title or "Yangi Velosiped 🚲",
+                "target_som": child.wishlist_target_som or 600000,
+            }
         },
         "parent": {
             "id": parent.id,
@@ -303,11 +314,22 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "location": {
                 "latitude": latest.latitude if latest else None,
                 "longitude": latest.longitude if latest else None,
+                "speed": latest.speed if latest else 0.0,
                 "battery_level": latest.battery_level if latest else None,
                 "is_charging": latest.is_charging if latest else False,
                 "sound_mode": latest.sound_mode if latest else "normal",
                 "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
-            } if latest else None
+            } if latest else None,
+            "walk_safe": {
+                "active": child.walk_safe_active or False,
+                "destination": child.walk_safe_destination or "Uyga",
+                "duration": child.walk_safe_duration or 20,
+                "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None,
+            },
+            "wishlist": {
+                "title": child.wishlist_title or "Yangi Velosiped 🚲",
+                "target_som": child.wishlist_target_som or 600000,
+            }
         }
     }
 
@@ -1018,11 +1040,35 @@ async def update_child_live_location_endpoint(
         latitude=payload.latitude,
         longitude=payload.longitude,
         accuracy=payload.accuracy,
+        speed=payload.speed,
         battery_level=payload.battery_level,
         is_charging=payload.is_charging or False,
         sound_mode=payload.sound_mode or "normal",
         source="web_watch_position"
     )
+
+    # Speed alert check (>= 30 km/h) with 15-min cooldown
+    if payload.speed is not None and payload.speed >= 30.0 and telemetry.telegram_bot:
+        now_utc = datetime.now(timezone.utc)
+        last_spd = telemetry.last_speed_alert_map.get(child_id)
+        if not last_spd or (now_utc - last_spd) > timedelta(minutes=15):
+            ch_user = await crud.get_user(session, child_id)
+            ch_name = ch_user.full_name if ch_user else f"Farzand #{child_id}"
+            spd_parents = await crud.get_parents_for_child(session, child_id)
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+            spd_msg = (
+                f"🚗 **TEZLIK OGOHLANTIRISHI!**\n\n"
+                f"👤 Farzandingiz: **{ch_name}**\n"
+                f"🚀 Harakat tezligi: **{payload.speed:.0f} km/soat**\n"
+                f"📍 Holat: **Avtomobil yoki jamoat transportida harakatlanmoqda**\n\n"
+                f"🗺 [Xaritada ko'rish (Google Maps)]({maps_url})"
+            )
+            for p in spd_parents:
+                try:
+                    await telemetry.telegram_bot.send_message(chat_id=p.id, text=spd_msg, parse_mode="Markdown")
+                except Exception:
+                    pass
+            telemetry.last_speed_alert_map[child_id] = now_utc
 
     child = await crud.get_user(session, child_id)
     if child and telemetry.telegram_bot:
@@ -1254,3 +1300,277 @@ async def get_coparent_invite_info(parent_id: int, session: AsyncSession = Depen
 
 
 
+
+
+# ---------------------------------------------------------
+# SOS 5-Second Voice Memo & Camera Snapshot Upload
+# ---------------------------------------------------------
+
+@router.post("/child/{child_id}/sos/media")
+async def upload_sos_snapshot_media(
+    child_id: int,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Accepts 5-second ambient audio recording or camera snapshot triggered on SOS.
+    Dispatches directly to linked parents via Telegram voice memo or photo.
+    """
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    upload_dir = Path("uploads/sos_snapshots")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(file.filename or "").suffix.lower()
+    if not ext:
+        ext = ".webm" if "audio" in (file.content_type or "") else ".jpg"
+
+    safe_filename = f"sos_{child_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = upload_dir / safe_filename
+
+    contents = await file.read()
+    with open(file_path, "wb") as f_out:
+        f_out.write(contents)
+
+    file_url = f"/uploads/sos_snapshots/{safe_filename}"
+    parents = await crud.get_parents_for_child(session, child_id)
+    child_name = child.full_name or f"Farzand #{child_id}"
+    now_str = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
+
+    is_audio = "audio" in (file.content_type or "") or ext in [".webm", ".ogg", ".wav", ".mp3", ".m4a"]
+
+    if telemetry.telegram_bot and parents:
+        for p in parents:
+            try:
+                if is_audio:
+                    caption = (
+                        f"🎤 **FARZANDINGIZNING SOS OVOZ YOZUVI (5 soniya)**\n\n"
+                        f"👤 Farzandingiz: **{child_name}**\n"
+                        f"🕒 Vaqt: **{now_str}**\n\n"
+                        f"Atrofdagi tovushlar va vaziyatni eshiting."
+                    )
+                    await telemetry.telegram_bot.send_voice(
+                        chat_id=p.id,
+                        voice=FSInputFile(str(file_path)),
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+                else:
+                    caption = (
+                        f"📸 **FARZANDINGIZNING SOS KAMERA SURATI**\n\n"
+                        f"👤 Farzandingiz: **{child_name}**\n"
+                        f"🕒 Vaqt: **{now_str}**"
+                    )
+                    await telemetry.telegram_bot.send_photo(
+                        chat_id=p.id,
+                        photo=FSInputFile(str(file_path)),
+                        caption=caption,
+                        parse_mode="Markdown"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to dispatch SOS media to parent {p.id}: {e}")
+
+    return {
+        "status": "success",
+        "file_url": file_url,
+        "is_audio": is_audio,
+        "notified_parents": len(parents)
+    }
+
+
+# ---------------------------------------------------------
+# "Xavfsiz Yo'l" (Walk Safe Timer Mode) Endpoints
+# ---------------------------------------------------------
+
+class WalkSafeStartPayload(BaseModel):
+    duration_minutes: int = Field(20, ge=5, le=180)
+    destination: Optional[str] = "Uyga qaytish"
+
+
+@router.post("/child/{child_id}/walk-safe/start")
+async def start_walk_safe_endpoint(
+    child_id: int,
+    payload: WalkSafeStartPayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """Start Walk Safe journey with timed check-in and parent notification."""
+    child = await crud.start_walk_safe(
+        session=session,
+        child_id=child_id,
+        duration_minutes=payload.duration_minutes,
+        destination=payload.destination or "Uyga qaytish"
+    )
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    parents = await crud.get_parents_for_child(session, child_id)
+    child_name = child.full_name or f"Farzand #{child_id}"
+    dest = payload.destination or "Uyga qaytish"
+
+    if telemetry.telegram_bot and parents:
+        msg = (
+            f"🚶‍♂️ **XAVFSIZ YO'L (WALK SAFE) BOSHLANDI**\n\n"
+            f"👤 Farzandingiz: **{child_name}**\n"
+            f"🎯 Yo'nalish: **{dest}**\n"
+            f"⏱ Rejalashtirilgan vaqt: **{payload.duration_minutes} daqiqa**\n\n"
+            f"Farzandingiz xaritada jonli kuzatilmoqda. Vaqti-vaqti bilan uning ahvoli tekshirilib turiladi."
+        )
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+
+    # Broadcast WebSocket update
+    for p in parents:
+        await ws_manager.send_to_user(p.id, {
+            "type": "walk_safe_started",
+            "child_id": child_id,
+            "duration_minutes": payload.duration_minutes,
+            "destination": dest,
+            "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None
+        })
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "duration_minutes": payload.duration_minutes,
+        "destination": dest,
+        "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None
+    }
+
+
+@router.post("/child/{child_id}/walk-safe/checkin")
+async def checkin_walk_safe_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child confirms periodic check-in during Walk Safe mode."""
+    child = await crud.checkin_walk_safe(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    parents = await crud.get_parents_for_child(session, child_id)
+    for p in parents:
+        await ws_manager.send_to_user(p.id, {
+            "type": "walk_safe_checkin",
+            "child_id": child_id,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    return {"status": "success", "child_id": child_id, "message": "Check-in accepted"}
+
+
+@router.post("/child/{child_id}/walk-safe/complete")
+async def complete_walk_safe_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child marks Walk Safe completed upon reaching destination."""
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    dest = child.walk_safe_destination or "Uyga"
+    child_name = child.full_name or f"Farzand #{child_id}"
+    await crud.complete_walk_safe(session, child_id)
+
+    parents = await crud.get_parents_for_child(session, child_id)
+    if telemetry.telegram_bot and parents:
+        msg = (
+            f"🎉 **FARZANDINGIZ ESON-OMON YETIB KELDI!**\n\n"
+            f"👤 Farzandingiz **{child_name}** manzilga (**{dest}**) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi."
+        )
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+
+    for p in parents:
+        await ws_manager.send_to_user(p.id, {
+            "type": "walk_safe_completed",
+            "child_id": child_id,
+            "destination": dest
+        })
+
+    return {"status": "success", "child_id": child_id, "message": "Walk safe completed successfully"}
+
+
+@router.get("/child/{child_id}/walk-safe/status")
+async def get_walk_safe_status_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Query current Walk Safe active countdown status."""
+    status_data = await crud.get_active_walk_safe(session, child_id)
+    return {"status": "success", "child_id": child_id, "walk_safe": status_data}
+
+
+# ---------------------------------------------------------
+# Wishlist ("Orzular Qutisi" / Bolaning maqsadi) Endpoints
+# ---------------------------------------------------------
+
+class UpdateWishlistPayload(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    target_som: int = Field(..., ge=1000)
+
+
+@router.get("/child/{child_id}/wishlist")
+async def get_child_wishlist_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Fetch child's current dream wishlist item, target price and progress."""
+    data = await crud.get_child_wishlist(session, child_id)
+    return {"status": "success", "child_id": child_id, "wishlist": data}
+
+
+@router.post("/child/{child_id}/wishlist")
+async def update_child_wishlist_endpoint(
+    child_id: int,
+    payload: UpdateWishlistPayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """Set or update child's dream wishlist and target savings amount."""
+    await crud.update_child_wishlist(
+        session=session,
+        child_id=child_id,
+        title=payload.title,
+        target_som=payload.target_som
+    )
+    data = await crud.get_child_wishlist(session, child_id)
+
+    # If achieved, alert parents with celebration notification
+    if data.get("is_achieved") and telemetry.telegram_bot:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name if child else f"Farzand #{child_id}"
+        parents = await crud.get_parents_for_child(session, child_id)
+        msg = (
+            f"🎉🎉 **TABRIKLAYMIZ! ORZU USHALDI!** 🎉🎉\n\n"
+            f"👤 Farzandingiz **{child_name}** bajargan foydali topshiriqlari orqali o'zi orzu qilgan **«{payload.title}»** ({payload.target_som:,} so'm) uchun kerakli mablag'ni to'liq jamg'ardi!\n\n"
+            f"Endi ushbu orzuni birgalikda amalga oshirishingiz mumkin!"
+        )
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+            except Exception:
+                pass
+
+    return {"status": "success", "child_id": child_id, "wishlist": data}
+
+
+# ---------------------------------------------------------
+# Daily Safety Report Endpoints
+# ---------------------------------------------------------
+
+@router.get("/child/{child_id}/daily-report")
+async def get_daily_safety_report_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Generate detailed movement and activity summary for child today."""
+    report = await crud.generate_daily_safety_report(session, child_id)
+    return {"status": "success", "child_id": child_id, "report": report}

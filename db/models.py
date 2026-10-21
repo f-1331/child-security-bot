@@ -32,6 +32,19 @@ class User(Base):
     pairing_code_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_sos_active: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Wishlist / Bolaning orzusi va maqsadi
+    wishlist_title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    wishlist_target_som: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # "Xavfsiz Yo'l" Taymeri (Walk Safe Mode)
+    walk_safe_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    walk_safe_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    walk_safe_duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # minutes
+    walk_safe_destination: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    walk_safe_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    walk_safe_last_checkin: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -62,6 +75,7 @@ class LocationLog(Base):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     accuracy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    speed: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # km/h
     battery_level: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-100%
     is_charging: Mapped[bool] = mapped_column(Boolean, default=False)
     sound_mode: Mapped[Optional[str]] = mapped_column(String(20), default="normal")  # "normal", "vibrate", "silent"

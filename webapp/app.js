@@ -932,6 +932,7 @@ async function loadChildSelfData(user) {
   await loadGeofences(user.id);
   await loadRouteHistory(user.id);
   await loadTasks();
+  await loadWishlist(user.id);
 }
 
 function logoutSession() {
@@ -1719,6 +1720,7 @@ async function selectChild(childId) {
   await loadGeofences(currentChildId);
   await loadRouteHistory(currentChildId);
   await loadTasks();
+  await loadWishlist(currentChildId);
 }
 
 // Fetch live telemetry for child
@@ -1733,6 +1735,16 @@ async function updateLiveTelemetry(childId) {
     const child = data.child;
     toggleSosBanner(child.is_sos_active);
 
+    // Feature 1: Walk Safe mode status sync for Parent
+    if (child.walk_safe) {
+      renderParentWalkSafeBanner(child.walk_safe);
+    }
+
+    // Feature 4: Wishlist status sync
+    if (child.wishlist) {
+      renderWishlistUI(child.wishlist);
+    }
+
     const loc = child.location;
     if (loc && loc.latitude && loc.longitude) {
       const lat = loc.latitude;
@@ -1740,6 +1752,7 @@ async function updateLiveTelemetry(childId) {
 
       updateBatteryUI(loc.battery_level, loc.is_charging);
       updateSoundUI(loc.sound_mode);
+      updateSpeedUI(loc.speed);
 
       if (loc.recorded_at) {
         document.getElementById("lastSeenText").innerHTML = `
@@ -1758,6 +1771,7 @@ async function updateLiveTelemetry(childId) {
         childMarker = null;
       }
       updateBatteryUI(null, false);
+      updateSpeedUI(0);
     }
   } catch (err) {
     console.warn("Telemetry polling error:", err);
@@ -2252,6 +2266,9 @@ function switchTab(tabName) {
     if (locCard) locCard.classList.add("hidden");
     if (tabName === "tasks") {
       loadTasks();
+    }
+    if (tabName === "wallet") {
+      loadWishlist(currentChildId);
     }
     if (tabName === "settings") {
       setGlobalTheme(currentTheme, false);
@@ -3564,6 +3581,8 @@ async function triggerChildSOS() {
   };
 
   if (!isDemoMode && currentChildId) {
+    // Feature 2: 5-second ambient audio recording in background
+    recordAndUploadSOSAudio(currentChildId);
     try {
       const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
         method: "POST",
@@ -3993,6 +4012,17 @@ function startChildLiveTracking(childId) {
         ? calculateDistanceMeters(lastSentLat, lastSentLng, latitude, longitude)
         : 999;
 
+      // Feature 3: Speed tracking & conversion to km/h
+      let speedKmh = 0;
+      if (typeof speed === "number" && !isNaN(speed) && speed > 0) {
+        speedKmh = Math.round(speed * 3.6);
+      } else if (lastSentLat && lastSentLng && lastSentTime && (now - lastSentTime) > 0) {
+        const timeDeltaSec = (now - lastSentTime) / 1000;
+        if (timeDeltaSec >= 3 && dist >= 5) {
+          speedKmh = Math.round((dist / timeDeltaSec) * 3.6);
+        }
+      }
+
       // Throttle: send if moved > 5 meters or at least once every 10 seconds
       if (dist >= 5 || (now - lastSentTime) > 10000) {
         lastSentTime = now;
@@ -4004,7 +4034,7 @@ function startChildLiveTracking(childId) {
           latitude,
           longitude,
           accuracy: accuracy || null,
-          speed: speed || 0,
+          speed: speedKmh,
           battery_level: battery,
           sound_mode: "normal"
         });
@@ -4150,7 +4180,39 @@ function handleIncomingWebSocketMessage(msg) {
       const name = child ? child.full_name : "Farzand";
       renderChildMarker(msg.latitude, msg.longitude, name, child?.is_sos_active, msg.battery_level);
       updateBatteryUI(msg.battery_level, msg.is_charging);
+      updateSpeedUI(msg.speed);
       resolveAddress(msg.latitude, msg.longitude);
+    }
+    return;
+  }
+
+  // 4.1 Walk Safe Started received by Parent
+  if (msg.type === "walk_safe_started" && currentRole === "parent") {
+    if (msg.child_id == currentChildId) {
+      renderParentWalkSafeBanner({
+        active: true,
+        destination: msg.destination,
+        deadline: msg.deadline,
+        duration: msg.duration_minutes
+      });
+      showToast(`🚶‍♂️ ${msg.child_name || 'Farzandingiz'} "Xavfsiz Yo'l" rejimini yoqdi (${msg.duration_minutes} daqiqa)`);
+    }
+    return;
+  }
+
+  // 4.2 Walk Safe Check-in received by Parent
+  if (msg.type === "walk_safe_checkin" && currentRole === "parent") {
+    if (msg.child_id == currentChildId) {
+      showToast("✅ Farzandingiz yo'lda hammasi yaxshiligini tasdiqladi");
+    }
+    return;
+  }
+
+  // 4.3 Walk Safe Completed received by Parent
+  if (msg.type === "walk_safe_completed" && currentRole === "parent") {
+    if (msg.child_id == currentChildId) {
+      renderParentWalkSafeBanner(null);
+      showToast(`🎉 Farzandingiz manzilga (${msg.destination || 'Uyga'}) eson-omon yetib keldi!`);
     }
     return;
   }
@@ -4438,6 +4500,10 @@ function setupTelegramBackButton() {
 function handleTelegramBackPress() {
   haptic("light");
   const modalPriority = [
+    { id: "modal-walk-safe", close: closeWalkSafeModal },
+    { id: "modal-walk-safe-checkin", close: closeWalkSafeCheckInModal },
+    { id: "modal-edit-wishlist", close: closeEditWishlistModal },
+    { id: "modal-daily-report", close: closeDailyReportModal },
     { id: "childOnboardingModal", close: () => { const m = document.getElementById("childOnboardingModal"); if (m) m.classList.add("hidden"); } },
     { id: "deleteChildModal", close: closeDeleteChildModal },
     { id: "childInviteParentModal", close: closeChildInviteParentModal },
@@ -4486,6 +4552,10 @@ function updateTelegramBackButton() {
   if (!tg || !tg.BackButton) return;
   try {
     const modalIds = [
+      "modal-walk-safe",
+      "modal-walk-safe-checkin",
+      "modal-edit-wishlist",
+      "modal-daily-report",
       "modal-zones",
       "modal-history",
       "modal-tasks",
@@ -4521,6 +4591,10 @@ function updateTelegramBackButton() {
 
 function initBackdropDismissListeners() {
   const modalList = [
+    { id: "modal-walk-safe", close: closeWalkSafeModal },
+    { id: "modal-walk-safe-checkin", close: closeWalkSafeCheckInModal },
+    { id: "modal-edit-wishlist", close: closeEditWishlistModal },
+    { id: "modal-daily-report", close: closeDailyReportModal },
     { id: "modal-zones", close: () => closeModal("zones") },
     { id: "modal-history", close: () => closeModal("history") },
     { id: "modal-tasks", close: () => closeModal("tasks") },
@@ -4549,3 +4623,634 @@ function initBackdropDismissListeners() {
     }
   });
 }
+
+
+// ============================================================================
+// 5 YANGI XAVFSIZLIK VA INTERAKTIV FUNKSIYALAR LOGIKASI (v29)
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// FUNKSIYA 2: SOS 5-SONIYALIK OVOZ YOZUVI (Ambient Audio Snapshot)
+// ----------------------------------------------------------------------------
+async function recordAndUploadSOSAudio(childId) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.log("MediaDevices not supported on this browser/environment");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const mimeType = (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus"))
+      ? "audio/webm;codecs=opus"
+      : (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus"))
+      ? "audio/ogg;codecs=opus"
+      : (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4"))
+      ? "audio/mp4"
+      : "";
+
+    const options = mimeType ? { mimeType } : {};
+    const mediaRecorder = new MediaRecorder(stream, options);
+    const chunks = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      // Mikrofonni zudlik bilan bo'shatish
+      try {
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
+
+      if (chunks.length === 0) return;
+
+      const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+      const ext = (mimeType && mimeType.includes("mp4")) ? "m4a" : "webm";
+      const formData = new FormData();
+      formData.append("file", blob, `sos_audio_${Date.now()}.${ext}`);
+
+      try {
+        await fetch(`/api/v1/webapp/child/${childId}/sos/media`, {
+          method: "POST",
+          body: formData,
+        });
+        console.log("SOS audio snapshot successfully dispatched to parents");
+      } catch (err) {
+        console.warn("Failed to upload SOS audio snapshot:", err);
+      }
+    };
+
+    mediaRecorder.start();
+    // 5 soniya davomida yozib avtomatik to'xtatish
+    setTimeout(() => {
+      if (mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    }, 5000);
+  } catch (err) {
+    console.warn("SOS ambient microphone capture skipped/denied:", err);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// FUNKSIYA 3: TEZLIKNI KO'RSATISH (Speed Badge)
+// ----------------------------------------------------------------------------
+function updateSpeedUI(speed) {
+  const badge = document.getElementById("speedBadge");
+  const val = document.getElementById("speedValue");
+  if (!badge || !val) return;
+
+  const kmh = Math.round(Number(speed) || 0);
+  if (kmh > 0) {
+    val.textContent = `${kmh} km/h`;
+    if (kmh >= 30) {
+      badge.className = "text-[9px] bg-rose-500/25 text-rose-300 border border-rose-500/50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 animate-pulse shadow-sm";
+    } else {
+      badge.className = "text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1";
+    }
+    badge.classList.remove("hidden");
+    if (window.lucide) window.lucide.createIcons();
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+// ----------------------------------------------------------------------------
+// FUNKSIYA 1: "XAVFSIZ YO'L" TAYMERI (Walk Safe / Meni kuzatib turing)
+// ----------------------------------------------------------------------------
+let walkSafeActive = false;
+let walkSafeDurationMinutes = 20;
+let walkSafeDestination = "Uyga qaytish 🏠";
+let walkSafeTimer = null;
+let walkSafeCheckInTimer = null;
+let walkSafeDeadlineTs = null;
+
+function openWalkSafeModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-walk-safe");
+  if (modal) {
+    modal.classList.remove("hidden");
+    setWalkSafeDuration(walkSafeDurationMinutes || 20);
+    const input = document.getElementById("inputWalkSafeDestination");
+    if (input && walkSafeDestination) input.value = walkSafeDestination;
+    if (window.lucide) window.lucide.createIcons();
+  }
+  updateTelegramBackButton();
+}
+
+function closeWalkSafeModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-walk-safe");
+  if (modal) modal.classList.add("hidden");
+  updateTelegramBackButton();
+}
+
+function setWalkSafeDestination(dest) {
+  walkSafeDestination = dest;
+  const input = document.getElementById("inputWalkSafeDestination");
+  if (input) input.value = dest;
+}
+
+function setWalkSafeDuration(mins) {
+  walkSafeDurationMinutes = parseInt(mins) || 20;
+  const disp = document.getElementById("walkSafeDurationDisplay");
+  if (disp) disp.textContent = `${walkSafeDurationMinutes} daqiqa`;
+  const slider = document.getElementById("inputWalkSafeSlider");
+  if (slider) slider.value = walkSafeDurationMinutes;
+}
+
+async function confirmStartWalkSafe() {
+  haptic("medium");
+  const input = document.getElementById("inputWalkSafeDestination");
+  const dest = input?.value?.trim() || walkSafeDestination || "Uyga qaytish 🏠";
+  walkSafeDestination = dest;
+
+  const btn = document.getElementById("btnStartWalkSafeConfirm");
+  if (btn) btn.disabled = true;
+
+  try {
+    if (!isDemoMode && currentChildId) {
+      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          duration_minutes: walkSafeDurationMinutes,
+          destination: dest
+        })
+      });
+      const data = await res.json();
+      if (data.status === "success" && data.walk_safe) {
+        startLocalWalkSafeCountdown(data.walk_safe.deadline, dest);
+      } else {
+        const deadline = new Date(Date.now() + walkSafeDurationMinutes * 60000).toISOString();
+        startLocalWalkSafeCountdown(deadline, dest);
+      }
+    } else {
+      const deadline = new Date(Date.now() + walkSafeDurationMinutes * 60000).toISOString();
+      startLocalWalkSafeCountdown(deadline, dest);
+    }
+
+    closeWalkSafeModal();
+    showToast("🚶‍♂️ Xavfsiz Yo'l rejimi boshlandi! Ota-onangizga xabar yuborildi.");
+  } catch (err) {
+    console.error("Walk safe start error:", err);
+    showToast("⚠️ Xavfsiz yo'l rejimini yoqishda xatolik");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function startLocalWalkSafeCountdown(deadlineIso, destination) {
+  walkSafeActive = true;
+  walkSafeDeadlineTs = deadlineIso ? new Date(deadlineIso).getTime() : Date.now() + 20 * 60000;
+  walkSafeDestination = destination || "Uyga qaytish";
+
+  // Bolaning faol yo'l paneli
+  const childBar = document.getElementById("childActiveWalkSafeBar");
+  if (childBar) childBar.classList.remove("hidden");
+
+  // Sarguzasht markazidagi kartani yangilash
+  const cardSub = document.getElementById("walkSafeCardSubtext");
+  if (cardSub) cardSub.textContent = `Faol: ${walkSafeDestination} tomon`;
+  const btnCard = document.getElementById("btnOpenWalkSafeModal");
+  if (btnCard) {
+    btnCard.textContent = "Holat";
+    btnCard.onclick = () => showToast(`🚶‍♂️ Yo'ldasiz: ${walkSafeDestination}`);
+  }
+
+  clearInterval(walkSafeTimer);
+  updateWalkSafeCountdownDisplay();
+  walkSafeTimer = setInterval(updateWalkSafeCountdownDisplay, 1000);
+
+  // Har 5 daqiqada "Ahvolingiz yaxshimi?" deb so'rash
+  clearInterval(walkSafeCheckInTimer);
+  walkSafeCheckInTimer = setInterval(() => {
+    if (walkSafeActive && currentRole === "child") {
+      openWalkSafeCheckInModal();
+    }
+  }, 5 * 60 * 1000);
+}
+
+function updateWalkSafeCountdownDisplay() {
+  if (!walkSafeActive || !walkSafeDeadlineTs) return;
+  const now = Date.now();
+  const diffSec = Math.max(0, Math.floor((walkSafeDeadlineTs - now) / 1000));
+
+  const mins = Math.floor(diffSec / 60);
+  const secs = diffSec % 60;
+  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  // Bola ekrani
+  const cdText = document.getElementById("childWalkSafeCountdown");
+  if (cdText) {
+    cdText.textContent = `${timeStr} qoldi (${walkSafeDestination})`;
+  }
+
+  // Ota-ona xarita ustidagi banner
+  const parentBanner = document.getElementById("parentWalkSafeBanner");
+  const parentText = document.getElementById("parentWalkSafeText");
+  if (parentBanner && !parentBanner.classList.contains("hidden") && parentText) {
+    parentText.textContent = `${timeStr} qoldi (${walkSafeDestination})`;
+  }
+
+  if (diffSec <= 0) {
+    clearInterval(walkSafeTimer);
+    if (currentRole === "child") {
+      showToast("⏰ Xavfsiz yo'l vaqti tugadi! Ota-onangizga xabar qilindi.");
+    }
+  }
+}
+
+function openWalkSafeCheckInModal() {
+  const modal = document.getElementById("modal-walk-safe-checkin");
+  if (modal) {
+    modal.classList.remove("hidden");
+    haptic("medium");
+    playPingSound();
+    if (window.lucide) window.lucide.createIcons();
+  }
+  updateTelegramBackButton();
+}
+
+function closeWalkSafeCheckInModal() {
+  const modal = document.getElementById("modal-walk-safe-checkin");
+  if (modal) modal.classList.add("hidden");
+  updateTelegramBackButton();
+}
+
+async function confirmWalkSafeCheckInModal() {
+  haptic("light");
+  closeWalkSafeCheckInModal();
+  showToast("✅ Ahvolingiz yaxshiligi qayd etildi!");
+
+  if (!isDemoMode && currentChildId) {
+    try {
+      await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/checkin`, {
+        method: "POST"
+      });
+    } catch (e) {
+      console.warn("Checkin send error:", e);
+    }
+  }
+}
+
+function childWalkSafeCheckIn() {
+  confirmWalkSafeCheckInModal();
+}
+
+async function childWalkSafeComplete() {
+  haptic("heavy");
+  clearInterval(walkSafeTimer);
+  clearInterval(walkSafeCheckInTimer);
+  walkSafeActive = false;
+
+  const childBar = document.getElementById("childActiveWalkSafeBar");
+  if (childBar) childBar.classList.add("hidden");
+
+  const cardSub = document.getElementById("walkSafeCardSubtext");
+  if (cardSub) cardSub.textContent = "Meni kuzatib turing (Xavfsiz yetib olish)";
+  const btnCard = document.getElementById("btnOpenWalkSafeModal");
+  if (btnCard) {
+    btnCard.textContent = "Boshlash";
+    btnCard.onclick = openWalkSafeModal;
+  }
+
+  showToast("🎉 Manzilga eson-omon yetib keldingiz! Ota-onangizga xabar yetkazildi.");
+
+  if (!isDemoMode && currentChildId) {
+    try {
+      await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/complete`, {
+        method: "POST"
+      });
+    } catch (e) {
+      console.warn("Complete walk safe error:", e);
+    }
+  }
+}
+
+function renderParentWalkSafeBanner(walkSafe) {
+  const banner = document.getElementById("parentWalkSafeBanner");
+  const text = document.getElementById("parentWalkSafeText");
+  if (!banner || !text) return;
+
+  if (walkSafe && walkSafe.active && walkSafe.deadline) {
+    walkSafeDestination = walkSafe.destination || "Uyga";
+    walkSafeDeadlineTs = new Date(walkSafe.deadline).getTime();
+    walkSafeActive = true;
+    banner.classList.remove("hidden");
+    clearInterval(walkSafeTimer);
+    updateWalkSafeCountdownDisplay();
+    walkSafeTimer = setInterval(updateWalkSafeCountdownDisplay, 1000);
+    if (window.lucide) window.lucide.createIcons();
+  } else {
+    banner.classList.add("hidden");
+    walkSafeActive = false;
+    clearInterval(walkSafeTimer);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// FUNKSIYA 4: "ORZULAR QUTISI" (Wishlist / Bolaning maqsadi)
+// ----------------------------------------------------------------------------
+let currentWishlistData = {
+  title: "Yangi Velosiped 🚲",
+  target_som: 600000,
+  balance: 0,
+  percent: 0,
+  remaining_som: 600000,
+  is_reached: false
+};
+
+async function loadWishlist(childId) {
+  if (!childId) return;
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${childId}/wishlist`);
+    const data = await res.json();
+    if (data.status === "success" && data.wishlist) {
+      currentWishlistData = data.wishlist;
+      renderWishlistUI(currentWishlistData);
+    }
+  } catch (err) {
+    console.warn("Failed to load wishlist:", err);
+  }
+}
+
+function renderWishlistUI(wl) {
+  if (!wl) return;
+  const titleEl = document.getElementById("wishlistTitleText");
+  if (titleEl) titleEl.textContent = `Maqsad: ${wl.title || 'Yangi Velosiped 🚲'}`;
+
+  const pct = Math.min(100, Math.max(0, wl.percent || 0));
+  const pctEl = document.getElementById("wishlistPercentBadge");
+  if (pctEl) pctEl.textContent = `${pct}%`;
+
+  const barEl = document.getElementById("wishlistProgressBar");
+  if (barEl) barEl.style.width = `${pct}%`;
+
+  const moneyEl = document.getElementById("wishlistMoneyProgress");
+  if (moneyEl) {
+    const balStr = (wl.balance || 0).toLocaleString();
+    const tgtStr = (wl.target_som || 600000).toLocaleString();
+    moneyEl.textContent = `${balStr} / ${tgtStr} so'm`;
+  }
+
+  const remEl = document.getElementById("wishlistRemainingText");
+  if (remEl) {
+    if (wl.is_reached || pct >= 100) {
+      remEl.textContent = "🎉 Orzu ushaldi! Tabriklaymiz!";
+      remEl.className = "text-amber-300 font-bold animate-pulse";
+    } else {
+      const rem = (wl.remaining_som || Math.max(0, (wl.target_som || 0) - (wl.balance || 0))).toLocaleString();
+      remEl.textContent = `Yana ${rem} so'm qoldi`;
+      remEl.className = "text-emerald-300 font-semibold";
+    }
+  }
+}
+
+function openEditWishlistModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-edit-wishlist");
+  if (modal) {
+    modal.classList.remove("hidden");
+    const tInput = document.getElementById("inputWishlistTitle");
+    if (tInput) tInput.value = currentWishlistData.title || "Yangi Velosiped 🚲";
+    const aInput = document.getElementById("inputWishlistTargetSom");
+    if (aInput) aInput.value = currentWishlistData.target_som || 600000;
+    if (window.lucide) window.lucide.createIcons();
+  }
+  updateTelegramBackButton();
+}
+
+function closeEditWishlistModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-edit-wishlist");
+  if (modal) modal.classList.add("hidden");
+  updateTelegramBackButton();
+}
+
+function setWishlistPreset(title, amount) {
+  haptic("light");
+  const tInput = document.getElementById("inputWishlistTitle");
+  if (tInput) tInput.value = title;
+  const aInput = document.getElementById("inputWishlistTargetSom");
+  if (aInput) aInput.value = amount;
+}
+
+async function saveWishlistConfirm() {
+  haptic("medium");
+  const tInput = document.getElementById("inputWishlistTitle");
+  const aInput = document.getElementById("inputWishlistTargetSom");
+  const title = tInput?.value?.trim() || "Yangi Velosiped 🚲";
+  const targetSom = parseInt(aInput?.value) || 600000;
+
+  if (targetSom < 1000) {
+    showToast("⚠️ Miqdor kamida 1,000 so'm bo'lishi kerak");
+    return;
+  }
+
+  const btn = document.getElementById("btnSaveWishlistConfirm");
+  if (btn) btn.disabled = true;
+
+  try {
+    if (!isDemoMode && currentChildId) {
+      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/wishlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, target_som: targetSom })
+      });
+      const data = await res.json();
+      if (data.status === "success" && data.wishlist) {
+        currentWishlistData = data.wishlist;
+        renderWishlistUI(currentWishlistData);
+      }
+    } else {
+      currentWishlistData.title = title;
+      currentWishlistData.target_som = targetSom;
+      currentWishlistData.percent = Math.min(100, Math.round((currentWishlistData.balance / targetSom) * 100));
+      renderWishlistUI(currentWishlistData);
+    }
+
+    closeEditWishlistModal();
+    showToast("🎯 Yangi orzu va maqsad muvaffaqiyatli saqlandi!");
+  } catch (err) {
+    console.error("Save wishlist error:", err);
+    showToast("⚠️ Saqlashda xatolik yuz berdi");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// FUNKSIYA 5: KUNLIK XAVFSIZLIK HISOBOTI (Daily Safety Report)
+// ----------------------------------------------------------------------------
+async function openDailyReportModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-daily-report");
+  if (modal) {
+    modal.classList.remove("hidden");
+    renderDailyReportLoading();
+    if (window.lucide) window.lucide.createIcons();
+  }
+  updateTelegramBackButton();
+
+  if (!currentChildId) return;
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/daily-report`);
+    const data = await res.json();
+    if (data.status === "success" && data.report) {
+      renderDailyReportContent(data.report);
+    } else {
+      renderDailyReportError("Hisobot ma'lumotlarini yuklab bo'lmadi.");
+    }
+  } catch (err) {
+    console.error("Daily report fetch error:", err);
+    renderDailyReportError("Tarmoq xatosi. Qaytadan urinib ko'ring.");
+  }
+}
+
+function closeDailyReportModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-daily-report");
+  if (modal) modal.classList.add("hidden");
+  updateTelegramBackButton();
+}
+
+function renderDailyReportLoading() {
+  const container = document.getElementById("dailyReportContent");
+  if (container) {
+    container.innerHTML = `
+      <div class="py-8 flex flex-col items-center justify-center gap-3">
+        <div class="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-xs text-slate-400">Kunlik xavfsizlik infografikasi yuklanmoqda...</p>
+      </div>
+    `;
+  }
+}
+
+function renderDailyReportError(msg) {
+  const container = document.getElementById("dailyReportContent");
+  if (container) {
+    container.innerHTML = `
+      <div class="py-6 text-center text-xs text-rose-400">
+        <i data-lucide="alert-circle" class="w-8 h-8 mx-auto mb-2 opacity-80"></i>
+        <p>${msg}</p>
+      </div>
+    `;
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
+function renderDailyReportContent(report) {
+  const container = document.getElementById("dailyReportContent");
+  if (!container) return;
+
+  const zones = report.visited_zones || [];
+  const zonesBadges = zones.length > 0
+    ? zones.map(z => `<span class="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">📍 ${z}</span>`).join(" ")
+    : `<span class="text-xs text-slate-400">Belgilangan zonalarga tashrif qayd etilmadi</span>`;
+
+  const safeHours = Math.floor((report.safe_zone_minutes || 0) / 60);
+  const safeMins = (report.safe_zone_minutes || 0) % 60;
+  const safeTimeStr = safeHours > 0 ? `${safeHours} soat ${safeMins} daqiqa` : `${safeMins} daqiqa`;
+
+  const sosStatusHtml = report.is_sos_triggered
+    ? `<div class="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+         <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 shrink-0"></i>
+         <span>Kun davomida SOS xavf signali faollashtirilgan!</span>
+       </div>`
+    : `<div class="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
+         <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+         <span>Kun davomida tinchlik va xavfsizlik to'liq ta'minlandi</span>
+       </div>`;
+
+  container.innerHTML = `
+    <!-- Sana sarlavhasi -->
+    <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60">
+      <div>
+        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Hisobot sanasi</p>
+        <p class="text-sm font-black text-white">${report.date || 'Bugun'}</p>
+      </div>
+      <div class="text-right">
+        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Lokatsiya nuqtalari</p>
+        <p class="text-sm font-black text-indigo-300">${report.total_pings || 0} ta</p>
+      </div>
+    </div>
+
+    <!-- SOS status banner -->
+    ${sosStatusHtml}
+
+    <!-- Asosiy ko'rsatkichlar kartalari (Grid 2x2) -->
+    <div class="grid grid-cols-2 gap-2.5">
+      <!-- 1. Masofa va Tezlik -->
+      <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-400 font-bold uppercase">Yurilgan masofa</span>
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
+        </div>
+        <p class="text-base font-black text-white mt-1">${report.total_distance_km || 0} <span class="text-xs font-normal text-slate-400">km</span></p>
+        <p class="text-[10px] text-amber-300/90 font-semibold mt-1">Maks. tezlik: ${report.max_speed_kmh || 0} km/h</p>
+      </div>
+
+      <!-- 2. Xavfsiz zonada bo'lish vaqti -->
+      <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-400 font-bold uppercase">Xavfsiz joylarda</span>
+          <i data-lucide="shield" class="w-3.5 h-3.5 text-emerald-400"></i>
+        </div>
+        <p class="text-base font-black text-emerald-300 mt-1">${safeTimeStr}</p>
+        <p class="text-[10px] text-slate-400 mt-1">Belgilangan geozonalar</p>
+      </div>
+
+      <!-- 3. Topshiriqlar va Daromad -->
+      <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-400 font-bold uppercase">Topshiriqlar</span>
+          <i data-lucide="check-circle" class="w-3.5 h-3.5 text-teal-400"></i>
+        </div>
+        <p class="text-base font-black text-teal-300 mt-1">${report.tasks_completed || 0} <span class="text-xs font-normal text-slate-400">ta</span></p>
+        <p class="text-[10px] text-emerald-400 font-semibold mt-1">+${(report.earnings_som || 0).toLocaleString()} so'm</p>
+      </div>
+
+      <!-- 4. Batareya quvvati -->
+      <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] text-slate-400 font-bold uppercase">O'rtacha quvvat</span>
+          <i data-lucide="battery" class="w-3.5 h-3.5 text-indigo-400"></i>
+        </div>
+        <p class="text-base font-black text-indigo-300 mt-1">${report.avg_battery || 0}%</p>
+        <p class="text-[10px] text-slate-400 mt-1">Kunlik batareya holati</p>
+      </div>
+    </div>
+
+    <!-- Tashrif buyurilgan zonalar ro'yxati -->
+    <div class="p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
+      <p class="text-[10px] text-slate-400 font-bold uppercase mb-2">Tashrif buyurilgan xavfsiz zonalar</p>
+      <div class="flex flex-wrap gap-1.5">
+        ${zonesBadges}
+      </div>
+    </div>
+  `;
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+// Global Window Exports
+window.openWalkSafeModal = openWalkSafeModal;
+window.closeWalkSafeModal = closeWalkSafeModal;
+window.setWalkSafeDestination = setWalkSafeDestination;
+window.setWalkSafeDuration = setWalkSafeDuration;
+window.confirmStartWalkSafe = confirmStartWalkSafe;
+window.childWalkSafeCheckIn = childWalkSafeCheckIn;
+window.childWalkSafeComplete = childWalkSafeComplete;
+window.openWalkSafeCheckInModal = openWalkSafeCheckInModal;
+window.closeWalkSafeCheckInModal = closeWalkSafeCheckInModal;
+window.confirmWalkSafeCheckInModal = confirmWalkSafeCheckInModal;
+
+window.openEditWishlistModal = openEditWishlistModal;
+window.closeEditWishlistModal = closeEditWishlistModal;
+window.setWishlistPreset = setWishlistPreset;
+window.saveWishlistConfirm = saveWishlistConfirm;
+window.loadWishlist = loadWishlist;
+
+window.openDailyReportModal = openDailyReportModal;
+window.closeDailyReportModal = closeDailyReportModal;

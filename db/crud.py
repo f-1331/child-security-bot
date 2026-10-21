@@ -1,3 +1,4 @@
+import math
 import random
 import string
 from datetime import datetime, timezone, timedelta
@@ -361,7 +362,8 @@ async def log_location(
     battery_level: Optional[int] = None,
     is_charging: bool = False,
     sound_mode: str = "normal",
-    source: str = "telegram_live"
+    source: str = "telegram_live",
+    speed: Optional[float] = None
 ) -> LocationLog:
     """Record a location telemetry entry."""
     entry = LocationLog(
@@ -369,6 +371,7 @@ async def log_location(
         latitude=latitude,
         longitude=longitude,
         accuracy=accuracy,
+        speed=speed,
         battery_level=battery_level,
         is_charging=is_charging,
         sound_mode=sound_mode,
@@ -725,3 +728,200 @@ async def reset_user_role(session: AsyncSession, user_id: int) -> Tuple[bool, Li
     user.is_sos_active = False
     await session.flush()
     return True, notified_ids
+
+
+# ---------------------------------------------------------
+# Wishlist / Orzular Qutisi CRUD
+# ---------------------------------------------------------
+
+async def update_child_wishlist(
+    session: AsyncSession,
+    child_id: int,
+    title: str,
+    target_som: int
+) -> Optional[User]:
+    """Set or update child's dream wishlist and target savings amount."""
+    child = await get_user(session, child_id)
+    if child:
+        child.wishlist_title = title.strip() if title else "Yangi Velosiped 🚲"
+        child.wishlist_target_som = max(1000, target_som)
+        await session.flush()
+    return child
+
+
+async def get_child_wishlist(session: AsyncSession, child_id: int) -> dict:
+    """Retrieve child's savings target and calculate current progress percentage."""
+    child = await get_user(session, child_id)
+    if not child:
+        return {
+            "title": "Yangi Velosiped 🚲",
+            "target_som": 600000,
+            "current_som": 0,
+            "progress_percent": 0,
+            "is_achieved": False
+        }
+    rate_coins, rate_som = await get_user_coin_rate(session, child_id)
+    current_som = calculate_som_from_coins(child.virtual_balance or 0, rate_coins, rate_som)
+    title = child.wishlist_title or "Yangi Velosiped 🚲"
+    target_som = child.wishlist_target_som if child.wishlist_target_som and child.wishlist_target_som > 0 else 600000
+    progress = min(100, int((current_som / target_som) * 100)) if target_som > 0 else 0
+    return {
+        "title": title,
+        "target_som": target_som,
+        "current_som": current_som,
+        "progress_percent": progress,
+        "is_achieved": current_som >= target_som
+    }
+
+
+# ---------------------------------------------------------
+# "Xavfsiz Yo'l" (Walk Safe Timer Mode) CRUD
+# ---------------------------------------------------------
+
+async def start_walk_safe(
+    session: AsyncSession,
+    child_id: int,
+    duration_minutes: int,
+    destination: str = "Uyga qaytish"
+) -> Optional[User]:
+    """Start an active Walk Safe countdown journey for child."""
+    child = await get_user(session, child_id)
+    if child:
+        now = datetime.now(timezone.utc)
+        duration = max(5, min(180, duration_minutes))
+        child.walk_safe_active = True
+        child.walk_safe_duration = duration
+        child.walk_safe_destination = destination.strip() or "Uyga qaytish"
+        child.walk_safe_started_at = now
+        child.walk_safe_deadline = now + timedelta(minutes=duration)
+        child.walk_safe_last_checkin = now
+        await session.flush()
+    return child
+
+
+async def checkin_walk_safe(session: AsyncSession, child_id: int) -> Optional[User]:
+    """Child confirms 'I am safe' periodic check-in."""
+    child = await get_user(session, child_id)
+    if child and child.walk_safe_active:
+        child.walk_safe_last_checkin = datetime.now(timezone.utc)
+        await session.flush()
+    return child
+
+
+async def complete_walk_safe(session: AsyncSession, child_id: int) -> Optional[User]:
+    """Child marks walk safe session completed upon safe arrival."""
+    child = await get_user(session, child_id)
+    if child:
+        child.walk_safe_active = False
+        child.walk_safe_deadline = None
+        child.walk_safe_started_at = None
+        await session.flush()
+    return child
+
+
+async def get_active_walk_safe(session: AsyncSession, child_id: int) -> Optional[dict]:
+    """Retrieve current Walk Safe countdown status."""
+    child = await get_user(session, child_id)
+    if not child or not child.walk_safe_active or not child.walk_safe_deadline:
+        return None
+    now = datetime.now(timezone.utc)
+    remaining_seconds = int((child.walk_safe_deadline - now).total_seconds())
+    is_expired = remaining_seconds <= 0
+    return {
+        "is_active": True,
+        "duration_minutes": child.walk_safe_duration,
+        "destination": child.walk_safe_destination or "Uyga qaytish",
+        "started_at": child.walk_safe_started_at.isoformat() if child.walk_safe_started_at else None,
+        "deadline": child.walk_safe_deadline.isoformat() if child.walk_safe_deadline else None,
+        "remaining_seconds": max(0, remaining_seconds),
+        "is_expired": is_expired,
+        "last_checkin": child.walk_safe_last_checkin.isoformat() if child.walk_safe_last_checkin else None
+    }
+
+
+# ---------------------------------------------------------
+# Daily Safety Report Infographic Generator
+# ---------------------------------------------------------
+
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance in kilometers between two GPS points using Haversine formula."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
+async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> dict:
+    """Compute comprehensive daily movement and safety statistics for evening report."""
+    child = await get_user(session, child_id)
+    child_name = child.full_name if child and child.full_name else f"Farzand #{child_id}"
+
+    # 1. Location logs for today
+    logs = await get_location_history_today(session, child_id, limit=300)
+
+    total_km = 0.0
+    max_speed = 0.0
+    speeds = []
+    for i in range(len(logs) - 1):
+        p1, p2 = logs[i], logs[i + 1]
+        dist = haversine_km(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
+        if dist < 50.0:  # filter GPS glitch jumps
+            total_km += dist
+        if p2.speed is not None and p2.speed > 0:
+            speeds.append(p2.speed)
+            if p2.speed > max_speed:
+                max_speed = p2.speed
+
+    first_signal = logs[0].recorded_at.strftime('%H:%M') if logs else None
+    last_signal = logs[-1].recorded_at.strftime('%H:%M') if logs else None
+    battery_level = logs[-1].battery_level if logs and logs[-1].battery_level is not None else None
+
+    # 2. Geofences visited today
+    geofences = await get_geofences_for_child(session, child_id)
+    visited_zones = []
+    for g in geofences:
+        inside_count = 0
+        for l in logs:
+            if haversine_km(g.latitude, g.longitude, l.latitude, l.longitude) * 1000.0 <= g.radius_meters:
+                inside_count += 1
+        if inside_count > 0:
+            visited_zones.append({
+                "name": g.name,
+                "points_inside": inside_count,
+                "est_minutes": min(720, inside_count * 2)
+            })
+
+    # 3. Tasks completed today
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    tasks_res = await session.execute(
+        select(Task).where(
+            Task.child_id == child_id,
+            Task.status == "approved",
+            Task.completed_at >= cutoff
+        )
+    )
+    completed_tasks = list(tasks_res.scalars().all())
+    rate_coins, rate_som = await get_user_coin_rate(session, child_id)
+    earned_coins = sum(t.reward_coins for t in completed_tasks)
+    earned_som = calculate_som_from_coins(earned_coins, rate_coins, rate_som)
+
+    # 4. Wishlist progress
+    wishlist = await get_child_wishlist(session, child_id)
+
+    return {
+        "child_id": child_id,
+        "child_name": child_name,
+        "points_count": len(logs),
+        "total_distance_km": round(total_km, 2),
+        "max_speed_kmh": round(max_speed, 1),
+        "first_signal": first_signal,
+        "last_signal": last_signal,
+        "battery_level": battery_level,
+        "visited_zones": visited_zones,
+        "completed_tasks_count": len(completed_tasks),
+        "earned_som": earned_som,
+        "earned_coins": earned_coins,
+        "wishlist": wishlist
+    }
