@@ -657,6 +657,18 @@ function applyAuthenticatedUser(data) {
   document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
   document.getElementById("demoNoticeBanner")?.classList.add("hidden");
 
+  // Purge any demo geofences on map and state when real user connects
+  if (geofenceLayers && map) {
+    geofenceLayers.forEach((layer) => {
+      try { map.removeLayer(layer); } catch (e) {}
+    });
+  }
+  geofenceLayers = [];
+  geofencesList = [];
+  renderChildDashboardCastles();
+  const initZoneStatus = document.getElementById("zoneStatusText");
+  if (initZoneStatus) initZoneStatus.textContent = "Kerakli joylar belgilanmagan";
+
   if (data.role === "parent") {
     parentId = data.user.id;
     coinRateCoins = data.user.coin_rate_coins || 1000;
@@ -906,6 +918,19 @@ function applyChildUI(user) {
 async function loadChildSelfData(user) {
   childrenList = [user];
   currentChildId = user.id;
+  isDemoMode = false;
+
+  // Purge demo geofences on child screen
+  if (geofenceLayers && map) {
+    geofenceLayers.forEach((layer) => {
+      try { map.removeLayer(layer); } catch (e) {}
+    });
+  }
+  geofenceLayers = [];
+  geofencesList = [];
+  renderChildDashboardCastles();
+  const childZoneStatus = document.getElementById("zoneStatusText");
+  if (childZoneStatus) childZoneStatus.textContent = "Kerakli joylar belgilanmagan";
 
   try {
     const res = await fetch(`/api/v1/webapp/child/${user.id}/status`);
@@ -1690,11 +1715,19 @@ async function selectChild(childId) {
 
   toggleSosBanner(child.is_sos_active);
 
-  // Clear previous polyline
+  // Clear previous polyline and geofence layers
   if (routePolyline && map) {
     try { map.removeLayer(routePolyline); } catch (e) {}
     routePolyline = null;
   }
+  if (geofenceLayers && map) {
+    geofenceLayers.forEach((layer) => {
+      try { map.removeLayer(layer); } catch (e) {}
+    });
+  }
+  geofenceLayers = [];
+  geofencesList = [];
+  renderChildDashboardCastles();
 
   // Re-highlight active child pill
   renderChildSelector();
@@ -1871,33 +1904,49 @@ async function loadGeofences(childId) {
     return;
   }
 
+  // Clear all previous geofence layers and tooltips from map
+  if (geofenceLayers && map) {
+    geofenceLayers.forEach((layer) => {
+      try { map.removeLayer(layer); } catch (e) {}
+    });
+  }
+  geofenceLayers = [];
+  geofencesList = [];
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${childId}/geofences`);
     const data = await res.json();
-    if (data.status !== "success") return;
-
-    geofenceLayers.forEach((layer) => map.removeLayer(layer));
-    geofenceLayers = [];
+    if (data.status !== "success") {
+      renderChildDashboardCastles();
+      return;
+    }
 
     const fences = data.geofences || [];
+    geofencesList = fences;
     const container = document.getElementById("zonesListContainer");
 
     if (fences.length === 0) {
-      container.innerHTML = `
-        <div class="text-center py-6 px-4">
-          <p class="text-xs text-slate-400 mb-3">Hozircha kerakli joylar belgilanmagan.</p>
-          <button onclick="openAddZoneModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95">
-            ➕ Kerakli joy qo'shish
-          </button>
-        </div>
-      `;
-      document.getElementById("zoneStatusText").textContent = "Kerakli joylar belgilanmagan";
+      if (container) {
+        container.innerHTML = `
+          <div class="text-center py-6 px-4">
+            <p class="text-xs text-slate-400 mb-3">Hozircha kerakli joylar belgilanmagan.</p>
+            <button onclick="openAddZoneModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95">
+              ➕ Kerakli joy qo'shish
+            </button>
+          </div>
+        `;
+      }
+      const zoneStatusEl = document.getElementById("zoneStatusText");
+      if (zoneStatusEl) zoneStatusEl.textContent = "Kerakli joylar belgilanmagan";
+      renderChildDashboardCastles();
       return;
     }
 
     renderFencesToMapAndList(fences);
   } catch (err) {
     console.error("Failed to load geofences:", err);
+    geofencesList = [];
+    renderChildDashboardCastles();
   }
 }
 
@@ -1959,6 +2008,11 @@ function renderFencesToMapAndList(fences) {
 
 // Render Demo Geofences
 function renderDemoGeofences() {
+  if (!isDemoMode) {
+    geofencesList = [];
+    renderChildDashboardCastles();
+    return;
+  }
   const demoFences = [
     { id: 1, name: "🏠 Uyimiz (Chilonzor)", latitude: 41.2858, longitude: 69.2035, radius_meters: 200 },
     { id: 2, name: "🏫 Maktab №45", latitude: 41.2915, longitude: 69.2120, radius_meters: 250 },
@@ -2422,6 +2476,17 @@ function renderChildDashboardCastles() {
         { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
         { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
       ] : []);
+
+  if (!isDemoMode && (!geofencesList || geofencesList.length === 0)) {
+    container.innerHTML = `
+      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
+        <span class="text-lg">🛡️</span>
+        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
+        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
+      </div>
+    `;
+    return;
+  }
 
   if (places.length === 0) {
     container.innerHTML = `
