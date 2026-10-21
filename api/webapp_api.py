@@ -636,11 +636,13 @@ async def complete_task_endpoint(
     if telemetry.telegram_bot:
         try:
             bot = telemetry.telegram_bot
-            caption = (
-                f"🔔 **Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:**\n\n"
-                f"👤 Farzand: **{child_name}**\n"
-                f"📌 Topshiriq: **{task.title}**\n"
-                f"💰 Mukofot: **{task.reward_coins:,}** tanga\n\n"
+            safe_cname = html.escape(child_name)
+            safe_title = html.escape(task.title)
+            caption_html = (
+                f"🔔 <b>Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:</b>\n\n"
+                f"👤 Farzand: <b>{safe_cname}</b>\n"
+                f"📌 Topshiriq: <b>{safe_title}</b>\n"
+                f"💰 Mukofot: <b>{task.reward_coins:,}</b> tanga\n\n"
                 f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
             )
             markup = get_task_approval_keyboard(task.id, task.reward_coins)
@@ -656,19 +658,36 @@ async def complete_task_endpoint(
                 await bot.send_photo(
                     chat_id=task.parent_id,
                     photo=target_photo,
-                    caption=caption,
+                    caption=caption_html,
                     reply_markup=markup,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
             except Exception:
+                raw_cap = (
+                    f"🔔 Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:\n\n"
+                    f"👤 Farzand: {child_name}\n"
+                    f"📌 Topshiriq: {task.title}\n"
+                    f"💰 Mukofot: {task.reward_coins:,} tanga\n\n"
+                    f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
+                )
                 await bot.send_message(
                     chat_id=task.parent_id,
-                    text=f"{caption}\n\n📷 Rasm hisoboti: {payload.proof_photo_url}",
-                    reply_markup=markup,
-                    parse_mode="Markdown"
+                    text=f"{raw_cap}\n\n📷 Rasm hisoboti: {payload.proof_photo_url}",
+                    reply_markup=markup
                 )
         except Exception as e:
             logger.error(f"Failed to forward completed task to parent Telegram: {e}")
+
+    # Broadcast task submitted event to parents via WebSocket
+    try:
+        await ws_manager.send_to_user(task.parent_id, {
+            "type": "task_submitted",
+            "task_id": task_id,
+            "task_title": task.title,
+            "child_id": task.child_id
+        })
+    except Exception:
+        pass
 
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "completed_by_child"}
@@ -686,18 +705,30 @@ async def approve_task_endpoint(task_id: int, session: AsyncSession = Depends(ge
 
     if telemetry.telegram_bot:
         try:
+            safe_title = html.escape(task.title)
             await telemetry.telegram_bot.send_message(
                 chat_id=task.child_id,
                 text=(
-                    f"🎉🎉 **TABRIKLAYMIZ!** 🎉🎉\n\n"
-                    f"Ota-onangiz **'{task.title}'** vazifangizni tasdiqladi!\n"
-                    f"💰 Balansingizga: **+{task.reward_coins:,} tanga** qo'shildi!\n"
-                    f"Hozirgi umumiy balansingiz: **{new_balance:,} tanga**."
+                    f"🎉🎉 <b>TABRIKLAYMIZ!</b> 🎉🎉\n\n"
+                    f"Ota-onangiz <b>'{safe_title}'</b> vazifangizni tasdiqladi!\n"
+                    f"💰 Balansingizga: <b>+{task.reward_coins:,} tanga</b> qo'shildi!\n"
+                    f"Hozirgi umumiy balansingiz: <b>{new_balance:,} tanga</b>."
                 ),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify child of approved task: {e}")
+
+    # Broadcast task approved to child via WebSocket
+    try:
+        await ws_manager.send_to_user(task.child_id, {
+            "type": "task_approved",
+            "task_id": task_id,
+            "reward_coins": task.reward_coins,
+            "new_balance": new_balance
+        })
+    except Exception:
+        pass
 
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "approved"}
@@ -712,13 +743,23 @@ async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get
 
     if telemetry.telegram_bot:
         try:
+            safe_title = html.escape(task.title)
             await telemetry.telegram_bot.send_message(
                 chat_id=task.child_id,
-                text=f"❌ **'{task.title}'** vazifasi ota-onangiz tomonidan rad etildi. Iltimos, vazifani to'liq bajarib, qayta topshiring.",
-                parse_mode="Markdown"
+                text=f"❌ <b>'{safe_title}'</b> vazifasi ota-onangiz tomonidan rad etildi. Iltimos, vazifani to'liq bajarib, qayta topshiring.",
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify child of rejected task: {e}")
+
+    # Broadcast task rejected to child via WebSocket
+    try:
+        await ws_manager.send_to_user(task.child_id, {
+            "type": "task_rejected",
+            "task_id": task_id
+        })
+    except Exception:
+        pass
 
     await session.commit()
     return {"status": "success", "task_id": task_id, "status": "rejected"}

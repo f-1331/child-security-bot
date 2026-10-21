@@ -1226,6 +1226,26 @@ async def on_location_received(message: Message, bot: Bot):
                 except Exception:
                     pass
 
+        # Broadcast live telemetry to connected parents via WebSocket
+        try:
+            from api.webapp_api import ws_manager
+            parents = await crud.get_parents_for_child(session, user_id)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, {
+                    "type": "child_location_update",
+                    "child_id": user_id,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "accuracy": accuracy,
+                    "speed": None,
+                    "battery_level": None,
+                    "is_charging": False,
+                    "sound_mode": "normal",
+                    "recorded_at": datetime.now(timezone.utc).isoformat()
+                })
+        except Exception:
+            pass
+
         await session.commit()
 
     if not live_period:
@@ -1261,17 +1281,18 @@ async def on_checkin_pressed(message: Message, bot: Bot):
                     place_info = f"\n📍 Manzil: **'{f.name}'**"
                     break
 
+        safe_cname = html.escape(child_name)
         for parent in parents:
             try:
                 checkin_text = (
-                    f"✅ **YETIB KELDIM (Check-in)!**\n\n"
-                    f"Farzandingiz **{child_name}** manzilga eson-omon yetib kelganini xabar qildi.{place_info}\n"
-                    f"🕒 Vaqt: **{now_str}**"
+                    f"✅ <b>YETIB KELDIM (Check-in)!</b>\n\n"
+                    f"Farzandingiz <b>{safe_cname}</b> manzilga eson-omon yetib kelganini xabar qildi.{place_info}\n"
+                    f"🕒 Vaqt: <b>{now_str}</b>"
                 )
                 await bot.send_message(
                     chat_id=parent.id,
                     text=checkin_text,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
                 if latest_loc:
                     await bot.send_location(
@@ -1281,6 +1302,19 @@ async def on_checkin_pressed(message: Message, bot: Bot):
                     )
             except Exception as e:
                 logger.error(f"Failed to send checkin to parent {parent.id}: {e}")
+
+        # Broadcast check-in to parents on WebApp
+        try:
+            from api.webapp_api import ws_manager
+            for parent in parents:
+                await ws_manager.send_to_user(parent.id, {
+                    "type": "checkin",
+                    "child_id": child_id,
+                    "child_name": child_name,
+                    "time": now_str
+                })
+        except Exception:
+            pass
 
         await message.answer(
             f"🌟 **Rahmat!** Ota-onangizga soat {now_str} da manzilga eson-omon yetib borganingiz bildirildi.",
@@ -1557,22 +1591,39 @@ async def on_task_proof_photo_received(message: Message, state: FSMContext, bot:
         child = await crud.get_user(session, task.child_id)
         child_name = child.full_name if child else "Farzandingiz"
 
+        safe_cname = html.escape(child_name)
+        safe_title = html.escape(task.title)
+        caption_html = (
+            f"🔔 <b>Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:</b>\n\n"
+            f"👤 Farzand: <b>{safe_cname}</b>\n"
+            f"📌 Topshiriq: <b>{safe_title}</b>\n"
+            f"💰 Mukofot: <b>{task.reward_coins:,}</b> tanga\n\n"
+            f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
+        )
+        markup = get_task_approval_keyboard(task.id, task.reward_coins)
         try:
             await bot.send_photo(
                 chat_id=task.parent_id,
                 photo=photo_id,
-                caption=(
-                    f"🔔 **Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:**\n\n"
-                    f"👤 Farzand: **{child_name}**\n"
-                    f"📌 Topshiriq: **{task.title}**\n"
-                    f"💰 Mukofot: **{task.reward_coins:,}** tanga\n\n"
-                    f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
-                ),
-                reply_markup=get_task_approval_keyboard(task.id, task.reward_coins),
-                parse_mode="Markdown"
+                caption=caption_html,
+                reply_markup=markup,
+                parse_mode="HTML"
             )
         except Exception as e:
-            logger.error(f"Failed to forward task proof photo to parent: {e}")
+            logger.error(f"Failed to forward task proof photo HTML, falling back: {e}")
+            raw_cap = (
+                f"🔔 Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:\n\n"
+                f"👤 Farzand: {child_name}\n"
+                f"📌 Topshiriq: {task.title}\n"
+                f"💰 Mukofot: {task.reward_coins:,} tanga\n\n"
+                f"Topshiriq to'g'ri bajarilgan bo'lsa, tasdiqlang:"
+            )
+            await bot.send_photo(
+                chat_id=task.parent_id,
+                photo=photo_id,
+                caption=raw_cap,
+                reply_markup=markup
+            )
 
         await session.commit()
 
@@ -1619,19 +1670,32 @@ async def on_approve_task(callback: CallbackQuery, bot: Bot):
         child_name = child.full_name if child else "Farzand"
         new_balance = child.virtual_balance if child else 0
 
+        safe_title = html.escape(task.title)
         try:
             await bot.send_message(
                 chat_id=task.child_id,
                 text=(
-                    f"🎉🎉 **TABRIKLAYMIZ!** 🎉🎉\n\n"
-                    f"Ota-onangiz **'{task.title}'** vazifangizni tasdiqladi!\n"
-                    f"💰 Balansingizga: **+{task.reward_coins:,} tanga** qo'shildi!\n"
-                    f"Hozirgi umumiy balansingiz: **{new_balance:,} tanga**."
+                    f"🎉🎉 <b>TABRIKLAYMIZ!</b> 🎉🎉\n\n"
+                    f"Ota-onangiz <b>'{safe_title}'</b> vazifangizni tasdiqladi!\n"
+                    f"💰 Balansingizga: <b>+{task.reward_coins:,} tanga</b> qo'shildi!\n"
+                    f"Hozirgi umumiy balansingiz: <b>{new_balance:,} tanga</b>."
                 ),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify child of approved task: {e}")
+
+        # Broadcast approval to child on WebApp
+        try:
+            from api.webapp_api import ws_manager
+            await ws_manager.send_to_user(task.child_id, {
+                "type": "task_approved",
+                "task_id": task.id,
+                "reward_coins": task.reward_coins,
+                "new_balance": new_balance
+            })
+        except Exception:
+            pass
 
         await session.commit()
 
@@ -1932,7 +1996,7 @@ async def _build_children_list_message(parent_id: int):
                 None
             )
 
-        text = f"👶 **Ulangan farzandlar ro'yxati ({len(children)} nafar):**\n\n"
+        text = f"👶 <b>Ulangan farzandlar ro'yxati ({len(children)} nafar):</b>\n\n"
         buttons = []
 
         for ch in children:
@@ -2001,22 +2065,23 @@ async def on_child_view_details(callback: CallbackQuery):
         sound_mode = latest_loc.sound_mode if latest_loc and latest_loc.sound_mode else "normal"
         sound_text = "🔊 Ovozli" if sound_mode == "normal" else ("📳 Vibratsiya" if sound_mode == "vibrate" else "🔇 Ovoz o'chiq")
 
-        safe_name = (child.full_name or "Farzand").replace("*", "").replace("_", "")
+        safe_name = html.escape(child.full_name or "Farzand")
+        safe_user = f"@{html.escape(child.username)}" if child.username else "yo'q"
 
         text = (
-            f"👤 **Farzand:** {safe_name}\n"
-            f"🆔 ID: `{child.id}`\n"
-            f"🔋 Batareya: **{battery}** {charging}\n"
-            f"🔔 Ovoz holati: **{sound_text}**\n"
-            f"🕒 Oxirgi signal: **{time_str}**\n"
-            f"💰 Tangalar balansi: **{child.virtual_balance:,} tanga**\n"
+            f"👤 <b>Farzand:</b> {safe_name} ({safe_user})\n"
+            f"🆔 <b>ID:</b> <code>{child.id}</code>\n"
+            f"🔋 <b>Batareya:</b> <b>{battery}</b> {charging}\n"
+            f"🔔 <b>Ovoz holati:</b> {sound_text}\n"
+            f"🕒 <b>Oxirgi signal:</b> {time_str}\n"
+            f"💰 <b>Tangalar balansi:</b> <b>{child.virtual_balance:,} tanga</b>\n"
         )
 
         try:
             await callback.message.edit_text(
                 text,
                 reply_markup=get_child_details_keyboard(child_id),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception:
             await callback.message.answer(
@@ -2037,20 +2102,20 @@ async def on_child_battery_callback(callback: CallbackQuery):
             await callback.answer("Farzand topilmadi.", show_alert=True)
             return
 
-        safe_name = (child.full_name or "Farzand").replace("*", "").replace("_", "")
+        safe_name = html.escape(child.full_name or "Farzand")
         if not latest_loc:
-            text = f"🔋 **{safe_name}** telefonidan hali batareya ma'lumoti kelmagan."
+            text = f"🔋 <b>{safe_name}</b> telefonidan hali batareya ma'lumoti kelmagan."
         else:
             batt = f"{latest_loc.battery_level}%" if latest_loc.battery_level is not None else "Noma'lum"
             chg = "Ha 🔌" if latest_loc.is_charging else "Yo'q 🔋"
             snd = "Oddiy (Ovozli)" if latest_loc.sound_mode == "normal" else ("Vibratsiya" if latest_loc.sound_mode == "vibrate" else "Ovozsiz")
             time_str = latest_loc.recorded_at.strftime("%d.%m.%Y, %H:%M:%S") if latest_loc.recorded_at else "Noma'lum"
             text = (
-                f"🔋 **{safe_name} — Telefon holati:**\n\n"
-                f"• Quvvat (Batareya): **{batt}**\n"
-                f"• Quvvatlanmoqda: **{chg}**\n"
-                f"• Ovoz rejimi: **{snd}**\n"
-                f"• Oxirgi yangilanish: **{time_str}**\n"
+                f"🔋 <b>{safe_name} — Telefon holati:</b>\n\n"
+                f"• Quvvat (Batareya): <b>{batt}</b>\n"
+                f"• Quvvatlanmoqda: <b>{chg}</b>\n"
+                f"• Ovoz rejimi: <b>{snd}</b>\n"
+                f"• Oxirgi yangilanish: <b>{time_str}</b>\n"
             )
 
         back_kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -2059,7 +2124,7 @@ async def on_child_battery_callback(callback: CallbackQuery):
         ])
 
         try:
-            await callback.message.edit_text(text, reply_markup=back_kb, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=back_kb, parse_mode="HTML")
         except Exception:
             await callback.message.answer(text, reply_markup=back_kb)
     await callback.answer()

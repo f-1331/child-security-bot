@@ -1639,6 +1639,14 @@ function renderChildSelector() {
   }
 }
 
+function renderChildrenSwitcher() {
+  renderChildSelector();
+}
+
+function switchChild(childId) {
+  selectChild(childId);
+}
+
 // Select active child and load telemetry
 async function selectChild(childId) {
   if (!childId) return;
@@ -1658,6 +1666,12 @@ async function selectChild(childId) {
 
   toggleSosBanner(child.is_sos_active);
 
+  // Clear previous polyline
+  if (routePolyline && map) {
+    try { map.removeLayer(routePolyline); } catch (e) {}
+    routePolyline = null;
+  }
+
   // Re-highlight active child pill
   renderChildSelector();
 
@@ -1666,6 +1680,16 @@ async function selectChild(childId) {
   if (loc && loc.latitude && loc.longitude) {
     renderChildMarker(loc.latitude, loc.longitude, child.full_name, child.is_sos_active, loc.battery_level);
     if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
+  } else {
+    if (childMarker && map) {
+      try { map.removeLayer(childMarker); } catch (e) {}
+      childMarker = null;
+    }
+    const addrEl = document.getElementById("addressText");
+    if (addrEl) addrEl.textContent = "Joylashuv kutilmoqda (Bot orqali yuboring)";
+    const lastSeenEl = document.getElementById("lastSeenText");
+    if (lastSeenEl) lastSeenEl.textContent = "Kutilmoqda...";
+    updateBatteryUI(null, false);
   }
 
   await updateLiveTelemetry(currentChildId);
@@ -1706,8 +1730,11 @@ async function updateLiveTelemetry(childId) {
     } else {
       document.getElementById("addressText").textContent = "Joylashuv kutilmoqda (Bot orqali yuboring)";
       document.getElementById("lastSeenText").textContent = "Kutilmoqda...";
-      renderChildMarker(DEFAULT_LAT, DEFAULT_LON, child.full_name, false, 80);
-      resolveAddress(DEFAULT_LAT, DEFAULT_LON);
+      if (childMarker && map) {
+        try { map.removeLayer(childMarker); } catch (e) {}
+        childMarker = null;
+      }
+      updateBatteryUI(null, false);
     }
   } catch (err) {
     console.warn("Telemetry polling error:", err);
@@ -4126,6 +4153,56 @@ function handleIncomingWebSocketMessage(msg) {
         })
         .catch(() => {});
     }
+    return;
+  }
+
+  // 7. Safe arrival check-in received by Parent
+  if (msg.type === "checkin" && currentRole === "parent") {
+    haptic("medium");
+    playSuccessChime();
+    showToast(`✅ Farzandingiz (${msg.child_name || 'Farzand'}) manzilga eson-omon yetib keldi!`);
+    if (msg.child_id == currentChildId) {
+      updateLiveTelemetry(currentChildId);
+    }
+    return;
+  }
+
+  // 8. Task submitted with photo by Child
+  if (msg.type === "task_submitted" && currentRole === "parent") {
+    haptic("medium");
+    showToast(`📋 Farzandingiz "${msg.task_title || 'topshiriq'}" bo'yicha hisobot rasmini yubordi!`);
+    loadTasks();
+    return;
+  }
+
+  // 9. Task approved by Parent
+  if (msg.type === "task_approved") {
+    if (currentRole === "child") {
+      playSuccessChime();
+      playCoinChime();
+      showToast(`🏆 Topshiriq tasdiqlandi! +${(msg.reward_coins || 0).toLocaleString()} tanga xazinangizga qo'shildi!`);
+      if (msg.new_balance !== undefined) {
+        childBalanceCoins = msg.new_balance;
+        childBalanceSom = Math.round(childBalanceCoins * (coinRateSom / Math.max(1, coinRateCoins)));
+        const heroMoney = document.getElementById("childHeroMoneyText");
+        if (heroMoney) heroMoney.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+        const bannerMoney = document.getElementById("childBannerMoney");
+        if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${childBalanceSom.toLocaleString()} so'm pulingiz bor! (${childBalanceCoins.toLocaleString()} tanga)`;
+        const wMoney = document.getElementById("childWalletMoneyText");
+        if (wMoney) wMoney.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+      }
+    }
+    loadTasks();
+    return;
+  }
+
+  // 10. Task rejected by Parent
+  if (msg.type === "task_rejected") {
+    if (currentRole === "child") {
+      haptic("warning");
+      showToast("❌ Topshiriq rad etildi. Qayta topshirib ko'ring.");
+    }
+    loadTasks();
     return;
   }
 }
