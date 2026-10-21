@@ -586,7 +586,9 @@ function enableChildDemoMode() {
     virtual_balance: 18000,
     virtual_money_som: 180000,
     coin_rate_coins: 1000,
-    coin_rate_som: 10000
+    coin_rate_som: 10000,
+    parent_phone: "+998901234567",
+    parent_name: "Ota-ona (Demo)"
   });
 
   document.getElementById("emptyStateBanner").classList.add("hidden");
@@ -3415,6 +3417,7 @@ async function triggerChildSOS() {
       });
       const data = await res.json();
       if (data && data.status === "success") {
+        if (data.parent_phone) parentPhone = data.parent_phone;
         showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
       }
     } catch (err) {
@@ -3460,11 +3463,12 @@ function callParent() {
   playPingSound();
   if (parentPhone) {
     const clean = parentPhone.replace(/[\s\-]/g, "");
+    showToast(`📞 Qo'ng'iroq qilinmoqda: ${parentPhone}`);
     window.location.href = `tel:${clean}`;
     return;
   }
   if (window.Telegram?.WebApp?.close) {
-    showToast("Ota-onangiz bilan Telegram chatga o'tilmoqda...");
+    showToast("⚠️ Ota-ona telefon raqami topilmadi. Telegram chatga o'tilmoqda...");
     window.Telegram.WebApp.close();
   } else {
     window.location.href = "tel:+998901234567";

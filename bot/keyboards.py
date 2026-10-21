@@ -336,13 +336,24 @@ def get_location_actions_keyboard(lat: float, lon: float, child_id: int) -> Inli
     )
 
 
-def get_child_sos_call_keyboard(parent_phone: Optional[str] = None) -> InlineKeyboardMarkup:
+def get_contact_request_keyboard() -> ReplyKeyboardMarkup:
+    """Keyboard prompting parent to link their phone number for SOS emergency calls."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📱 Raqamimni ulash (Kontaktni yuborish)", request_contact=True)],
+            [KeyboardButton(text="⏭ Keyinroq ulash")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+
+def get_child_sos_call_keyboard(parent_phone: Optional[str] = None, parent_tg_id: Optional[int] = None) -> InlineKeyboardMarkup:
     """Emergency keyboard for child when SOS is pressed."""
     buttons = []
-    if parent_phone:
-        clean_phone = parent_phone.replace(" ", "").replace("-", "")
+    if parent_tg_id:
         buttons.append([
-            InlineKeyboardButton(text="📞 Oyingizga / Dadasiga qo'ng'iroq", url=f"tel:{clean_phone}")
+            InlineKeyboardButton(text="💬 Ota-ona bilan Telegramda bog'lanish", url=f"tg://user?id={parent_tg_id}")
         ])
     buttons.append([
         InlineKeyboardButton(text="✅ Xavf bartaraf bo'ldi (Bekor qilish)", callback_data="child_cancel_sos")

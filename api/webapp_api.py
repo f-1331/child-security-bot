@@ -788,10 +788,13 @@ async def child_sos_endpoint(
             except Exception as e:
                 logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
 
+    parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
+
     return {
         "status": "success",
         "child_id": child_id,
         "is_sos_active": True,
+        "parent_phone": parent_phone,
         "notified_parents": len(parents),
         "latitude": lat,
         "longitude": lon,

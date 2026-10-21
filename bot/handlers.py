@@ -22,6 +22,7 @@ from bot.keyboards import (
     get_role_selection_keyboard,
     get_parent_main_keyboard,
     get_child_main_keyboard,
+    get_contact_request_keyboard,
     get_pairing_share_keyboard,
     get_child_details_keyboard,
     get_location_actions_keyboard,
@@ -122,6 +123,16 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             parse_mode="Markdown"
                         )
 
+                        if not user.phone_number:
+                            await state.set_state(PhoneSaveState.waiting_for_phone)
+                            await message.answer(
+                                f"⚠️ **MUHIM QADAM — Oila Favqulodda Kontakti:**\n\n"
+                                f"Farzandingiz **🚨 SOS** tugmasini bosganida uning telefonidan bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
+                                f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
+                                reply_markup=get_contact_request_keyboard(),
+                                parse_mode="Markdown"
+                            )
+
                         try:
                             await bot.send_message(
                                 chat_id=target_child_id,
@@ -160,6 +171,16 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             reply_markup=get_parent_main_keyboard(user_id),
                             parse_mode="Markdown"
                         )
+
+                        if not user.phone_number:
+                            await state.set_state(PhoneSaveState.waiting_for_phone)
+                            await message.answer(
+                                f"⚠️ **MUHIM QADAM — Oila Favqulodda Kontakti:**\n\n"
+                                f"Farzandlaringiz **🚨 SOS** tugmasini bosganida bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
+                                f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
+                                reply_markup=get_contact_request_keyboard(),
+                                parse_mode="Markdown"
+                            )
 
                         try:
                             await bot.send_message(
@@ -219,6 +240,20 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
         # If user is already assigned a role
         if user.role == "parent":
             children = await crud.get_children_for_parent(session, user.id)
+            if not user.phone_number:
+                await state.set_state(PhoneSaveState.waiting_for_phone)
+                await message.answer(
+                    f"Assalomu alaykum, **{full_name}**!\n\n"
+                    f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
+                    f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
+                    f"⚠️ **DIQQAT — SOS Xavfsizlik talabi:**\n"
+                    f"Farzandingiz xavf ostida qolib **🚨 SOS (Xavf tugmasi)**ni bosganida, uning telefonidan to'g'ridan-to'g'ri bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
+                    f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki telefon raqamingizni yozib yuboring (masalan: `+998901234567`):",
+                    reply_markup=get_contact_request_keyboard(),
+                    parse_mode="Markdown"
+                )
+                return
+
             await message.answer(
                 f"Assalomu alaykum, **{full_name}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
@@ -280,9 +315,13 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
                 reply_markup=get_pairing_share_keyboard(bot_info.username, code),
                 parse_mode="Markdown"
             )
+            await state.set_state(PhoneSaveState.waiting_for_phone)
             await callback.message.answer(
-                "Asosiy boshqaruv menyusi faollashtirildi:",
-                reply_markup=get_parent_main_keyboard(user_id)
+                f"⚠️ **MUHIM QADAM — Oila favqulodda kontakti:**\n\n"
+                f"Farzandingiz xavf ostida qolib **🚨 SOS (Xavf tugmasi)**ni bosganida, uning telefonidan bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
+                f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
+                reply_markup=get_contact_request_keyboard(),
+                parse_mode="Markdown"
             )
 
         elif role == "child":
@@ -746,12 +785,20 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
             except Exception as e:
                 logger.error(f"Failed to send SOS to parent {parent.id}: {e}")
 
+        phone_hint = (
+            f"📞 **Ota-onangiz bilan bog'lanish:**\n"
+            f"Telefon: `{parent_phone}` *(Qo'ng'iroq qilish uchun ustiga bosing)*\n\n"
+            if parent_phone else
+            "⚠️ Ota-onangiz telefon raqamini hali ulamagan.\n\n"
+        )
+
         # Send immediate emergency response to child with Direct Call button
         await message.answer(
-            "🚨 **SOS SIGNALI OTA-ONANGIZGA YUBORILDI!**\n\n"
-            "Iltimos, xotirjam bo'ling. Ota-onangizga xabar va joriy joylashuvingiz yetkazildi.\n\n"
-            "📞 **Darhol ota-onangizga qo'ng'iroq qiling** yoki ovozli xabar (golos) yuboring — biz uni yetkazamiz!",
-            reply_markup=get_child_sos_call_keyboard(parent_phone),
+            f"🚨 **SOS SIGNALI OTA-ONANGIZGA YUBORILDI!**\n\n"
+            f"Iltimos, xotirjam bo'ling. Ota-onangizga xabar va joriy joylashuvingiz yetkazildi.\n\n"
+            f"{phone_hint}"
+            f"Darhol ota-onangizga qo'ng'iroq qiling yoki ovozli xabar (golos) yuboring — biz uni yetkazamiz!",
+            reply_markup=get_child_sos_call_keyboard(parent_phone, parents[0].id if parents else None),
             parse_mode="Markdown"
         )
 
@@ -794,13 +841,12 @@ async def on_child_call_parent_pressed(message: Message):
         for p in parents:
             text += f"👤 **{p.full_name}**"
             if p.phone_number:
-                text += f": `{p.phone_number}`\n"
-                clean_phone = p.phone_number.replace(" ", "").replace("-", "")
-                buttons.append([InlineKeyboardButton(text=f"📞 {p.full_name}ga qo'ng'iroq qilish", url=f"tel:{clean_phone}")])
+                text += f": `{p.phone_number}`\n*(Qo'ng'iroq qilish uchun raqam ustiga bosing)*\n"
             else:
                 text += f" (@{p.username or 'yoq'})\n"
+            buttons.append([InlineKeyboardButton(text=f"💬 {p.full_name} bilan Telegramda bog'lanish", url=f"tg://user?id={p.id}")])
 
-        if not buttons:
+        if not any(p.phone_number for p in parents):
             text += "\n💡 _Ota-onangiz o'z telefon raqamini botga kiritmagan. Telegram orqali yozishingiz mumkin._"
 
         await message.answer(
@@ -822,15 +868,21 @@ async def on_family_contacts_menu(message: Message, state: FSMContext):
         await message.answer(
             f"📞 **Oila Favqulodda Kontaktlari**\n\n"
             f"Hozirgi telefon raqamingiz: **{phone}**\n\n"
-            f"Farzandingiz SOS tugmasini bosganda to'g'ridan-to'g'ri bir tugma bilan sizga qo'ng'iroq qilishi uchun telefon raqamingizni kiriting (masalan: `+998901234567`):",
+            f"Farzandingiz **🚨 SOS** tugmasini bosganda to'g'ridan-to'g'ri bir tugma bilan sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
+            f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
+            reply_markup=get_contact_request_keyboard(),
             parse_mode="Markdown"
         )
 
 
-@router.message(PhoneSaveState.waiting_for_phone)
-async def on_phone_entered(message: Message, state: FSMContext):
-    phone = message.text.strip()
+@router.message(PhoneSaveState.waiting_for_phone, F.contact)
+async def on_contact_received(message: Message, state: FSMContext):
+    """Parent sends native contact card via Telegram button."""
+    contact = message.contact
     parent_id = message.from_user.id
+    phone = contact.phone_number.strip()
+    if not phone.startswith("+"):
+        phone = "+" + phone
 
     async with AsyncSessionLocal() as session:
         user = await crud.get_user(session, parent_id)
@@ -840,8 +892,56 @@ async def on_phone_entered(message: Message, state: FSMContext):
 
     await state.clear()
     await message.answer(
-        f"✅ **Telefon raqamingiz saqlandi:** `{phone}`\n\n"
-        f"Endi farzandingiz SOS xavf tugmasini bosganida darhol sizga bir bosishda qo'ng'iroq qila oladi.",
+        f"✅ **Telefon raqamingiz muvaffaqiyatli saqlandi:** `{phone}`\n\n"
+        f"Endi farzandingiz **🚨 SOS** xavf tugmasini bosganida darhol sizga bir bosishda qo'ng'iroq qila oladi! 🛡️",
+        reply_markup=get_parent_main_keyboard(parent_id),
+        parse_mode="Markdown"
+    )
+
+
+@router.message(PhoneSaveState.waiting_for_phone, F.text)
+async def on_phone_entered(message: Message, state: FSMContext):
+    """Parent enters phone number manually as text."""
+    raw_text = message.text.strip()
+    parent_id = message.from_user.id
+
+    if "keyinroq" in raw_text.lower():
+        await state.clear()
+        await message.answer(
+            "Tushunarli. Telefon raqamingizni keyinroq **«📞 Oila kontaktlari»** bo'limi orqali istalgan payt kiritishingiz mumkin.",
+            reply_markup=get_parent_main_keyboard(parent_id)
+        )
+        return
+
+    # Normalize phone
+    cleaned = "".join([c for c in raw_text if c.isdigit() or c == "+"])
+    if not cleaned.startswith("+"):
+        if cleaned.startswith("998"):
+            cleaned = "+" + cleaned
+        elif len(cleaned) == 9:
+            cleaned = "+998" + cleaned
+        else:
+            cleaned = "+" + cleaned
+
+    digits = [c for c in cleaned if c.isdigit()]
+    if len(digits) < 7:
+        await message.answer(
+            "⚠️ Telefon raqam noto'g'ri formatda kiritildi.\n\n"
+            "Iltimos, pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni to'liq yozing (masalan: `+998901234567`):",
+            reply_markup=get_contact_request_keyboard()
+        )
+        return
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, parent_id)
+        if user:
+            user.phone_number = cleaned
+            await session.commit()
+
+    await state.clear()
+    await message.answer(
+        f"✅ **Telefon raqamingiz muvaffaqiyatli saqlandi:** `{cleaned}`\n\n"
+        f"Endi farzandingiz **🚨 SOS** xavf tugmasini bosganida darhol sizga bir bosishda qo'ng'iroq qila oladi! 🛡️",
         reply_markup=get_parent_main_keyboard(parent_id),
         parse_mode="Markdown"
     )
