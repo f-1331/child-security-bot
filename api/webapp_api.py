@@ -443,9 +443,13 @@ async def get_child_tasks(child_id: int, session: AsyncSession = Depends(get_db)
 
 
 @router.get("/parent/{parent_id}/tasks")
-async def get_parent_tasks_endpoint(parent_id: int, session: AsyncSession = Depends(get_db)):
-    """Fetch all tasks assigned by parent for WebApp display."""
-    tasks = await crud.get_tasks_for_parent(session, parent_id)
+async def get_parent_tasks_endpoint(
+    parent_id: int,
+    child_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """Fetch tasks assigned by parent (optionally filtered by child_id)."""
+    tasks = await crud.get_tasks_for_parent(session, parent_id, child_id=child_id)
     return {
         "status": "success",
         "tasks": [

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import platform
 import sys
 from contextlib import asynccontextmanager
@@ -30,6 +31,22 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("smart_parental_tracker")
+
+# Sentry Monitoring Initialization
+sentry_dsn = settings.SENTRY_DSN or os.environ.get("SENTRY_DSN")
+if sentry_dsn:
+    try:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            environment=os.environ.get("SENTRY_ENVIRONMENT", "production" if not settings.DEBUG else "development"),
+            traces_sample_rate=1.0,
+            send_default_pii=True,
+            enable_logs=True,
+        )
+        logger.info("Sentry monitoring initialized successfully.")
+    except Exception as sentry_err:
+        logger.warning(f"Could not initialize Sentry: {sentry_err}")
 
 
 def prevent_windows_sleep():
@@ -79,6 +96,14 @@ app.add_middleware(
 # Register API routers
 app.include_router(telemetry_router)
 app.include_router(webapp_router)
+
+
+@app.get("/api/sentry-debug", tags=["Debug"])
+async def trigger_sentry_debug_error():
+    """Endpoint for verifying Sentry error monitoring connection."""
+    logger.info("Triggering intentional test exception for Sentry verification...")
+    division_by_zero = 1 / 0
+    return {"result": division_by_zero}
 
 # Mount WebApp Static Directory under both /child_security_site and /webapp
 webapp_path = Path(__file__).resolve().parent / "webapp"

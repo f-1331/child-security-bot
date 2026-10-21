@@ -310,6 +310,12 @@ def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="🗑 Farzandni hisobdan o'chirish",
+                    callback_data=f"delete_child_confirm:{child_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="⬅️ Farzandlar ro'yxatiga qaytish",
                     callback_data="list_children"
                 )

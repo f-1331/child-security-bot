@@ -577,7 +577,17 @@ function enableChildDemoMode() {
       virtual_balance: 18000,
       virtual_money_som: 180000,
       is_sos_active: false,
+      location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
+    {
+      id: 2003,
+      full_name: "Madinaxon Karimova (Farzand 2)",
+      username: "madina_child",
+      virtual_balance: 24000,
+      virtual_money_som: 240000,
+      is_sos_active: false,
+      location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
+    }
   ];
 
   applyChildUI({
@@ -1511,7 +1521,17 @@ function enableDemoMode() {
       virtual_balance: 18000,
       virtual_money_som: 180000,
       is_sos_active: false,
+      location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
+    {
+      id: 2003,
+      full_name: "Madinaxon Karimova (Farzand 2)",
+      username: "madina_child",
+      virtual_balance: 24000,
+      virtual_money_som: 240000,
+      is_sos_active: false,
+      location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
+    }
   ];
 
   currentChildId = 2002;
@@ -2535,7 +2555,9 @@ async function loadTasks() {
   try {
     let url = "";
     if (parentId) {
-      url = `/api/v1/webapp/parent/${parentId}/tasks`;
+      url = currentChildId
+        ? `/api/v1/webapp/parent/${parentId}/tasks?child_id=${currentChildId}`
+        : `/api/v1/webapp/parent/${parentId}/tasks`;
     } else if (currentChildId) {
       url = `/api/v1/webapp/child/${currentChildId}/tasks`;
     } else {
@@ -3298,8 +3320,8 @@ async function approveTask(taskId) {
         }
 
         renderTasksList();
-        const cornerMoneyText = document.getElementById("childMoneyCornerText");
-        if (cornerMoneyText) cornerMoneyText.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+        const heroMoney = document.getElementById("childHeroMoneyText");
+        if (heroMoney) heroMoney.textContent = `${childBalanceSom.toLocaleString()} so'm`;
         const bannerMoney = document.getElementById("childBannerMoney");
         if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${childBalanceSom.toLocaleString()} so'm pulingiz bor! (${childBalanceCoins.toLocaleString()} tanga)`;
         const wMoney = document.getElementById("childWalletMoneyText");

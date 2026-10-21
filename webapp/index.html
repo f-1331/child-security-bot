@@ -26,6 +26,23 @@
   <!-- Custom Styles -->
   <link rel="stylesheet" href="style.css?v=17" />
 
+  <!-- Sentry Browser Error & Performance Monitoring SDK -->
+  <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+  <script>
+    (function() {
+      var dsn = window.SENTRY_DSN || localStorage.getItem("sentry_dsn");
+      if (dsn && window.Sentry) {
+        try {
+          Sentry.init({
+            dsn: dsn,
+            tracesSampleRate: 1.0,
+            environment: "production"
+          });
+        } catch(e) {}
+      }
+    })();
+  </script>
+
   <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
   <script>
     (function() {
@@ -1629,6 +1646,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

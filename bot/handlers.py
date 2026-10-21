@@ -637,6 +637,54 @@ async def on_delete_fence(callback: CallbackQuery):
         await callback.answer("O'chirishda xatolik yuz berdi.", show_alert=True)
 
 
+@router.callback_query(F.data.startswith("view_fence:"))
+async def on_view_fence(callback: CallbackQuery):
+    fence_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        fence = await crud.get_geofence(session, fence_id)
+        if not fence:
+            await callback.answer("⚠️ Kerakli joy topilmadi.", show_alert=True)
+            return
+
+        maps_link = f"https://www.google.com/maps/search/?api=1&query={fence.latitude},{fence.longitude}"
+        text = (
+            f"📍 **Kerakli joy:** **{fence.name}**\n\n"
+            f"🎯 Radiusi: **{int(fence.radius_meters)} metr**\n"
+            f"🗺 Koordinatalar: `{fence.latitude}, {fence.longitude}`\n"
+            f"🌐 [Google Maps orqali ochish]({maps_link})\n\n"
+            f"Farzandingiz ushbu hududga kirganda yoki undan chiqqanda sizga darhol xabarnoma yuboriladi."
+        )
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🗺 Xaritada ko'rish", url=maps_link)],
+                [InlineKeyboardButton(text="🗑 O'chirish", callback_data=f"delete_fence:{fence.id}")],
+                [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_fences")]
+            ]
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_to_fences")
+async def on_back_to_fences(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        fences = await crud.get_geofences_for_user(session, user_id)
+        text = "📍 **Kerakli joylar (Xavfsiz hududlar):**\n\n"
+        if not fences:
+            text += "Hozircha hech qanday joy belgilanmagan.\n\nYangi joy qo'shish uchun pastdagi tugmani bosing:"
+        else:
+            text += "Belgilangan hududlar ro'yxati:"
+        try:
+            await callback.message.edit_text(text, reply_markup=get_kerakli_joylar_menu_keyboard(fences), parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(text, reply_markup=get_kerakli_joylar_menu_keyboard(fences), parse_mode="Markdown")
+    await callback.answer()
+
+
 # ---------------------------------------------------------
 # Battery & Phone Status Check ("🔋 Batareya va Holat")
 # ---------------------------------------------------------
@@ -1875,6 +1923,105 @@ async def on_show_pairing_code(message: Message, bot: Bot):
             reply_markup=get_pairing_share_keyboard(bot_info.username, code),
             parse_mode="Markdown"
         )
+
+
+@router.callback_query(F.data == "refresh_pairing_code")
+async def on_refresh_pairing_code(callback: CallbackQuery, bot: Bot):
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        new_code = await crud.generate_pairing_code(session, parent_id)
+        await session.commit()
+
+        bot_info = await bot.get_me()
+        new_text = (
+            f"🔑 **YANGILANGAN YAGONA OILA VA SAYT KODINGIZ:** ` {new_code} `\n\n"
+            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
+            f"1️⃣ **Farzandlarni ulash:**\n"
+            f"Farzandingiz botga kirib ushbu yangi ` {new_code} ` kodini kiritadi.\n\n"
+            f"2️⃣ **Saytga (Web App) kirish:**\n"
+            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
+            f"Saytga ham shu ` {new_code} ` kodini kiritib boshqarishingiz mumkin.\n\n"
+            f"Ulashish uchun quyidagi tugmani bosing:"
+        )
+        try:
+            await callback.message.edit_text(
+                new_text,
+                reply_markup=get_pairing_share_keyboard(bot_info.username, new_code),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            await callback.message.answer(
+                new_text,
+                reply_markup=get_pairing_share_keyboard(bot_info.username, new_code),
+                parse_mode="Markdown"
+            )
+    await callback.answer("✅ Yangi ulanish kodi yaratildi!")
+
+
+@router.callback_query(F.data == "cancel_action")
+async def on_cancel_action(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        await callback.message.edit_text("❌ Amal bekor qilindi.")
+    except Exception:
+        await callback.message.delete()
+    await callback.answer("Bekor qilindi.")
+
+
+@router.callback_query(F.data.startswith("delete_child_confirm:"))
+async def on_delete_child_confirm(callback: CallbackQuery):
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name if child else "Farzand"
+
+    text = (
+        f"⚠️ **DIQQAT: Farzandni o'chirishni tasdiqlaysizmi?**\n\n"
+        f"👤 Farzand: **{child_name}**\n\n"
+        f"Agar tasdiqlasangiz, farzand hisobingizdan va tizimdan to'liq chiqariladi."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🗑 Ha, o'chirish", callback_data=f"delete_child_do:{child_id}"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"child_view:{child_id}")
+            ]
+        ]
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("delete_child_do:"))
+async def on_delete_child_do(callback: CallbackQuery, bot: Bot):
+    child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        success = await crud.delete_child_profile(session, parent_id, child_id)
+        await session.commit()
+
+    if success:
+        await callback.answer("✅ Farzand hisobi muvaffaqiyatli o'chirildi!", show_alert=True)
+        # Notify child if active
+        try:
+            await bot.send_message(
+                chat_id=child_id,
+                text="ℹ️ Ota-onangiz profilingizni hisobdan chiqardi.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+        except Exception:
+            pass
+        # Return to children list
+        text, reply_markup = await _build_children_list_message(parent_id)
+        try:
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(text, reply_markup=reply_markup)
+    else:
+        await callback.answer("⚠️ Farzandni o'chirishda xatolik yuz berdi.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("resolve_sos:"))

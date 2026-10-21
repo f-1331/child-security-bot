@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///parental_tracker.db"
     TIMEZONE: str = "Asia/Tashkent"
     DEBUG: bool = True
+    SENTRY_DSN: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

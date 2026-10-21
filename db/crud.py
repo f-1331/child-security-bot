@@ -608,10 +608,13 @@ async def get_tasks_for_child(
 async def get_tasks_for_parent(
     session: AsyncSession,
     parent_id: int,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    child_id: Optional[int] = None
 ) -> List[Task]:
     """Fetch tasks created by parent."""
     query = select(Task).where(Task.parent_id == parent_id)
+    if child_id:
+        query = query.where(Task.child_id == child_id)
     if status:
         query = query.where(Task.status == status)
     query = query.order_by(Task.created_at.desc())
