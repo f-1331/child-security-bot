@@ -530,7 +530,7 @@ nav#mainNavBar {
    6. FIND MY / LIFE360 STYLE FLOATING STATUS CARD (PARENT SCREEN)
    -------------------------------------------------------------------------- */
 #locationCard {
-  bottom: calc(84px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  bottom: calc(80px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
   background: var(--glass-bg) !important;
   backdrop-filter: blur(28px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
@@ -541,7 +541,7 @@ nav#mainNavBar {
 }
 
 #parentMonitoringBar {
-  bottom: calc(168px + max(14px, env(safe-area-inset-bottom, 0px))) !important;
+  bottom: calc(212px + max(14px, env(safe-area-inset-bottom, 0px))) !important;
   z-index: 21 !important;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -551,7 +551,7 @@ nav#mainNavBar {
     bottom: 96px !important;
   }
   #parentMonitoringBar {
-    bottom: 175px !important;
+    bottom: 215px !important;
   }
 }
 

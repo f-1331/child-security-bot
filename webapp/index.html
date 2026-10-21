@@ -24,7 +24,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=40" />
+  <link rel="stylesheet" href="style.css?v=41" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -413,7 +413,7 @@
       </div>
 
       <!-- 1. Standalone Tactical Monitoring Bar (Floats comfortably HIGHER UP on the map) -->
-      <div id="parentMonitoringBar" style="bottom: calc(168px + max(14px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex items-center gap-2 md:max-w-md">
+      <div id="parentMonitoringBar" style="bottom: calc(212px + max(14px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex items-center gap-2 md:max-w-md">
         <!-- 1-tugma: Passiv monitoring (Silent check) -->
         <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2 px-2.5 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
           <div class="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
@@ -438,7 +438,7 @@
       </div>
 
       <!-- 2. Location & Address Card (Positioned right above bottom navigation dock) -->
-      <div id="locationCard" style="bottom: calc(84px + max(10px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 p-3 rounded-2xl md:max-w-md shadow-2xl flex items-center justify-between gap-2">
+      <div id="locationCard" style="bottom: calc(80px + max(10px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 p-3 rounded-2xl md:max-w-md shadow-2xl flex items-center justify-between gap-2">
         <div class="min-w-0 flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
             <i data-lucide="map-pin" class="w-4 h-4"></i>
@@ -1901,6 +1901,6 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=41"></script>
 </body>
 </html>
