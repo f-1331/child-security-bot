@@ -8,9 +8,7 @@ if (tg) {
     if (typeof tg.disableVerticalSwipes === "function") {
       tg.disableVerticalSwipes();
     }
-    if (typeof tg.enableClosingConfirmation === "function") {
-      tg.enableClosingConfirmation();
-    }
+    // Closing confirmation removed to allow smooth, instant exit back to Telegram
     if (tg.setHeaderColor) tg.setHeaderColor("#090d16");
     if (tg.setBackgroundColor) tg.setBackgroundColor("#090d16");
     if (typeof tg.onEvent === "function") {
@@ -38,35 +36,50 @@ let parentPhone = null;
 let parentName = null;
 let lastSosAlertState = false;
 
-// High-accuracy device GPS acquisition
+// High-accuracy device GPS acquisition with cache suppression to avoid repeated prompts
+let cachedDeviceLocation = null;
+let lastLocationFetchTime = 0;
+
 async function getDeviceLocation() {
+  // If in demo mode, do not trigger native GPS permission modal
+  if (isDemoMode) {
+    return { latitude: 41.2916, longitude: 69.2121, accuracy: 10 };
+  }
+
+  // Use cached location if fresh (< 60 seconds) to avoid repeated browser prompts
+  if (cachedDeviceLocation && (Date.now() - lastLocationFetchTime < 60000)) {
+    return cachedDeviceLocation;
+  }
+
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
-      resolve(null);
+      resolve(cachedDeviceLocation || null);
       return;
     }
     const timer = setTimeout(() => {
-      resolve(null);
+      resolve(cachedDeviceLocation || null);
     }, 4000);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         clearTimeout(timer);
-        resolve({
+        cachedDeviceLocation = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
-        });
+        };
+        lastLocationFetchTime = Date.now();
+        resolve(cachedDeviceLocation);
       },
       (err) => {
         clearTimeout(timer);
         console.warn("Geolocation query error:", err);
-        resolve(null);
+        resolve(cachedDeviceLocation || null);
       },
       {
         enableHighAccuracy: true,
         timeout: 4000,
-        maximumAge: 5000,
+        maximumAge: 60000,
       }
     );
   });
@@ -644,7 +657,7 @@ function enableChildDemoMode() {
   renderDemoGeofences();
   renderDemoHistory();
   renderDemoTasks();
-  initChildPermissionsAndTracking(2002);
+  // In demo mode do not request real device camera/GPS permissions
   showToast("👦 Farzand demo rejimiga o'tildi");
 }
 
@@ -2219,10 +2232,17 @@ function updateSoundUI(mode) {
   }
 }
 
-// Format relative time (e.g. "3 daqiqa oldin")
+// Format relative time with strict UTC timezone parsing (fixes 5-hour Tashkent UTC+5 offset)
 function formatTimeAgo(isoString) {
-  const diffSec = Math.floor((new Date() - new Date(isoString)) / 1000);
-  if (diffSec < 60) return "Hozirgina";
+  if (!isoString) return "Hozirgina";
+  let s = String(isoString).trim();
+  // If timestamp doesn't include timezone offset, append 'Z' because database stores UTC
+  if (!s.endsWith("Z") && !s.includes("+") && !/[+-]\d{2}:\d{2}$/.test(s)) {
+    s += "Z";
+  }
+  const date = new Date(s);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 60) return "Hozirgina";
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} daqiqa oldin`;
   return `${Math.floor(diffSec / 3600)} soat oldin`;
 }
@@ -4075,6 +4095,8 @@ function startChildLiveTracking(childId) {
   childWatchId = navigator.geolocation.watchPosition(
     async (pos) => {
       const { latitude, longitude, accuracy, speed } = pos.coords;
+      cachedDeviceLocation = { latitude, longitude, accuracy };
+      lastLocationFetchTime = Date.now();
       const now = Date.now();
 
       // Check if child currently has active SOS
@@ -4621,7 +4643,21 @@ function handleTelegramBackPress() {
     return;
   }
 
-  updateTelegramBackButton();
+  // If no modals are open and user is on the main screen, exit WebApp back to Telegram!
+  closeWebApp();
+}
+
+function closeWebApp() {
+  haptic("light");
+  try {
+    if (window.Telegram?.WebApp?.close) {
+      window.Telegram.WebApp.close();
+      return;
+    }
+  } catch (e) {}
+  try {
+    window.close();
+  } catch (e) {}
 }
 
 function updateTelegramBackButton() {

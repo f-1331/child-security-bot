@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/webapp", tags=["WebApp"])
 
 
+def format_utc_iso(dt: Optional[datetime]) -> Optional[str]:
+    """Ensure naive datetimes from DB are explicitly marked as UTC ISO strings."""
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 class ConnectionManager:
     """Manages real-time WebSocket connections between parents and children."""
     def __init__(self):
@@ -122,7 +131,7 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
                     "battery_level": latest.battery_level if latest else None,
                     "is_charging": latest.is_charging if latest else False,
                     "sound_mode": latest.sound_mode if latest else "normal",
-                    "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+                    "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
                 } if latest else None
             })
 
@@ -176,7 +185,7 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
                 "battery_level": latest.battery_level if latest else None,
                 "is_charging": latest.is_charging if latest else False,
                 "sound_mode": latest.sound_mode if latest else "normal",
-                "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+                "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None,
             "walk_safe": {
                 "active": child.walk_safe_active or False,
@@ -277,7 +286,7 @@ async def get_parent_children(parent_id: int, session: AsyncSession = Depends(ge
                 "battery_level": latest.battery_level if latest else None,
                 "is_charging": latest.is_charging if latest else False,
                 "sound_mode": latest.sound_mode if latest else "normal",
-                "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+                "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None
         })
 
@@ -318,7 +327,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
                 "battery_level": latest.battery_level if latest else None,
                 "is_charging": latest.is_charging if latest else False,
                 "sound_mode": latest.sound_mode if latest else "normal",
-                "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None,
+                "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None,
             "walk_safe": {
                 "active": child.walk_safe_active or False,
@@ -349,7 +358,7 @@ async def get_child_history(
             "longitude": h.longitude,
             "battery_level": h.battery_level,
             "is_charging": h.is_charging,
-            "recorded_at": h.recorded_at.isoformat() if h.recorded_at else None
+            "recorded_at": format_utc_iso(h.recorded_at)
         }
         for h in history
     ]
@@ -1140,7 +1149,7 @@ async def update_child_live_location_endpoint(
         "speed": payload.speed,
         "battery_level": payload.battery_level,
         "is_charging": payload.is_charging,
-        "recorded_at": log.recorded_at.isoformat() if log.recorded_at else datetime.now().isoformat()
+        "recorded_at": format_utc_iso(log.recorded_at) if log.recorded_at else format_utc_iso(datetime.now(timezone.utc))
     }
     for p in parents:
         await ws_manager.send_to_user(p.id, telemetry_data)
@@ -1148,7 +1157,7 @@ async def update_child_live_location_endpoint(
     return {
         "status": "success",
         "child_id": child_id,
-        "recorded_at": log.recorded_at.isoformat() if log.recorded_at else None
+        "recorded_at": format_utc_iso(log.recorded_at)
     }
 
 
@@ -1178,7 +1187,7 @@ async def silent_check_endpoint(
             "battery_level": latest.battery_level if latest else None,
             "is_charging": latest.is_charging if latest else False,
             "sound_mode": latest.sound_mode if latest else "normal",
-            "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None
+            "recorded_at": format_utc_iso(latest.recorded_at) if latest else None
         } if latest else None,
         "notification_sent_to_child": False
     }
@@ -1224,7 +1233,7 @@ async def active_check_endpoint(
             "battery_level": latest.battery_level if latest else None,
             "is_charging": latest.is_charging if latest else False,
             "sound_mode": latest.sound_mode if latest else "normal",
-            "recorded_at": latest.recorded_at.isoformat() if latest and latest.recorded_at else None
+            "recorded_at": format_utc_iso(latest.recorded_at) if latest else None
         } if latest else None,
         "notification_sent_to_child": True
     }
