@@ -293,6 +293,12 @@ def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="📞 Farzand bilan bog'lanish (Qo'ng'iroq)",
+                    callback_data=f"contact_child:{child_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="➕ Yangi vazifa yuklash",
                     callback_data=f"create_task:{child_id}"
                 ),

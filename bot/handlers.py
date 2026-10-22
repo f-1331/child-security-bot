@@ -1051,32 +1051,122 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
 
 @router.message(F.text == "📞 Ota-onamga qo'ng'iroq")
 async def on_child_call_parent_pressed(message: Message):
-    """Child wants to call parent directly."""
+    """Child wants to call parent directly in 1 tap with native Contact Card and direct dial."""
     child_id = message.from_user.id
     async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name if child and child.full_name else "Farzandingiz"
         parents = await crud.get_parents_for_child(session, child_id)
         if not parents:
             await message.answer("Sizga hali ota-ona ulanmagan.")
             return
 
-        text = "📞 **Ota-onangiz bilan bog'lanish:**\n\n"
-        buttons = []
         for p in parents:
-            text += f"👤 **{p.full_name}**"
+            p_name = p.full_name or "Ota-ona"
             if p.phone_number:
-                text += f": `{p.phone_number}`\n*(Qo'ng'iroq qilish uchun raqam ustiga bosing)*\n"
+                clean_phone = p.phone_number.strip().replace(" ", "").replace("-", "")
+                # 1. Send native interactive Telegram Contact Card (Renders big green CALL button in 1 tap!)
+                try:
+                    await message.answer_contact(
+                        phone_number=clean_phone,
+                        first_name=p_name,
+                        last_name="(Ota-onangiz)"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send contact card: {e}")
+
+                buttons = []
+                if p.username:
+                    buttons.append([InlineKeyboardButton(text=f"📞 {p_name} (Telegram qo'ng'iroq)", url=f"https://t.me/{p.username}")])
+                else:
+                    buttons.append([InlineKeyboardButton(text=f"📞 {p_name} (Telegram orqali)", url=f"tg://user?id={p.id}")])
+
+                call_text = (
+                    f"📞 **{p_name} ga qo'ng'iroq qilish:**\n\n"
+                    f"📱 Yuqoridagi kontakt kartasida **«QO'NG'IROQ QILISH»** tugmasini bosing yoki quyidagi raqam ustiga bosing:\n\n"
+                    f"👉 **{p.phone_number}**"
+                )
+                await message.answer(
+                    call_text,
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                    parse_mode="Markdown"
+                )
             else:
-                text += f" (@{p.username or 'yoq'})\n"
-            buttons.append([InlineKeyboardButton(text=f"💬 {p.full_name} bilan Telegramda bog'lanish", url=f"tg://user?id={p.id}")])
+                buttons = [
+                    [InlineKeyboardButton(
+                        text=f"💬 {p_name} bilan Telegramda bog'lanish",
+                        url=f"https://t.me/{p.username}" if p.username else f"tg://user?id={p.id}"
+                    )]
+                ]
+                await message.answer(
+                    f"⚠️ **{p_name}** o'z telefon raqamini botga kiritmagan.\n\n"
+                    f"Ular bilan Telegram orqali qo'ng'iroq qilishingiz yoki yozishingiz mumkin:",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                    parse_mode="Markdown"
+                )
+                # Notify parent to add their phone number immediately so child can call in 1 tap
+                try:
+                    await message.bot.send_message(
+                        chat_id=p.id,
+                        text=(
+                            f"📞 **DIQQAT!** Farzandingiz **{child_name}** sizga telefon qilmoqchi bo'ldi, "
+                            f"lekin profilingizda telefon raqamingiz kiritilmagan.\n\n"
+                            f"Farzandingiz 1 ta tugma orqali sizga qo'ng'iroq qila olishi uchun "
+                            f"iltimos, pastdagi **«📱 Raqamimni ulash»** tugmasini bosing:"
+                        ),
+                        reply_markup=get_contact_request_keyboard(),
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
 
-        if not any(p.phone_number for p in parents):
-            text += "\n💡 _Ota-onangiz o'z telefon raqamini botga kiritmagan. Telegram orqali yozishingiz mumkin._"
+@router.callback_query(F.data.startswith("contact_child:"))
+async def on_contact_child_callback(callback: CallbackQuery):
+    """Parent wants to call/contact their child in 1 tap."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        if not child:
+            await callback.answer("Farzand topilmadi", show_alert=True)
+            return
 
-        await message.answer(
-            text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None,
-            parse_mode="Markdown"
-        )
+        child_name = child.full_name or "Farzand"
+        if child.phone_number:
+            clean_phone = child.phone_number.strip().replace(" ", "").replace("-", "")
+            try:
+                await callback.message.answer_contact(
+                    phone_number=clean_phone,
+                    first_name=child_name,
+                    last_name="(Farzandingiz)"
+                )
+            except Exception:
+                pass
+            buttons = []
+            if child.username:
+                buttons.append([InlineKeyboardButton(text=f"📞 {child_name} (Telegram)", url=f"https://t.me/{child.username}")])
+            else:
+                buttons.append([InlineKeyboardButton(text=f"📞 {child_name} (Telegram)", url=f"tg://user?id={child.id}")])
+            await callback.message.answer(
+                f"📞 **{child_name} ga qo'ng'iroq qilish:**\n\n"
+                f"📱 Kontakt kartasida **«QO'NG'IROQ QILISH»** tugmasini bosing yoki quyidagi raqam ustiga bosing:\n\n"
+                f"👉 **{child.phone_number}**",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                parse_mode="Markdown"
+            )
+        else:
+            buttons = [
+                [InlineKeyboardButton(
+                    text=f"💬 {child_name} bilan Telegramda bog'lanish",
+                    url=f"https://t.me/{child.username}" if child.username else f"tg://user?id={child.id}"
+                )]
+            ]
+            await callback.message.answer(
+                f"👤 **{child_name}** bilan Telegram orqali bog'lanishingiz mumkin:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                parse_mode="Markdown"
+            )
+    await callback.answer()
+
 
 
 @router.message(F.text == "📞 Oila kontaktlari")

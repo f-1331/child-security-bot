@@ -24,7 +24,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=42" />
+  <link rel="stylesheet" href="style.css?v=43" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -1623,44 +1623,43 @@
   <!-- CHILD ONBOARDING PERMISSIONS MODAL -->
   <div id="childOnboardingModal" class="hidden fixed inset-0 z-[2400] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
     <div class="relative bg-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="skipChildPermissions()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
       <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg border-2 border-white/80">
         <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
       </div>
-      <h3 class="text-base font-black text-white">Xavfsizlik Ruxsatnomalari 🛡️</h3>
+      <h3 class="text-base font-black text-white">Xavfsizlik Ruxsatnomasi 🛡️</h3>
       <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
-        Sizning xavfsizligingizni ta'minlash va ota-onangiz bilan bog'lanish uchun quyidagi ruxsatlarni faollashtiring:
+        Xavfsizligingizni ta'minlash va ota-onangiz sizning qayerdaligingizni bilib turishi uchun jonli joylashuvga 1 marta ruxsat bering:
       </p>
 
       <div class="flex flex-col gap-2.5 my-4 text-left">
-        <!-- 1. Geolokatsiya -->
-        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
-          <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="map-pin" class="w-4 h-4"></i>
+        <!-- Geolokatsiya -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="map-pin" class="w-5 h-5"></i>
           </div>
           <div>
             <h4 class="text-xs font-bold text-white">Doimiy Jonli Joylashuv (GPS)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ota-onangiz har doim sizning xavfsiz joydaligingizni bilib turishi uchun fonda avtomatik yangilanadi.</p>
-          </div>
-        </div>
-
-        <!-- 2. Kamera va Video -->
-        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
-          <div class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="camera" class="w-4 h-4"></i>
-          </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">Kamera va Video (Surat/Video)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Topshiriqlarni rasmga olib yuborish va favqulodda vaziyatda tezkor video yuborish uchun.</p>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">1 marta ruxsat beriladi va qayta so'ralmaydi. Ota-onangiz har doim xavfsizligingizdan xabardor bo'ladi.</p>
           </div>
         </div>
       </div>
 
       <button id="btnGrantChildPermissions" onclick="requestChildAllPermissions()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-2xl shadow-xl shadow-teal-500/20 transition flex items-center justify-center gap-2">
         <i data-lucide="check-circle" class="w-4 h-4"></i>
-        <span>Ruxsat berish va Boshlash</span>
+        <span>Ruxsat berish (1 martalik)</span>
+      </button>
+
+      <button onclick="skipChildPermissions()" class="w-full mt-2.5 py-2.5 text-slate-400 hover:text-white text-xs font-semibold active:scale-95 transition">
+        Keyinroq ruxsat berish (O'tkazib yuborish)
       </button>
     </div>
   </div>
+
+
 
   <!-- CHILD ACTIVE CHECK NOTIFICATION BANNER (Positioned below header, fully readable) -->
   <div id="childActiveCheckBanner" style="top: calc(84px + max(8px, env(safe-area-inset-top, 0px)));" class="hidden fixed left-3.5 right-3.5 sm:left-auto sm:right-6 sm:w-96 z-[2500] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-4 rounded-2xl shadow-2xl border border-white/30 animate-fade-in flex items-center gap-3">
@@ -1906,6 +1905,50 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=43"></script>
+
+  <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
+  <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+    <div class="relative bg-slate-900 border-t sm:border border-blue-500/30 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center">
+      <button onclick="closeCallParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="w-16 h-16 rounded-3xl bg-emerald-500/20 border-2 border-emerald-400/40 flex items-center justify-center mx-auto mb-3 text-emerald-400 shadow-xl">
+        <i data-lucide="phone-call" class="w-8 h-8 animate-pulse"></i>
+      </div>
+
+      <h3 id="modalParentCallName" class="text-base font-black text-white">Ota-onaga qo'ng'iroq</h3>
+      <p id="modalParentCallDesc" class="text-xs text-slate-300 mt-1">
+        Quyidagi tugma orqali to'g'ridan-to'g'ri bir bosishda telefon qilishingiz mumkin:
+      </p>
+
+      <div class="my-4 flex flex-col gap-2.5">
+        <!-- 1. Direct Tel Link Button (Native 1-Tap Dial) -->
+        <a id="btnModalParentTel" href="tel:+998901234567" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-95 text-white font-black text-sm rounded-2xl shadow-xl shadow-emerald-900/40 flex items-center justify-center gap-2.5 transition">
+          <i data-lucide="phone" class="w-5 h-5"></i>
+          <span id="modalParentCallPhoneText">Qo'ng'iroq qilish (+998...)</span>
+        </a>
+
+        <!-- 2. Telegram Direct Call / Chat -->
+        <button id="btnModalParentTelegram" onclick="openParentTelegramChat()" class="w-full py-3 px-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 active:scale-95 text-blue-300 hover:text-white font-bold text-xs rounded-2xl transition flex items-center justify-center gap-2">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Telegram orqali qo'ng'iroq / yozish</span>
+        </button>
+
+        <!-- 3. Copy Phone Number -->
+        <button id="btnModalParentCopy" onclick="copyParentPhoneNumber()" class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white font-semibold text-xs rounded-2xl transition flex items-center justify-center gap-2">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+          <span id="btnModalParentCopyText">Raqamdan nusxa olish</span>
+        </button>
+      </div>
+
+      <div id="modalParentBotBadge" class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium flex items-center justify-center gap-2">
+        <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-400"></i>
+        <span>Telegram botingizga ham kontakt kartasi yuborildi!</span>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

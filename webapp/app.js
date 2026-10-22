@@ -34,6 +34,7 @@ let childBalanceCoins = 0;
 let childBalanceSom = 0;
 let parentPhone = null;
 let parentName = null;
+let parentUsername = null;
 let lastSosAlertState = false;
 
 // High-accuracy device GPS acquisition with cache suppression to avoid repeated prompts
@@ -46,9 +47,36 @@ async function getDeviceLocation() {
     return { latitude: 41.2916, longitude: 69.2121, accuracy: 10 };
   }
 
-  // Use cached location if fresh (< 60 seconds) to avoid repeated browser prompts
-  if (cachedDeviceLocation && (Date.now() - lastLocationFetchTime < 60000)) {
+  // Use cached location if available (< 5 minutes) to avoid repeated browser prompts
+  if (cachedDeviceLocation && (Date.now() - lastLocationFetchTime < 300000)) {
     return cachedDeviceLocation;
+  }
+  if (lastSentLat && lastSentLng) {
+    return { latitude: lastSentLat, longitude: lastSentLng, accuracy: 20 };
+  }
+
+  // Check Telegram LocationManager first (permanent permission)
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.LocationManager && tg.LocationManager.isAccessGranted) {
+    return new Promise((resolve) => {
+      try {
+        tg.LocationManager.getLocation((loc) => {
+          if (loc && loc.latitude && loc.longitude) {
+            cachedDeviceLocation = {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              accuracy: loc.accuracy || 10
+            };
+            lastLocationFetchTime = Date.now();
+            resolve(cachedDeviceLocation);
+          } else {
+            resolve(cachedDeviceLocation || null);
+          }
+        });
+      } catch (e) {
+        resolve(cachedDeviceLocation || null);
+      }
+    });
   }
 
   return new Promise((resolve) => {
@@ -58,7 +86,7 @@ async function getDeviceLocation() {
     }
     const timer = setTimeout(() => {
       resolve(cachedDeviceLocation || null);
-    }, 4000);
+    }, 3000);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -73,13 +101,13 @@ async function getDeviceLocation() {
       },
       (err) => {
         clearTimeout(timer);
-        console.warn("Geolocation query error:", err);
+        console.warn("Geolocation query note:", err);
         resolve(cachedDeviceLocation || null);
       },
       {
         enableHighAccuracy: true,
-        timeout: 4000,
-        maximumAge: 60000,
+        timeout: 3000,
+        maximumAge: 300000,
       }
     );
   });
@@ -714,6 +742,7 @@ function applyAuthenticatedUser(data) {
 }
 
 function applyParentUI(data) {
+  document.getElementById("childOnboardingModal")?.classList.add("hidden");
   currentRole = "parent";
   document.body.classList.remove("role-child");
   document.body.classList.add("role-parent");
@@ -3783,18 +3812,105 @@ async function cancelChildSOS() {
 function callParent() {
   haptic("heavy");
   playPingSound();
-  if (parentPhone) {
-    const clean = parentPhone.replace(/[\s\-]/g, "");
-    showToast(`📞 Qo'ng'iroq qilinmoqda: ${parentPhone}`);
-    window.location.href = `tel:${clean}`;
+
+  const modal = document.getElementById("modalCallParent");
+  const phoneText = document.getElementById("modalParentCallPhoneText");
+  const descText = document.getElementById("modalParentCallDesc");
+  const linkBtn = document.getElementById("btnModalParentTel");
+  const nameText = document.getElementById("modalParentCallName");
+
+  const cleanPhone = (parentPhone || "").replace(/[\s\-]/g, "");
+  const pName = parentName || "Ota-onangiz";
+
+  if (nameText) nameText.textContent = `${pName} bilan bog'lanish`;
+
+  if (cleanPhone) {
+    if (phoneText) phoneText.textContent = `Qo'ng'iroq qilish (${parentPhone})`;
+    if (linkBtn) {
+      linkBtn.href = `tel:${cleanPhone}`;
+      linkBtn.classList.remove("hidden");
+    }
+    if (descText) {
+      descText.textContent = "Qo'ng'iroq qilish tugmasini bosing yoki Telegram orqali bog'laning:";
+    }
+
+    // Attempt direct phone call triggering
+    try {
+      const tempLink = document.createElement("a");
+      tempLink.href = `tel:${cleanPhone}`;
+      tempLink.target = "_blank";
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      setTimeout(() => tempLink.remove(), 500);
+    } catch(e) {}
+  } else {
+    if (phoneText) phoneText.textContent = "Telefon raqam hali kiritilmagan";
+    if (linkBtn) linkBtn.classList.add("hidden");
+    if (descText) {
+      descText.textContent = "Ota-onangiz hali botga telefon raqamini kiritmagan. Telegram orqali qo'ng'iroq qilishingiz yoki yozishingiz mumkin:";
+    }
+  }
+
+  // Trigger backend to send native contact card to child's Telegram chat so child can dial in 1 tap!
+  if (!isDemoMode && currentChildId) {
+    fetch(`/api/v1/webapp/child/${currentChildId}/call-parent-trigger`, {
+      method: "POST"
+    }).catch(console.warn);
+  }
+
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+    setTimeout(updateTelegramBackButton, 50);
+  }
+}
+
+function closeCallParentModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  const modal = document.getElementById("modalCallParent");
+  if (modal) modal.classList.add("hidden");
+}
+
+function copyParentPhoneNumber() {
+  haptic("medium");
+  if (!parentPhone) {
+    showToast("Telefon raqami kiritilmagan");
     return;
   }
-  if (window.Telegram?.WebApp?.close) {
-    showToast("⚠️ Ota-ona telefon raqami topilmadi. Telegram chatga o'tilmoqda...");
-    window.Telegram.WebApp.close();
+  const clean = parentPhone.replace(/[\s\-]/g, "");
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(clean).then(() => {
+      showToast("📋 Telefon raqami nusxalandi: " + clean);
+    }).catch(() => {
+      showToast("Raqam: " + clean);
+    });
   } else {
-    window.location.href = "tel:+998901234567";
+    showToast("Raqam: " + clean);
   }
+}
+
+function openParentTelegramChat() {
+  haptic("medium");
+  const tg = window.Telegram?.WebApp;
+  const pObj = authenticatedSession?.parent || {};
+  const uname = parentUsername || pObj.username;
+  const pid = pObj.id || parentId;
+
+  if (uname && tg && tg.openTelegramLink) {
+    tg.openTelegramLink(`https://t.me/${uname}`);
+    return;
+  }
+  if (pid && tg && tg.openTelegramLink) {
+    tg.openTelegramLink(`tg://user?id=${pid}`);
+    return;
+  }
+  if (tg && typeof tg.close === "function") {
+    showToast("Telegram chatga o'tilmoqda...");
+    tg.close();
+    return;
+  }
+  showToast("Telegram chatga o'ting.");
 }
 
 function openParentChat() {
@@ -4078,7 +4194,7 @@ function initChildPermissionsAndTracking(childId) {
   // Start HTTP fallback polling for active check alerts
   startChildNotificationPolling(childId);
 
-  // Check if permissions were previously granted
+  // Check if permissions were previously granted or dismissed
   const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
   if (!granted) {
     const modal = document.getElementById("childOnboardingModal");
@@ -4086,8 +4202,8 @@ function initChildPermissionsAndTracking(childId) {
       modal.classList.remove("hidden");
       if (window.lucide) lucide.createIcons();
     }
-  } else {
-    // Automatically start live GPS telemetry tracking
+  } else if (granted === "true") {
+    // Automatically start live GPS telemetry tracking silently
     startChildLiveTracking(childId);
   }
 }
@@ -4098,33 +4214,52 @@ async function requestChildAllPermissions() {
   const btn = document.getElementById("btnGrantChildPermissions");
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<span class="animate-pulse">Ruxsatlar faollashtirilmoqda...</span>`;
+    btn.innerHTML = `<span class="animate-pulse">Faollashtirilmoqda...</span>`;
   }
 
-  // 1. Request Camera and Video via navigator.mediaDevices.getUserMedia
-  try {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
-        .catch(() => null);
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+  // 1. Try Telegram native LocationManager (remembers permission forever in Telegram!)
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.LocationManager) {
+    try {
+      tg.LocationManager.init(() => {
+        if (tg.LocationManager.isLocationAvailable) {
+          tg.LocationManager.getLocation((loc) => {
+            if (loc && loc.latitude && loc.longitude) {
+              cachedDeviceLocation = {
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                accuracy: loc.accuracy || 10
+              };
+              lastLocationFetchTime = Date.now();
+            }
+          });
+        }
+      });
+    } catch (e) {
+      console.warn("Telegram LocationManager init note:", e);
     }
-  } catch (e) {
-    console.warn("Media permissions prompt note:", e);
   }
 
-  // 2. Start continuous watchPosition GPS telemetry
+  // 2. Start continuous GPS telemetry
   const targetId = currentChildId || authenticatedSession?.user?.id;
   if (targetId) {
     startChildLiveTracking(targetId);
   }
 
+  // Permanently save permission flag so it NEVER prompts again!
   localStorage.setItem("smart_tracker_child_permissions_granted", "true");
+  localStorage.setItem("smart_tracker_location_permitted", "true");
 
   if (modal) modal.classList.add("hidden");
-  showToast("✅ Ruxsatlar berildi! Jonli GPS xavfsizlik monitoringi ishga tushdi 🛡️");
+  showToast("✅ Ruxsat berildi! Jonli GPS xavfsizlik monitoringi faollashtirildi 🛡️");
+}
+
+function skipChildPermissions() {
+  haptic("light");
+  // Remember that user skipped so the modal NEVER pops up on entry again!
+  localStorage.setItem("smart_tracker_child_permissions_granted", "dismissed");
+  const modal = document.getElementById("childOnboardingModal");
+  if (modal) modal.classList.add("hidden");
 }
 
 function startChildLiveTracking(childId) {

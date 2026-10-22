@@ -201,7 +201,8 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
         "parent": {
             "id": parent.id,
             "full_name": parent.full_name or "Ota-ona",
-            "phone_number": parent.phone_number if parent else None
+            "phone_number": parent.phone_number if parent else None,
+            "username": parent.username if parent else None
         } if parent else None
     }
 
@@ -306,6 +307,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
     parents = await crud.get_parents_for_child(session, child_id)
     parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
     parent_name = parents[0].full_name if parents and parents[0].full_name else None
+    parent_username = parents[0].username if parents and parents[0].username else None
 
     return {
         "status": "success",
@@ -320,6 +322,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "is_sos_active": child.is_sos_active,
             "parent_phone": parent_phone,
             "parent_name": parent_name,
+            "parent_username": parent_username,
             "location": {
                 "latitude": latest.latitude if latest else None,
                 "longitude": latest.longitude if latest else None,
@@ -1579,3 +1582,58 @@ async def get_daily_safety_report_endpoint(
     """Generate detailed movement and activity summary for child today."""
     report = await crud.generate_daily_safety_report(session, child_id)
     return {"status": "success", "child_id": child_id, "report": report}
+
+
+@router.post("/child/{child_id}/call-parent-trigger")
+async def trigger_call_parent_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+    """Trigger 1-tap call from WebApp: sends native contact card to child's Telegram chat."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child else f"Farzand #{child_id}"
+    parents = await crud.get_parents_for_child(session, child_id)
+    if not parents:
+        return {"status": "error", "message": "Ota-ona topilmadi"}
+
+    sent_contacts = 0
+    if telemetry.telegram_bot:
+        for p in parents:
+            if p.phone_number:
+                clean_phone = p.phone_number.strip().replace(" ", "").replace("-", "")
+                try:
+                    await telemetry.telegram_bot.send_contact(
+                        chat_id=child_id,
+                        phone_number=clean_phone,
+                        first_name=p.full_name or "Ota-ona",
+                        last_name="(Ota-onangiz)"
+                    )
+                    sent_contacts += 1
+                except Exception as e:
+                    logger.warning(f"Failed to send contact to child {child_id}: {e}")
+            else:
+                # Notify parent to add phone
+                try:
+                    await telemetry.telegram_bot.send_message(
+                        chat_id=p.id,
+                        text=(
+                            f"📞 **DIQQAT!** Farzandingiz **{child_name}** sayt orqali sizga telefon qilmoqchi bo'ldi, "
+                            f"lekin profilingizda telefon raqamingiz kiritilmagan.\n\n"
+                            f"Farzandingiz bir tugma bilan sizga qo'ng'iroq qila olishi uchun "
+                            f"pastdagi **«📱 Raqamimni ulash»** tugmasini bosing:"
+                        ),
+                        reply_markup=get_contact_request_keyboard(),
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
+
+    return {
+        "status": "success",
+        "parents": [
+            {
+                "id": p.id,
+                "full_name": p.full_name or "Ota-ona",
+                "phone_number": p.phone_number,
+                "username": p.username
+            } for p in parents
+        ],
+        "sent_contacts": sent_contacts
+    }
