@@ -825,6 +825,108 @@ function applyParentUI(data) {
   if (window.lucide) lucide.createIcons();
 }
 
+// =========================================================
+// GAMIFIED CHILD LEVEL & XP SYSTEM (Dynamic, starts at Lvl 1)
+// =========================================================
+function calculateChildLevel(coins = 0, completedTasksCount = 0) {
+  const safeCoins = Math.max(0, parseInt(coins, 10) || 0);
+  const safeTasks = Math.max(0, parseInt(completedTasksCount, 10) || 0);
+  // XP formula: Each coin earned gives 1 XP, each completed quest gives 100 XP
+  const xp = safeCoins + (safeTasks * 100);
+
+  let level = 1;
+  let title = "Yangi Sayohatchi";
+  let icon = "🌱";
+  let minXp = 0;
+  let maxXp = 500;
+
+  if (xp >= 10000) {
+    level = 5;
+    title = "Afsonaviy Super Qahramon";
+    icon = "👑";
+    minXp = 10000;
+    maxXp = 10000;
+  } else if (xp >= 4000) {
+    level = 4;
+    title = "Tezkor Qalqon";
+    icon = "⚡";
+    minXp = 4000;
+    maxXp = 10000;
+  } else if (xp >= 1500) {
+    level = 3;
+    title = "Oltin Qalqon Qo'riqchisi";
+    icon = "🛡️";
+    minXp = 1500;
+    maxXp = 4000;
+  } else if (xp >= 500) {
+    level = 2;
+    title = "Bilimdon Qahramon";
+    icon = "⭐";
+    minXp = 500;
+    maxXp = 1500;
+  } else {
+    level = 1;
+    title = "Yangi Sayohatchi";
+    icon = "🌱";
+    minXp = 0;
+    maxXp = 500;
+  }
+
+  const range = Math.max(1, maxXp - minXp);
+  const currentInLevel = Math.max(0, xp - minXp);
+  const percent = level >= 5 ? 100 : Math.min(100, Math.round((currentInLevel / range) * 100));
+  const remainingXp = level >= 5 ? 0 : Math.max(0, maxXp - xp);
+
+  return {
+    xp,
+    level,
+    title,
+    icon,
+    minXp,
+    maxXp,
+    percent,
+    remainingXp
+  };
+}
+
+function updateChildLevelAndXP(coins = 0, completedTasksCount = 0) {
+  const lvl = calculateChildLevel(coins, completedTasksCount);
+
+  // 1. Top Bar Level Badge
+  const heroBadge = document.getElementById("childHeroLevelBadge");
+  if (heroBadge) heroBadge.textContent = `Lvl ${lvl.level}`;
+
+  // 2. Adventure Hub Level Badge
+  const dashBadge = document.getElementById("childDashboardLevelBadge");
+  if (dashBadge) dashBadge.textContent = `Lvl ${lvl.level}`;
+
+  // 3. Adventure Hub Hero Title
+  const dashTitle = document.getElementById("childDashboardHeroTitle");
+  if (dashTitle) {
+    dashTitle.innerHTML = `<span>${lvl.icon}</span> <span>${lvl.title}</span>`;
+  }
+
+  // 4. Adventure Hub XP Progress Fill
+  const dashXpFill = document.getElementById("childDashboardXpFill");
+  if (dashXpFill) {
+    dashXpFill.style.width = `${lvl.percent}%`;
+  }
+
+  // 5. Adventure Hub XP Remaining Text
+  const dashXpText = document.getElementById("childDashboardXpText");
+  if (dashXpText) {
+    dashXpText.textContent = lvl.level >= 5
+      ? "Maksimal daraja zabt etildi! (Cheksiz XP)"
+      : `Keyingi darajagacha ${lvl.remainingXp.toLocaleString()} XP qoldi`;
+  }
+
+  // 6. Child Wallet Modal Level Pill
+  const walletPill = document.getElementById("childWalletLevelPill");
+  if (walletPill) {
+    walletPill.textContent = `${lvl.icon} ${lvl.level}-Daraja (${lvl.title})`;
+  }
+}
+
 function applyChildUI(user) {
   currentRole = "child";
   document.body.classList.remove("role-parent");
@@ -902,9 +1004,11 @@ function applyChildUI(user) {
   const moneyStr = (user.virtual_money_som || 0).toLocaleString();
   const coinsStr = (user.virtual_balance || 0).toLocaleString();
 
+  const youngHeroFallback = dict.young_hero || "Yosh Qahramon";
+
   // Child Hero Bar Updates
   const heroName = document.getElementById("childHeroName");
-  if (heroName) heroName.textContent = user.full_name || "Azizbek Qahramon";
+  if (heroName) heroName.textContent = user.full_name || youngHeroFallback;
 
   const heroMoneyText = document.getElementById("childHeroMoneyText");
   if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} so'm`;
@@ -917,7 +1021,13 @@ function applyChildUI(user) {
 
   // Child Adventure Dashboard Card updates
   const dashHeroName = document.getElementById("childDashboardHeroName");
-  if (dashHeroName) dashHeroName.textContent = user.full_name || "Azizbek Qahramon";
+  if (dashHeroName) dashHeroName.textContent = user.full_name || youngHeroFallback;
+
+  // Dynamically compute and display gamified level and XP
+  const completedCount = (tasksList && tasksList.length)
+    ? tasksList.filter(t => t.status === "completed" || t.status === "approved").length
+    : 0;
+  updateChildLevelAndXP(user.virtual_balance || 0, completedCount);
 
   const portalMoney = document.getElementById("childPortalMoneyText");
   if (portalMoney) portalMoney.textContent = `${moneyStr} so'm`;
@@ -1031,6 +1141,10 @@ function logoutSession() {
       appWebSocket = null;
     }
     clearInterval(childNotificationPollTimer);
+    if (window._tgLocationPollInterval) {
+      clearInterval(window._tgLocationPollInterval);
+      window._tgLocationPollInterval = null;
+    }
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = "";
     showAuthGateModal();
@@ -3087,6 +3201,12 @@ function renderDemoTasks() {
 
 function renderTasksList() {
   renderChildDashboardQuests();
+  if (currentRole === "child") {
+    const doneCount = (tasksList && tasksList.length)
+      ? tasksList.filter(t => t.status === "completed" || t.status === "approved").length
+      : 0;
+    updateChildLevelAndXP(childBalanceCoins || 0, doneCount);
+  }
   const container = document.getElementById("tasksListContainer");
   if (!container) return;
 
@@ -4403,8 +4523,78 @@ function initChildPermissionsAndTracking(childId) {
       if (window.lucide) lucide.createIcons();
     }
   } else if (granted === "true") {
-    // Automatically start live GPS telemetry tracking silently
-    startChildLiveTracking(childId);
+    // Automatically attempt silent background tracking without any browser prompt!
+    trySilentBackgroundLocationTracking(childId);
+  }
+}
+
+function trySilentBackgroundLocationTracking(childId) {
+  if (!childId || isDemoMode) return;
+
+  // 1. Try Telegram native LocationManager (remembers permanently in Telegram with 0 browser prompts!)
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.LocationManager) {
+    try {
+      tg.LocationManager.init(() => {
+        if (tg.LocationManager.isAccessGranted) {
+          fetchTelegramLocationSilently(childId);
+          if (!window._tgLocationPollInterval) {
+            window._tgLocationPollInterval = setInterval(() => {
+              if (currentRole === "child" && currentChildId && tg.LocationManager.isAccessGranted) {
+                fetchTelegramLocationSilently(currentChildId);
+              }
+            }, 25000);
+          }
+        }
+      });
+      return;
+    } catch (e) {
+      console.warn("Telegram LocationManager init note:", e);
+    }
+  }
+
+  // 2. In browser: Check if origin permission is already granted permanently by the browser
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: "geolocation" }).then((status) => {
+      if (status.state === "granted") {
+        // Permission was already granted by browser origin; safe to watchPosition with NO popup!
+        startChildLiveTracking(childId);
+      } else {
+        // State is 'prompt' or 'denied':
+        // DO NOT call watchPosition on page load! Calling it triggers the repeated permission prompt!
+        console.log("Geolocation permission state is:", status.state, "- skipping automatic watchPosition on startup to prevent popups.");
+      }
+    }).catch(() => {});
+  }
+}
+
+function fetchTelegramLocationSilently(childId) {
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.LocationManager && tg.LocationManager.isAccessGranted) {
+    try {
+      tg.LocationManager.getLocation(async (loc) => {
+        if (loc && loc.latitude && loc.longitude) {
+          cachedDeviceLocation = {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy || 15
+          };
+          lastLocationFetchTime = Date.now();
+          renderChildMarker(loc.latitude, loc.longitude, "Men", false, null);
+          const battery = await getDeviceBattery();
+          sendChildLiveTelemetry(childId, {
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy || 15,
+            battery_level: battery,
+            is_charging: false,
+            speed_kmh: 0,
+            sound_mode: "normal",
+            is_sos_active: false
+          });
+        }
+      });
+    } catch (e) {}
   }
 }
 

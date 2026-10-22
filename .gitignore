@@ -21,3 +21,6 @@ ENV/
 *.swo
 Thumbs.db
 Desktop.ini
+
+# Temporary scratch scripts
+scratch/
