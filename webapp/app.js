@@ -5,10 +5,16 @@ if (tg) {
   try {
     tg.ready();
     tg.expand();
+    if (typeof tg.disableClosingConfirmation === "function") {
+      tg.disableClosingConfirmation();
+    }
     if (typeof tg.disableVerticalSwipes === "function") {
       tg.disableVerticalSwipes();
     }
-    // Closing confirmation removed to allow smooth, instant exit back to Telegram
+    // Ensure no closing confirmation prompt ever warns about unsaved changes
+    if (typeof tg.disableClosingConfirmation === "function") {
+      tg.disableClosingConfirmation();
+    }
     if (tg.setHeaderColor) tg.setHeaderColor("#090d16");
     if (tg.setBackgroundColor) tg.setBackgroundColor("#090d16");
     if (typeof tg.onEvent === "function") {
@@ -5164,10 +5170,38 @@ function shareParentInviteToTelegram() {
 // =========================================================
 
 function setupTelegramBackButton() {
-  if (!tg || !tg.BackButton) return;
+  const tgApp = window.Telegram?.WebApp;
+  if (tgApp) {
+    try {
+      if (typeof tgApp.disableClosingConfirmation === "function") {
+        tgApp.disableClosingConfirmation();
+      }
+      if (tgApp.BackButton) {
+        tgApp.BackButton.onClick(() => {
+          handleTelegramBackPress();
+        });
+        tgApp.BackButton.show();
+      }
+    } catch (e) {
+      console.warn("setupTelegramBackButton note:", e);
+    }
+  }
+
+  // Intercept beforeunload so browser never warns about unsaved changes
   try {
-    tg.BackButton.onClick(() => {
+    window.onbeforeunload = null;
+    window.addEventListener("beforeunload", (e) => {
+      delete e["returnValue"];
+    });
+  } catch (e) {}
+
+  // Android hardware back button & swipe gestures
+  try {
+    window.history.pushState({ app: "smart_tracker_root" }, "");
+    window.addEventListener("popstate", () => {
       handleTelegramBackPress();
+      // Restore dummy state so next back press also triggers popstate
+      window.history.pushState({ app: "smart_tracker_root" }, "");
     });
   } catch (e) {}
 }
@@ -5175,6 +5209,7 @@ function setupTelegramBackButton() {
 function handleTelegramBackPress() {
   haptic("light");
   const modalPriority = [
+    { id: "modalCallParent", close: closeCallParentModal },
     { id: "modal-walk-safe", close: closeWalkSafeModal },
     { id: "modal-walk-safe-checkin", close: closeWalkSafeCheckInModal },
     { id: "modal-edit-wishlist", close: closeEditWishlistModal },
@@ -5226,55 +5261,31 @@ function handleTelegramBackPress() {
 
 function closeWebApp() {
   haptic("light");
-  try {
-    if (window.Telegram?.WebApp?.close) {
-      window.Telegram.WebApp.close();
-      return;
-    }
-  } catch (e) {}
+  const tgApp = window.Telegram?.WebApp;
+  if (tgApp) {
+    try {
+      if (typeof tgApp.disableClosingConfirmation === "function") {
+        tgApp.disableClosingConfirmation();
+      }
+    } catch (e) {}
+    try {
+      if (typeof tgApp.close === "function") {
+        tgApp.close();
+        return;
+      }
+    } catch (e) {}
+  }
   try {
     window.close();
   } catch (e) {}
 }
 
 function updateTelegramBackButton() {
-  if (!tg || !tg.BackButton) return;
+  const tgApp = window.Telegram?.WebApp;
+  if (!tgApp || !tgApp.BackButton) return;
   try {
-    const modalIds = [
-      "modal-walk-safe",
-      "modal-walk-safe-checkin",
-      "modal-edit-wishlist",
-      "modal-daily-report",
-      "modal-zones",
-      "modal-history",
-      "modal-tasks",
-      "modal-wallet",
-      "modal-settings",
-      "zonePickerBottomDock",
-      "modal-add-task",
-      "modal-task-schedule",
-      "modal-task-proof",
-      "modal-coin-rate",
-      "deleteChildModal",
-      "childOnboardingModal",
-      "childInviteParentModal",
-      "parentInviteSpouseModal",
-      "modal-sos-active"
-    ];
-    const hasOpenModal = modalIds.some(id => {
-      const el = document.getElementById(id);
-      return el && !el.classList.contains("hidden");
-    });
-
-    const activeTab = document.querySelector(".nav-tab.active");
-    const isNonMapTab = activeTab && activeTab.id !== "tabBtn-map";
-    const childMapOpen = !document.getElementById("btnChildBackFromMap")?.classList.contains("hidden");
-
-    if (hasOpenModal || isNonMapTab || childMapOpen) {
-      tg.BackButton.show();
-    } else {
-      tg.BackButton.hide();
-    }
+    // Keep BackButton ALWAYS visible so the user can ALWAYS navigate back or return to Telegram!
+    tgApp.BackButton.show();
   } catch (e) {}
 }
 
