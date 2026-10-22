@@ -710,11 +710,34 @@ async def on_kerakli_joy_location_fallback(message: Message):
 @router.callback_query(KerakliJoyAddState.waiting_for_radius, F.data.startswith("radius:"))
 async def on_kerakli_joy_radius_selected(callback: CallbackQuery, state: FSMContext):
     radius = float(callback.data.split(":")[1])
+    await _save_custom_geofence(callback.message, state, callback.from_user.id, radius, is_callback=True)
+    await callback.answer("Saqlandi!")
+
+
+@router.message(KerakliJoyAddState.waiting_for_radius, F.text)
+async def on_kerakli_joy_custom_radius_entered(message: Message, state: FSMContext):
+    """Parent types custom radius distance in meters (e.g. 150 or 75m)."""
+    raw_text = message.text.strip().lower().replace("metr", "").replace("m", "").replace(" ", "")
+    try:
+        radius = float(raw_text)
+        if radius < 30 or radius > 5000:
+            await message.answer("⚠️ Masofa radiusi kamida 30 metr va ko'pi bilan 5,000 metr (5 km) bo'lishi kerak. Iltimos, qayta kiriting:")
+            return
+        await _save_custom_geofence(message, state, message.from_user.id, radius, is_callback=False)
+    except ValueError:
+        await message.answer(
+            "⚠️ Iltimos, masofani son ko'rinishida kiriting (masalan: `150`) yoki quyidagi tugmalardan birini tanlang:",
+            reply_markup=get_radius_selection_keyboard(),
+            parse_mode="Markdown"
+        )
+
+
+async def _save_custom_geofence(event_target: Message, state: FSMContext, parent_id: int, radius: float, is_callback: bool = False):
     data = await state.get_data()
-    name = data["name"]
-    lat = data["lat"]
-    lon = data["lon"]
-    parent_id = callback.from_user.id
+    name = data.get("name", "Xavfsiz joy")
+    lat = data.get("lat")
+    lon = data.get("lon")
+    target_child_id = data.get("target_child_id")
 
     async with AsyncSessionLocal() as session:
         await crud.create_geofence(
@@ -723,20 +746,26 @@ async def on_kerakli_joy_radius_selected(callback: CallbackQuery, state: FSMCont
             name=name,
             latitude=lat,
             longitude=lon,
-            radius_meters=radius
+            radius_meters=radius,
+            child_id=target_child_id
         )
         await session.commit()
 
     await state.clear()
-    await callback.message.edit_text(
+    success_text = (
         f"✅ **Yangi kerakli joy muvaffaqiyatli saqlandi!**\n\n"
         f"📍 Nomi: **{name}**\n"
         f"📏 Radiusi: **{int(radius)} metr**\n"
-        f"📌 Koordinatalar: `{lat:.5f}, {lon:.5f}`\n\n"
-        f"Farzandingiz bu joyga yetib kelganda yoki chiqqanda sizga avtomatik bildirishnoma boradi.",
-        parse_mode="Markdown"
+        f"🗺 Koordinatalar: `{lat:.5f}, {lon:.5f}`\n\n"
+        f"Farzandingiz bu joyga kirganda yoki chiqqanda sizga avtomatik bildirishnoma boradi."
     )
-    await callback.answer("Saqlandi!")
+    if is_callback:
+        try:
+            await event_target.edit_text(success_text, parse_mode="Markdown")
+        except Exception:
+            await event_target.answer(success_text, parse_mode="Markdown")
+    else:
+        await event_target.answer(success_text, parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("delete_fence:"))

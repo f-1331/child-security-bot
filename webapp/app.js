@@ -137,6 +137,8 @@ let childMarker = null;
 let geofenceLayers = [];
 let routePolyline = null;
 let previewCircle = null;
+let zonePickerMarker = null;
+let isZonePickerActive = false;
 let replayMarker = null;
 let isRouteVisible = true;
 let isReplaying = false;
@@ -1524,11 +1526,10 @@ function initMap() {
     maxZoom: 19,
   });
 
-  // Map click listener to set position for new safe zone
+  // Map click listener: when Zone Picker is active, move pin & circle directly to tapped location!
   map.on("click", (e) => {
-    const modal = document.getElementById("modal-add-zone");
-    if (!modal.classList.contains("hidden")) {
-      updatePreviewCircle(e.latlng.lat, e.latlng.lng);
+    if (isZonePickerActive) {
+      setZonePickerLocation(e.latlng.lat, e.latlng.lng);
     }
   });
 }
@@ -2587,57 +2588,139 @@ function closeModal(tabName) {
   updateTelegramBackButton();
 }
 
-// Add Kerakli Joy Modal & Presets
+// Interactive Map Zone Picker Engine (Direct Map Selection & Live Visual Radius)
 function openAddZoneModal() {
   setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
-  const modal = document.getElementById("modal-add-zone");
-  modal.classList.remove("hidden");
 
+  // 1. Close list modal if open
+  const listModal = document.getElementById("modal-zones");
+  if (listModal) listModal.classList.add("hidden");
+
+  // 2. Ensure map tab is active and visible
+  switchTab("map");
+  isZonePickerActive = true;
+
+  // 3. Hide standard HUD controls so map is clean and clear
   const floatControls = document.getElementById("floatingMapControls");
   if (floatControls) floatControls.classList.add("hidden");
-  const locCard = document.getElementById("locationCard");
-  if (locCard) locCard.classList.add("hidden");
+  const bottomContainer = document.getElementById("parentBottomContainer");
+  if (bottomContainer) bottomContainer.classList.add("hidden");
+  document.getElementById("locationCard")?.classList.add("hidden");
   document.getElementById("parentMonitoringBar")?.classList.add("hidden");
 
-  const center = map.getCenter();
-  const radius = parseFloat(document.getElementById("inputZoneRadius").value);
-  updatePreviewCircle(center.lat, center.lng, radius);
+  // 4. Show Zone Picker Top Bar & Bottom Dock
+  const topBar = document.getElementById("zonePickerTopBar");
+  const bottomDock = document.getElementById("zonePickerBottomDock");
+  if (topBar) topBar.classList.remove("hidden");
+  if (bottomDock) bottomDock.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+
+  // 5. Determine initial position: use child location if available, otherwise map center
+  let initLat = DEFAULT_LAT;
+  let initLng = DEFAULT_LON;
+  if (childMarker) {
+    const pos = childMarker.getLatLng();
+    initLat = pos.lat;
+    initLng = pos.lng;
+  } else if (map) {
+    const center = map.getCenter();
+    initLat = center.lat;
+    initLng = center.lng;
+  }
+
+  const radiusInput = document.getElementById("inputZoneRadius");
+  const initRadius = radiusInput ? parseFloat(radiusInput.value) || 200 : 200;
+
+  // Center map on initial point and place interactive pin & circle
+  if (map) {
+    map.setView([initLat, initLng], Math.max(map.getZoom(), 15), { animate: true });
+    setTimeout(() => map.invalidateSize(), 150);
+  }
+
+  setZonePickerLocation(initLat, initLng, initRadius);
+
+  const nameInput = document.getElementById("inputZoneName");
+  if (nameInput) {
+    nameInput.value = "";
+    setTimeout(() => nameInput.focus(), 300);
+  }
 }
 
 function closeAddZoneModal() {
   setTimeout(updateTelegramBackButton, 50);
   haptic("light");
-  document.getElementById("modal-add-zone").classList.add("hidden");
-  if (previewCircle) {
+  isZonePickerActive = false;
+
+  // 1. Hide Zone Picker HUD
+  const topBar = document.getElementById("zonePickerTopBar");
+  const bottomDock = document.getElementById("zonePickerBottomDock");
+  if (topBar) topBar.classList.add("hidden");
+  if (bottomDock) bottomDock.classList.add("hidden");
+
+  // 2. Remove picker circle & marker from map
+  if (previewCircle && map) {
     map.removeLayer(previewCircle);
     previewCircle = null;
   }
+  if (zonePickerMarker && map) {
+    map.removeLayer(zonePickerMarker);
+    zonePickerMarker = null;
+  }
+
+  // 3. Restore normal HUD cards
   const floatControls = document.getElementById("floatingMapControls");
   if (floatControls) floatControls.classList.remove("hidden");
-  const locCard = document.getElementById("locationCard");
-  if (locCard) locCard.classList.remove("hidden");
+  const bottomContainer = document.getElementById("parentBottomContainer");
+  if (bottomContainer) bottomContainer.classList.remove("hidden");
+  document.getElementById("locationCard")?.classList.remove("hidden");
   document.getElementById("parentMonitoringBar")?.classList.remove("hidden");
 }
 
-function applyZonePreset(namePrefix, radius) {
-  haptic("light");
-  document.getElementById("inputZoneName").value = namePrefix;
-  document.getElementById("inputZoneRadius").value = radius;
-  updateRadiusPreview(radius);
-}
-
-function updateRadiusPreview(val) {
-  document.getElementById("zoneRadiusDisplay").textContent = `${val} m`;
-  if (previewCircle) {
-    previewCircle.setRadius(parseFloat(val));
-  }
-}
-
-function updatePreviewCircle(lat, lon, radius = null) {
+function setZonePickerLocation(lat, lon, radius = null) {
+  if (!map) return;
   if (!radius) {
-    radius = parseFloat(document.getElementById("inputZoneRadius").value);
+    const radiusInput = document.getElementById("inputZoneRadius");
+    radius = radiusInput ? parseFloat(radiusInput.value) || 200 : 200;
   }
+
+  // 1. Update or create interactive draggable Leaflet marker
+  if (zonePickerMarker) {
+    zonePickerMarker.setLatLng([lat, lon]);
+  } else {
+    const pinIcon = L.divIcon({
+      className: "custom-zone-picker-pin",
+      html: `
+        <div style="transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; pointer-events: auto;">
+          <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 6px 12px; border-radius: 12px; font-weight: 900; font-size: 11px; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6); border: 2px solid white; display: flex; align-items: center; gap: 4px; white-space: nowrap;">
+            <span>📍 Xavfsiz Makon</span>
+          </div>
+          <div style="width: 4px; height: 14px; background: #10b981; border-radius: 2px;"></div>
+          <div style="width: 12px; height: 12px; border-radius: 50%; background: #10b981; border: 2px solid white; box-shadow: 0 0 10px #10b981;"></div>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+
+    zonePickerMarker = L.marker([lat, lon], {
+      icon: pinIcon,
+      draggable: true,
+      autoPan: true
+    }).addTo(map);
+
+    zonePickerMarker.on("drag", (e) => {
+      const pos = e.target.getLatLng();
+      if (previewCircle) previewCircle.setLatLng(pos);
+    });
+
+    zonePickerMarker.on("dragend", (e) => {
+      const pos = e.target.getLatLng();
+      setZonePickerLocation(pos.lat, pos.lng);
+    });
+  }
+
+  // 2. Update or create preview circle on map
   if (previewCircle) {
     previewCircle.setLatLng([lat, lon]);
     previewCircle.setRadius(radius);
@@ -2645,30 +2728,137 @@ function updatePreviewCircle(lat, lon, radius = null) {
     previewCircle = L.circle([lat, lon], {
       color: "#10b981",
       fillColor: "#10b981",
-      fillOpacity: 0.25,
-      weight: 2,
-      dashArray: "5, 5",
+      fillOpacity: 0.22,
+      weight: 2.5,
+      dashArray: "6, 6",
       radius: radius,
     }).addTo(map);
   }
+
+  // 3. Reverse geocode address to show parent what street/building they picked
+  reverseGeocodePickerLocation(lat, lon);
 }
 
-// Submit new Kerakli joy
-async function submitNewZone() {
-  const nameInput = document.getElementById("inputZoneName");
-  const name = nameInput.value.trim();
-  if (!name) {
-    showToast("Iltimos, joy nomini kiriting!");
+function updateRadiusPreview(val) {
+  const radiusNum = parseFloat(val) || 200;
+  const display = document.getElementById("zoneRadiusDisplay");
+  if (display) {
+    display.textContent = radiusNum >= 1000 ? `${(radiusNum / 1000).toFixed(1)} km (${Math.round(radiusNum)} m)` : `${Math.round(radiusNum)} metr`;
+  }
+  if (previewCircle) {
+    previewCircle.setRadius(radiusNum);
+  }
+}
+
+function setZoneRadiusVal(val) {
+  haptic("light");
+  const input = document.getElementById("inputZoneRadius");
+  if (input) {
+    input.value = val;
+    updateRadiusPreview(val);
+  }
+}
+
+function setZoneNameTag(name) {
+  haptic("light");
+  const input = document.getElementById("inputZoneName");
+  if (input) {
+    input.value = name;
+  }
+}
+
+function centerPickerOnChild() {
+  haptic("medium");
+  if (childMarker) {
+    const pos = childMarker.getLatLng();
+    map.flyTo(pos, 16, { duration: 1.0 });
+    setZonePickerLocation(pos.lat, pos.lng);
+    showToast("📍 Markaz farzandingiz joriy joylashuviga ko'chirildi");
+  } else {
+    showToast("Farzand joylashuvi hali aniqlanmagan");
+  }
+}
+
+async function reverseGeocodePickerLocation(lat, lon) {
+  const addrText = document.getElementById("zonePickerAddressText");
+  if (!addrText) return;
+
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (addressCache.has(key)) {
+    addrText.textContent = addressCache.get(key);
     return;
   }
 
-  const radius = parseFloat(document.getElementById("inputZoneRadius").value);
-  const center = previewCircle ? previewCircle.getLatLng() : map.getCenter();
+  addrText.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)} (Manzil aniqlanmoqda...)`;
+
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
+      headers: { "Accept-Language": "uz,ru,en" }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.display_name) {
+        const parts = data.display_name.split(",");
+        const clean = parts.slice(0, 3).join(",").trim();
+        addressCache.set(key, clean);
+        addrText.textContent = clean;
+        return;
+      }
+    }
+  } catch (e) {}
+
+  addrText.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+// Submit newly customized Kerakli Joy to server
+async function submitNewZone() {
+  const nameInput = document.getElementById("inputZoneName");
+  const name = nameInput ? nameInput.value.trim() : "";
+  if (!name) {
+    haptic("warning");
+    showToast("⚠️ Iltimos, joy nomini kiriting (masalan: Uyimiz, Maktab)!");
+    if (nameInput) nameInput.focus();
+    return;
+  }
+
+  const radiusInput = document.getElementById("inputZoneRadius");
+  const radius = radiusInput ? parseFloat(radiusInput.value) || 200 : 200;
+
+  let centerLat = DEFAULT_LAT;
+  let centerLng = DEFAULT_LON;
+  if (zonePickerMarker) {
+    const pos = zonePickerMarker.getLatLng();
+    centerLat = pos.lat;
+    centerLng = pos.lng;
+  } else if (previewCircle) {
+    const pos = previewCircle.getLatLng();
+    centerLat = pos.lat;
+    centerLng = pos.lng;
+  } else if (map) {
+    const c = map.getCenter();
+    centerLat = c.lat;
+    centerLng = c.lng;
+  }
+
+  const btn = document.getElementById("btnSubmitZone");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">Saqlanmoqda...</span>`;
+  }
 
   if (isDemoMode) {
     haptic("success");
-    showToast("✅ Kerakli joy saqlandi!");
-    nameInput.value = "";
+    playSuccessChime();
+    showToast(`✅ Kerakli joy saqlandi: ${name} (${Math.round(radius)}m)`);
+    geofencesList.push({
+      id: Date.now(),
+      name: name,
+      latitude: centerLat,
+      longitude: centerLng,
+      radius_meters: radius,
+      is_active: true
+    });
+    renderFencesToMapAndList(geofencesList);
     closeAddZoneModal();
     return;
   }
@@ -2679,26 +2869,36 @@ async function submitNewZone() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         parent_id: parseInt(parentId),
-        child_id: currentChildId ? parseInt(currentChildId) : null,
         name: name,
-        latitude: center.lat,
-        longitude: center.lng,
+        latitude: centerLat,
+        longitude: centerLng,
         radius_meters: radius,
+        child_id: currentChildId ? parseInt(currentChildId) : null,
       }),
     });
 
     const data = await res.json();
-    if (data.status === "success") {
+    if (res.ok && data.status === "success") {
       haptic("success");
-      showToast("✅ Kerakli joy saqlandi!");
-      nameInput.value = "";
+      playSuccessChime();
+      showToast(`✅ '${name}' xavfsiz makon sifatida saqlandi (${Math.round(radius)}m)!`);
       closeAddZoneModal();
       if (currentChildId) {
         await loadGeofences(currentChildId);
       }
+    } else {
+      throw new Error(data.detail || "Saqlashda xatolik yuz berdi");
     }
   } catch (err) {
-    showToast("Server bilan aloqa uzildi");
+    console.error("Create geofence error:", err);
+    haptic("warning");
+    showToast("❌ " + (err.message || "Server bilan aloqa uzildi"));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i><span>Ushbu joyni saqlash</span>`;
+      if (window.lucide) lucide.createIcons();
+    }
   }
 }
 
@@ -4797,7 +4997,7 @@ function handleTelegramBackPress() {
     { id: "modal-task-proof", close: closeProofModal },
     { id: "modal-task-schedule", close: closeScheduleModal },
     { id: "modal-add-task", close: closeAddTaskModal },
-    { id: "modal-add-zone", close: closeAddZoneModal },
+    { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "modal-settings", close: closeSettingsModal },
     { id: "modal-wallet", close: () => closeModal("wallet") },
@@ -4860,7 +5060,7 @@ function updateTelegramBackButton() {
       "modal-tasks",
       "modal-wallet",
       "modal-settings",
-      "modal-add-zone",
+      "zonePickerBottomDock",
       "modal-add-task",
       "modal-task-schedule",
       "modal-task-proof",
@@ -4899,7 +5099,7 @@ function initBackdropDismissListeners() {
     { id: "modal-tasks", close: () => closeModal("tasks") },
     { id: "modal-wallet", close: () => closeModal("wallet") },
     { id: "modal-settings", close: closeSettingsModal },
-    { id: "modal-add-zone", close: closeAddZoneModal },
+    { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-add-task", close: closeAddTaskModal },
     { id: "modal-task-schedule", close: closeScheduleModal },
     { id: "modal-task-proof", close: closeProofModal },

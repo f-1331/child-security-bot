@@ -526,18 +526,21 @@ def get_kerakli_joylar_menu_keyboard(fences: list) -> InlineKeyboardMarkup:
 
 
 def get_radius_selection_keyboard() -> InlineKeyboardMarkup:
-    """Radius selection for Kerakli joy creation."""
+    """Radius selection for Kerakli joy creation with flexible distance presets."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text="50 metr", callback_data="radius:50"),
                 InlineKeyboardButton(text="100 metr", callback_data="radius:100"),
                 InlineKeyboardButton(text="200 metr (Tavsiya)", callback_data="radius:200"),
             ],
             [
+                InlineKeyboardButton(text="300 metr", callback_data="radius:300"),
                 InlineKeyboardButton(text="500 metr", callback_data="radius:500"),
                 InlineKeyboardButton(text="1000 metr (1 km)", callback_data="radius:1000"),
             ],
             [
+                InlineKeyboardButton(text="2000 metr (2 km)", callback_data="radius:2000"),
                 InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")
             ]
         ]

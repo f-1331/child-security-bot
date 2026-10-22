@@ -80,7 +80,7 @@ class CreateGeofenceRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
-    radius_meters: float = Field(200.0, ge=50.0, le=5000.0)
+    radius_meters: float = Field(200.0, ge=30.0, le=5000.0)
     child_id: Optional[int] = None
 
 
