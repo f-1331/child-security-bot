@@ -840,18 +840,28 @@ async def complete_task_endpoint(
                 if disk_file.exists():
                     local_path = FSInputFile(str(disk_file))
 
-            target_photo = local_path if local_path else payload.proof_photo_url
+            target_media = local_path if local_path else payload.proof_photo_url
+            is_proof_video = any(payload.proof_photo_url.lower().endswith(ext) for ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp"])
             try:
-                await bot.send_photo(
-                    chat_id=task.parent_id,
-                    photo=target_photo,
-                    caption=caption_html,
-                    reply_markup=markup,
-                    parse_mode="HTML"
-                )
+                if is_proof_video:
+                    await bot.send_video(
+                        chat_id=task.parent_id,
+                        video=target_media,
+                        caption=caption_html,
+                        reply_markup=markup,
+                        parse_mode="HTML"
+                    )
+                else:
+                    await bot.send_photo(
+                        chat_id=task.parent_id,
+                        photo=target_media,
+                        caption=caption_html,
+                        reply_markup=markup,
+                        parse_mode="HTML"
+                    )
             except Exception:
                 raw_cap = (
-                    f"🔔 Topshiriq bajarildi! Farzandingiz hisobot rasmini yubordi:\n\n"
+                    f"🔔 Topshiriq bajarildi! Farzandingiz hisobot faylini yubordi:\n\n"
                     f"👤 Farzand: {child_name}\n"
                     f"📌 Topshiriq: {task.title}\n"
                     f"💰 Mukofot: {task.reward_coins:,} tanga\n\n"
@@ -859,7 +869,7 @@ async def complete_task_endpoint(
                 )
                 await bot.send_message(
                     chat_id=task.parent_id,
-                    text=f"{raw_cap}\n\n📷 Rasm hisoboti: {payload.proof_photo_url}",
+                    text=f"{raw_cap}\n\n📎 Hisobot fayli: {payload.proof_photo_url}",
                     reply_markup=markup
                 )
         except Exception as e:

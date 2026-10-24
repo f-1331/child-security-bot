@@ -3653,35 +3653,46 @@ function handleTaskMediaSelected(input) {
   const imgEl = document.getElementById("taskPreviewImg");
   const videoEl = document.getElementById("taskPreviewVideo");
   const label = document.getElementById("taskMediaLabel");
+  const badge = document.getElementById("taskMediaStatusBadge");
+  const icon = document.getElementById("taskMediaStatusIcon");
 
-  label.textContent = selectedTaskMediaFile.name;
-  previewBox.classList.remove("hidden");
+  const isVideo = selectedTaskMediaFile.type.startsWith("video/");
+  if (label) label.textContent = selectedTaskMediaFile.name;
+  if (icon) icon.textContent = isVideo ? "🎥" : "📸";
+  if (badge) badge.classList.remove("hidden");
+  if (previewBox) previewBox.classList.remove("hidden");
 
   const url = URL.createObjectURL(selectedTaskMediaFile);
-  if (selectedTaskMediaFile.type.startsWith("video/")) {
-    imgEl.classList.add("hidden");
-    videoEl.classList.remove("hidden");
-    videoEl.src = url;
+  if (isVideo) {
+    if (imgEl) imgEl.classList.add("hidden");
+    if (videoEl) {
+      videoEl.classList.remove("hidden");
+      videoEl.src = url;
+    }
   } else {
-    videoEl.classList.add("hidden");
-    imgEl.classList.remove("hidden");
-    imgEl.src = url;
+    if (videoEl) videoEl.classList.add("hidden");
+    if (imgEl) {
+      imgEl.classList.remove("hidden");
+      imgEl.src = url;
+    }
   }
   if (window.lucide) lucide.createIcons();
 }
 
 function clearTaskMedia() {
   selectedTaskMediaFile = null;
-  const input = document.getElementById("taskMediaFileInput");
-  if (input) input.value = "";
+  ["taskCameraPhotoInput", "taskCameraVideoInput", "taskGalleryInput", "taskMediaFileInput"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
   const previewBox = document.getElementById("taskMediaPreview");
   if (previewBox) previewBox.classList.add("hidden");
+  const badge = document.getElementById("taskMediaStatusBadge");
+  if (badge) badge.classList.add("hidden");
   const imgEl = document.getElementById("taskPreviewImg");
   if (imgEl) { imgEl.src = ""; imgEl.classList.add("hidden"); }
   const videoEl = document.getElementById("taskPreviewVideo");
   if (videoEl) { videoEl.src = ""; videoEl.classList.add("hidden"); }
-  const label = document.getElementById("taskMediaLabel");
-  if (label) label.textContent = "Rasm / Video olish yoki tanlash";
 }
 
 async function submitNewTask() {
@@ -3977,8 +3988,24 @@ function closeProofModal() {
   setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   activeProofTaskId = null;
-  selectedProofPhotoFile = null;
+  clearProofMedia();
   document.getElementById("modal-task-proof").classList.add("hidden");
+}
+
+function clearProofMedia() {
+  selectedProofPhotoFile = null;
+  ["proofCameraPhotoInput", "proofCameraVideoInput", "proofGalleryInput", "proofFileInput"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  const prev = document.getElementById("proofPhotoPreviewContainer");
+  if (prev) prev.classList.add("hidden");
+  const img = document.getElementById("proofPreviewImg");
+  if (img) { img.src = ""; img.classList.add("hidden"); }
+  const video = document.getElementById("proofPreviewVideo");
+  if (video) { video.src = ""; video.classList.add("hidden"); }
+  const btn = document.getElementById("btnSubmitProof");
+  if (btn) btn.disabled = true;
 }
 
 function handleProofPhotoSelected(input) {
@@ -3987,12 +4014,29 @@ function handleProofPhotoSelected(input) {
 
   const prev = document.getElementById("proofPhotoPreviewContainer");
   const img = document.getElementById("proofPreviewImg");
+  const video = document.getElementById("proofPreviewVideo");
   const btn = document.getElementById("btnSubmitProof");
 
-  img.src = URL.createObjectURL(selectedProofPhotoFile);
-  prev.classList.remove("hidden");
-  btn.disabled = false;
-  document.getElementById("proofFileLabel").textContent = "📸 Rasm tanlandi";
+  const isVideo = selectedProofPhotoFile.type.startsWith("video/");
+  const url = URL.createObjectURL(selectedProofPhotoFile);
+
+  if (isVideo) {
+    if (img) img.classList.add("hidden");
+    if (video) {
+      video.classList.remove("hidden");
+      video.src = url;
+    }
+  } else {
+    if (video) video.classList.add("hidden");
+    if (img) {
+      img.classList.remove("hidden");
+      img.src = url;
+    }
+  }
+
+  if (prev) prev.classList.remove("hidden");
+  if (btn) btn.disabled = false;
+  if (window.lucide) lucide.createIcons();
 }
 
 async function submitTaskProof() {
