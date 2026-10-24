@@ -90,16 +90,20 @@ async def evaluate_geofences_and_notify(
             await crud.update_geofence_state(session, fence.id, child.id, True)
 
             # Send Telegram notification to all linked parents
-            if bot and parents:
-                for parent in parents:
+            notify_ids = {p.id for p in parents}
+            if fence.parent_id:
+                notify_ids.add(fence.parent_id)
+
+            if bot and notify_ids:
+                for pid in notify_ids:
                     try:
                         await bot.send_message(
-                            chat_id=parent.id,
+                            chat_id=pid,
                             text=message_text,
                             parse_mode="Markdown"
                         )
                     except Exception as e:
-                        print(f"[Geofence Alert Error] Failed to notify parent {parent.id}: {e}")
+                        print(f"[Geofence Alert Error] Failed to notify parent {pid}: {e}")
 
         elif state.is_inside and not is_inside_now:
             # Child EXITED kerakli joy
@@ -120,15 +124,19 @@ async def evaluate_geofences_and_notify(
             await crud.update_geofence_state(session, fence.id, child.id, False)
 
             # Send Telegram notification to all linked parents
-            if bot and parents:
-                for parent in parents:
+            notify_ids = {p.id for p in parents}
+            if fence.parent_id:
+                notify_ids.add(fence.parent_id)
+
+            if bot and notify_ids:
+                for pid in notify_ids:
                     try:
                         await bot.send_message(
-                            chat_id=parent.id,
+                            chat_id=pid,
                             text=message_text,
                             parse_mode="Markdown"
                         )
                     except Exception as e:
-                        print(f"[Geofence Alert Error] Failed to notify parent {parent.id}: {e}")
+                        print(f"[Geofence Alert Error] Failed to notify parent {pid}: {e}")
 
     return events

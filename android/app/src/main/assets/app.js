@@ -2084,6 +2084,12 @@ async function loadGeofences(childId) {
     return;
   }
 
+  const targetId = childId || currentChildId || authenticatedSession?.user?.id;
+  if (!targetId) {
+    renderChildDashboardCastles();
+    return;
+  }
+
   // Clear all previous geofence layers and tooltips from map
   if (geofenceLayers && map) {
     geofenceLayers.forEach((layer) => {
@@ -2094,7 +2100,7 @@ async function loadGeofences(childId) {
   geofencesList = [];
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/geofences`);
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/geofences`);
     const data = await res.json();
     if (data.status !== "success") {
       renderChildDashboardCastles();
@@ -2107,14 +2113,24 @@ async function loadGeofences(childId) {
 
     if (fences.length === 0) {
       if (container) {
-        container.innerHTML = `
-          <div class="text-center py-6 px-4">
-            <p class="text-xs text-slate-400 mb-3">Hozircha kerakli joylar belgilanmagan.</p>
-            <button onclick="openAddZoneModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95">
-              ➕ Kerakli joy qo'shish
-            </button>
-          </div>
-        `;
+        if (currentRole === "child") {
+          container.innerHTML = `
+            <div class="text-center py-6 px-4">
+              <span class="text-2xl mb-2 block">🛡️</span>
+              <p class="text-xs font-bold text-slate-300 mb-1">Xavfsiz makonlar hali belgilanmagan</p>
+              <p class="text-[11px] text-slate-400">Ota-onangiz bot yoki sayt orqali kerakli joylarni qo'shganda bu yerda ko'rinadi.</p>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="text-center py-6 px-4">
+              <p class="text-xs text-slate-400 mb-3">Hozircha kerakli joylar belgilanmagan.</p>
+              <button onclick="openAddZoneModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md transition active:scale-95">
+                ➕ Kerakli joy qo'shish
+              </button>
+            </div>
+          `;
+        }
       }
       const zoneStatusEl = document.getElementById("zoneStatusText");
       if (zoneStatusEl) zoneStatusEl.textContent = "Kerakli joylar belgilanmagan";
@@ -2136,53 +2152,74 @@ function renderFencesToMapAndList(fences) {
   const container = document.getElementById("zonesListContainer");
   const colors = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
 
-  fences.forEach((fence, idx) => {
-    const color = colors[idx % colors.length];
-    const circle = L.circle([fence.latitude, fence.longitude], {
-      color: color,
-      fillColor: color,
-      fillOpacity: 0.16,
-      weight: 2,
-      radius: fence.radius_meters,
-    }).addTo(map);
+  if (map) {
+    if (geofenceLayers && geofenceLayers.length > 0) {
+      geofenceLayers.forEach((layer) => {
+        try { map.removeLayer(layer); } catch (e) {}
+      });
+      geofenceLayers = [];
+    }
 
-    circle.bindTooltip(`📍 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
-      permanent: true,
-      direction: "top",
-      className: "geofence-tooltip",
+    fences.forEach((fence, idx) => {
+      const color = colors[idx % colors.length];
+      const circle = L.circle([fence.latitude, fence.longitude], {
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.16,
+        weight: 2,
+        radius: fence.radius_meters,
+      }).addTo(map);
+
+      circle.bindTooltip(`📍 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
+        permanent: true,
+        direction: "top",
+        className: "geofence-tooltip",
+      });
+
+      geofenceLayers.push(circle);
     });
+  }
 
-    geofenceLayers.push(circle);
-  });
-
-  container.innerHTML = fences
-    .map(
-      (f) => `
-    <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between shadow-sm">
-      <div class="flex items-center gap-2.5">
-        <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-          <i data-lucide="map-pin" class="w-4 h-4"></i>
+  if (container) {
+    const isChild = (currentRole === "child");
+    container.innerHTML = fences
+      .map(
+        (f) => `
+      <div class="bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white">${f.name}</h4>
+            <span class="text-[11px] text-slate-400">Radiusi: ${Math.round(f.radius_meters)} metr</span>
+          </div>
         </div>
-        <div>
-          <h4 class="text-xs font-bold text-white">${f.name}</h4>
-          <span class="text-[11px] text-slate-400">Radiusi: ${Math.round(f.radius_meters)} metr</span>
-        </div>
+        ${
+          isChild
+            ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">🛡️ Xavfsiz</span>`
+            : `<button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>`
+        }
       </div>
-      <button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
-      </button>
-    </div>
-  `
-    )
-    .join("");
+    `
+      )
+      .join("");
+  }
 
   if (window.lucide) lucide.createIcons();
-  document.getElementById("zoneStatusText").textContent = `✅ ${fences.length} ta kerakli joy nazoratda`;
+  const zoneStatusTextEl = document.getElementById("zoneStatusText");
+  if (zoneStatusTextEl) {
+    zoneStatusTextEl.textContent = `✅ ${fences.length} ta kerakli joy nazoratda`;
+  }
 
   // Auto-fit view to show all geofences
-  if (geofenceLayers.length > 0) {
-    const group = new L.featureGroup(geofenceLayers.concat(childMarker ? [childMarker] : []));
-    map.fitBounds(group.getBounds().pad(0.2));
+  if (map && geofenceLayers.length > 0 && currentRole === "parent") {
+    try {
+      const group = new L.featureGroup(geofenceLayers.concat(childMarker ? [childMarker] : []));
+      map.fitBounds(group.getBounds().pad(0.2));
+    } catch (e) {}
   }
 }
 
@@ -2526,6 +2563,21 @@ function switchTab(tabName) {
     if (tabName === "wallet") {
       loadWishlist(currentChildId);
     }
+    if (tabName === "zones") {
+      const activeChild = currentChildId || (authenticatedSession?.user?.id);
+      if (activeChild) {
+        loadGeofences(activeChild);
+      }
+      const addZoneSec = document.getElementById("btnAddZoneSection");
+      const modalTitle = document.getElementById("zonesModalTitle");
+      if (currentRole === "child") {
+        if (addZoneSec) addZoneSec.classList.add("hidden");
+        if (modalTitle) modalTitle.textContent = "Mening Xavfsiz Makonlarim";
+      } else {
+        if (addZoneSec) addZoneSec.classList.remove("hidden");
+        if (modalTitle) modalTitle.textContent = "Kerakli Joylar (Geozonalar)";
+      }
+    }
     if (tabName === "settings") {
       setGlobalTheme(currentTheme, false);
       setGlobalLanguage(currentLanguage, false);
@@ -2678,23 +2730,12 @@ function renderChildDashboardCastles() {
   }
 
   const places = (geofencesList && geofencesList.length > 0)
-    ? geofencesList.slice(0, 4)
+    ? geofencesList
     : (isDemoMode ? [
         { name: "Uyimiz (Asosiy Baza 🏡)", radius_meters: 200 },
         { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
         { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
       ] : []);
-
-  if (!isDemoMode && (!geofencesList || geofencesList.length === 0)) {
-    container.innerHTML = `
-      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
-        <span class="text-lg">🛡️</span>
-        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
-        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
-      </div>
-    `;
-    return;
-  }
 
   if (places.length === 0) {
     container.innerHTML = `
@@ -2709,15 +2750,26 @@ function renderChildDashboardCastles() {
 
   const placeEmojis = ["🏡", "🏫", "📚", "🥋", "📍", "🛡️"];
 
-  container.innerHTML = places.map((c, i) => `
-    <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
-      <span class="text-xl shrink-0">${placeEmojis[i % placeEmojis.length]}</span>
-      <div class="min-w-0">
-        <p class="font-bold text-white text-xs truncate">${c.name}</p>
-        <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
+  container.innerHTML = places.map((c, i) => {
+    let icon = placeEmojis[i % placeEmojis.length];
+    const n = (c.name || "").toLowerCase();
+    if (n.includes("uy") || n.includes("dom") || n.includes("home")) icon = "🏡";
+    else if (n.includes("maktab") || n.includes("shkola") || n.includes("school")) icon = "🏫";
+    else if (n.includes("kurs") || n.includes("o'quv") || n.includes("dars")) icon = "📚";
+    else if (n.includes("bog'cha") || n.includes("sadik")) icon = "🧸";
+    else if (n.includes("sport") || n.includes("zal")) icon = "🥋";
+    else if (n.includes("bobo") || n.includes("buvi") || n.includes("ota")) icon = "👵";
+
+    return `
+      <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
+        <span class="text-xl shrink-0">${icon}</span>
+        <div class="min-w-0">
+          <p class="font-bold text-white text-xs truncate">${c.name}</p>
+          <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
+        </div>
       </div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 }
 
 function closeModal(tabName) {
@@ -3006,11 +3058,12 @@ async function submitNewZone() {
   }
 
   try {
+    const effectiveParentId = parentId || authenticatedSession?.user?.id;
     const res = await fetch("/api/v1/webapp/geofence", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        parent_id: parseInt(parentId),
+        parent_id: parseInt(effectiveParentId),
         name: name,
         latitude: centerLat,
         longitude: centerLng,
@@ -3055,7 +3108,8 @@ async function deleteGeofence(fenceId) {
   }
 
   try {
-    const res = await fetch(`/api/v1/webapp/geofence/${fenceId}?parent_id=${parentId}`, {
+    const effectiveParentId = parentId || authenticatedSession?.user?.id;
+    const res = await fetch(`/api/v1/webapp/geofence/${fenceId}?parent_id=${effectiveParentId}`, {
       method: "DELETE",
     });
     const data = await res.json();

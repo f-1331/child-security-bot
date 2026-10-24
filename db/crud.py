@@ -3,7 +3,7 @@ import random
 import string
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple
-from sqlalchemy import desc, select, and_, delete
+from sqlalchemy import desc, select, and_, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import (
     User,
@@ -440,27 +440,94 @@ async def get_geofences_for_parent(session: AsyncSession, parent_id: int) -> Lis
     """Get all geofences created by a parent."""
     result = await session.execute(
         select(Geofence)
-        .where(Geofence.parent_id == parent_id, Geofence.is_active == True)
+        .where(
+            Geofence.parent_id == parent_id,
+            or_(Geofence.is_active.is_(True), Geofence.is_active.is_(None))
+        )
         .order_by(Geofence.created_at.desc())
     )
     return list(result.scalars().all())
 
 
 async def get_active_geofences_for_child(session: AsyncSession, child_id: int) -> List[Geofence]:
-    """Get all safe zones applicable to a child (from their parents)."""
+    """Get all safe zones applicable to a child (from their parents and direct assignments)."""
+    parent_ids = set()
+
+    # 1. Linked parents via ParentChildLink
     parents = await get_parents_for_child(session, child_id)
-    if not parents:
-        return []
-    parent_ids = [p.id for p in parents]
+    for p in parents:
+        parent_ids.add(p.id)
+
+    # 2. Check ParentChildLink where child_id matches
+    link_res = await session.execute(
+        select(ParentChildLink.parent_id).where(ParentChildLink.child_id == child_id)
+    )
+    for pid in link_res.scalars().all():
+        if pid:
+            parent_ids.add(pid)
+
+    # 3. Fallback: Include child_id itself (handles self-testing or role switch in bot/webapp)
+    parent_ids.add(child_id)
+
+    conditions = [
+        Geofence.child_id == child_id
+    ]
+    if parent_ids:
+        conditions.append(
+            and_(
+                Geofence.parent_id.in_(list(parent_ids)),
+                or_(
+                    Geofence.child_id.is_(None),
+                    Geofence.child_id == child_id
+                )
+            )
+        )
+
+    active_condition = or_(Geofence.is_active.is_(True), Geofence.is_active.is_(None))
 
     result = await session.execute(
-        select(Geofence).where(
-            Geofence.parent_id.in_(parent_ids),
-            Geofence.is_active == True,
-            (Geofence.child_id == None) | (Geofence.child_id == child_id)
+        select(Geofence)
+        .where(
+            active_condition,
+            or_(*conditions)
         )
+        .order_by(Geofence.created_at.desc())
     )
-    return list(result.scalars().all())
+
+    unique_fences = []
+    seen = set()
+    for f in result.scalars().all():
+        if f.id not in seen:
+            seen.add(f.id)
+            unique_fences.append(f)
+    return unique_fences
+
+
+# Backward-compatible alias used in report generators
+get_geofences_for_child = get_active_geofences_for_child
+
+
+async def get_geofences_for_user(session: AsyncSession, user_id: int) -> List[Geofence]:
+    """Get geofences for a user ID, supporting both parent and child roles."""
+    user = await get_user(session, user_id)
+    if user and user.role == 'parent':
+        return await get_geofences_for_parent(session, user_id)
+    elif user and user.role == 'child':
+        return await get_active_geofences_for_child(session, user_id)
+    else:
+        # Fallback: check parent geofences first, then child geofences
+        fences = await get_geofences_for_parent(session, user_id)
+        if fences:
+            return fences
+        return await get_active_geofences_for_child(session, user_id)
+
+
+async def get_geofence(session: AsyncSession, geofence_id: int) -> Optional[Geofence]:
+    """Retrieve a single geofence by ID."""
+    result = await session.execute(
+        select(Geofence).where(Geofence.id == geofence_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def delete_geofence(session: AsyncSession, geofence_id: int, parent_id: int) -> bool:
