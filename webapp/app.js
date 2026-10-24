@@ -2414,7 +2414,7 @@ function toggleSosBanner(isActive) {
     if (!lastSosAlertState) {
       haptic("heavy");
       playSirenSound();
-      showToast("🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!");
+      showToast("🚨 SOS: Farzandingiz xavf signalini yoqdi!");
     }
     lastSosAlertState = true;
   } else {
@@ -4020,7 +4020,7 @@ async function triggerChildSOS() {
       if (window.lucide) window.lucide.createIcons();
     }
   
-    showToast("🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI! Ota-onangizga xabar ketmoqda...");
+    showToast("🚨 SOS yuborildi! Ota-onangizga xabar ketmoqda...");
   
     // Coordinates fallback
     let fallbackLat = DEFAULT_LAT;
@@ -4083,7 +4083,7 @@ async function triggerChildSOS() {
         const data = await res.json();
         if (data && data.status === "success") {
           if (data.parent_phone) parentPhone = data.parent_phone;
-          showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
+          showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
         }
       } catch (err) {
         console.error("SOS dispatch error:", err);
@@ -4831,7 +4831,7 @@ function handleIncomingWebSocketMessage(msg) {
         if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1 });
       }
     } else {
-      showToast(`🚨 DIQQAT: ${msg.child_name || 'Farzandingiz'} SOS xavf signalini yoqdi!`);
+      showToast(`🚨 SOS: ${msg.child_name || 'Farzandingiz'} xavf signalini yoqdi!`);
       playSirenSound();
       haptic("heavy");
     }
