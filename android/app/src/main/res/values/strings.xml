@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Child Security</string>
+    <string name="channel_name">Child Security Monitoring</string>
+    <string name="channel_desc">Farzand xavfsizligi va jonli GPS monitoring xizmati</string>
+    <string name="notification_title">Child Security 🛡️</string>
+    <string name="notification_body">Xavfsizlik himoyasi faol. Joylashuv nazoratda.</string>
+</resources>

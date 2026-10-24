@@ -4514,6 +4514,16 @@ let activeBannerTimer = null;
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
+  // 0. If running inside Native Android APK, trigger 24/7 background GPS tracking service immediately!
+  if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function") {
+    try {
+      window.AndroidBridge.startBackgroundTracking(String(childId), window.location.origin);
+      console.log("Native Android 24/7 background GPS tracking active for child:", childId);
+    } catch (e) {
+      console.warn("AndroidBridge startBackgroundTracking note:", e);
+    }
+  }
+
   // Connect real-time WebSocket for instant alerts
   connectWebSocket(childId);
 
@@ -5209,6 +5219,7 @@ function setupTelegramBackButton() {
 function handleTelegramBackPress() {
   haptic("light");
   const modalPriority = [
+    { id: "modalInstallApp", close: closeInstallAppModal },
     { id: "modalCallParent", close: closeCallParentModal },
     { id: "modal-walk-safe", close: closeWalkSafeModal },
     { id: "modal-walk-safe-checkin", close: closeWalkSafeCheckInModal },
@@ -5261,6 +5272,10 @@ function handleTelegramBackPress() {
 
 function closeWebApp() {
   haptic("light");
+  if (window.AndroidBridge && typeof window.AndroidBridge.minimizeApp === "function") {
+    window.AndroidBridge.minimizeApp();
+    return;
+  }
   const tgApp = window.Telegram?.WebApp;
   if (tgApp) {
     try {
@@ -5983,3 +5998,73 @@ window.loadWishlist = loadWishlist;
 
 window.openDailyReportModal = openDailyReportModal;
 window.closeDailyReportModal = closeDailyReportModal;
+
+// =========================================================
+// PWA & SERVICE WORKER REGISTRATION + NATIVE INSTALL ENGINE
+// =========================================================
+let deferredInstallPrompt = null;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then((reg) => {
+        console.log("Child Security PWA Service Worker registered:", reg.scope);
+      })
+      .catch((err) => {
+        console.warn("Service Worker registration note:", err);
+      });
+  });
+}
+
+// Capture Android/Chrome install banner prompt
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+function openInstallAppModal() {
+  haptic("medium");
+  const modal = document.getElementById("modalInstallApp");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeInstallAppModal() {
+  haptic("light");
+  const modal = document.getElementById("modalInstallApp");
+  if (modal) modal.classList.add("hidden");
+}
+
+function switchInstallTab(tab) {
+  haptic("light");
+  ["android", "ios", "pwa"].forEach((t) => {
+    const pane = document.getElementById(`installTabPane-${t}`);
+    const btn = document.getElementById(`installTabBtn-${t}`);
+    if (pane) {
+      if (t === tab) pane.classList.remove("hidden");
+      else pane.classList.add("hidden");
+    }
+    if (btn) {
+      if (t === tab) {
+        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md transition";
+      } else {
+        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition";
+      }
+    }
+  });
+}
+
+async function triggerPwaInstall() {
+  haptic("medium");
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    console.log("Install prompt outcome:", outcome);
+    deferredInstallPrompt = null;
+    closeInstallAppModal();
+  } else {
+    showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
+  }
+}

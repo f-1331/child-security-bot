@@ -6,9 +6,15 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Child Security Bot - Bolalar Nazorati</title>
-  <link rel="icon" type="image/png" href="favicon.png?v=17" />
-  <link rel="apple-touch-icon" href="favicon.png?v=17" />
+  <title>Child Security - Bolalar Nazorati</title>
+  <link rel="manifest" href="manifest.json?v=2" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Child Security" />
+  <meta name="theme-color" content="#090d16" />
+  <meta name="mobile-web-app-capable" content="yes" />
   
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -234,6 +240,11 @@
           <span id="soundText" class="hidden xs:inline sm:inline">Oddiy</span>
         </div>
 
+        <!-- Mobil ilova (Android APK / iPhone) -->
+        <button onclick="openInstallAppModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+        </button>
+
         <!-- Rang mavzulari -->
         <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn ranglarini tanlash">
           <i data-lucide="palette" class="w-3.5 h-3.5"></i>
@@ -285,6 +296,11 @@
         <button onclick="switchTab('wallet')" class="flex items-center gap-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 text-emerald-300 border border-emerald-500/35 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black shadow-md transition active:scale-95 shrink-0" title="Jamg'armam">
           <span class="text-xs">🐷</span>
           <span id="childHeroMoneyText" class="truncate font-black max-w-[70px] xs:max-w-[95px] sm:max-w-none">180,000 so'm</span>
+        </button>
+
+        <!-- Mobil ilova (Android APK / iPhone) -->
+        <button onclick="openInstallAppModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
         </button>
 
         <!-- Theme Palette -->
@@ -1314,6 +1330,22 @@
         </div>
       </div>
 
+      <!-- Mobil Ilova Banner -->
+      <div class="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-purple-900/40 border border-blue-500/40 flex items-center justify-between gap-2.5 shadow-md">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+            <i data-lucide="smartphone" class="w-5 h-5"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-black text-white truncate">Mobil ilova (Android & iOS)</p>
+            <p class="text-[10px] text-blue-200/80 truncate">24/7 doimiy GPS va ekran o'chiq holda ishlash</p>
+          </div>
+        </div>
+        <button type="button" onclick="openInstallAppModal()" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[10px] rounded-xl shadow transition shrink-0">
+          O'rnatish
+        </button>
+      </div>
+
       <!-- SECTION 1: LANGUAGE SWITCHER -->
       <div class="mt-3 mb-4">
         <div class="flex items-center gap-1.5 text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">
@@ -1944,7 +1976,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=46"></script>
+  <script src="app.js?v=47"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -1985,6 +2017,143 @@
       <div id="modalParentBotBadge" class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium flex items-center justify-center gap-2">
         <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-400"></i>
         <span>Telegram botingizga ham kontakt kartasi yuborildi!</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INSTALL MOBILE APP (ANDROID APK & IPHONE PWA) -->
+  <div id="modalInstallApp" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+    <div class="relative bg-slate-900 border border-blue-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl text-left max-h-[92dvh] overflow-y-auto custom-scroll">
+      <button onclick="closeInstallAppModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg border-2 border-white/20 shrink-0">
+          <i data-lucide="smartphone" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-black text-white">Child Security Ilovasi 📲</h3>
+          <p class="text-[11px] text-blue-300 font-medium">Android APK & iPhone (iOS) uchun rasmiy o'rnatish</p>
+        </div>
+      </div>
+
+      <!-- Segmented Tab Selector -->
+      <div class="flex items-center gap-1.5 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/80 mb-4">
+        <button id="installTabBtn-android" onclick="switchInstallTab('android')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md transition">
+          🤖 Android APK
+        </button>
+        <button id="installTabBtn-ios" onclick="switchInstallTab('ios')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition">
+          🍎 iPhone (iOS)
+        </button>
+        <button id="installTabBtn-pwa" onclick="switchInstallTab('pwa')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition">
+          🌐 Brauzer PWA
+        </button>
+      </div>
+
+      <!-- PANE 1: ANDROID APK (24/7 BACKGROUND GPS) -->
+      <div id="installTabPane-android" class="flex flex-col gap-3">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-800 to-indigo-950/60 border border-emerald-500/40">
+          <span class="inline-block text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full mb-1.5">
+            ⚡ Tavsiya etiladi (Farzand uchun)
+          </span>
+          <h4 class="text-xs sm:text-sm font-black text-white">24/7 Doimiy Foniy GPS Monitoring</h4>
+          <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            Telefon ekrani o'chirilgan, qulflangan yoki ilova berkitilgan holatda ham farzand joylashuvini to'xtovsiz xaritada yangilab turadi.
+          </p>
+        </div>
+
+        <div class="space-y-1.5 text-[11px] text-slate-300">
+          <p class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">✓</span> Ekran o'chiq holatda ham GPS to'xtamaydi
+          </p>
+          <p class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">✓</span> Telefon o'chib-yonsa, avtomatik qayta ishga tushadi
+          </p>
+          <p class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">✓</span> Xavfsiz makonlar (geozonalar) doimiy nazoratda
+          </p>
+          <p class="flex items-center gap-2">
+            <span class="text-emerald-400 font-bold">✓</span> SOS xavf signali va tezkor aloqa
+          </p>
+        </div>
+
+        <a href="/download/apk" target="_blank" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xl shadow-teal-500/20 flex items-center justify-center gap-2 transition mt-2">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          <span>Android APK Yuklab Olish (.apk)</span>
+        </a>
+
+        <div class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/60 text-[10px] text-slate-400 leading-normal">
+          <span class="font-bold text-amber-300">💡 Eslatma:</span> O'rnatishdan so'ng ilovaga "Joylashuvga doimiy ruxsat berish" (Allow all the time) va "Batareyani tejashni cheklamaslik" ruxsatlarini bering.
+        </div>
+      </div>
+
+      <!-- PANE 2: IPHONE (APPLE IOS SAFARI PWA) -->
+      <div id="installTabPane-ios" class="hidden flex flex-col gap-3">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 via-slate-800 to-slate-900 border border-blue-500/40">
+          <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
+            <span>🍎</span> <span>Apple iPhone uchun o'rnatish</span>
+          </h4>
+          <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            iPhone telefonlarida App Store kerak emas! Safari orqali 3 soniyada ish stoliga to'laqonli ilova sifatida o'rnatiladi:
+          </p>
+        </div>
+
+        <!-- 3 Step iOS Guide Cards -->
+        <div class="space-y-2">
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-start gap-3">
+            <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+              1
+            </div>
+            <div>
+              <p class="text-xs font-bold text-white">"Ulashish" tugmasini bosing</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Safari brauzerining pastki qismidagi <span class="text-blue-300 font-bold">📤 Share (Ulashish)</span> belgisini bosing.</p>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-start gap-3">
+            <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+              2
+            </div>
+            <div>
+              <p class="text-xs font-bold text-white">"Asosiy ekranga qo'shish"</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Ochilgan menyudan <span class="text-indigo-300 font-bold">➕ "На экран «Домой»" / "Add to Home Screen"</span> bandini tanlang.</p>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-start gap-3">
+            <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
+              3
+            </div>
+            <div>
+              <p class="text-xs font-bold text-white">"Qo'shish"ni tasdiqlang</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Tepadagi <span class="text-emerald-300 font-bold">"Добавить" / "Add"</span> tugmasini bosing. Ilova tayyor!</p>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[10px] text-slate-400 text-center italic mt-1">
+          Ilova iPhone ekranda alohida logotipi bilan paydo bo'ladi va brauzersiz to'liq ekranda ishlaydi.
+        </p>
+      </div>
+
+      <!-- PANE 3: BROWSER / PWA 1-TAP INSTALL -->
+      <div id="installTabPane-pwa" class="hidden flex flex-col gap-3">
+        <div class="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80">
+          <h4 class="text-xs sm:text-sm font-black text-white">Brauzer orqali to'g'ridan-to'g'ri o'rnatish</h4>
+          <p class="text-[11px] text-slate-300 mt-1 leading-relaxed">
+            Chrome, Samsung Internet yoki Edge brauzerlarida hech narsa yuklab olmasdan 1 ta bosishda ilovani o'rnating:
+          </p>
+        </div>
+
+        <button onclick="triggerPwaInstall()" class="w-full py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-xl flex items-center justify-center gap-2 transition">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Ilovani Hoziroq O'rnatish</span>
+        </button>
+
+        <p class="text-[10px] text-slate-400 text-center">
+          O'rnatilgach, telefoningiz ilovalar ro'yxatida va bosh ekranida alohida ilova bo'lib turadi.
+        </p>
       </div>
     </div>
   </div>

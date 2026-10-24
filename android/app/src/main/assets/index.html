@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Child Security Bot - Bolalar Nazorati</title>
+  <link rel="icon" type="image/png" href="favicon.png?v=17" />
+  <link rel="apple-touch-icon" href="favicon.png?v=17" />
+  
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet.js Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css?v=44" />
+
+  <!-- Sentry Browser Error & Performance Monitoring SDK -->
+  <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
+  <script>
+    (function() {
+      var dsn = window.SENTRY_DSN || localStorage.getItem("sentry_dsn");
+      if (dsn && window.Sentry) {
+        try {
+          Sentry.init({
+            dsn: dsn,
+            tracesSampleRate: 1.0,
+            environment: "production"
+          });
+        } catch(e) {}
+      }
+    })();
+  </script>
+
+  <!-- Netlify Badge & HUD Total Suppression Script (Runs before Netlify HUD mounts) -->
+  <script>
+    (function() {
+      try {
+        var ttl = 7 * 24 * 60 * 60 * 1000;
+        var now = Date.now();
+        localStorage.setItem("nl-hud:public:v1", "hidden:" + (now + ttl));
+        localStorage.setItem("nl-hud:owner-private:v1", "hidden");
+        localStorage.setItem("nl-hud:v1", "hidden");
+      } catch(e) {}
+    })();
+
+    // MutationObserver to remove Netlify badge iframe as soon as injected into DOM
+    (function() {
+      try {
+        var obs = new MutationObserver(function(mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            var added = mutations[i].addedNodes;
+            for (var j = 0; j < added.length; j++) {
+              var node = added[j];
+              if (node && node.nodeType === 1) {
+                if (node.id === "nl-badge-frame" || node.id === "nl-hud-frame" ||
+                    (node.tagName === "IFRAME" && (node.title === "Powered by Netlify" || (node.id && node.id.indexOf("nl-") === 0)))) {
+                  node.remove();
+                }
+              }
+            }
+          }
+        });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+      } catch(e) {}
+    })();
+  </script>
+
+  <style>
+    /* Complete suppression of Netlify badge, iframe, drawer, and HUD */
+    #nl-badge-frame,
+    #nl-hud-frame,
+    iframe[id^="nl-"],
+    iframe[title*="Netlify"],
+    iframe[title*="Powered by Netlify"],
+    iframe[srcdoc*="Netlify"],
+    iframe[srcdoc*="nl-"],
+    iframe[style*="2147483645"],
+    netlify-drawer,
+    #netlify-drawer,
+    div#netlify-drawer,
+    .netlify-badge,
+    #netlify-badge,
+    [data-netlify-deploy-id],
+    [data-netlify-site-id],
+    [class*="netlify"],
+    [id*="netlify"],
+    a[href*="netlify.com"],
+    iframe[src*="netlify"],
+    script[src*="hud"] {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      width: 0px !important;
+      height: 0px !important;
+      max-width: 0px !important;
+      max-height: 0px !important;
+      position: fixed !important;
+      top: -99999px !important;
+      left: -99999px !important;
+      clip-path: path("M0 0Z") !important;
+      overflow: hidden !important;
+      z-index: -99999 !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden select-none">
+
+  <!-- TOP HEADER (APPLE DYNAMIC ISLAND & FROSTED GLASS CAPSULE) -->
+  <header class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top">
+    <!-- 0. IOS DYNAMIC ISLAND (Centrally Anchored Floating Capsule) -->
+    <div id="dynamicIslandContainer" class="flex justify-center w-full">
+      <div id="dynamicIslandPill" onclick="centerOnChild()" class="dynamic-island cursor-pointer active:scale-95 transition" title="Jonli holat / Farzandga yaqinlashtirish">
+        <span id="dynamicIslandDot" class="dynamic-island-dot"></span>
+        <span id="dynamicIslandText" class="text-[11px] font-bold text-white tracking-tight">Jonli GPS faol</span>
+        <div id="dynamicIslandBattery" class="flex items-center gap-1 text-[10px] text-emerald-400 font-semibold border-l border-white/10 pl-2">
+          <i data-lucide="battery-charging" class="w-3 h-3"></i>
+          <span id="dynamicIslandBatteryText">--%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. DEMO MODE NOTICE BANNER & INSTANT ROLE SWITCHER -->
+    <div id="demoNoticeBanner" class="hidden bg-gradient-to-r from-amber-500/90 via-orange-500/90 to-amber-600/90 backdrop-blur-xl text-slate-950 px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40">
+      <div class="flex items-center gap-1.5 min-w-0">
+        <span class="text-sm">🎮</span>
+        <span id="demoBadge" class="uppercase tracking-wider font-black text-[11px] truncate">Demo Rejim</span>
+      </div>
+
+      <!-- Segmented Role Switcher -->
+      <div class="flex items-center bg-slate-950/40 p-0.5 rounded-xl border border-black/20 text-[10px]">
+        <button id="btnDemoRoleParent" onclick="switchDemoRole('parent')" class="px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 bg-slate-900 text-blue-300 shadow">
+          <span>👨‍👩‍👧</span> <span>Ota-ona</span>
+        </button>
+        <button id="btnDemoRoleChild" onclick="switchDemoRole('child')" class="px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1 text-slate-900 hover:text-white">
+          <span>👦</span> <span>Farzand</span>
+        </button>
+      </div>
+
+      <button id="btnTopDemoAuth" onclick="showAuthGateModal()" class="px-2.5 py-1 bg-slate-950 text-amber-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition active:scale-95 shadow shrink-0 flex items-center gap-1">
+        <i data-lucide="key" class="w-3 h-3"></i>
+        <span>Kodni kiritish</span>
+      </button>
+    </div>
+
+    <!-- 2. PARENT HEADER ROW (Apple Find My Inspired Executive Cockpit) -->
+    <div id="parentHeaderRow" class="flex flex-col gap-2">
+      <!-- Top Row: Child Profile Capsule (Left) + Mode & Settings Pills (Right) -->
+      <div class="flex items-center justify-between gap-2">
+        <!-- Child Profile Capsule -->
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
+            <div id="childAvatar" class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center font-black text-white shadow-lg text-xs sm:text-base border-2 border-white/20 active:scale-95 transition">
+              B
+            </div>
+            <span id="onlineDot" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full shadow-sm"></span>
+          </div>
+          
+          <div class="min-w-0 flex items-center gap-1.5">
+            <div>
+              <select id="childSelect" class="bg-white/5 hover:bg-white/10 text-[11px] sm:text-xs font-black text-white rounded-xl px-2.5 py-1 outline-none border border-white/10 focus:border-blue-400 max-w-[120px] sm:max-w-[170px] truncate block shadow-inner backdrop-blur-md transition">
+                <option value="">Farzand...</option>
+              </select>
+              <p id="lastSeenText" class="text-[10px] sm:text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+                <span class="truncate">Jonli kuzatuv</span>
+              </p>
+            </div>
+            <!-- Profilni o'chirish tugmasi -->
+            <button id="btnDeleteChild" onclick="openDeleteChildModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-200 flex items-center justify-center transition active:scale-90 shrink-0 shadow-sm" title="Farzand profilini o'chirish">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Quick Actions: Farzand rejimi & Settings Pill -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="promptRoleSwitch('child')" class="flex items-center gap-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-2xl text-[11px] font-black transition active:scale-95 shadow-sm backdrop-blur-md" title="Farzand hisobiga o'tish">
+            <span>👦</span>
+            <span class="hidden sm:inline">Farzand</span>
+          </button>
+          <button onclick="switchTab('settings')" class="flex items-center gap-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-2xl text-[11px] font-bold transition active:scale-95 shadow-sm backdrop-blur-md" title="Dizayn va sozlamalar">
+            <i data-lucide="palette" class="w-3.5 h-3.5 text-purple-400"></i>
+            <span class="hidden sm:inline">Dizayn</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Multi-child switcher if parent links >1 child -->
+      <div id="parentMultiChildBar" class="hidden flex items-center gap-2 overflow-x-auto py-1 custom-scroll no-scrollbar"></div>
+
+      <!-- Apple Control Center Style Utility Capsule Strip -->
+      <div id="parentUtilityBar" class="flex items-center justify-between gap-1 pt-1.5 border-t border-white/5 overflow-x-auto no-scrollbar">
+        <!-- Kunlik hisobot -->
+        <button id="btnParentDailyReport" onclick="openDailyReportModal()" class="flex items-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span class="truncate font-semibold">Hisobot</span>
+        </button>
+
+        <!-- Tangalar kursi -->
+        <button id="btnCoinRateCorner" onclick="openCoinRateModal()" class="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Tangalar kursini sozlash">
+          <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="coinRateCornerText" class="truncate font-semibold">1k = 10k</span>
+        </button>
+
+        <!-- Hamkor ota-ona -->
+        <button onclick="openParentInviteSpouseModal()" class="flex items-center gap-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Ikkinchi ota-onani taklif qilish">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span class="truncate font-semibold hidden sm:inline">Hamkor ota-ona</span>
+          <span class="truncate font-semibold inline sm:hidden">Hamkor</span>
+        </button>
+
+        <!-- Batareya -->
+        <div id="batteryPill" class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-xl text-[10px] sm:text-xs font-semibold text-emerald-400 border border-white/10 shadow-sm shrink-0" title="Telefon zaryadi">
+          <i id="batteryIcon" data-lucide="battery-charging" class="w-3.5 h-3.5"></i>
+          <span id="batteryText">--%</span>
+        </div>
+
+        <!-- Ovoz rejimi -->
+        <div id="soundPill" class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-xl text-[10px] sm:text-xs font-medium text-slate-300 border border-white/10 shadow-sm shrink-0" title="Ovoz rejimi">
+          <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+          <span id="soundText" class="hidden xs:inline sm:inline">Oddiy</span>
+        </div>
+
+        <!-- Rang mavzulari -->
+        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn ranglarini tanlash">
+          <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <!-- Chiqish / Boshqa hisob -->
+        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <!-- Telegramga qaytish / Yopish -->
+        <button onclick="closeWebApp()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition active:scale-90 shrink-0" title="Telegramga qaytish (Ilovani yopish)">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. CHILD HEADER ROW (Gamified Superhero Portal Header) -->
+    <div id="childHeaderRow" class="hidden flex items-center justify-between gap-2">
+      <!-- Child Avatar & Gamified Hero Name -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
+          <div id="childAvatarHero" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-xl text-base sm:text-xl border-2 border-white/80 active:scale-95 transition overflow-hidden">
+            <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Hero Mascot" />
+          </div>
+          <span class="absolute -top-1 -right-1 text-xs">👑</span>
+        </div>
+        
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h1 id="childHeroName" class="text-xs sm:text-sm font-black text-white truncate max-w-[100px] xs:max-w-[150px] sm:max-w-none">Yosh Qahramon</h1>
+            <span id="childHeroLevelBadge" class="text-[9px] bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+          </div>
+          <p id="childHeroGreeting" class="text-[10px] sm:text-[11px] text-emerald-400 font-bold mt-0.5 truncate flex items-center gap-1">
+            <span>🚀</span> <span id="childHeroStatusText">Missiyalarga tayyormisiz?</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Child Quick Controls: Switch to Parent + Piggy Bank + Palette + Logout -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Ota-ona rejimiga o'tish -->
+        <button onclick="promptRoleSwitch('parent')" class="flex items-center gap-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Ota-ona rejimiga o'tish">
+          <span>👨‍👩‍👧</span>
+          <span class="hidden xs:inline sm:inline">Ota-ona</span>
+        </button>
+
+        <!-- Piggy Bank Vault Pill -->
+        <button onclick="switchTab('wallet')" class="flex items-center gap-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 text-emerald-300 border border-emerald-500/35 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black shadow-md transition active:scale-95 shrink-0" title="Jamg'armam">
+          <span class="text-xs">🐷</span>
+          <span id="childHeroMoneyText" class="truncate font-black max-w-[70px] xs:max-w-[95px] sm:max-w-none">180,000 so'm</span>
+        </button>
+
+        <!-- Theme Palette -->
+        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-purple-500/30 text-purple-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Ranglar">
+          <span class="text-xs">🎨</span>
+        </button>
+
+        <!-- Logout -->
+        <button onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <!-- Telegramga qaytish / Yopish -->
+        <button onclick="closeWebApp()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition active:scale-90 shrink-0" title="Telegramga qaytish (Ilovani yopish)">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Child View Welcome Adventure Banner -->
+    <div id="childWelcomeBanner" class="hidden bg-gradient-to-r from-emerald-950/70 via-slate-900/80 to-purple-950/70 border border-emerald-500/30 p-2.5 rounded-2xl flex items-center justify-between text-xs shadow-lg backdrop-blur-md">
+      <div>
+        <p class="font-black text-white flex items-center gap-1.5">
+          <span>🌟</span> <span id="childBannerName">Bugungi sarguzasht</span>
+        </p>
+        <p class="text-emerald-300 font-bold text-[11px] mt-0.5" id="childBannerMoney">
+          💰 Sizda hozir 180,000 so'm bor! (18,000 tanga)
+        </p>
+      </div>
+      <button onclick="switchTab('tasks')" class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white rounded-xl font-black text-xs shadow-md transition active:scale-95 flex items-center gap-1">
+        <span>Missiyalar</span>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+
+    <!-- Urgent SOS Alert Banner -->
+    <div id="sosAlertBanner" class="hidden bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white text-xs font-bold px-3.5 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl animate-pulse border border-white/40">
+      <div class="flex items-center gap-2 overflow-hidden mr-2">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-white shrink-0 animate-bounce"></i>
+        <span class="truncate font-black">🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!</span>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="resolveCurrentSos()" class="px-3 py-1 bg-white text-red-700 hover:bg-red-50 rounded-xl text-[10px] font-black uppercase tracking-wider shadow transition active:scale-95">To'xtatish</button>
+        <button onclick="dismissSos()" class="p-1 text-white/80 hover:text-white text-base font-bold leading-none" title="Yopish">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- EMPTY STATE BANNER -->
+  <div id="emptyStateBanner" class="hidden absolute top-20 left-4 right-4 z-[450] bg-slate-900/90 backdrop-blur-2xl border border-blue-500/30 p-5 rounded-3xl shadow-2xl flex flex-col items-center text-center">
+    <div class="w-12 h-12 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center mb-2.5 border border-blue-400/30">
+      <i data-lucide="user-plus" class="w-6 h-6"></i>
+    </div>
+    <h3 class="text-sm font-black text-white">Hozircha farzand ulanmagan</h3>
+    <p class="text-xs text-slate-300 mt-1 max-w-xs leading-relaxed">
+      Farzandingiz telefonida botga ulanish kodi kiritilishi kerak. Tizimni sinab ko'rish uchun Namuna (Demo) rejimini yoqishingiz mumkin.
+    </p>
+    <div class="flex gap-2.5 mt-3.5 w-full">
+      <button onclick="enableDemoMode()" class="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white text-xs font-black rounded-2xl shadow-lg transition active:scale-95">
+        🎮 Namuna (Demo) ko'rish
+      </button>
+      <button onclick="closeEmptyState()" class="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold rounded-2xl border border-white/10">
+        Yopish
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="relative flex-1 w-full bg-slate-950 overflow-hidden">
+    <!-- ========================================================= -->
+    <!-- 1. PARENT VIEW SECTION: LIVE SECURITY HUD (Ota-ona)       -->
+    <!-- ========================================================= -->
+    <div id="parentViewSection" class="relative w-full h-full">
+      <!-- Live Map Canvas -->
+      <div id="map" class="w-full h-full"></div>
+
+      <!-- Child Back Button from Fullscreen Map Mode -->
+      <button id="btnChildBackFromMap" onclick="closeChildMapModal()" class="hidden absolute top-4 left-4 z-30 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-2xl text-xs font-black shadow-2xl border border-white/20 backdrop-blur-xl flex items-center gap-1.5 active:scale-95 transition">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        <span>Ortga</span>
+      </button>
+
+      <!-- Child Floating Actions (When child views map) -->
+      <div id="childFloatingActions" class="hidden absolute left-4 right-4 bottom-24 z-20 flex gap-2"></div>
+
+      <!-- Parent View Active Walk Safe Monitoring Banner -->
+      <div id="parentWalkSafeBanner" class="hidden absolute top-4 left-4 z-20 bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-slate-900/90 border border-amber-500/40 text-amber-200 px-3.5 py-2 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold backdrop-blur-2xl animate-pulse">
+        <span class="text-lg">🚶‍♂️</span>
+        <div class="leading-tight">
+          <p class="text-[9px] text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
+          <p id="parentWalkSafeText" class="text-xs text-white font-bold">14:20 qoldi (Uyga qaytish)</p>
+        </div>
+      </div>
+
+      <!-- Floating Map Controls (Right Vertical Frosted Glass Dock) -->
+      <div id="floatingMapControls" class="floating-glass-dock absolute right-3.5 top-3.5 z-20">
+        <!-- Remote Siren -->
+        <button id="btnParentSiren" onclick="triggerRemoteSiren()" class="text-rose-400 hover:text-rose-300" title="Signal chalish (Ovoz chiqarish)">
+          <i data-lucide="bell-ring" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Center on Child -->
+        <button id="btnCenterChild" onclick="centerOnChild()" class="text-blue-400 hover:text-blue-300" title="Farzandga yaqinlashtirish">
+          <i data-lucide="crosshair" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Toggle Map Layer -->
+        <button id="btnMapLayer" onclick="toggleMapLayer()" class="text-emerald-400 hover:text-emerald-300" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Toggle Route History Polyline -->
+        <button id="btnToggleRoute" onclick="toggleRouteHistory()" class="text-amber-400 hover:text-amber-300" title="Bugungi harakat yo'li">
+          <i data-lucide="route" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Add Zone -->
+        <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="text-indigo-400 hover:text-indigo-300" title="Kerakli joy qo'shish">
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Refresh Data -->
+        <button id="btnRefresh" onclick="refreshAllData()" class="text-slate-300 hover:text-white" title="Yangilash">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Combined Parent Floating Controls & Location Deck (Flex column physically guarantees ZERO overlap!) -->
+      <div id="parentBottomContainer" style="bottom: calc(78px + max(12px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex flex-col gap-2.5 md:max-w-md pointer-events-none">
+        
+        <!-- 1. Passiv monitoring va Hozirgi joylashuvi (Tugmalar doim toza va ochiq!) -->
+        <div id="parentMonitoringBar" class="pointer-events-auto flex items-center gap-2">
+          <!-- Passiv monitoring (Silent check) -->
+          <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2.5 px-3 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
+            <div class="w-7 h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
+              <i data-lucide="eye" class="w-4 h-4"></i>
+            </div>
+            <div class="text-left min-w-0">
+              <p class="text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
+              <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
+            </div>
+          </button>
+
+          <!-- Faol so'rov (Active check) -->
+          <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group shadow-blue-500/20" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
+            <div class="w-7 h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
+              <i data-lucide="crosshair" class="w-4 h-4"></i>
+            </div>
+            <div class="text-left min-w-0">
+              <p class="text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
+              <p class="text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
+            </div>
+          </button>
+        </div>
+
+        <!-- 2. Joriy Manzil kartasi (Doim tugmalarning tagida, hech qachon ustiga chiqmaydi!) -->
+        <div id="locationCard" class="pointer-events-auto p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-2.5">
+          <div class="min-w-0 flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                <span data-i18n="current_address">Joriy Manzil</span>
+                <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
+              </div>
+              <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
+              <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
+            </div>
+          </div>
+          
+          <button onclick="openExternalNavigation()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md shrink-0" title="Marshrut ochish">
+            <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+            <span data-i18n="route">Yo'l</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 2. CHILD VIEW SECTION: GAMIFIED ADVENTURE PORTAL (Bola)   -->
+    <!-- ========================================================= -->
+    <div id="childViewSection" class="hidden relative w-full h-full overflow-y-auto custom-scroll p-3.5 sm:p-5 flex flex-col gap-3.5 pb-28">
+      <!-- Child Active Walk Safe Live Floating Bar -->
+      <div id="childActiveWalkSafeBar" class="hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-3.5 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl border border-white/40 animate-pulse">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl shrink-0">🚶‍♂️</span>
+          <div class="min-w-0">
+            <p class="text-[9px] font-black uppercase tracking-wider text-slate-950">Xavfsiz Yo'l Faol</p>
+            <p id="childWalkSafeCountdown" class="text-xs font-black text-white truncate">19:45 qoldi (Uyga qaytish)</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="childWalkSafeCheckIn()" class="px-2.5 py-1 bg-slate-950 text-amber-300 hover:text-white rounded-xl text-[10px] font-black transition active:scale-95 shadow">
+            👍 Yaxshiman
+          </button>
+          <button onclick="childWalkSafeComplete()" class="px-2.5 py-1 bg-white text-emerald-800 hover:bg-emerald-50 rounded-xl text-[10px] font-black transition active:scale-95 shadow">
+            ✅ Yetib keldim
+          </button>
+        </div>
+      </div>
+
+      <!-- 1. Hero Adventure Banner (Gamified Character Card) -->
+      <div class="child-hero-banner p-4 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center shadow-lg border-2 border-white/80 active:scale-95 transition shrink-0 overflow-hidden">
+            <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Hero Mascot" />
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <h2 id="childDashboardHeroName" class="text-sm sm:text-base font-black text-white truncate max-w-[140px] sm:max-w-none">Yosh Qahramon</h2>
+              <span id="childDashboardLevelBadge" class="text-[9px] bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+            </div>
+            <p id="childDashboardHeroTitle" class="text-[10px] sm:text-[11px] text-purple-300 font-bold mt-0.5 flex items-center gap-1 truncate">
+              <span>🌱</span> <span>Yangi Sayohatchi</span>
+            </p>
+            <div class="mt-1.5 w-36 sm:w-48 xp-progress-bar">
+              <div id="childDashboardXpFill" class="xp-progress-fill" style="width: 0%;"></div>
+            </div>
+            <p id="childDashboardXpText" class="text-[8px] sm:text-[9px] text-slate-400 mt-1">Keyingi darajagacha 500 XP qoldi</p>
+          </div>
+        </div>
+        <div class="text-center shrink-0 bg-white/5 px-2.5 py-1.5 rounded-2xl border border-white/10 backdrop-blur-md">
+          <span class="text-xl sm:text-2xl">🔥</span>
+          <p id="childStreakDaysText" class="text-[10px] font-black text-amber-400 leading-tight">1 kun</p>
+          <p class="text-[7px] text-slate-400 uppercase tracking-wider font-bold">Seriya</p>
+        </div>
+      </div>
+
+      <!-- 1.5. Ota-onamni taklif qilish -->
+      <div class="ios-glass-card p-3.5 flex items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-400/30 text-blue-300 flex items-center justify-center text-lg shrink-0">
+            👨‍👩‍👧
+          </div>
+          <div class="min-w-0">
+            <h4 class="text-xs sm:text-sm font-black text-white truncate">Ota-onamni taklif qilish</h4>
+            <p class="text-[10px] text-blue-200/80 truncate">Xavfsizligingiz uchun ota-onangizni ulab oling</p>
+          </div>
+        </div>
+        <button onclick="openChildInviteParentModal()" class="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+          <span>Ulashish</span>
+        </button>
+      </div>
+
+      <!-- 2. Piggy Bank & Treasury Vault Card (Orzular Qutisi) -->
+      <div class="wishlist-vault-card p-4 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">🐷</span>
+            <div>
+              <p class="text-[10px] font-black text-emerald-400 uppercase tracking-wider" data-i18n="treasure_balance">Jamg'arilgan naqd pulingiz:</p>
+              <h3 id="childPortalMoneyText" class="text-2xl font-black text-white tracking-tight">0 so'm</h3>
+            </div>
+          </div>
+          <button onclick="switchTab('wallet')" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1">
+            <span data-i18n="tab_treasure">Xazina</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-500/20 text-xs">
+          <div class="bg-black/30 p-2.5 rounded-2xl border border-emerald-500/20">
+            <p class="text-[10px] text-slate-400">Hisobdagi tangalar:</p>
+            <p id="childPortalCoinsText" class="text-sm font-black text-amber-300 flex items-center gap-1 mt-0.5">
+              <span>🪙</span> <span>18,000 tanga</span>
+            </p>
+          </div>
+          <div class="bg-black/30 p-2.5 rounded-2xl border border-emerald-500/20">
+            <p class="text-[10px] text-slate-400">Ota-onangiz kursi:</p>
+            <p id="childPortalRateText" class="text-xs font-bold text-emerald-300 mt-0.5">
+              1,000 🪙 = 10,000 so'm
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Walk Safe Mode ("Xavfsiz Yo'l" Taymeri) -->
+      <div id="walkSafeChildCard" class="ios-glass-card p-3.5 sm:p-4 flex items-center justify-between gap-3 border-amber-500/30">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-xl sm:text-2xl shadow-lg border border-amber-300/40 shrink-0">
+            🚶‍♂️
+          </div>
+          <div class="min-w-0">
+            <h4 class="text-xs sm:text-sm font-black text-white truncate">Xavfsiz Yo'l Taymeri</h4>
+            <p id="walkSafeCardSubtext" class="text-[10px] sm:text-[11px] text-amber-300 font-semibold mt-0.5 truncate">Meni kuzatib turing (Uyga qaytish)</p>
+          </div>
+        </div>
+        <button id="btnOpenWalkSafeModal" onclick="openWalkSafeModal()" class="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 active:scale-95 text-slate-950 rounded-2xl text-xs font-black shrink-0 shadow-lg transition flex items-center gap-1.5">
+          <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+          <span>Boshlash</span>
+        </button>
+      </div>
+
+      <!-- 4. Tactile SOS Emergency Shield (Apple Emergency Inspired) -->
+      <div class="ios-glass-card p-4 flex flex-col gap-3 border-red-500/40">
+        <div class="flex items-center justify-between text-rose-300">
+          <div class="flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-5 h-5 text-red-400"></i>
+            <span class="text-xs font-black uppercase tracking-wider">Favqulodda Xavfsizlik</span>
+          </div>
+          <span class="text-[9px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full font-bold">5s Ovoz Snapshot</span>
+        </div>
+
+        <!-- Radiating SOS Center Button -->
+        <div class="sos-shield-container my-1">
+          <div class="sos-shield-pulse-ring-outer"></div>
+          <div class="sos-shield-pulse-ring"></div>
+          <button id="btnChildBigSOS" onclick="triggerChildSOS()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 text-white font-black text-sm flex items-center justify-center gap-2.5 shadow-2xl active:scale-95 transition border-2 border-white/60">
+            <i data-lucide="alert-octagon" class="w-5 h-5 animate-pulse"></i>
+            <span data-i18n="sos_button">XAVF SIGNALINI YOQISH (SOS)</span>
+          </button>
+        </div>
+
+        <!-- 3 Quick Child Lifelines -->
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="triggerChildCheckIn()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-emerald-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-emerald-500/30 active:scale-95 transition">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+            <span data-i18n="check_in">Yetib keldim</span>
+          </button>
+          <button onclick="navigateChildHome()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-amber-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-amber-500/30 active:scale-95 transition">
+            <i data-lucide="home" class="w-4 h-4 text-amber-400"></i>
+            <span data-i18n="go_home">Uyga yo'l</span>
+          </button>
+          <button onclick="callParent()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-blue-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-blue-500/30 active:scale-95 transition">
+            <i data-lucide="phone" class="w-4 h-4 text-blue-400"></i>
+            <span data-i18n="call_parent">Ota-onam</span>
+          </button>
+        </div>
+
+        <button onclick="openChildMapModal()" class="w-full py-2 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-white/10 transition">
+          <i data-lucide="map" class="w-3.5 h-3.5 text-blue-400"></i>
+          <span data-i18n="view_adventure_map">Sarguzasht xaritasini to'liq ochish</span>
+        </button>
+      </div>
+
+      <!-- 5. Active Missions Card (Topshiriqlar) -->
+      <div class="ios-glass-card p-4 flex flex-col gap-3 border-blue-500/30">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-blue-300 flex items-center gap-1.5 uppercase tracking-wider">
+            <i data-lucide="trophy" class="w-4 h-4 text-amber-400"></i>
+            <span data-i18n="active_missions">Bugungi Missiyalar & Vazifalar</span>
+          </h3>
+          <button onclick="switchTab('tasks')" class="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-0.5">
+            <span>Barchasi</span>
+            <i data-lucide="arrow-right" class="w-3 h-3"></i>
+          </button>
+        </div>
+
+        <div id="childDashboardTasksList" class="space-y-2">
+          <!-- Dynamic tasks rendered here -->
+        </div>
+      </div>
+
+      <!-- 6. Safe Castles (Xavfsiz Makonlarim) -->
+      <div class="ios-glass-card p-4 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-black text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+            <span>🛡️</span>
+            <span data-i18n="safe_castles">Mening Xavfsiz Makonlarim</span>
+          </h3>
+          <button onclick="switchTab('zones')" class="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-0.5">
+            <span>Ko'rish</span>
+            <i data-lucide="arrow-right" class="w-3 h-3"></i>
+          </button>
+        </div>
+
+        <div id="childDashboardZonesList" class="grid grid-cols-2 gap-2 text-xs">
+          <!-- Dynamic zones rendered here -->
+        </div>
+      </div>
+
+      <!-- 7. Theme & Design Customization Card (for Child) -->
+      <div onclick="switchTab('settings')" class="ios-glass-card cursor-pointer p-4 flex items-center justify-between hover:border-purple-400 transition active:scale-98 border-purple-500/30">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-xl shadow-md border border-purple-300/40 shrink-0">
+            🎨
+          </div>
+          <div>
+            <h4 class="text-xs font-black text-white">Dizayn va Ranglarni O'zgartirish</h4>
+            <p class="text-[10px] text-purple-300 font-semibold mt-0.5">12 xil mavzu (Kosmik, Qahramon, Zümrad, Kiberpank...)</p>
+          </div>
+        </div>
+        <button type="button" class="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold shrink-0 shadow-md flex items-center gap-1">
+          <span>Tanlash</span>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 5-BUTTON BOTTOM NAVIGATION BAR (Floating Frosted Glass Dock) -->
+  <nav id="mainNavBar" class="fixed bottom-3 left-3 right-3 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[480px] z-30 px-2 py-1.5 grid grid-cols-5 gap-1 shadow-2xl safe-bottom transition-all duration-300">
+    <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active text-blue-400 hover:text-blue-300">
+      <i id="tabIcon-map" data-lucide="map" class="w-5 h-5"></i>
+      <span id="tabLabel-map" class="text-[9px] sm:text-xs font-bold mt-1 truncate">Xarita</span>
+    </button>
+
+    <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab text-slate-400 hover:text-slate-200">
+      <i id="tabIcon-zones" data-lucide="map-pin" class="w-5 h-5"></i>
+      <span id="tabLabel-zones" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Joylar</span>
+    </button>
+
+    <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab text-slate-400 hover:text-slate-200">
+      <i id="tabIcon-tasks" data-lucide="check-square" class="w-5 h-5"></i>
+      <span id="tabLabel-tasks" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Vazifalar</span>
+    </button>
+
+    <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab text-slate-400 hover:text-slate-200">
+      <i id="tabIcon-history" data-lucide="history" class="w-5 h-5"></i>
+      <span id="tabLabel-history" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Tarix</span>
+    </button>
+
+    <button onclick="switchTab('settings')" id="tabBtn-settings" class="nav-tab text-purple-400 hover:text-purple-300">
+      <i id="tabIcon-settings" data-lucide="palette" class="w-5 h-5"></i>
+      <span id="tabLabel-settings" class="text-[9px] sm:text-xs font-medium mt-1 truncate" data-i18n="tab_settings">Dizayn</span>
+    </button>
+  </nav>
+
+<!-- SLIDING MODAL: KERAKLI JOYLAR (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-zones" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
+      <!-- Drag handle indicator for mobile -->
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="map-pin" class="w-5 h-5 text-emerald-400"></i>
+          <h2 id="zonesModalTitle" class="text-sm font-bold text-white">Kerakli Joylar</h2>
+        </div>
+        <button onclick="closeModal('zones')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="btnAddZoneSection" class="my-3">
+        <button onclick="openAddZoneModal()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Yangi kerakli joy qo'shish</span>
+        </button>
+      </div>
+
+      <div id="zonesListContainer" class="flex-1 overflow-y-auto custom-scroll space-y-2 py-1 max-h-[50vh]">
+        <p class="text-center text-xs text-slate-400 py-6">Joylar yuklanmoqda...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING MODAL: ROUTE HISTORY (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-history" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
+      <!-- Drag handle indicator for mobile -->
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="footprints" class="w-5 h-5 text-amber-400"></i>
+          <h2 class="text-sm font-bold text-white">Bugungi Harakat Tarixi</h2>
+        </div>
+        <button onclick="closeModal('history')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Route Playback Control & Daily Report -->
+      <div class="my-3 flex gap-2">
+        <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-md">
+          <i data-lucide="play" class="w-4 h-4"></i>
+          <span>Harakatni ko'rish</span>
+        </button>
+        <button id="btnOpenDailyReportFromHistory" onclick="openDailyReportModal()" class="py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
+          <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-400"></i>
+          <span>Hisobot</span>
+        </button>
+      </div>
+
+      <div id="historyListContainer" class="flex-1 overflow-y-auto custom-scroll space-y-2 py-2 max-h-[55vh]">
+        <p class="text-center text-xs text-slate-400 py-6">Harakatlar tarixi yuklanmoqda...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING MODAL: CHILD WALLET & ACHIEVEMENTS (Child Piggy Bank) -->
+  <div id="modal-wallet" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom overflow-y-auto custom-scroll">
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="wallet" class="w-5 h-5 text-emerald-400"></i>
+          <h2 class="text-sm font-bold text-white">Mening Hamyonim & Jamg'armam</h2>
+        </div>
+        <button onclick="closeModal('wallet')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Piggy Bank Balance Display Card -->
+      <div class="my-3 p-4 bg-gradient-to-tr from-emerald-950/90 via-slate-900 to-indigo-950/80 border border-emerald-500/40 rounded-2xl shadow-xl">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+            <span class="text-base">🐷</span>
+            <span>Jamg'arilgan naqd pulingiz:</span>
+          </span>
+          <span id="childWalletLevelPill" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+            🌱 1-Daraja (Yangi Sayohatchi)
+          </span>
+        </div>
+        <p id="childWalletMoneyText" class="text-2xl font-black text-white mt-1.5 tracking-tight">
+          0 so'm
+        </p>
+        <p id="childWalletCoinsText" class="text-xs text-amber-400 font-bold mt-1 flex items-center gap-1">
+          <i data-lucide="coins" class="w-3.5 h-3.5"></i>
+          <span>18,000 tanga (Kurs: 1k = 10,000 so'm)</span>
+        </p>
+      </div>
+
+      <!-- Orzular Qutisi (Dynamic Dream Goal Progress Bar) -->
+      <div class="p-3.5 bg-gradient-to-r from-emerald-950/70 via-slate-900 to-indigo-950/70 border border-emerald-500/40 rounded-2xl mb-3 shadow-md">
+        <div class="flex justify-between items-center text-xs font-bold mb-1.5">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="text-base shrink-0">🎯</span>
+            <span id="wishlistTitleText" class="text-white truncate">Maqsad: Yangi Velosiped 🚲</span>
+            <button onclick="openEditWishlistModal()" class="p-1 text-emerald-400 hover:text-emerald-200 transition shrink-0" title="Maqsadni o'zgartirish">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <span id="wishlistPercentBadge" class="text-emerald-400 font-black text-xs shrink-0">0%</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-700/80">
+          <div id="wishlistProgressBar" class="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between items-center text-[10px] sm:text-[11px] text-slate-300 mt-1.5">
+          <span id="wishlistMoneyProgress">0 / 600,000 so'm</span>
+          <span id="wishlistRemainingText" class="text-emerald-300 font-semibold">Yuklanmoqda...</span>
+        </div>
+      </div>
+
+      <!-- Motivation / Badges Achievements -->
+      <div>
+        <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Mening yutuqlarim:</label>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
+            <span class="text-2xl">🏆</span>
+            <span class="text-[11px] font-bold text-white mt-1">Dars A'lochisi</span>
+            <span class="text-[9px] text-emerald-400 font-medium">+5 topshiriq</span>
+          </div>
+          <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
+            <span class="text-2xl">⏰</span>
+            <span class="text-[11px] font-bold text-white mt-1">Vaqt ustasi</span>
+            <span class="text-[9px] text-amber-400 font-medium">O'z vaqtida</span>
+          </div>
+          <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
+            <span class="text-2xl">🛡</span>
+            <span class="text-[11px] font-bold text-white mt-1">Intizomli</span>
+            <span class="text-[9px] text-indigo-400 font-medium">Xavfsiz bola</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE MAP ZONE PICKER (TOP FLOATING HUD & BOTTOM CONTROLS) -->
+  <!-- 1. Top Location Inspector Pill -->
+  <div id="zonePickerTopBar" class="hidden absolute top-3 left-3.5 right-3.5 sm:left-6 sm:right-auto sm:max-w-md z-30 bg-slate-900/95 border border-emerald-500/40 backdrop-blur-2xl p-3 rounded-2xl shadow-2xl flex flex-col gap-1.5 animate-slide-down">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping"></span>
+        <span class="text-xs font-black text-white">Xaritadan joyni tanlang</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button type="button" onclick="centerPickerOnChild()" class="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/40 rounded-xl text-[10px] font-bold transition flex items-center gap-1 active:scale-95">
+          <i data-lucide="crosshair" class="w-3 h-3"></i>
+          <span>Farzand joyi</span>
+        </button>
+        <button type="button" onclick="toggleMapLayer()" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-yellow-400 rounded-xl text-xs transition active:scale-95" title="Yo'ldosh xaritasi">
+          <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+    </div>
+    <p class="text-[10px] text-slate-300 leading-tight">
+      📍 Xaritani suring yoki kerakli bino/nuqta ustiga bosing. Yashil aylana xavfsiz chegarani bildiradi.
+    </p>
+    <div class="bg-slate-950/70 border border-slate-800 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 text-[11px] text-emerald-300 font-semibold truncate">
+      <i data-lucide="map-pin" class="w-3.5 h-3.5 shrink-0 text-emerald-400"></i>
+      <span id="zonePickerAddressText" class="truncate">Tanlangan joy aniqlanmoqda...</span>
+    </div>
+  </div>
+
+  <!-- 2. Bottom Floating Control Dock (Name, Radius Slider, Presets & Actions) -->
+  <div id="zonePickerBottomDock" class="hidden absolute left-3.5 right-3.5 sm:left-6 sm:right-auto sm:w-96 bottom-3 sm:bottom-6 z-30 bg-slate-900/95 border border-emerald-500/40 backdrop-blur-2xl p-4 rounded-3xl shadow-2xl flex flex-col gap-3 animate-slide-up">
+    <!-- Title and Close -->
+    <div class="flex items-center justify-between pb-2 border-b border-white/10">
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+          <i data-lucide="shield-plus" class="w-4 h-4"></i>
+        </div>
+        <span class="text-xs font-black text-white">Yangi Xavfsiz Makon Qo'shish</span>
+      </div>
+      <button type="button" onclick="closeAddZoneModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Zone Name Input & Quick Name Tags -->
+    <div>
+      <label class="block text-[11px] font-bold text-slate-300 mb-1">Joy nomi:</label>
+      <input id="inputZoneName" type="text" placeholder="Masalan: Uyimiz, 45-maktab, Boks to'garagi..." class="w-full bg-slate-950/80 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 font-medium transition" />
+      
+      <!-- Quick Name Tags -->
+      <div class="flex items-center gap-1.5 mt-1.5 overflow-x-auto custom-scroll pb-1">
+        <button type="button" onclick="setZoneNameTag('🏠 Uyimiz')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold shrink-0 transition active:scale-95">🏠 Uyimiz</button>
+        <button type="button" onclick="setZoneNameTag('🏫 Maktab')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold shrink-0 transition active:scale-95">🏫 Maktab</button>
+        <button type="button" onclick="setZoneNameTag('📚 Kurs')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold shrink-0 transition active:scale-95">📚 Kurs</button>
+        <button type="button" onclick="setZoneNameTag('⚽ Sport to'garagi')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold shrink-0 transition active:scale-95">⚽ Sport</button>
+        <button type="button" onclick="setZoneNameTag('👵 Bobomnikilar')" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold shrink-0 transition active:scale-95">👵 Bobomnikilar</button>
+      </div>
+    </div>
+
+    <!-- Radius Slider & Custom Distance -->
+    <div>
+      <div class="flex justify-between items-center mb-1">
+        <label class="text-[11px] font-bold text-slate-300">Xavfsiz masofa (Radius):</label>
+        <span id="zoneRadiusDisplay" class="text-xs font-black text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-lg">200 metr</span>
+      </div>
+      <input id="inputZoneRadius" type="range" min="30" max="2500" step="10" value="200" oninput="updateRadiusPreview(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+      
+      <!-- Quick Radius Chips -->
+      <div class="flex items-center justify-between gap-1 mt-1.5 text-[10px] text-slate-400">
+        <button type="button" onclick="setZoneRadiusVal(50)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">50m</button>
+        <button type="button" onclick="setZoneRadiusVal(100)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">100m</button>
+        <button type="button" onclick="setZoneRadiusVal(200)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold text-emerald-400 active:scale-95 transition">200m</button>
+        <button type="button" onclick="setZoneRadiusVal(300)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">300m</button>
+        <button type="button" onclick="setZoneRadiusVal(500)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">500m</button>
+        <button type="button" onclick="setZoneRadiusVal(1000)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">1 km</button>
+        <button type="button" onclick="setZoneRadiusVal(2000)" class="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 rounded-md font-semibold active:scale-95 transition">2 km</button>
+      </div>
+    </div>
+
+    <!-- Save and Cancel Buttons -->
+    <div class="flex items-center gap-2 pt-1">
+      <button type="button" onclick="closeAddZoneModal()" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 font-bold text-xs rounded-xl transition">
+        Bekor qilish
+      </button>
+      <button type="button" id="btnSubmitZone" onclick="submitNewZone()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-1.5 transition">
+        <i data-lucide="check" class="w-4 h-4"></i>
+        <span>Ushbu joyni saqlash</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SLIDING MODAL: TASKS (Mobile Bottom Sheet / Desktop Centered Dialog) -->
+  <div id="modal-tasks" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom">
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="check-square" class="w-5 h-5 text-indigo-400"></i>
+          <h2 id="tasksModalTitle" class="text-sm font-bold text-white">Topshiriqlar Xizmati</h2>
+        </div>
+        <button onclick="closeModal('tasks')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Action button for parent: Add new task -->
+      <div id="parentTaskActionSection" class="my-3">
+        <button onclick="openAddTaskModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Yangi topshiriq berish (Rasm/Video bilan)</span>
+        </button>
+      </div>
+
+      <div id="tasksListContainer" class="flex-1 overflow-y-auto custom-scroll space-y-2.5 py-1 max-h-[55vh]">
+        <p class="text-center text-xs text-slate-400 py-6">Topshiriqlar yuklanmoqda...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD TASK (With Photo/Video capture & preview) -->
+  <div id="modal-add-task" class="hidden fixed inset-0 z-[1010] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm flex flex-col shadow-2xl animate-fade-in my-auto max-h-[92dvh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-400"></i>
+          <span>Yangi Topshiriq</span>
+        </h3>
+        <button onclick="closeAddTaskModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="py-3 space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Topshiriq nomi:</label>
+          <input id="inputTaskTitle" type="text" placeholder="Masalan: Matematika darslarini qilish" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 transition" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Batafsil izoh (ixtiyoriy):</label>
+          <textarea id="inputTaskDesc" rows="2" placeholder="Masalan: 45-sahifadagi 1-dan 5-gacha misollar..." class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 transition resize-none"></textarea>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-300">Mukofot tangasi:</label>
+            <span id="inputTaskRewardSom" class="text-xs font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shadow-sm">≈ 10,000 so'm</span>
+          </div>
+          <input id="inputTaskReward" type="number" value="1000" min="100" step="500" oninput="updateTaskRewardPreview(this.value)" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-500 transition font-bold text-amber-400" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Rasm yoki video biriktirish (ixtiyoriy):</label>
+          <input id="taskMediaFileInput" type="file" accept="image/*,video/*" capture="environment" class="hidden" onchange="handleTaskMediaSelected(this)" />
+          
+          <button type="button" onclick="document.getElementById('taskMediaFileInput').click()" class="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-dashed border-slate-600 rounded-xl text-xs font-medium text-slate-300 flex items-center justify-center gap-2 transition">
+            <i data-lucide="camera" class="w-4 h-4 text-indigo-400"></i>
+            <span id="taskMediaLabel">Rasm / Video olish yoki tanlash</span>
+          </button>
+
+          <!-- Media preview container -->
+          <div id="taskMediaPreview" class="hidden mt-2 relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 max-h-32 flex items-center justify-center">
+            <img id="taskPreviewImg" class="hidden max-h-32 w-full object-cover" />
+            <video id="taskPreviewVideo" class="hidden max-h-32 w-full object-cover" controls></video>
+            <button type="button" onclick="clearTaskMedia()" class="absolute top-1 right-1 bg-red-600/80 hover:bg-red-600 text-white p-1 rounded-full text-xs">
+              <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeAddTaskModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSubmitTask" onclick="submitNewTask()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <span>Yuborish</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TASK SCHEDULE PICKER (Child commitment) -->
+  <div id="modal-task-schedule" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
+          <span>Qachon bajarasiz?</span>
+        </h3>
+        <button onclick="closeScheduleModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300 mt-3 mb-2">Vaqtni tanlang, ota-onangizga darhol bildirishnoma boradi:</p>
+
+      <!-- Tezkor tanlov tugmalari -->
+      <div class="grid grid-cols-2 gap-2 py-1">
+        <button onclick="confirmTaskSchedule('Hozir')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⚡️ Hozir</button>
+        <button onclick="confirmTaskSchedule('15 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 15 daqiqada</button>
+        <button onclick="confirmTaskSchedule('30 daqiqadan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 30 daqiqada</button>
+        <button onclick="confirmTaskSchedule('1 soatdan keyin')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">⏰ 1 soatda</button>
+        <button onclick="confirmTaskSchedule('Ertaga')" class="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-white text-left active:scale-95 transition">📅 Ertaga</button>
+        <button type="button" onclick="toggleCustomSchedulePicker()" class="p-2.5 bg-gradient-to-r from-amber-600/30 to-purple-600/30 hover:from-amber-600/40 border border-amber-500/50 rounded-xl text-xs font-bold text-amber-300 text-left active:scale-95 transition flex items-center justify-between">
+          <span>⚙️ Boshqa vaqt...</span>
+          <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-amber-400"></i>
+        </button>
+      </div>
+
+      <!-- BOLA O'ZI BELGILASH BO'LIMI: Sana va Vaqt tanlash (Sana avtomatik bugungi kunga to'g'irlangan) -->
+      <div id="customScheduleBox" class="mt-3 p-3.5 bg-slate-950/80 border border-amber-500/40 rounded-2xl flex flex-col gap-3 shadow-inner">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-amber-300 flex items-center gap-1.5">
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>O'zingiz aniq vaqtni tanlang</span>
+          </span>
+          <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black">
+            ✨ Bugun avtomatik
+          </span>
+        </div>
+
+        <!-- Sana tanlash (Avtomatik bugungi sana qo'yilgan, yosh bolalar tegishi shart emas) -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1 flex items-center justify-between">
+            <span>📅 Bajarish sanasi:</span>
+            <span class="text-[9px] text-emerald-400 font-medium">Bugungi kun tayyor</span>
+          </label>
+          <input
+            id="scheduleCustomDate"
+            type="date"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-amber-400 transition"
+          />
+        </div>
+
+        <!-- Vaqt tanlash -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-bold text-slate-300">⏰ Bajarish vaqti:</label>
+            <span id="customTimePreviewBadge" class="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md"></span>
+          </div>
+          <input
+            id="scheduleCustomTime"
+            type="time"
+            onchange="updateScheduleTimeBadge()"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-center text-lg font-black text-amber-300 outline-none focus:border-amber-400 transition tracking-widest"
+          />
+        </div>
+
+        <!-- Tezkor vaqt sozlash tugmalari (Yosh bolalar uchun oson: bitta bosishda vaqt qo'shiladi) -->
+        <div class="grid grid-cols-4 gap-1.5">
+          <button type="button" onclick="adjustScheduleMinutes(15)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+15 daq</button>
+          <button type="button" onclick="adjustScheduleMinutes(30)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+30 daq</button>
+          <button type="button" onclick="adjustScheduleMinutes(60)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+1 soat</button>
+          <button type="button" onclick="adjustScheduleMinutes(120)" class="py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 text-slate-200 rounded-xl text-[10px] font-bold transition text-center">+2 soat</button>
+        </div>
+
+        <!-- Tasdiqlash tugmasi -->
+        <button
+          type="button"
+          onclick="submitCustomSchedule()"
+          class="w-full mt-1 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-1.5"
+        >
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Shu vaqtga va'da berish</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TASK PROOF UPLOAD (Child sends proof photo) -->
+  <div id="modal-task-proof" class="hidden fixed inset-0 z-[1020] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="camera" class="w-4 h-4 text-emerald-400"></i>
+          <span>Bajarilganini tasdiqlash</span>
+        </h3>
+        <button onclick="closeProofModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="py-3 space-y-3">
+        <p class="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl">
+          ⚠️ <b>Eslatma:</b> Topshiriqni topshirish uchun rasm yuborish majburiy! Kameradan rasmga oling.
+        </p>
+
+        <input id="proofFileInput" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleProofPhotoSelected(this)" />
+
+        <button type="button" onclick="document.getElementById('proofFileInput').click()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 border border-dashed border-emerald-500/50 rounded-xl text-xs font-bold text-emerald-400 flex items-center justify-center gap-2 transition">
+          <i data-lucide="camera" class="w-5 h-5"></i>
+          <span id="proofFileLabel">📸 Kameradan rasmga olish</span>
+        </button>
+
+        <div id="proofPhotoPreviewContainer" class="hidden relative rounded-xl overflow-hidden border border-slate-700 bg-slate-950 max-h-48 flex items-center justify-center">
+          <img id="proofPreviewImg" class="max-h-48 w-full object-cover" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeProofModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSubmitProof" onclick="submitTaskProof()" disabled class="flex-1 py-2.5 bg-emerald-600 disabled:opacity-40 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-lg">Ota-onaga yuborish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL SCREEN AUTH GATE (Locks site until 6-digit code is verified) -->
+  <div id="authGateModal" class="hidden fixed inset-0 z-[2000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-top safe-bottom">
+    <div class="relative bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-sm sm:max-w-md max-h-[94dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in text-center">
+      <!-- Close button (Always accessible so user is never trapped) -->
+      <button id="btnCloseAuthGate" onclick="hideAuthGateModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <div class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3 overflow-hidden">
+        <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Child Security Bot" />
+      </div>
+
+      <h2 id="authModalTitle" class="text-base font-bold text-white">Child Security Bot</h2>
+      <p id="authModalSub" class="text-xs text-slate-400 mt-1">
+        Bolalar xavfsizligi va rag'batlantirish platformasi
+      </p>
+
+      <div class="my-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 text-left">
+        <label class="block text-xs font-semibold text-slate-200 mb-1.5 flex items-center justify-between">
+          <span>🔑 6 xonali kirish kodingiz:</span>
+          <span class="text-[10px] text-blue-400 font-normal">Telegram botdan oling</span>
+        </label>
+        <input
+          id="inputAuthCode"
+          type="text"
+          maxlength="8"
+          inputmode="numeric"
+          placeholder="123456"
+          class="w-full bg-slate-900 border border-slate-600 text-center text-2xl font-mono tracking-widest font-bold text-white rounded-xl py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+          onkeyup="if(event.key === 'Enter') submitAuthCode()"
+        />
+        <p id="authErrorText" class="hidden text-[11px] text-red-400 font-medium mt-1.5 flex items-center gap-1">
+          <i data-lucide="alert-circle" class="w-3 h-3"></i>
+          <span id="authErrorMsg">Kiritilgan kod noto'g'ri</span>
+        </p>
+
+        <button
+          id="btnSubmitAuthCode"
+          onclick="submitAuthCode()"
+          class="w-full mt-3 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-600/30 transition active:scale-95 flex items-center justify-center gap-2"
+        >
+          <span>Saytga kirish</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Telegram Bot Info Helper -->
+      <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60 text-left mb-3">
+        💡 <b>Kod qayerdan olinadi?</b><br/>
+        Telegram botimizda <b>«🔑 Saytga kirish kodi»</b> tugmasini bosing va olingan kodni kiriting.
+      </div>
+
+      <!-- Demo preview buttons -->
+      <div class="border-t border-slate-800 pt-3">
+        <p class="text-[11px] text-slate-400 mb-2 font-medium">Yoki tizimni kodsiz demo rejimida sinab ko'ring:</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="startDemoMode('parent')" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition">
+            👨‍👩‍👧 Ota-ona Demo
+          </button>
+          <button onclick="startDemoMode('child')" class="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-emerald-400 transition">
+            👦 Farzand Demo
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COIN RATE SETTINGS (Corner feature) -->
+  <div id="modal-coin-rate" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>
+          <span>Tangalar Kursini Sozlash</span>
+        </h3>
+        <button onclick="closeCoinRateModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Recommendation tip (shown on first use, dismissed forever if clicked) -->
+      <div id="coinRateTipBox" class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200/90 space-y-2">
+        <div class="flex items-start gap-2">
+          <i data-lucide="lightbulb" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+          <p class="leading-relaxed">
+            <b>Psixologik tavsiya:</b> Farzandingiz bajargan foydali topshiriqlari uchun berilgan tangalar real pulga aylanishi bolada mehnat qadrini va sog'lom moliyaviy maqsadlarni shakllantiradi.
+          </p>
+        </div>
+        <button type="button" onclick="dismissCoinRateTip()" class="w-full py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] rounded-lg border border-amber-500/40 transition">
+          ✓ Tushundim (Boshqa ko'rsatilmasin)
+        </button>
+      </div>
+
+      <div class="py-3 space-y-3">
+        <!-- Presets -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 mb-1.5">Tezkor tavsiyaviy kurslar:</label>
+          <div class="grid grid-cols-3 gap-1.5">
+            <button type="button" onclick="applyCoinRatePreset(1000, 10000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 10,000
+            </button>
+            <button type="button" onclick="applyCoinRatePreset(1000, 5000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 5,000
+            </button>
+            <button type="button" onclick="applyCoinRatePreset(1000, 20000)" class="py-2 px-1 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-[11px] font-medium text-slate-200 text-center transition">
+              1k = 20,000
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Tanga miqdori:</label>
+            <input id="inputCoinRateCoins" type="number" value="1000" min="1" step="100" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-500 font-bold" oninput="updateCoinRatePreview()" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">So'm miqdori:</label>
+            <input id="inputCoinRateSom" type="number" value="10000" min="1" step="1000" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-500 font-bold text-amber-400" oninput="updateCoinRatePreview()" />
+          </div>
+        </div>
+
+        <!-- Live calculation indicator -->
+        <div class="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700 text-center text-xs">
+          <span class="text-slate-400">Hisob-kitob:</span>
+          <span id="coinRateLivePreview" class="font-bold text-amber-300 ml-1">1 tanga = 10 so'm</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeCoinRateModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSaveCoinRate" onclick="saveCoinRate()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <span>Saqlash</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SETTINGS (DESIGN THEMES & LANGUAGE SWITCHER) -->
+  <div id="modal-settings" class="tab-panel hidden fixed inset-0 z-[1100] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="text-lg">⚙️</span>
+          <span data-i18n="settings_title">Dizayn va Til Sozlamalari</span>
+        </h3>
+        <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- App Brand Card -->
+      <div class="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-950/60 via-indigo-950/40 to-slate-900 border border-blue-500/30 flex items-center gap-3">
+        <img src="logo.png?v=17" class="w-12 h-12 rounded-xl object-contain drop-shadow-md shrink-0" alt="Child Security Bot Logo" />
+        <div>
+          <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+            <span>Child Security Bot</span>
+            <span class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded-md font-bold">PRO</span>
+          </h4>
+          <p class="text-[10px] text-slate-400 mt-0.5">Aqlli Bolalar Xavfsizlik & Rag'bat Tizimi</p>
+        </div>
+      </div>
+
+      <!-- SECTION 1: LANGUAGE SWITCHER -->
+      <div class="mt-3 mb-4">
+        <div class="flex items-center gap-1.5 text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">
+          <i data-lucide="globe" class="w-3.5 h-3.5"></i>
+          <span data-i18n="lang_heading">🌐 Tilni tanlash</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <!-- 1. Uzbek (Latin) -->
+          <button type="button" onclick="setGlobalLanguage('uz_lat')" id="langBtn-uz_lat" class="lang-option-btn p-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex items-center justify-between transition active:scale-95 text-left">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>🇺🇿</span> <span>O'zbekcha</span>
+            </span>
+            <span class="lang-check text-xs font-bold text-blue-400 hidden">✓</span>
+          </button>
+
+          <!-- 2. Uzbek (Cyrillic) -->
+          <button type="button" onclick="setGlobalLanguage('uz_cyr')" id="langBtn-uz_cyr" class="lang-option-btn p-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex items-center justify-between transition active:scale-95 text-left">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>🇺🇿</span> <span>Ўзбекча</span>
+            </span>
+            <span class="lang-check text-xs font-bold text-blue-400 hidden">✓</span>
+          </button>
+
+          <!-- 3. Russian -->
+          <button type="button" onclick="setGlobalLanguage('ru')" id="langBtn-ru" class="lang-option-btn p-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex items-center justify-between transition active:scale-95 text-left">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>🇷🇺</span> <span>Русский</span>
+            </span>
+            <span class="lang-check text-xs font-bold text-blue-400 hidden">✓</span>
+          </button>
+
+          <!-- 4. English -->
+          <button type="button" onclick="setGlobalLanguage('en')" id="langBtn-en" class="lang-option-btn p-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-800 flex items-center justify-between transition active:scale-95 text-left">
+            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>🇬🇧</span> <span>English</span>
+            </span>
+            <span class="lang-check text-xs font-bold text-blue-400 hidden">✓</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION 2: 12 DISTINCT THEMES -->
+      <div class="pt-3 border-t border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-purple-400 uppercase tracking-wider">
+            <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+            <span data-i18n="theme_heading">🎨 Dizayn Mavzulari (12 xil)</span>
+          </div>
+          <span class="text-[10px] text-slate-400">12 ta uslub</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mb-3" data-i18n="theme_desc">
+          O'zingizga yoqqan dizaynni tanlang. U butun sayt, xarita va tugmalar ranglarini darhol o'zgartiradi:
+        </p>
+
+        <!-- 12 Themes List -->
+        <div class="space-y-2 py-1 max-h-[50vh] overflow-y-auto custom-scroll pr-1">
+          <!-- 1. Galaxy Neon -->
+          <button type="button" onclick="setGlobalTheme('galaxy')" id="themeBtn-galaxy" class="theme-option-btn w-full p-2.5 rounded-2xl border border-purple-500/40 bg-gradient-to-r from-purple-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-purple-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-pink-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-indigo-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🌌 Kosmik Neon</span>
+                  <span class="text-[9px] bg-purple-500/30 text-purple-300 px-1.5 py-0.2 rounded-full font-bold">Neon</span>
+                </p>
+                <p class="text-[10px] text-purple-300">Yulduzli tun, binafsha & pushti</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-purple-400 hidden">✓</span>
+          </button>
+
+          <!-- 2. Midnight Tactical -->
+          <button type="button" onclick="setGlobalTheme('midnight')" id="themeBtn-midnight" class="theme-option-btn w-full p-2.5 rounded-2xl border border-blue-500/40 bg-gradient-to-r from-blue-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-blue-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-cyan-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-slate-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🛡️ Taktik Qora</span>
+                  <span class="text-[9px] bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded-full font-bold">OLED</span>
+                </p>
+                <p class="text-[10px] text-blue-300">Tungi qora & safir moviy</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-blue-400 hidden">✓</span>
+          </button>
+
+          <!-- 3. Comic Hero -->
+          <button type="button" onclick="setGlobalTheme('comic')" id="themeBtn-comic" class="theme-option-btn w-full p-2.5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/70 via-rose-950/40 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-amber-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-rose-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-blue-600 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🦸 Super Qahramon</span>
+                  <span class="text-[9px] bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full font-bold">Komiks</span>
+                </p>
+                <p class="text-[10px] text-amber-300">Quvnoq komiks, oltin & qizil</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-amber-400 hidden">✓</span>
+          </button>
+
+          <!-- 4. Emerald Forest -->
+          <button type="button" onclick="setGlobalTheme('emerald')" id="themeBtn-emerald" class="theme-option-btn w-full p-2.5 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-emerald-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-teal-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-green-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🌿 Zümrad Tabiat</p>
+                <p class="text-[10px] text-emerald-300">Jonli o'rmon, yashil xotirjamlik</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-emerald-400 hidden">✓</span>
+          </button>
+
+          <!-- 5. Sunset Amber -->
+          <button type="button" onclick="setGlobalTheme('sunset')" id="themeBtn-sunset" class="theme-option-btn w-full p-2.5 rounded-2xl border border-orange-500/40 bg-gradient-to-r from-orange-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-orange-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-amber-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-amber-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🌅 Oltin Quyosh</p>
+                <p class="text-[10px] text-amber-300">Iliq to'q sariq va oltin shafaq</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-amber-400 hidden">✓</span>
+          </button>
+
+          <!-- 6. Clean Daylight -->
+          <button type="button" onclick="setGlobalTheme('daylight')" id="themeBtn-daylight" class="theme-option-btn w-full p-2.5 rounded-2xl border border-slate-400/40 bg-gradient-to-r from-slate-200 to-white flex items-center justify-between transition active:scale-95 text-left shadow-md text-slate-900">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-blue-600 border border-white shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-sky-400 border border-white shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-white border border-slate-300 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-slate-900">☀️ Yorug' Kunduz</p>
+                <p class="text-[10px] text-slate-600">Toza oq, zamonaviy kunduzgi ko'rinish</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-blue-600 hidden">✓</span>
+          </button>
+
+          <!-- 7. Ocean Abyss -->
+          <button type="button" onclick="setGlobalTheme('ocean')" id="themeBtn-ocean" class="theme-option-btn w-full p-2.5 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-cyan-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-blue-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-teal-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🌊 Chuqur Okean</p>
+                <p class="text-[10px] text-cyan-300">Dengiz tubi, elektr firuza & moviy</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-cyan-400 hidden">✓</span>
+          </button>
+
+          <!-- 8. Sakura Dream -->
+          <button type="button" onclick="setGlobalTheme('sakura')" id="themeBtn-sakura" class="theme-option-btn w-full p-2.5 rounded-2xl border border-pink-500/40 bg-gradient-to-r from-pink-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-pink-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-rose-300 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-purple-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🌸 Pushti Sakura</p>
+                <p class="text-[10px] text-pink-300">Yapon olchasi, mayin pushti</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-pink-400 hidden">✓</span>
+          </button>
+
+          <!-- 9. Cyberpunk 2077 -->
+          <button type="button" onclick="setGlobalTheme('cyberpunk')" id="themeBtn-cyberpunk" class="theme-option-btn w-full p-2.5 rounded-2xl border border-yellow-500/40 bg-gradient-to-r from-yellow-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-yellow-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-cyan-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-black border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">⚡ Kiberpank 2077</p>
+                <p class="text-[10px] text-yellow-300">Neon sariq, kiber moviy va qora</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-yellow-400 hidden">✓</span>
+          </button>
+
+          <!-- 10. Crimson Magma -->
+          <button type="button" onclick="setGlobalTheme('magma')" id="themeBtn-magma" class="theme-option-btn w-full p-2.5 rounded-2xl border border-red-500/40 bg-gradient-to-r from-red-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-red-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-orange-500 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-stone-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🌋 Olovli Magma</p>
+                <p class="text-[10px] text-red-300">Vulqon qorasi & qip-qizil olov</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-red-400 hidden">✓</span>
+          </button>
+
+          <!-- 11. Retro Arcade -->
+          <button type="button" onclick="setGlobalTheme('arcade')" id="themeBtn-arcade" class="theme-option-btn w-full p-2.5 rounded-2xl border border-purple-400/40 bg-gradient-to-r from-purple-900/60 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-purple-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-emerald-400 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-fuchsia-950 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">🎮 Retro Piksel</p>
+                <p class="text-[10px] text-purple-300">8-Bit sintveyn neon & piksel yashil</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-purple-400 hidden">✓</span>
+          </button>
+
+          <!-- 12. Arctic Frost -->
+          <button type="button" onclick="setGlobalTheme('frost')" id="themeBtn-frost" class="theme-option-btn w-full p-2.5 rounded-2xl border border-sky-400/40 bg-gradient-to-r from-sky-950/70 to-slate-900 flex items-center justify-between transition active:scale-95 text-left shadow-md">
+            <div class="flex items-center gap-2.5">
+              <div class="flex -space-x-1.5 shrink-0">
+                <span class="w-5 h-5 rounded-full bg-sky-300 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-blue-200 border border-white/40 shadow"></span>
+                <span class="w-5 h-5 rounded-full bg-slate-900 border border-white/40 shadow"></span>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">❄️ Muzlik Arktika</p>
+                <p class="text-[10px] text-sky-300">Muzdek tiniq moviy & qor oqi</p>
+              </div>
+            </div>
+            <span class="theme-check text-xs font-bold text-sky-400 hidden">✓</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="pt-3">
+        <button type="button" onclick="closeSettingsModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold rounded-xl transition" data-i18n="close_btn">
+          Yopish
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING / POPUP MODAL: SOS ACTIVE (Emergency Screen for Child) -->
+  <div id="modal-sos-active" class="hidden fixed inset-0 z-[1200] bg-red-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-gradient-to-b from-red-900 via-slate-900 to-black border-2 border-red-500 rounded-3xl p-6 w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-fade-in relative overflow-hidden">
+      <!-- Background glowing pulse effect -->
+      <div class="absolute -top-16 -left-16 w-48 h-48 bg-red-600/30 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+      <div class="absolute -bottom-16 -right-16 w-48 h-48 bg-rose-600/30 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+
+      <!-- Pulsing Shield Icon -->
+      <div class="relative mb-4">
+        <div class="w-20 h-20 rounded-full bg-red-600/30 animate-ping absolute inset-0"></div>
+        <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center shadow-lg shadow-red-600/50 relative border-2 border-white/80">
+          <i data-lucide="shield-alert" class="w-10 h-10 text-white animate-bounce"></i>
+        </div>
+      </div>
+
+      <h3 class="text-xl font-black text-white tracking-wide mb-1">🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI!</h3>
+      <p class="text-xs text-red-200 font-medium mb-4">
+        Ota-onangizga favqulodda ogohlantirish, jonli geolokatsiyangiz va batareya holatingiz yetkazildi.
+      </p>
+
+      <!-- Reassurance Card -->
+      <div class="w-full bg-red-950/60 border border-red-500/40 rounded-2xl p-3 mb-4 text-left">
+        <p class="text-[11px] text-rose-100 flex items-center gap-2 mb-1.5 font-bold">
+          <i data-lucide="radio" class="w-4 h-4 text-red-400 shrink-0 animate-pulse"></i>
+          <span>Xavfsizlik tizimi nazoratda</span>
+        </p>
+        <p class="text-[10px] text-rose-200/80 leading-relaxed">
+          Iltimos, tinchlaning va xavfsiz joyda turing. Ota-onangiz tez orada siz bilan bog'lanadi.
+        </p>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="w-full flex flex-col gap-2.5">
+        <button onclick="callParent()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
+          <i data-lucide="phone-call" class="w-4 h-4"></i>
+          <span>📞 Ota-onaga qo'ng'iroq qilish</span>
+        </button>
+
+        <button onclick="openParentChat()" class="w-full py-2.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs rounded-xl border border-slate-600 flex items-center justify-center gap-2 transition">
+          <i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>
+          <span>💬 Telegram orqali yozish</span>
+        </button>
+
+        <!-- Safe / Resolve SOS Button -->
+        <button onclick="cancelChildSOS()" class="w-full mt-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-900/50 flex items-center justify-center gap-2 transition border border-emerald-400/50">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>✅ Hammasi yaxshi / Xavf o'tdi (To'xtatish)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE CHILD CONFIRMATION MODAL -->
+  <div id="deleteChildModal" class="hidden fixed inset-0 z-[2200] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-red-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <div class="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mx-auto mb-3 shadow-lg">
+        <i data-lucide="trash-2" class="w-7 h-7"></i>
+      </div>
+      <h3 class="text-base font-bold text-white">Farzand profilini o'chirish</h3>
+      <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+        Haqiqatan ham <b id="deleteChildNameText" class="text-red-400">Farzand</b> profilini ro'yxatdan va bazadan butunlay o'chirmoqchimisiz?
+      </p>
+      <div class="bg-red-950/40 border border-red-500/30 rounded-xl p-3 my-3 text-left">
+        <p class="text-[11px] text-red-300">
+          ⚠️ <b>Ogohlantirish:</b> Ushbu farzandning barcha joylashuv tarixi, topshiriqlari va xavfsizlik sozlamalari tiklab bo'lmas darajada o'chiriladi.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 gap-2 mt-4">
+        <button onclick="closeDeleteChildModal()" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs font-semibold transition">
+          Bekor qilish
+        </button>
+        <button id="btnConfirmDeleteChild" onclick="confirmDeleteChild()" class="py-2.5 px-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-red-900/40">
+          Ha, o'chirilsin
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHILD ONBOARDING PERMISSIONS MODAL -->
+  <div id="childOnboardingModal" class="hidden fixed inset-0 z-[2400] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="skipChildPermissions()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-lg border-2 border-white/80">
+        <i data-lucide="shield-check" class="w-8 h-8 text-white"></i>
+      </div>
+      <h3 class="text-base font-black text-white">Xavfsizlik Ruxsatnomasi 🛡️</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Xavfsizligingizni ta'minlash va ota-onangiz sizning qayerdaligingizni bilib turishi uchun jonli joylashuvga 1 marta ruxsat bering:
+      </p>
+
+      <div class="flex flex-col gap-2.5 my-4 text-left">
+        <!-- Geolokatsiya -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="map-pin" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-white">Doimiy Jonli Joylashuv (GPS)</h4>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">1 marta ruxsat beriladi va qayta so'ralmaydi. Ota-onangiz har doim xavfsizligingizdan xabardor bo'ladi.</p>
+          </div>
+        </div>
+      </div>
+
+      <button id="btnGrantChildPermissions" onclick="requestChildAllPermissions()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-2xl shadow-xl shadow-teal-500/20 transition flex items-center justify-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span>Ruxsat berish (1 martalik)</span>
+      </button>
+
+      <button onclick="skipChildPermissions()" class="w-full mt-2.5 py-2.5 text-slate-400 hover:text-white text-xs font-semibold active:scale-95 transition">
+        Keyinroq ruxsat berish (O'tkazib yuborish)
+      </button>
+    </div>
+  </div>
+
+
+
+  <!-- CHILD ACTIVE CHECK NOTIFICATION BANNER (Positioned below header, fully readable) -->
+  <div id="childActiveCheckBanner" style="top: calc(84px + max(8px, env(safe-area-inset-top, 0px)));" class="hidden fixed left-3.5 right-3.5 sm:left-auto sm:right-6 sm:w-96 z-[2500] bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-4 rounded-2xl shadow-2xl border border-white/30 animate-fade-in flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 text-white relative">
+      <i data-lucide="bell" class="w-5 h-5 animate-bounce"></i>
+      <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-400 rounded-full animate-ping"></span>
+    </div>
+    <div class="min-w-0 flex-1 text-left">
+      <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+        <span>Joylashuv tekshirildi</span>
+        <span class="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-full font-mono font-bold" id="childCheckTimeText">12:00</span>
+      </h4>
+      <p class="text-xs text-blue-100 font-semibold mt-0.5 leading-snug">
+        Ota-onangiz joylashuvingizni tekshirdi 📍
+      </p>
+    </div>
+    <button onclick="dismissChildActiveBanner()" class="text-white/80 hover:text-white p-1 rounded-lg shrink-0">
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <!-- MODAL: CHILD INVITE PARENT -->
+  <div id="childInviteParentModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-blue-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="closeChildInviteParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <div class="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
+        👨‍👩‍👧
+      </div>
+      <h3 class="text-base font-bold text-white">Ota-onangizni taklif qilish</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Xavfsizligingizni kuzatib turishi va sizga topshiriqlar berishi uchun ushbu taklif havolasini ota-onangizga yuboring:
+      </p>
+
+      <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
+        <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+          🔗 Tezkor Telegram ulanish havolasi:
+        </label>
+        <div class="flex items-center gap-1.5">
+          <input id="childInviteLinkInput" readonly class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl outline-none font-mono truncate" value="Havola yuklanmoqda..." />
+          <button onclick="copyChildInviteLink()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-bold shrink-0 transition" title="Nusxalash">
+            Nusxa
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-3 text-left mb-3.5">
+        <p class="text-[11px] text-indigo-300">
+          🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code id="childOwnCodeText" class="font-mono font-bold text-amber-300 bg-black/40 px-1.5 py-0.5 rounded">------</code>
+        </p>
+        <p class="text-[9px] text-slate-400 mt-0.5">Ushbu kod faqat o'zingizning sarguzasht profilingizga kirish uchun kerak.</p>
+      </div>
+
+      <button id="btnShareChildInviteTg" onclick="shareChildInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        <span>Telegram orqali ota-onamga yuborish</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: PARENT INVITE SPOUSE / CO-PARENT -->
+  <div id="parentInviteSpouseModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <button onclick="closeParentInviteSpouseModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <div class="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
+        👨‍👩‍👧
+      </div>
+      <h3 class="text-base font-bold text-white">Hamkor ota-onani taklif qilish</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Turmush o'rtog'ingiz (dada yoki oyi) ham bolalarni birgalikda kuzatishi uchun ushbu taklif havolasini yuboring. Ular botga kirishi bilan barcha farzandlar unga ham ulanadi:
+      </p>
+
+      <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
+        <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
+          🔗 Hamkor ota-ona ulanish havolasi:
+        </label>
+        <div class="flex items-center gap-1.5">
+          <input id="parentInviteLinkInput" readonly class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl outline-none font-mono truncate" value="Havola yuklanmoqda..." />
+          <button onclick="copyParentInviteLink()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-bold shrink-0 transition" title="Nusxalash">
+            Nusxa
+          </button>
+        </div>
+      </div>
+
+      <button id="btnShareParentInviteTg" onclick="shareParentInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-900/40 transition flex items-center justify-center gap-2">
+        <i data-lucide="send" class="w-4 h-4"></i>
+        <span>Turmush o'rtog'imga yuborish</span>
+      </button>
+    </div>
+  </div>
+
+
+  <!-- MODAL: START WALK SAFE (Child sets duration & destination) -->
+  <div id="modal-walk-safe" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="text-lg">🚶‍♂️</span>
+          <span>Xavfsiz Yo'l Taymeri</span>
+        </h3>
+        <button onclick="closeWalkSafeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200/90 leading-relaxed">
+        💡 Maktab, kurs yoki do'kondan uyga qaytayotganda taymerni yoqing. Ota-onangiz sizni xaritada kuzatib turadi va vaqti-vaqti bilan ahvolingizni so'raydi.
+      </div>
+
+      <!-- Destination Presets -->
+      <div class="py-2.5 space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">🎯 Qayerga boryapsiz?</label>
+          <div class="grid grid-cols-2 gap-1.5 mb-2">
+            <button type="button" onclick="setWalkSafeDestination('Uyga qaytish 🏠')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🏠 Uyga qaytish</button>
+            <button type="button" onclick="setWalkSafeDestination('Maktabga borish 🏫')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🏫 Maktabga</button>
+            <button type="button" onclick="setWalkSafeDestination('O'quv markaziga 📚')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">📚 O'quv markaziga</button>
+            <button type="button" onclick="setWalkSafeDestination('Sport mashg'ulotiga ⚽')" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⚽ Sportga</button>
+          </div>
+          <input id="inputWalkSafeDestination" type="text" value="Uyga qaytish 🏠" placeholder="Yo'nalish nomi..." class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-amber-400 font-bold" />
+        </div>
+
+        <!-- Duration Presets -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-[11px] font-bold text-slate-300">⏱ Rejalashtirilgan vaqt:</label>
+            <span id="walkSafeDurationDisplay" class="text-xs font-black text-amber-400">20 daqiqa</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1.5 mb-2">
+            <button type="button" onclick="setWalkSafeDuration(10)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">10 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(20)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">20 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(30)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">30 daq</button>
+            <button type="button" onclick="setWalkSafeDuration(45)" class="py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-bold text-white transition text-center">45 daq</button>
+          </div>
+          <input id="inputWalkSafeSlider" type="range" min="5" max="90" step="5" value="20" oninput="setWalkSafeDuration(this.value)" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeWalkSafeModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnStartWalkSafeConfirm" onclick="confirmStartWalkSafe()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 active:scale-95 text-slate-950 text-xs font-black rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+          <span>Boshlash</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL: WALK SAFE CHECK-IN ("Ahvolingiz yaxshimi?") -->
+  <div id="modal-walk-safe-checkin" class="hidden fixed inset-0 z-[1100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="relative bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+      <div class="w-16 h-16 rounded-3xl bg-amber-500/20 border border-amber-400/40 text-amber-300 flex items-center justify-center text-3xl mx-auto mb-3 shadow-lg animate-bounce">
+        🔔
+      </div>
+      <h3 class="text-base font-black text-white">Hammasi joyidami?</h3>
+      <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+        Siz hozir «Xavfsiz yo'l» rejimidasiz. Barchasi yaxshi ekanini ota-onangizga bildirish uchun tasdiqlang:
+      </p>
+      <div class="mt-4 flex flex-col gap-2">
+        <button onclick="confirmWalkSafeCheckInModal()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+          <span>✅ Ha, hammasi yaxshi!</span>
+        </button>
+        <button onclick="triggerChildSOS()" class="w-full py-2.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 font-bold text-xs rounded-xl border border-red-500/40 transition">
+          🚨 Yordam kerak (SOS)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT WISHLIST / ORZULAR QUTISI -->
+  <div id="modal-edit-wishlist" class="hidden fixed inset-0 z-[1050] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-5 w-full max-w-sm max-h-[92dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="text-lg">🎯</span>
+          <span>Orzular Qutisi & Maqsad</span>
+        </h3>
+        <button onclick="closeEditWishlistModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-200/90 leading-relaxed">
+        💡 Qanday orzungiz bor? Uni maqsad qilib qo'ying. Foydali topshiriqlarni bajarganingiz sari jamg'armaniz to'lib boradi!
+      </div>
+
+      <!-- Wishlist Presets -->
+      <div class="py-2.5 space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Tezkor namunalar:</label>
+          <div class="grid grid-cols-2 gap-1.5 mb-2">
+            <button type="button" onclick="setWishlistPreset('Yangi Velosiped 🚲', 600000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">🚲 Velosiped (600k)</button>
+            <button type="button" onclick="setWishlistPreset('Futbol to'pi ⚽', 150000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⚽ Futbol to'pi (150k)</button>
+            <button type="button" onclick="setWishlistPreset('Tezkor Konki ⛸️', 350000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">⛸️ Konki (350k)</button>
+            <button type="button" onclick="setWishlistPreset('Kitoblar to'plami 📚', 100000)" class="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded-xl text-xs font-semibold text-white transition text-left">📚 Kitoblar (100k)</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Orzuingiz nomi:</label>
+          <input id="inputWishlistTitle" type="text" placeholder="Masalan: Yangi Velosiped 🚲" class="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 font-bold" />
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-300 mb-1">Narxi (so'mda):</label>
+          <input id="inputWishlistTargetSom" type="number" step="10000" min="5000" value="600000" class="w-full bg-slate-800 border border-slate-700 text-amber-400 rounded-xl px-3 py-2 text-xs outline-none focus:border-emerald-500 font-bold" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="closeEditWishlistModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs font-semibold rounded-xl transition">Bekor qilish</button>
+        <button id="btnSaveWishlistConfirm" onclick="saveWishlistConfirm()" class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 active:scale-95 text-white text-xs font-black rounded-xl transition shadow-lg flex items-center justify-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Saqlash</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING MODAL: DAILY SAFETY REPORT (Mobile Bottom Sheet / Desktop Centered) -->
+  <div id="modal-daily-report" class="tab-panel hidden fixed inset-0 z-[1000] bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end md:justify-center md:items-center p-0 md:p-4">
+    <div class="bg-slate-900 border-t md:border border-slate-800 rounded-t-[28px] md:rounded-3xl p-5 max-h-[85vh] md:max-h-[80vh] w-full md:max-w-md flex flex-col animate-slide-up shadow-2xl safe-bottom overflow-y-auto custom-scroll">
+      <div class="w-12 h-1 bg-slate-700 rounded-full mx-auto mb-3 shrink-0 md:hidden"></div>
+
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2">
+          <i data-lucide="bar-chart-2" class="w-5 h-5 text-indigo-400"></i>
+          <h2 class="text-sm font-bold text-white">Kunlik Xavfsizlik Hisoboti</h2>
+        </div>
+        <button onclick="closeDailyReportModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div id="dailyReportContent" class="py-3 space-y-3">
+        <p class="text-center text-xs text-slate-400 py-6">Hisobot yuklanmoqda...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js?v=46"></script>
+
+  <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
+  <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+    <div class="relative bg-slate-900 border-t sm:border border-blue-500/30 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center">
+      <button onclick="closeCallParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="w-16 h-16 rounded-3xl bg-emerald-500/20 border-2 border-emerald-400/40 flex items-center justify-center mx-auto mb-3 text-emerald-400 shadow-xl">
+        <i data-lucide="phone-call" class="w-8 h-8 animate-pulse"></i>
+      </div>
+
+      <h3 id="modalParentCallName" class="text-base font-black text-white">Ota-onaga qo'ng'iroq</h3>
+      <p id="modalParentCallDesc" class="text-xs text-slate-300 mt-1">
+        Quyidagi tugma orqali to'g'ridan-to'g'ri bir bosishda telefon qilishingiz mumkin:
+      </p>
+
+      <div class="my-4 flex flex-col gap-2.5">
+        <!-- 1. Direct Tel Link Button (Native 1-Tap Dial) -->
+        <a id="btnModalParentTel" href="tel:+998901234567" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-95 text-white font-black text-sm rounded-2xl shadow-xl shadow-emerald-900/40 flex items-center justify-center gap-2.5 transition">
+          <i data-lucide="phone" class="w-5 h-5"></i>
+          <span id="modalParentCallPhoneText">Qo'ng'iroq qilish (+998...)</span>
+        </a>
+
+        <!-- 2. Telegram Direct Call / Chat -->
+        <button id="btnModalParentTelegram" onclick="openParentTelegramChat()" class="w-full py-3 px-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 active:scale-95 text-blue-300 hover:text-white font-bold text-xs rounded-2xl transition flex items-center justify-center gap-2">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Telegram orqali qo'ng'iroq / yozish</span>
+        </button>
+
+        <!-- 3. Copy Phone Number -->
+        <button id="btnModalParentCopy" onclick="copyParentPhoneNumber()" class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white font-semibold text-xs rounded-2xl transition flex items-center justify-center gap-2">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+          <span id="btnModalParentCopyText">Raqamdan nusxa olish</span>
+        </button>
+      </div>
+
+      <div id="modalParentBotBadge" class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium flex items-center justify-center gap-2">
+        <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-400"></i>
+        <span>Telegram botingizga ham kontakt kartasi yuborildi!</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

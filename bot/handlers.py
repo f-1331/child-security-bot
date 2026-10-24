@@ -2529,6 +2529,56 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
 
 
 @router.message(F.text.in_([
+    "📲 Mobil ilova",
+    "📲 Mobil ilova (Android & iPhone)",
+    "Mobil ilova",
+    "📲 Ilovani yuklab olish"
+]))
+@router.message(Command("app", "download", "apk", "ilova"))
+async def on_download_app_pressed(message: Message):
+    """Provide mobile application download links for Android APK."""
+    webapp_url = settings.RESOLVED_WEBAPP_URL
+    apk_download_url = f"{webapp_url}/download/apk"
+
+    text = (
+        "📲 **Child Security Mobil Ilovasi (Android)**\n\n"
+        "Farzandingiz xavfsizligini ta'minlash va telefon ekrani o'chiq bo'lsa ham joylashuvini "
+        "24/7 uzluksiz kuzatib borish uchun Android APK ilovasini o'rnating:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 **Android APK imkoniyatlari:**\n"
+        "• **24/7 Doimiy Foniy GPS:** Ekran o'chiq, qulflangan yoki ilova berkitilgan holatda ham GPS to'xtovsiz yuboriladi.\n"
+        "• **Avtomatik qayta ishga tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
+        "• **Batareyani tejash:** Kam energiya sarflovchi aqlli sensorlar.\n"
+        "• **Batareya & ovoz rejimi:** Har doim real vaqtda yangilanadi.\n\n"
+        f"📥 [Android APK Yuklab Olish]({apk_download_url})\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 **O'rnatish tartibi:**\n"
+        "1️⃣ Quyidagi tugma orqali `.apk` faylni yuklab oling va telefonga o'rnating.\n"
+        "2️⃣ Ilovani ochib, unga **\"Joylashuvga doimiy ruxsat berish\" (Allow all the time)** ruxsatini bering.\n"
+        "3️⃣ Farzand kodi orqali kiring. Bo'ldi! Tizim 24/7 rejimda bolangizni himoya qiladi."
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📥 Android APK Yuklab Olish (Doimiy GPS)",
+                    url=apk_download_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Web App Saytini ochish",
+                    web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+
+@router.message(F.text.in_([
     "🔄 Rolni o'zgartirish",
     "Rolni o'zgartirish",
     "🔄 Rolni almashtirish",

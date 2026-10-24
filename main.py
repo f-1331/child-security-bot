@@ -128,6 +128,24 @@ async def root_redirect():
     return RedirectResponse(url="/child_security_site/index.html")
 
 
+@app.get("/download/apk", tags=["App"])
+async def download_android_apk():
+    """Download or redirect to the Android APK file."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+
+    local_apk = os.path.join(settings.BASE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+    if os.path.exists(local_apk):
+        return FileResponse(
+            local_apk,
+            filename="ChildSecurity.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    return RedirectResponse(
+        url="https://github.com/f-1331/child-security-bot/releases/latest/download/app-debug.apk",
+        status_code=302
+    )
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Service health status endpoint."""

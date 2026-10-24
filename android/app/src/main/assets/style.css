@@ -1,0 +1,969 @@
+/* ==========================================================================
+   CHILD SECURITY BOT - PREMIUM APPLE HIG / LINEAR DESIGN SYSTEM
+   Ultra-refined Glassmorphism, Dynamic Island HUD, Tactile Mobile Ergonomics
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. GLOBAL THEME ENGINE & PALETTES (12 DYNAMIC THEMES)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Default: Midnight Tactical */
+  --bg-main: #06080e;
+  --bg-surface: #0c101b;
+  --bg-card: rgba(15, 22, 38, 0.78);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --glass-bg: rgba(12, 17, 30, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65);
+  --pill-bg: rgba(23, 33, 56, 0.85);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.45);
+  --accent: #06b6d4;
+  --header-bg: rgba(8, 12, 22, 0.82);
+  --nav-bg: rgba(8, 12, 22, 0.85);
+  --tab-active-bg: rgba(59, 130, 246, 0.2);
+  --tab-active-color: #60a5fa;
+  --badge-bg: rgba(59, 130, 246, 0.18);
+  --badge-border: rgba(59, 130, 246, 0.35);
+}
+
+/* Theme 1: Galaxy Neon */
+body.theme-galaxy {
+  --bg-main: #070412;
+  --bg-surface: #100824;
+  --bg-card: rgba(24, 13, 52, 0.78);
+  --bg-card-border: rgba(168, 85, 247, 0.35);
+  --glass-bg: rgba(20, 10, 44, 0.75);
+  --glass-border: rgba(168, 85, 247, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(16, 5, 36, 0.8);
+  --pill-bg: rgba(36, 18, 76, 0.85);
+  --text-main: #faf5ff;
+  --text-muted: #c084fc;
+  --primary: #a855f7;
+  --primary-glow: rgba(168, 85, 247, 0.5);
+  --accent: #ec4899;
+  --header-bg: rgba(12, 6, 28, 0.82);
+  --nav-bg: rgba(12, 6, 28, 0.85);
+  --tab-active-bg: rgba(168, 85, 247, 0.25);
+  --tab-active-color: #e9d5ff;
+  --badge-bg: rgba(168, 85, 247, 0.22);
+  --badge-border: rgba(168, 85, 247, 0.4);
+}
+
+/* Theme 2: Midnight Tactical */
+body.theme-midnight {
+  --bg-main: #06080e;
+  --bg-surface: #0c101b;
+  --bg-card: rgba(15, 22, 38, 0.78);
+  --bg-card-border: rgba(59, 130, 246, 0.28);
+  --glass-bg: rgba(12, 17, 30, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.65);
+  --pill-bg: rgba(23, 33, 56, 0.85);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.45);
+  --accent: #06b6d4;
+  --header-bg: rgba(8, 12, 22, 0.82);
+  --nav-bg: rgba(8, 12, 22, 0.85);
+  --tab-active-bg: rgba(59, 130, 246, 0.2);
+  --tab-active-color: #60a5fa;
+  --badge-bg: rgba(59, 130, 246, 0.18);
+  --badge-border: rgba(59, 130, 246, 0.35);
+}
+
+/* Theme 3: Emerald Forest */
+body.theme-emerald {
+  --bg-main: #030e07;
+  --bg-surface: #071c10;
+  --bg-card: rgba(10, 36, 21, 0.78);
+  --bg-card-border: rgba(16, 185, 129, 0.35);
+  --glass-bg: rgba(8, 28, 16, 0.75);
+  --glass-border: rgba(16, 185, 129, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 16px 40px -8px rgba(3, 16, 8, 0.8);
+  --pill-bg: rgba(16, 50, 30, 0.85);
+  --text-main: #ecfdf5;
+  --text-muted: #6ee7b7;
+  --primary: #10b981;
+  --primary-glow: rgba(16, 185, 129, 0.48);
+  --accent: #14b8a6;
+  --header-bg: rgba(6, 22, 13, 0.82);
+  --nav-bg: rgba(6, 22, 13, 0.85);
+  --tab-active-bg: rgba(16, 185, 129, 0.22);
+  --tab-active-color: #a7f3d0;
+  --badge-bg: rgba(16, 185, 129, 0.2);
+  --badge-border: rgba(16, 185, 129, 0.38);
+}
+
+/* Theme 4: Sunset Amber */
+body.theme-sunset {
+  --bg-main: #100602;
+  --bg-surface: #1e0c04;
+  --bg-card: rgba(40, 18, 7, 0.78);
+  --bg-card-border: rgba(245, 158, 11, 0.35);
+  --glass-bg: rgba(30, 13, 5, 0.75);
+  --glass-border: rgba(245, 158, 11, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.16);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 7, 2, 0.8);
+  --pill-bg: rgba(56, 25, 9, 0.85);
+  --text-main: #fffbeb;
+  --text-muted: #fcd34d;
+  --primary: #f59e0b;
+  --primary-glow: rgba(245, 158, 11, 0.48);
+  --accent: #f97316;
+  --header-bg: rgba(24, 10, 3, 0.82);
+  --nav-bg: rgba(24, 10, 3, 0.85);
+  --tab-active-bg: rgba(245, 158, 11, 0.22);
+  --tab-active-color: #fde68a;
+  --badge-bg: rgba(245, 158, 11, 0.2);
+  --badge-border: rgba(245, 158, 11, 0.38);
+}
+
+/* Theme 5: Clean Daylight (Light iOS Modern) */
+body.theme-daylight {
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.88);
+  --bg-card-border: rgba(203, 213, 225, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(226, 232, 240, 0.9);
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 14px 34px -6px rgba(15, 23, 42, 0.08);
+  --pill-bg: rgba(241, 245, 249, 0.9);
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --primary: #2563eb;
+  --primary-glow: rgba(37, 99, 235, 0.25);
+  --accent: #0284c7;
+  --header-bg: rgba(255, 255, 255, 0.88);
+  --nav-bg: rgba(255, 255, 255, 0.88);
+  --tab-active-bg: rgba(37, 99, 235, 0.12);
+  --tab-active-color: #1d4ed8;
+  --badge-bg: rgba(37, 99, 235, 0.1);
+  --badge-border: rgba(37, 99, 235, 0.25);
+}
+
+/* Theme 6: Comic Hero */
+body.theme-comic {
+  --bg-main: #070b1a;
+  --bg-surface: #0e152e;
+  --bg-card: rgba(18, 28, 62, 0.8);
+  --bg-card-border: rgba(250, 204, 21, 0.4);
+  --glass-bg: rgba(15, 23, 52, 0.78);
+  --glass-border: rgba(250, 204, 21, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.7);
+  --pill-bg: rgba(26, 40, 88, 0.85);
+  --text-main: #ffffff;
+  --text-muted: #93c5fd;
+  --primary: #facc15;
+  --primary-glow: rgba(250, 204, 21, 0.55);
+  --accent: #f43f5e;
+  --header-bg: rgba(12, 19, 42, 0.84);
+  --nav-bg: rgba(12, 19, 42, 0.86);
+  --tab-active-bg: rgba(250, 204, 21, 0.22);
+  --tab-active-color: #fef08a;
+  --badge-bg: rgba(250, 204, 21, 0.18);
+  --badge-border: rgba(250, 204, 21, 0.4);
+}
+
+/* Theme 7: Ocean Abyss */
+body.theme-ocean {
+  --bg-main: #020e18;
+  --bg-surface: #051c2e;
+  --bg-card: rgba(7, 34, 56, 0.78);
+  --bg-card-border: rgba(6, 182, 212, 0.35);
+  --glass-bg: rgba(6, 27, 44, 0.75);
+  --glass-border: rgba(6, 182, 212, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(2, 12, 20, 0.8);
+  --pill-bg: rgba(10, 44, 72, 0.85);
+  --text-main: #f0fdfa;
+  --text-muted: #67e8f9;
+  --primary: #06b6d4;
+  --primary-glow: rgba(6, 182, 212, 0.5);
+  --accent: #38bdf8;
+  --header-bg: rgba(4, 20, 32, 0.82);
+  --nav-bg: rgba(4, 20, 32, 0.85);
+  --tab-active-bg: rgba(6, 182, 212, 0.2);
+  --tab-active-color: #a5f3fc;
+  --badge-bg: rgba(6, 182, 212, 0.18);
+  --badge-border: rgba(6, 182, 212, 0.35);
+}
+
+/* Theme 8: Sakura Dream */
+body.theme-sakura {
+  --bg-main: #14060f;
+  --bg-surface: #220b1a;
+  --bg-card: rgba(45, 15, 35, 0.78);
+  --bg-card-border: rgba(244, 114, 182, 0.35);
+  --glass-bg: rgba(34, 11, 26, 0.75);
+  --glass-border: rgba(244, 114, 182, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 5, 14, 0.8);
+  --pill-bg: rgba(60, 20, 46, 0.85);
+  --text-main: #fdf2f8;
+  --text-muted: #f472b6;
+  --primary: #f472b6;
+  --primary-glow: rgba(244, 114, 182, 0.5);
+  --accent: #fb7185;
+  --header-bg: rgba(26, 8, 20, 0.82);
+  --nav-bg: rgba(26, 8, 20, 0.85);
+  --tab-active-bg: rgba(244, 114, 182, 0.22);
+  --tab-active-color: #fbcfe8;
+  --badge-bg: rgba(244, 114, 182, 0.18);
+  --badge-border: rgba(244, 114, 182, 0.38);
+}
+
+/* Theme 9: Cyberpunk 2077 */
+body.theme-cyberpunk {
+  --bg-main: #0a0b10;
+  --bg-surface: #12141e;
+  --bg-card: rgba(20, 23, 34, 0.8);
+  --bg-card-border: rgba(250, 204, 21, 0.45);
+  --glass-bg: rgba(16, 18, 28, 0.78);
+  --glass-border: rgba(250, 204, 21, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.8);
+  --pill-bg: rgba(28, 32, 48, 0.85);
+  --text-main: #fef9c3;
+  --text-muted: #facc15;
+  --primary: #eab308;
+  --primary-glow: rgba(234, 179, 8, 0.55);
+  --accent: #06b6d4;
+  --header-bg: rgba(14, 16, 24, 0.84);
+  --nav-bg: rgba(14, 16, 24, 0.86);
+  --tab-active-bg: rgba(234, 179, 8, 0.22);
+  --tab-active-color: #fef08a;
+  --badge-bg: rgba(234, 179, 8, 0.18);
+  --badge-border: rgba(234, 179, 8, 0.4);
+}
+
+/* Theme 10: Crimson Magma */
+body.theme-magma {
+  --bg-main: #100303;
+  --bg-surface: #1e0606;
+  --bg-card: rgba(42, 10, 10, 0.78);
+  --bg-card-border: rgba(239, 68, 68, 0.4);
+  --glass-bg: rgba(30, 8, 8, 0.75);
+  --glass-border: rgba(239, 68, 68, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(18, 3, 3, 0.8);
+  --pill-bg: rgba(56, 14, 14, 0.85);
+  --text-main: #fef2f2;
+  --text-muted: #f87171;
+  --primary: #ef4444;
+  --primary-glow: rgba(239, 68, 68, 0.55);
+  --accent: #f97316;
+  --header-bg: rgba(24, 6, 6, 0.82);
+  --nav-bg: rgba(24, 6, 6, 0.85);
+  --tab-active-bg: rgba(239, 68, 68, 0.24);
+  --tab-active-color: #fca5a5;
+  --badge-bg: rgba(239, 68, 68, 0.2);
+  --badge-border: rgba(239, 68, 68, 0.4);
+}
+
+/* Theme 11: Retro Arcade */
+body.theme-arcade {
+  --bg-main: #090614;
+  --bg-surface: #140c26;
+  --bg-card: rgba(28, 17, 54, 0.8);
+  --bg-card-border: rgba(192, 132, 252, 0.4);
+  --glass-bg: rgba(22, 13, 44, 0.75);
+  --glass-border: rgba(192, 132, 252, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(12, 5, 24, 0.8);
+  --pill-bg: rgba(38, 23, 74, 0.85);
+  --text-main: #fdf4ff;
+  --text-muted: #d8b4fe;
+  --primary: #c084fc;
+  --primary-glow: rgba(192, 132, 252, 0.55);
+  --accent: #22c55e;
+  --header-bg: rgba(16, 9, 32, 0.82);
+  --nav-bg: rgba(16, 9, 32, 0.85);
+  --tab-active-bg: rgba(192, 132, 252, 0.24);
+  --tab-active-color: #f3e8ff;
+  --badge-bg: rgba(192, 132, 252, 0.2);
+  --badge-border: rgba(192, 132, 252, 0.4);
+}
+
+/* Theme 12: Arctic Frost */
+body.theme-frost {
+  --bg-main: #08101a;
+  --bg-surface: #0e1c2e;
+  --bg-card: rgba(18, 36, 60, 0.78);
+  --bg-card-border: rgba(56, 189, 248, 0.35);
+  --glass-bg: rgba(14, 28, 48, 0.75);
+  --glass-border: rgba(56, 189, 248, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(4, 14, 26, 0.8);
+  --pill-bg: rgba(24, 48, 80, 0.85);
+  --text-main: #f0f9ff;
+  --text-muted: #7dd3fc;
+  --primary: #38bdf8;
+  --primary-glow: rgba(56, 189, 248, 0.5);
+  --accent: #93c5fd;
+  --header-bg: rgba(10, 20, 34, 0.82);
+  --nav-bg: rgba(10, 20, 34, 0.85);
+  --tab-active-bg: rgba(56, 189, 248, 0.2);
+  --tab-active-color: #bae6fd;
+  --badge-bg: rgba(56, 189, 248, 0.18);
+  --badge-border: rgba(56, 189, 248, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   2. CORE BASE & TYPOGRAPHY ENGINE (APPLE SF PRO / LINEAR STACK)
+   -------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", -system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  background-color: var(--bg-main) !important;
+  color: var(--text-main) !important;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  transition: background-color 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.35s ease;
+  letter-spacing: -0.015em;
+}
+
+/* Subtle ambient mesh light in dark mode */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 240px;
+  background: radial-gradient(ellipse at 50% -20%, var(--primary-glow) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+/* --------------------------------------------------------------------------
+   3. APPLE GLASSMORPHISM & DEPTH CONTAINERS
+   -------------------------------------------------------------------------- */
+.ios-glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), var(--glass-shadow);
+  border-radius: 24px;
+}
+
+.ios-glass-pill {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-radius: 9999px;
+}
+
+/* Universal Card, Header, and Nav Glass overrides */
+header {
+  background: var(--header-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.45) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+nav#mainNavBar {
+  background: var(--nav-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+  border-radius: 28px !important;
+}
+
+/* Modal Bottom Sheets & Surface Containers */
+.tab-panel > div,
+#modal-add-zone > div,
+#modal-add-task > div,
+#modal-task-schedule > div,
+#modal-task-proof > div,
+#authGateModal > div,
+#modal-coin-rate > div,
+#modal-theme > div,
+#modal-settings > div,
+#modal-wallet > div,
+#modal-walk-safe > div,
+#modal-edit-wishlist > div,
+#childOnboardingModal > div,
+#childInviteParentModal > div,
+#parentInviteSpouseModal > div,
+#deleteChildModal > div {
+  background: var(--bg-surface) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 24px 60px -8px rgba(0, 0, 0, 0.75) !important;
+  color: var(--text-main) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Dynamic Surfaces */
+.bg-slate-950,
+.bg-slate-900,
+.bg-slate-900\/95,
+.bg-slate-900\/90,
+.bg-slate-900\/80,
+.bg-slate-900\/60 {
+  background-color: var(--bg-surface) !important;
+}
+
+.bg-slate-950\/80,
+.bg-slate-950\/60,
+.bg-slate-950\/40,
+.bg-slate-800,
+.bg-slate-800\/90,
+.bg-slate-800\/80,
+.bg-slate-800\/60,
+.bg-slate-700,
+.bg-slate-700\/50 {
+  background-color: var(--pill-bg) !important;
+}
+
+.border-slate-950,
+.border-slate-800,
+.border-slate-700,
+.border-slate-700\/80,
+.border-slate-700\/60 {
+  border-color: var(--glass-border) !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. DYNAMIC ISLAND & FLOATING LIVE STATUS CAPSULES
+   -------------------------------------------------------------------------- */
+.dynamic-island {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 14, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 9999px;
+  padding: 5px 12px;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dynamic-island:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.dynamic-island-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: dynamic-pulse 2s infinite ease-in-out;
+}
+
+@keyframes dynamic-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. FLOATING MAP CONTROLS DOCK (RIGHT SIDEBAR)
+   -------------------------------------------------------------------------- */
+.floating-glass-dock {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 14px 34px -4px rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.floating-glass-dock button {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.floating-glass-dock button:active {
+  transform: scale(0.88);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* --------------------------------------------------------------------------
+   6. FIND MY / LIFE360 STYLE FLOATING STATUS CARD (PARENT SCREEN)
+   -------------------------------------------------------------------------- */
+#locationCard {
+  bottom: calc(80px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 16px 40px -6px rgba(0, 0, 0, 0.65) !important;
+  border-radius: 26px !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#parentMonitoringBar {
+  bottom: calc(212px + max(14px, env(safe-area-inset-bottom, 0px))) !important;
+  z-index: 21 !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@media (min-width: 768px) {
+  #locationCard {
+    bottom: 96px !important;
+  }
+  #parentMonitoringBar {
+    bottom: 215px !important;
+  }
+}
+
+#locationCard:hover {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. GAMIFIED CHILD HERO PORTAL & REVOLUT <18 AESTHETIC
+   -------------------------------------------------------------------------- */
+.child-hero-banner {
+  background: linear-gradient(135deg, rgba(30, 20, 60, 0.85) 0%, rgba(15, 22, 45, 0.85) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 14px 34px -4px rgba(12, 6, 28, 0.65);
+  border-radius: 26px;
+  position: relative;
+  overflow: hidden;
+}
+
+.child-hero-banner::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Level XP Shimmer Progress Bar */
+.xp-progress-bar {
+  position: relative;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 9999px;
+  height: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.xp-progress-fill {
+  background: linear-gradient(90deg, #f59e0b, #ec4899, #a855f7);
+  height: 100%;
+  border-radius: 9999px;
+  position: relative;
+}
+
+.xp-progress-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: shimmer-stream 2.2s infinite ease-in-out;
+}
+
+@keyframes shimmer-stream {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Orzular Qutisi (Wishlist Vault Card) */
+.wishlist-vault-card {
+  background: linear-gradient(135deg, rgba(8, 36, 26, 0.82) 0%, rgba(12, 24, 38, 0.82) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18), 0 16px 36px -4px rgba(4, 20, 14, 0.65);
+  border-radius: 26px;
+}
+
+/* Tactile SOS Emergency Shield */
+.sos-shield-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 18px 12px;
+}
+
+.sos-shield-pulse-ring {
+  position: absolute;
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.22);
+  animation: sos-radar-wave 2s infinite cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.sos-shield-pulse-ring-outer {
+  position: absolute;
+  width: 165px;
+  height: 165px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  animation: sos-radar-wave 2s infinite cubic-bezier(0.16, 1, 0.3, 1) 0.5s;
+  pointer-events: none;
+}
+
+@keyframes sos-radar-wave {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+#btnChildBigSOS {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 32px rgba(239, 68, 68, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.6) !important;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
+}
+
+#btnChildBigSOS:active {
+  transform: scale(0.92);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), inset 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. MOBILE TACTILE INTERACTIONS & HAPTIC BUTTON PHYSICS
+   -------------------------------------------------------------------------- */
+button, input, select, textarea, a, .nav-tab {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Spring Tactile feedback on all buttons */
+button:not(#btnChildBigSOS):not(.nav-tab):active {
+  transform: scale(0.95);
+  transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Navigation Tabs Active State */
+.nav-tab {
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 18px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-tab.active {
+  color: var(--tab-active-color) !important;
+}
+
+.nav-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  width: 14px;
+  height: 3px;
+  background-color: var(--primary);
+  border-radius: 9999px;
+  box-shadow: 0 0 8px var(--primary-glow);
+  animation: tabDotGrow 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tabDotGrow {
+  from { width: 0px; opacity: 0; }
+  to { width: 14px; opacity: 1; }
+}
+
+/* Safe areas */
+.safe-top {
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+}
+
+.safe-bottom {
+  padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom, 0px)));
+}
+
+/* Smooth momentum scrolling */
+.overflow-y-auto,
+.overflow-x-auto,
+.custom-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   9. RADAR MARKERS & MAP TILES
+   -------------------------------------------------------------------------- */
+#map {
+  height: 100%;
+  width: 100%;
+  z-index: 1;
+  background-color: var(--bg-main);
+}
+
+#map.map-dark-tiles .leaflet-tile-pane {
+  filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(92%);
+}
+
+#map.map-cyber-tiles .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(2.2) hue-rotate(195deg) saturate(0.4) brightness(0.75);
+}
+
+#map.map-light-tiles .leaflet-tile-pane {
+  filter: none !important;
+}
+
+.child-radar-marker {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.child-avatar-pin {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: 3px solid #ffffff;
+  box-shadow: 0 6px 20px var(--primary-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 20px;
+  z-index: 2;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.child-pulse-ring {
+  position: absolute;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  animation: pulse-ring 2.2s infinite ease-out;
+  z-index: 1;
+}
+
+.sos-pulse-ring {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.65);
+  animation: sos-pulse-ring 0.85s infinite ease-out;
+  z-index: 1;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.6); opacity: 0.95; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes sos-pulse-ring {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.0); opacity: 0; }
+}
+
+.geofence-tooltip {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  color: var(--text-main) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+  padding: 5px 12px !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(16px);
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: var(--bg-surface) !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. MODAL BOTTOM SHEET ANIMATIONS & ACCESSIBILITY
+   -------------------------------------------------------------------------- */
+@keyframes slideUpSpring {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUpSpring 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* iOS Bottom sheet max height & responsive handling */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  .tab-panel > div {
+    max-height: calc(88dvh - env(safe-area-inset-top, 0px)) !important;
+  }
+}
+
+/* Daylight Light Theme High Contrast */
+body.theme-daylight .text-white:not(button):not(button *):not([class*="from-"]):not(#btnChildBigSOS *) {
+  color: #0f172a !important;
+}
+body.theme-daylight .text-slate-100,
+body.theme-daylight .text-slate-200 {
+  color: #0f172a !important;
+}
+body.theme-daylight .text-slate-300,
+body.theme-daylight .text-slate-400,
+body.theme-daylight .text-slate-500 {
+  color: #475569 !important;
+}
+body.theme-daylight input,
+body.theme-daylight select,
+body.theme-daylight textarea {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Universal Toast Pill (Positioned cleanly below top header, wrap text, high mobile readability) */
+.app-toast-pill {
+  position: fixed;
+  top: calc(76px + max(8px, env(safe-area-inset-top, 0px))) !important;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto;
+  max-width: min(92vw, 420px);
+  padding: 10px 18px;
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  color: #ffffff !important;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  border-radius: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75), 0 0 20px rgba(59, 130, 246, 0.35);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  pointer-events: none;
+  animation: toastDropIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes toastDropIn {
+  from { opacity: 0; transform: translate(-50%, -14px) scale(0.92); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.app-toast-pill.toast-leaving {
+  animation: toastFlyOut 0.28s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes toastFlyOut {
+  from { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -12px) scale(0.92); }
+}
+
+/* Watermark Suppression */
+#nl-badge-frame, #nl-hud-frame, iframe[id^="nl-"], iframe[title*="Netlify"],
+iframe[title*="Powered by Netlify"], iframe[srcdoc*="Netlify"], netlify-drawer,
+#netlify-drawer, div#netlify-drawer, .netlify-badge, #netlify-badge,
+[data-netlify-deploy-id], .leaflet-control-attribution {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0px !important;
+  width: 0px !important;
+  position: fixed !important;
+  top: -99999px !important;
+  left: -99999px !important;
+  z-index: -99999 !important;
+}
