@@ -2602,6 +2602,71 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
         await message.answer(text, reply_markup=get_settings_keyboard(), parse_mode="Markdown")
 
 
+# ---------------------------------------------------------
+# Web App (Sayt) Dedicated Opener & Link Handler
+# ---------------------------------------------------------
+
+@router.message(F.text.in_([
+    "📱 Web App (Sayt)",
+    "Web App (Sayt)",
+    "Web App",
+    "web app",
+    "Sayt",
+    "sayt",
+    "🌐 Web App",
+    "Saytga kirish",
+    "saytga kirish"
+]))
+@router.message(Command("webapp", "sayt", "site", "web"))
+async def on_webapp_requested(message: Message):
+    """Handle Web App request and provide instant 1-tap open buttons and browser link."""
+    user_id = message.from_user.id
+    webapp_url = settings.RESOLVED_WEBAPP_URL
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        role = user.role if user else "parent"
+
+        access_code = None
+        if user:
+            access_code = await crud.generate_web_access_code(session, user_id)
+            await session.commit()
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🌐 Web App (Sayt)ni ochish",
+                        web_app=WebAppInfo(url=webapp_url)
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔗 Brauzerda ochish (Vercel)",
+                        url=webapp_url
+                    )
+                ]
+            ]
+        )
+
+        code_text = f"🔑 **Sizning saytga kirish kodingiz:** ` {access_code} `\n\n*(Sayt ochilganda ushbu 6 xonali kodni kiriting)*\n\n" if access_code else ""
+
+        reply_kb = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard()
+
+        await message.answer(
+            f"🌐 **Child Security — Rasmiy Web App (Sayt):**\n\n"
+            f"🔗 **Rasmiy havola:** {webapp_url}\n\n"
+            f"{code_text}"
+            f"Saytni ochish uchun quyidagi tugmalardan birini tanlang:",
+            reply_markup=kb,
+            parse_mode="Markdown"
+        )
+        await message.answer(
+            "📋 **Klaviaturangiz yangilandi!** Pastdagi **«📱 Web App (Sayt)»** tugmasi orqali ham istalgan payt ochishingiz mumkin.",
+            reply_markup=reply_kb
+        )
+
+
 @router.message(F.text.in_([
     "👨‍👩‍👧 Ota-ona ilovasi (APK)",
     "Ota-ona ilovasi",

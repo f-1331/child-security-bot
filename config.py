@@ -69,11 +69,8 @@ class Settings(BaseSettings):
 
     @property
     def MINI_APP_URL(self) -> str:
-        """URL for Telegram WebApp button with dynamic cache-busting timestamp."""
-        base = self.RESOLVED_WEBAPP_URL
-        sep = "&" if "?" in base else "?"
-        # Cache busting timestamp ensures Telegram Webview never serves stale cached assets
-        return f"{base}{sep}v=2.5&t={int(time.time())}"
+        """Clean official URL for Telegram WebApp button (Vercel)."""
+        return self.RESOLVED_WEBAPP_URL
 
     @property
     def BASE_DIR(self) -> Path:
