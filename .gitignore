@@ -24,3 +24,6 @@ Desktop.ini
 
 # Temporary scratch scripts
 scratch/
+
+# Local binary downloads
+downloads/*.apk

@@ -146,6 +146,18 @@ async def download_android_apk():
         status_code=302
     )
 
+@app.get("/privacy", tags=["Legal"])
+@app.get("/privacy.html", tags=["Legal"])
+async def privacy_policy_view():
+    """Serve official Google Play compliant Privacy Policy."""
+    import os
+    from fastapi.responses import FileResponse
+    privacy_file = os.path.join(settings.BASE_DIR, "webapp", "privacy.html")
+    if os.path.exists(privacy_file):
+        return FileResponse(privacy_file, media_type="text/html")
+    return RedirectResponse(url="/child_security_site/privacy.html")
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Service health status endpoint."""

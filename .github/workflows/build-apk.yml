@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK & Play Store AAB
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build & Release Android APK
+    name: Build & Release Android APK + Play Store AAB
     runs-on: ubuntu-latest
 
     steps:
@@ -33,10 +33,10 @@ jobs:
         with:
           gradle-version: '8.2'
 
-      - name: Build Debug APK with Gradle
+      - name: Build APK and Play Store AAB with Gradle
         run: |
           cd android
-          gradle assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug bundleRelease --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -45,23 +45,33 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn
 
+      - name: Upload Play Store AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChildSecurity-PlayStore-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v1.0.0-apk
-          name: Child Security Android APK v1.0.0
+          name: Child Security Android APK & Play Store AAB v1.0.0
           make_latest: true
           body: |
-            ## 📱 Child Security Android APK (Doimiy 24/7 Foniy GPS)
+            ## 📱 Child Security Android (APK & Google Play AAB Bundle)
             
-            Ushbu APK ilova orqa fonda, telefon ekrani o'chiq va bloklangan holatda ham GPS joylashuvni uzluksiz yuborib turadi.
+            Ushbu relizda 2 ta format tayyorlandi:
+            1. **`app-debug.apk`** — Telegram bot va veb-sayt orqali to'g'ridan-to'g'ri o'rnatish uchun (.apk).
+            2. **`app-release.aab`** — Google Play Store (Play Market) Console ga yuklash uchun rasmiy Android App Bundle (.aab).
             
-            ### 🚀 O'rnatish tartibi:
-            1. `app-debug.apk` faylini yuklab oling va telefonga o'rnating.
-            2. Ilovani oching va joylashuv ruxsatlarini "Doimiy ruxsat berish" (Allow all the time) deb belgilang.
-            3. Farzand kodi orqali kiring.
+            ### 🛡️ Xususiyatlari:
+            * **24/7 Foniy GPS:** Ekran o'chiq va bloklangan holatda ham doimiy nazorat.
+            * **Avto-ishga tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.
+            * **Google Play Policy Compliant:** Background location disclosure va Maxfiylik siyosatiga 100% mos.
           files: |
             android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/release/app-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

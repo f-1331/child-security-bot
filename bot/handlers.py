@@ -11,6 +11,8 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardRemove,
+    FSInputFile,
+    URLInputFile,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2542,10 +2544,11 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
 ]))
 @router.message(Command("app", "download", "apk", "ilova", "mobil"))
 @router.message(F.text.regexp(r"(?i)^(📲\s*)?(mobil\s*ilova|ilova(ni)?|apk|android).*"))
-async def on_download_app_pressed(message: Message):
-    """Provide mobile application download links for Android APK."""
+async def on_download_app_pressed(message: Message, bot: Bot):
+    """Provide mobile application download links and send APK file directly into chat."""
     webapp_url = settings.RESOLVED_WEBAPP_URL
     apk_download_url = f"{webapp_url}/download/apk"
+    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
 
     text = (
         "📲 **Child Security Mobil Ilovasi (Android)**\n\n"
@@ -2560,7 +2563,7 @@ async def on_download_app_pressed(message: Message):
         f"📥 [Android APK Yuklab Olish]({apk_download_url})\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🚀 **O'rnatish tartibi:**\n"
-        "1️⃣ Quyidagi tugma orqali `.apk` faylni yuklab oling va telefonga o'rnating.\n"
+        "1️⃣ Quyidagi fayl yoki tugma orqali ilovani yuklab oling va telefonga o'rnating.\n"
         "2️⃣ Ilovani ochib, unga **\"Joylashuvga doimiy ruxsat berish\" (Allow all the time)** ruxsatini bering.\n"
         "3️⃣ Farzand kodi orqali kiring. Bo'ldi! Tizim 24/7 rejimda bolangizni himoya qiladi."
     )
@@ -2576,7 +2579,7 @@ async def on_download_app_pressed(message: Message):
             [
                 InlineKeyboardButton(
                     text="⚡ To'g'ridan-to'g'ri yuklab olish (Zaxira)",
-                    url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+                    url=direct_github_apk
                 )
             ],
             [
@@ -2589,6 +2592,23 @@ async def on_download_app_pressed(message: Message):
     )
 
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+    # Send the actual APK document directly into the Telegram chat!
+    local_apk_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    try:
+        if os.path.exists(local_apk_path):
+            doc = FSInputFile(local_apk_path, filename="ChildSecurity.apk")
+        else:
+            doc = URLInputFile(direct_github_apk, filename="ChildSecurity.apk")
+
+        await message.answer_document(
+            document=doc,
+            caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
+                    "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Could not send APK document directly: {e}")
 
 
 @router.message(F.text.in_([

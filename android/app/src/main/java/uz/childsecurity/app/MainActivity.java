@@ -154,7 +154,15 @@ public class MainActivity extends AppCompatActivity {
     private void checkBackgroundLocationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, PERMISSION_REQUEST_CODE + 1);
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("📍 Doimiy Joylashuv (Xavfsizlik Himoyasi)")
+                        .setMessage("Child Security farzand xavfsizligini ta'minlash, xavfsiz makonlarga yetib borishni aniqlash va favqulodda SOS holatlarida ota-onaga tezkor yordam ko'rsatish maqsadida, ilova yopiq yoki fonda bo'lgan paytda ham joylashuv ma'lumotlarini to'playdi.\n\nUshbu ma'lumotlar faqat ota-onangizga ko'rsatiladi va uchinchi shaxslarga berilmaydi.\n\nIltimos, keyingi oynada \"Har doim ruxsat berish\" (Allow all the time) bandini tanlang.")
+                        .setPositiveButton("Tushundim (Ruxsat berish)", (dialog, which) -> {
+                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, PERMISSION_REQUEST_CODE + 1);
+                        })
+                        .setNegativeButton("Keyinroq", (dialog, which) -> dialog.dismiss())
+                        .setCancelable(false)
+                        .show();
             }
         }
     }

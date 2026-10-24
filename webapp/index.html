@@ -240,9 +240,10 @@
           <span id="soundText" class="hidden xs:inline sm:inline">Oddiy</span>
         </div>
 
-        <!-- Mobil ilova (Android APK / iPhone) -->
-        <button onclick="openInstallAppModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
-          <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+        <!-- Mobil ilova (Android APK) -->
+        <button onclick="openInstallAppModal()" class="px-2.5 py-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-blue-200 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm shrink-0" title="Mobil ilovani o'rnatish (Android APK)">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5 text-blue-300"></i>
+          <span class="text-[10px] font-black">📲 APK</span>
         </button>
 
         <!-- Rang mavzulari -->
@@ -529,6 +530,23 @@
           <p id="childStreakDaysText" class="text-[10px] font-black text-amber-400 leading-tight">1 kun</p>
           <p class="text-[7px] text-slate-400 uppercase tracking-wider font-bold">Seriya</p>
         </div>
+      </div>
+
+      <!-- 1.4. Mobil Ilovani O'rnatish (Android APK) -->
+      <div class="ios-glass-card p-3.5 flex items-center justify-between gap-2.5 border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/60 shadow-lg">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center text-lg shrink-0">
+            📲
+          </div>
+          <div class="min-w-0">
+            <h4 class="text-xs sm:text-sm font-black text-white truncate">Mobil ilova (Android APK)</h4>
+            <p class="text-[10px] text-emerald-200/80 truncate">24/7 foniy GPS va ekran o'chiq holda ishlash</p>
+          </div>
+        </div>
+        <a href="/download/apk" target="_blank" class="px-3 py-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Yuklab olish</span>
+        </a>
       </div>
 
       <!-- 1.5. Ota-onamni taklif qilish -->
@@ -1218,6 +1236,21 @@
       <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60 text-left mb-3">
         💡 <b>Kod qayerdan olinadi?</b><br/>
         Telegram botimizda <b>«🔑 Saytga kirish kodi»</b> tugmasini bosing va olingan kodni kiriting.
+      </div>
+
+      <!-- Mobil ilovani yuklab olish kartasi -->
+      <div class="p-3 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-800 to-slate-800 border border-emerald-500/30 flex items-center justify-between gap-2 mb-3 shadow">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl shrink-0">📲</span>
+          <div class="min-w-0">
+            <p class="text-xs font-black text-white truncate">Mobil ilova (Android APK)</p>
+            <p class="text-[9px] text-emerald-300/80 truncate">24/7 foniy GPS kuzatuv</p>
+          </div>
+        </div>
+        <a href="/download/apk" target="_blank" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[10px] font-black rounded-xl shadow transition shrink-0 flex items-center gap-1">
+          <i data-lucide="download" class="w-3 h-3"></i>
+          <span>Yuklab olish</span>
+        </a>
       </div>
 
       <!-- Demo preview buttons -->
