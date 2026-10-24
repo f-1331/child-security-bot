@@ -40,16 +40,16 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
         ],
         [
-            KeyboardButton(text="📍 Kerakli joylar"),
-            KeyboardButton(text="🔋 Batareya va Holat")
+            KeyboardButton(text="📲 Mobil ilova (Android APK)"),
+            KeyboardButton(text="📍 Kerakli joylar")
         ],
         [
-            KeyboardButton(text="👶 Farzandlarim"),
-            KeyboardButton(text="➕ Farzand ulash (Kodi)")
+            KeyboardButton(text="🔋 Batareya va Holat"),
+            KeyboardButton(text="👶 Farzandlarim")
         ],
         [
-            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish"),
-            KeyboardButton(text="📲 Mobil ilova")
+            KeyboardButton(text="➕ Farzand ulash (Kodi)"),
+            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish")
         ],
         [
             KeyboardButton(text="🔑 Saytga kirish kodi"),
@@ -86,19 +86,19 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [
-            KeyboardButton(text="✅ Yetib keldim (Check-in)"),
+            KeyboardButton(text="📲 Mobil ilova (Android APK)"),
             KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True)
         ],
         [
-            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq"),
-            KeyboardButton(text="👨‍👩‍👧 Ota-onamni taklif qilish")
+            KeyboardButton(text="✅ Yetib keldim (Check-in)"),
+            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq")
         ],
         [
             KeyboardButton(text="🔑 Saytga kirish kodi"),
             KeyboardButton(text="📋 Vazifalarim va Tangalar")
         ],
         [
-            KeyboardButton(text="📲 Mobil ilova")
+            KeyboardButton(text="👨‍👩‍👧 Ota-onamni taklif qilish")
         ],
         [
             KeyboardButton(text="🔄 Rolni o'zgartirish"),

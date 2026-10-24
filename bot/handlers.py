@@ -2529,12 +2529,19 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
 
 
 @router.message(F.text.in_([
+    "📲 Mobil ilova (Android APK)",
     "📲 Mobil ilova",
     "📲 Mobil ilova (Android & iPhone)",
     "Mobil ilova",
-    "📲 Ilovani yuklab olish"
+    "📲 Ilovani yuklab olish",
+    "Ilovani yuklash",
+    "Ilova",
+    "APK",
+    "apk",
+    "Android APK"
 ]))
-@router.message(Command("app", "download", "apk", "ilova"))
+@router.message(Command("app", "download", "apk", "ilova", "mobil"))
+@router.message(F.text.regexp(r"(?i)^(📲\s*)?(mobil\s*ilova|ilova(ni)?|apk|android).*"))
 async def on_download_app_pressed(message: Message):
     """Provide mobile application download links for Android APK."""
     webapp_url = settings.RESOLVED_WEBAPP_URL
@@ -3236,3 +3243,31 @@ async def on_parent_invite_coparent(message: Message, bot: Bot):
             parse_mode="Markdown"
         )
 
+
+@router.message(F.text)
+async def fallback_text_handler(message: Message):
+    """Fallback handler for unrecognized text messages: automatically restores and refreshes the main keyboard."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or not user.role:
+            await message.answer(
+                "Iltimos, avval rolingizni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            return
+
+        if user.role == "parent":
+            await message.answer(
+                "📋 **Menyu yangilandi!**\n\n"
+                "Quyidagi menyu tugmalaridan birini tanlang. Mobil ilovani yuklab olish uchun pastdagi **«📲 Mobil ilova (Android APK)»** tugmasini bosing:",
+                reply_markup=get_parent_main_keyboard(user_id),
+                parse_mode="Markdown"
+            )
+        else:
+            await message.answer(
+                "📋 **Menyu yangilandi!**\n\n"
+                "Quyidagi xavfsizlik menyusi tugmalaridan birini tanlang:",
+                reply_markup=get_child_main_keyboard(),
+                parse_mode="Markdown"
+            )

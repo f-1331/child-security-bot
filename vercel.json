@@ -12,6 +12,10 @@
       "dest": "https://child-security-site.onrender.com/api/$1"
     },
     {
+      "src": "/download/(.*)",
+      "dest": "https://child-security-site.onrender.com/download/$1"
+    },
+    {
       "src": "/uploads/(.*)",
       "dest": "https://child-security-site.onrender.com/uploads/$1"
     },
