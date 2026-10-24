@@ -256,9 +256,10 @@
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
 
-        <!-- Telegramga qaytish / Yopish -->
-        <button onclick="closeWebApp()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition active:scale-90 shrink-0" title="Telegramga qaytish (Ilovani yopish)">
-          <i data-lucide="x" class="w-4 h-4"></i>
+        <!-- Telegramga qaytish / Chiqish -->
+        <button onclick="closeWebApp()" class="px-2.5 py-1 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          <span class="text-[10px] font-black">Chiqish</span>
         </button>
       </div>
     </div>
@@ -314,9 +315,10 @@
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
 
-        <!-- Telegramga qaytish / Yopish -->
-        <button onclick="closeWebApp()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center transition active:scale-90 shrink-0" title="Telegramga qaytish (Ilovani yopish)">
-          <i data-lucide="x" class="w-4 h-4"></i>
+        <!-- Telegramga qaytish / Chiqish -->
+        <button onclick="closeWebApp()" class="px-2.5 py-1 rounded-2xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          <span class="text-[10px] font-black">Chiqish</span>
         </button>
       </div>
     </div>
@@ -429,56 +431,51 @@
         </button>
       </div>
 
-      <!-- Combined Parent Floating Controls & Location Deck (Flex column physically guarantees ZERO overlap!) -->
-      <div id="parentBottomContainer" style="bottom: calc(78px + max(12px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 flex flex-col gap-2.5 md:max-w-md pointer-events-none">
-        
-        <!-- 1. Passiv monitoring va Hozirgi joylashuvi (Tugmalar doim toza va ochiq!) -->
-        <div id="parentMonitoringBar" class="pointer-events-auto flex items-center gap-2">
-          <!-- Passiv monitoring (Silent check) -->
-          <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2.5 px-3 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
-            <div class="w-7 h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
-              <i data-lucide="eye" class="w-4 h-4"></i>
-            </div>
-            <div class="text-left min-w-0">
-              <p class="text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
-              <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
-            </div>
-          </button>
-
-          <!-- Faol so'rov (Active check) -->
-          <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group shadow-blue-500/20" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
-            <div class="w-7 h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
-              <i data-lucide="crosshair" class="w-4 h-4"></i>
-            </div>
-            <div class="text-left min-w-0">
-              <p class="text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
-              <p class="text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
-            </div>
-          </button>
-        </div>
-
-        <!-- 2. Joriy Manzil kartasi (Doim tugmalarning tagida, hech qachon ustiga chiqmaydi!) -->
-        <div id="locationCard" class="pointer-events-auto p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-2.5">
-          <div class="min-w-0 flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
-              <i data-lucide="map-pin" class="w-4 h-4"></i>
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                <span data-i18n="current_address">Joriy Manzil</span>
-                <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
-              </div>
-              <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
-              <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
-            </div>
+      <!-- 1. Passiv monitoring va Hozirgi joylashuvi (Teparoqda, Joriy manzildan mutlaqo alohida!) -->
+      <div id="parentMonitoringBar" style="bottom: calc(185px + max(14px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-22 flex items-center gap-2 md:max-w-md pointer-events-auto">
+        <!-- Passiv monitoring (Silent check) -->
+        <button id="btnSilentCheck" onclick="executeSilentCheck()" class="flex-1 py-2.5 px-3 bg-slate-900/95 hover:bg-slate-800/95 active:scale-95 border border-purple-500/40 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group" title="Sezdirmasdan ko'rish (Farzandga bildirishnoma yuborilmaydi)">
+          <div class="w-7 h-7 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition shrink-0">
+            <i data-lucide="eye" class="w-4 h-4"></i>
           </div>
-          
-          <button onclick="openExternalNavigation()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md shrink-0" title="Marshrut ochish">
-            <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
-            <span data-i18n="route">Yo'l</span>
-          </button>
-        </div>
+          <div class="text-left min-w-0">
+            <p class="text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
+            <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
+          </div>
+        </button>
 
+        <!-- Faol so'rov (Active check) -->
+        <button id="btnActiveCheck" onclick="executeActiveCheck()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-95 border border-blue-400/50 backdrop-blur-2xl rounded-2xl shadow-xl text-white transition flex items-center justify-center gap-2 group shadow-blue-500/20" title="Farzandning hozirgi joylashuvi (Farzandga bildirishnoma yuboriladi)">
+          <div class="w-7 h-7 rounded-xl bg-white/20 border border-white/30 flex items-center justify-center text-white group-hover:scale-105 transition shrink-0">
+            <i data-lucide="crosshair" class="w-4 h-4"></i>
+          </div>
+          <div class="text-left min-w-0">
+            <p class="text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
+            <p class="text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
+          </div>
+        </button>
+      </div>
+
+      <!-- 2. Joriy Manzil kartasi (Pastda alohida, tugmalardan kamida 40px pastda!) -->
+      <div id="locationCard" style="bottom: calc(76px + max(10px, env(safe-area-inset-bottom, 0px)));" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 md:max-w-md pointer-events-auto p-3 rounded-2xl shadow-2xl flex items-center justify-between gap-2.5">
+        <div class="min-w-0 flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-400/30 flex items-center justify-center shrink-0">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              <span data-i18n="current_address">Joriy Manzil</span>
+              <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
+            </div>
+            <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
+            <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
+          </div>
+        </div>
+        
+        <button onclick="openExternalNavigation()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md shrink-0" title="Marshrut ochish">
+          <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
+          <span data-i18n="route">Yo'l</span>
+        </button>
       </div>
     </div>
 

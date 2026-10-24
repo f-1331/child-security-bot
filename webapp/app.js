@@ -5193,7 +5193,6 @@ function setupTelegramBackButton() {
         tgApp.BackButton.onClick(() => {
           handleTelegramBackPress();
         });
-        tgApp.BackButton.show();
       }
     } catch (e) {
       console.warn("setupTelegramBackButton note:", e);
@@ -5208,15 +5207,8 @@ function setupTelegramBackButton() {
     });
   } catch (e) {}
 
-  // Android hardware back button & swipe gestures
-  try {
-    window.history.pushState({ app: "smart_tracker_root" }, "");
-    window.addEventListener("popstate", () => {
-      handleTelegramBackPress();
-      // Restore dummy state so next back press also triggers popstate
-      window.history.pushState({ app: "smart_tracker_root" }, "");
-    });
-  } catch (e) {}
+  // Update BackButton state initially
+  updateTelegramBackButton();
 }
 
 function handleTelegramBackPress() {
@@ -5239,6 +5231,7 @@ function handleTelegramBackPress() {
     { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "modal-settings", close: closeSettingsModal },
+    { id: "modalThemeSelector", close: closeThemeModal },
     { id: "modal-wallet", close: () => closeModal("wallet") },
     { id: "modal-history", close: () => closeModal("history") },
     { id: "modal-tasks", close: () => closeModal("tasks") },
@@ -5274,11 +5267,12 @@ function handleTelegramBackPress() {
 }
 
 function closeWebApp() {
-  haptic("light");
+  haptic("medium");
   if (window.AndroidBridge && typeof window.AndroidBridge.minimizeApp === "function") {
     window.AndroidBridge.minimizeApp();
     return;
   }
+
   const tgApp = window.Telegram?.WebApp;
   if (tgApp) {
     try {
@@ -5289,21 +5283,45 @@ function closeWebApp() {
     try {
       if (typeof tgApp.close === "function") {
         tgApp.close();
-        return;
       }
     } catch (e) {}
   }
+
   try {
     window.close();
   } catch (e) {}
+
+  // Instant fallback to return directly to Telegram chat
+  setTimeout(() => {
+    try {
+      window.location.href = "https://t.me/child_security_bot";
+    } catch (e) {}
+  }, 120);
 }
 
 function updateTelegramBackButton() {
   const tgApp = window.Telegram?.WebApp;
   if (!tgApp || !tgApp.BackButton) return;
+
+  const openModal = document.querySelector(
+    "#modal-tasks:not(.hidden), #modal-wallet:not(.hidden), #modal-history:not(.hidden), " +
+    "#modal-zones:not(.hidden), #modal-settings:not(.hidden), #modalInstallApp:not(.hidden), " +
+    "#modalCallParent:not(.hidden), #modal-walk-safe:not(.hidden), #modal-coin-rate:not(.hidden), " +
+    "#deleteChildModal:not(.hidden), #childInviteParentModal:not(.hidden), #zonePickerBottomDock:not(.hidden), " +
+    "#modalThemeSelector:not(.hidden)"
+  );
+
+  const activeTab = document.querySelector(".nav-tab.active");
+  const isSubTab = activeTab && activeTab.id !== "tabBtn-map";
+
   try {
-    // Keep BackButton ALWAYS visible so the user can ALWAYS navigate back or return to Telegram!
-    tgApp.BackButton.show();
+    if (openModal || isSubTab) {
+      // Sub-screen is open: show BackButton to return to map
+      tgApp.BackButton.show();
+    } else {
+      // Main screen: HIDE BackButton so Telegram natively displays its own Close [X] button!
+      tgApp.BackButton.hide();
+    }
   } catch (e) {}
 }
 
