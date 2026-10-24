@@ -529,35 +529,34 @@ nav#mainNavBar {
 /* --------------------------------------------------------------------------
    6. FIND MY / LIFE360 STYLE FLOATING STATUS CARD (PARENT SCREEN)
    -------------------------------------------------------------------------- */
+#parentBottomContainer {
+  bottom: calc(66px + max(8px, env(safe-area-inset-bottom, 0px))) !important;
+  z-index: 21 !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 #locationCard {
-  bottom: calc(76px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
   background: var(--glass-bg) !important;
   backdrop-filter: blur(28px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 16px 40px -6px rgba(0, 0, 0, 0.65) !important;
-  border-radius: 26px !important;
+  border-radius: 24px !important;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 20 !important;
-}
-
-#parentMonitoringBar {
-  bottom: calc(185px + max(14px, env(safe-area-inset-bottom, 0px))) !important;
-  z-index: 22 !important;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-@media (min-width: 768px) {
-  #locationCard {
-    bottom: 96px !important;
-  }
-  #parentMonitoringBar {
-    bottom: 215px !important;
-  }
 }
 
 #locationCard:hover {
   border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+#parentMonitoringBar {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+@media (min-width: 768px) {
+  #parentBottomContainer {
+    bottom: 80px !important;
+  }
 }
 
 /* --------------------------------------------------------------------------

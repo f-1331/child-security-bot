@@ -2510,6 +2510,7 @@ function switchTab(tabName) {
   const childActions = document.getElementById("childFloatingActions");
   const locCard = document.getElementById("locationCard");
   const parentBar = document.getElementById("parentMonitoringBar");
+  const bottomContainer = document.getElementById("parentBottomContainer");
 
   if (tabName !== "map") {
     const targetModal = document.getElementById(`modal-${tabName}`);
@@ -2518,6 +2519,7 @@ function switchTab(tabName) {
     if (childActions) childActions.classList.add("hidden");
     if (locCard) locCard.classList.add("hidden");
     if (parentBar) parentBar.classList.add("hidden");
+    if (bottomContainer) bottomContainer.classList.add("hidden");
     if (tabName === "tasks") {
       loadTasks();
     }
@@ -2543,6 +2545,7 @@ function switchTab(tabName) {
       if (floatControls) floatControls.classList.remove("hidden");
       if (locCard) locCard.classList.remove("hidden");
       document.getElementById("parentMonitoringBar")?.classList.remove("hidden");
+      document.getElementById("parentBottomContainer")?.classList.remove("hidden");
       if (map) {
         setTimeout(() => map.invalidateSize(), 80);
       }
