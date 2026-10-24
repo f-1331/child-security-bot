@@ -25,6 +25,6 @@ Desktop.ini
 # Temporary scratch scripts
 scratch/
 
-# Local binary downloads (ChildSecurity.apk tracked for guaranteed bot delivery on Render)
+# Local binary downloads (APKs tracked for guaranteed bot delivery on Render)
 downloads/*
-!downloads/ChildSecurity.apk
+!downloads/*.apk

@@ -299,9 +299,15 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="📥 Ilovani yuklab olish (.apk)",
-                            callback_data="download_apk_direct"
+                            text="👨‍👩‍👧 Ota-ona ilovasi (.apk)",
+                            callback_data="download_parent_apk"
                         ),
+                        InlineKeyboardButton(
+                            text="👦 Farzand ilovasi (.apk)",
+                            callback_data="download_child_apk"
+                        )
+                    ],
+                    [
                         InlineKeyboardButton(
                             text="🌐 Web App (Sayt)ni ochish",
                             web_app=WebAppInfo(url=settings.MINI_APP_URL)
@@ -313,8 +319,10 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 f"Assalomu alaykum, **{full_name}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
                 f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
-                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n"
-                f"📲 Farzand telefoniga doimiy 24/7 foniy GPS o'rnatish uchun pastdagi **«📥 Ilovani yuklab olish»** tugmasini bosing yoki `/apk` deb yozing.{phone_prompt}",
+                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n\n"
+                f"📲 **Mobil ilovalar:**\n"
+                f"• **👨‍👩‍👧 Ota-ona ilovasi:** O'z telefoningizdan farzandlarni jonli xaritada kuzatish, topshiriq berish va hisobotlarni ko'rish uchun.\n"
+                f"• **👦 Farzand ilovasi:** Farzand telefonida ekran o'chiq bo'lsa ham 24/7 foniy GPS va SOS ishlashi uchun.{phone_prompt}",
                 reply_markup=get_parent_main_keyboard(user.id),
                 parse_mode="Markdown"
             )
@@ -332,14 +340,14 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🌐 Web App (Sayt)ni ochish",
-                            web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                            text="👦 Farzand ilovasi (.apk)",
+                            callback_data="download_child_apk"
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            text="📲 Android APK Yuklab Olish (Doimiy GPS)",
-                            callback_data="download_apk_direct"
+                            text="🌐 Web App (Sayt)ni ochish",
+                            web_app=WebAppInfo(url=settings.MINI_APP_URL)
                         )
                     ]
                 ]
@@ -3410,3 +3418,135 @@ async def fallback_text_handler(message: Message):
                 reply_markup=get_child_main_keyboard(),
                 parse_mode="Markdown"
             )
+
+
+@router.message(F.text.in_([
+    "👨‍👩‍👧 Ota-ona ilovasi (APK)",
+    "Ota-ona ilovasi",
+    "ota-ona ilovasi",
+    "ota ona ilovasi",
+    "Parent app",
+    "parent app"
+]))
+@router.message(Command("parent_app", "parentapp", "otaona"))
+@router.callback_query(F.data == "download_parent_apk")
+async def on_download_parent_apk(event, bot: Bot):
+    """Send dedicated Parent Monitoring App directly into chat."""
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("👨‍👩‍👧 Ota-ona ilovasi yuborilmoqda...")
+
+    webapp_url = settings.RESOLVED_WEBAPP_URL
+    apk_download_url = f"{webapp_url}/download/parent-apk"
+    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+
+    text = (
+        "👨‍👩‍👧 **Child Security — Ota-ona Ilovasi (Android)**\n\n"
+        "Ushbu ilovani **o'zingizning telefoningizga** o'rnating:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌟 **Ota-ona ilovasi imkoniyatlari:**\n"
+        "• **Jonli Xarita:** Farzandlaringiz qayerda va qanday tezlikda yurganini real-vaqtda ko'rish.\n"
+        "• **Masofaviy Sirena:** Farzand telefonida ovoz chiqarish (yo'qolganda topish uchun).\n"
+        "• **Xavfsiz Makonlar (Geozonalar):** Maktab, uy, bog'chaga kirib-chiqqanini avtomatik bilish.\n"
+        "• **Kunlik Hisobot:** Farzandning bugungi harakatlari, batareyasi va vaqti tahlili.\n"
+        "• **Topshiriqlar & Tangalar:** Farzandga foydali vazifalar berish va rag'batlantirish.\n\n"
+        f"📥 [Ota-ona ilovasini yuklab olish]({apk_download_url})"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📥 Ota-ona ilovasi (.apk)",
+                    url=apk_download_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Web App Saytini ochish",
+                    web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+    local_parent_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Parent.apk")
+    local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    target = local_parent_apk if os.path.exists(local_parent_apk) else local_apk
+
+    try:
+        if os.path.exists(target):
+            doc = FSInputFile(target, filename="ChildSecurity_Parent.apk")
+            await message.answer_document(
+                document=doc,
+                caption="👨‍👩‍👧 **Child Security — Ota-ona Ilovasi (v1.0.0)**\n\nO'rnatish uchun ushbu fayl ustiga bosing. O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
+                parse_mode="Markdown"
+            )
+        else:
+            await message.answer(f"📥 Ilovani yuklab olish havolasi: {apk_download_url}")
+    except Exception as e:
+        logger.warning(f"Could not send parent APK document: {e}")
+
+
+@router.message(F.text.in_([
+    "👦 Farzand ilovasi (APK)",
+    "Farzand ilovasi",
+    "farzand ilovasi",
+    "Child app",
+    "child app"
+]))
+@router.message(Command("child_app", "childapp", "farzand"))
+@router.callback_query(F.data == "download_child_apk")
+async def on_download_child_apk(event, bot: Bot):
+    """Send dedicated Child Safety & 24/7 Background GPS App directly into chat."""
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("👦 Farzand ilovasi yuborilmoqda...")
+
+    webapp_url = settings.RESOLVED_WEBAPP_URL
+    apk_download_url = f"{webapp_url}/download/child-apk"
+    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+
+    text = (
+        "👦 **Child Security — Farzand Ilovasi (Android)**\n\n"
+        "Ushbu ilovani **farzandingizning telefoniga** o'rnating:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 **Farzand ilovasi imkoniyatlari:**\n"
+        "• **24/7 Doimiy Foniy GPS:** Telefon ekrani o'chiq bo'lsa ham joylashuv to'xtovsiz ota-onaga boradi.\n"
+        "• **🚨 SOS Favqulodda Tugma:** 1 bosishda ota-onaga xavf signali va tezkor qo'ng'iroq.\n"
+        "• **Avtomatik Ishga Tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
+        "• **Missiyalar & Tangalar:** Ota-onaning topshiriqlarini bajarib, virtual tangalar yig'ish.\n\n"
+        f"📥 [Farzand ilovasini yuklab olish]({apk_download_url})"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📥 Farzand ilovasi (.apk)",
+                    url=apk_download_url
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+    local_child_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Child.apk")
+    local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    target = local_child_apk if os.path.exists(local_child_apk) else local_apk
+
+    try:
+        if os.path.exists(target):
+            doc = FSInputFile(target, filename="ChildSecurity_Child.apk")
+            await message.answer_document(
+                document=doc,
+                caption="👦 **Child Security — Farzand Ilovasi (v1.0.0)**\n\nFarzandingiz telefoniga o'rnating. Ekran o'chiq bo'lsa ham 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
+                parse_mode="Markdown"
+            )
+        else:
+            await message.answer(f"📥 Ilovani yuklab olish havolasi: {apk_download_url}")
+    except Exception as e:
+        logger.warning(f"Could not send child APK document: {e}")

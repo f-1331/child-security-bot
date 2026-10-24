@@ -90,6 +90,18 @@ async def ensure_cached_apk():
     except Exception as e:
         logger.warning(f"Could not pre-cache APK: {e}")
 
+    try:
+        import shutil
+        parent_apk = downloads_dir / "ChildSecurity_Parent.apk"
+        child_apk = downloads_dir / "ChildSecurity_Child.apk"
+        if apk_file.exists():
+            if not parent_apk.exists() or parent_apk.stat().st_size != apk_file.stat().st_size:
+                shutil.copyfile(apk_file, parent_apk)
+            if not child_apk.exists() or child_apk.stat().st_size != apk_file.stat().st_size:
+                shutil.copyfile(apk_file, child_apk)
+    except Exception as e:
+        logger.warning(f"Could not duplicate parent/child APKs: {e}")
+
 
 # Lifespan context manager for FastAPI
 @asynccontextmanager
@@ -181,6 +193,62 @@ async def download_android_apk():
         status_code=302
     )
 
+
+@app.get("/download/parent-apk", tags=["App"])
+async def download_parent_apk():
+    """Download dedicated Parent Monitoring Android App."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+
+    downloads_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Parent.apk")
+    fallback_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    local_apk = os.path.join(settings.BASE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+
+    target = None
+    for path in [downloads_apk, fallback_apk, local_apk]:
+        if os.path.exists(path) and os.path.getsize(path) > 1_000_000:
+            target = path
+            break
+
+    if target:
+        return FileResponse(
+            target,
+            filename="ChildSecurity_Parent.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    return RedirectResponse(
+        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+        status_code=302
+    )
+
+
+@app.get("/download/child-apk", tags=["App"])
+async def download_child_apk():
+    """Download dedicated Child Safety & 24/7 Background GPS Android App."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+
+    downloads_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Child.apk")
+    fallback_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    local_apk = os.path.join(settings.BASE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+
+    target = None
+    for path in [downloads_apk, fallback_apk, local_apk]:
+        if os.path.exists(path) and os.path.getsize(path) > 1_000_000:
+            target = path
+            break
+
+    if target:
+        return FileResponse(
+            target,
+            filename="ChildSecurity_Child.apk",
+            media_type="application/vnd.android.package-archive"
+        )
+    return RedirectResponse(
+        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+        status_code=302
+    )
+
 @app.get("/privacy", tags=["Legal"])
 @app.get("/privacy.html", tags=["Legal"])
 async def privacy_policy_view():
@@ -246,7 +314,8 @@ async def start_bot(bot: Bot, dp: Dispatcher):
             from aiogram.types import BotCommand
             await bot.set_my_commands([
                 BotCommand(command="start", description="🔄 Bosh menyu / Botni yangilash"),
-                BotCommand(command="apk", description="📲 Android Mobil Ilovani yuklab olish (.apk)"),
+                BotCommand(command="parent_app", description="👨‍👩‍👧 Ota-ona ilovasi (Boshqaruv & Xarita)"),
+                BotCommand(command="child_app", description="👦 Farzand ilovasi (24/7 Foniy GPS & SOS)"),
                 BotCommand(command="app", description="🌐 Web App (Sayt)ni ochish"),
                 BotCommand(command="sos", description="🚨 SOS Favqulodda signal"),
                 BotCommand(command="help", description="ℹ️ Qo'llanma va yordam"),

@@ -18,8 +18,6 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
                     text="👨‍👩‍👧 Ota-ona (Parent)",
                     callback_data="set_role:parent"
                 ),
-            ],
-            [
                 InlineKeyboardButton(
                     text="👦 Farzand (Child)",
                     callback_data="set_role:child"
@@ -27,8 +25,12 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="📥 Ilovani yuklab olish (.apk)",
-                    callback_data="download_apk_direct"
+                    text="👨‍👩‍👧 Ota-ona ilovasi (.apk)",
+                    callback_data="download_parent_apk"
+                ),
+                InlineKeyboardButton(
+                    text="👦 Farzand ilovasi (.apk)",
+                    callback_data="download_child_apk"
                 ),
             ],
         ]
@@ -38,38 +40,39 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Includes Download App, Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
+    Includes Parent App, Child App, Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
     """
     keyboard = [
         [
-            KeyboardButton(text="📥 Ilovani yuklab olish"),
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+            KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
+            KeyboardButton(text="👦 Farzand ilovasi (APK)")
         ],
         [
-            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
-            KeyboardButton(text="📍 Kerakli joylar")
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
+            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
         ],
         [
-            KeyboardButton(text="🔋 Batareya va Holat"),
-            KeyboardButton(text="👶 Farzandlarim")
+            KeyboardButton(text="📍 Kerakli joylar"),
+            KeyboardButton(text="🔋 Batareya va Holat")
         ],
         [
-            KeyboardButton(text="➕ Farzand ulash (Kodi)"),
-            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish")
+            KeyboardButton(text="👶 Farzandlarim"),
+            KeyboardButton(text="➕ Farzand ulash (Kodi)")
         ],
         [
-            KeyboardButton(text="🔑 Saytga kirish kodi"),
-            KeyboardButton(text="💰 Tangalar kursini sozlash")
+            KeyboardButton(text="👨‍👩‍👧 Ikkinchi ota-onani taklif qilish"),
+            KeyboardButton(text="🔑 Saytga kirish kodi")
         ],
         [
-            KeyboardButton(text="📊 Bugungi hisobot"),
-            KeyboardButton(text="📞 Oila kontaktlari")
+            KeyboardButton(text="💰 Tangalar kursini sozlash"),
+            KeyboardButton(text="📊 Bugungi hisobot")
         ],
         [
-            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="📞 Oila kontaktlari"),
             KeyboardButton(text="🔄 Rolni o'zgartirish")
         ],
         [
+            KeyboardButton(text="ℹ️ Yordam"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -84,11 +87,11 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
 def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
-    Includes Download App, Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
+    Includes Child App, Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
     """
     keyboard = [
         [
-            KeyboardButton(text="📥 Ilovani yuklab olish"),
+            KeyboardButton(text="👦 Farzand ilovasi (APK)"),
             KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
         ],
         [
@@ -361,7 +364,7 @@ def get_contact_request_keyboard() -> ReplyKeyboardMarkup:
     """Keyboard prompting parent to link their phone number for SOS emergency calls."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📥 Ilovani yuklab olish")],
+            [KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"), KeyboardButton(text="👦 Farzand ilovasi (APK)")],
             [KeyboardButton(text="📱 Raqamimni ulash (Kontaktni yuborish)", request_contact=True)],
             [KeyboardButton(text="⏭ Keyinroq ulash")]
         ],
