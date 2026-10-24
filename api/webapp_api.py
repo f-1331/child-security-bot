@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import uuid
@@ -18,6 +19,7 @@ from bot.keyboards import (
     get_child_task_action_keyboard,
     get_task_approval_keyboard,
     get_sos_alert_parent_keyboard,
+    get_contact_request_keyboard,
 )
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,15 @@ import asyncio
 import logging
 import html
 from datetime import datetime, timezone
-import pytz
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+try:
+    import pytz
+except ImportError:
+    pytz = None
 from aiogram import Bot
 from config import settings
 from db.database import AsyncSessionLocal
@@ -21,7 +29,16 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
     last_sent_date = None
     alerted_expired_walk_safes = set()
 
-    tz = pytz.timezone(settings.TIMEZONE)
+    try:
+        if ZoneInfo is not None:
+            tz = ZoneInfo(settings.TIMEZONE)
+        elif pytz is not None:
+            tz = pytz.timezone(settings.TIMEZONE)
+        else:
+            tz = timezone.utc
+    except Exception as tz_err:
+        logger.warning(f"Could not initialize timezone {settings.TIMEZONE}: {tz_err}. Falling back to UTC.")
+        tz = timezone.utc
 
     while True:
         try:

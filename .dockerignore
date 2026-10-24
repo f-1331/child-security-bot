@@ -1,0 +1,14 @@
+.git
+.github
+android
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+venv
+*.db
+*.sqlite3
+node_modules
+.DS_Store

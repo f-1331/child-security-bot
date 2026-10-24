@@ -1,6 +1,8 @@
 import html
 import logging
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -13,12 +15,14 @@ from aiogram.types import (
     ReplyKeyboardRemove,
     FSInputFile,
     URLInputFile,
+    WebAppInfo,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db.database import AsyncSessionLocal
 import db.crud as crud
+from api import telemetry
 from bot.geofence import evaluate_geofences_and_notify, haversine_distance
 from bot.keyboards import (
     get_role_selection_keyboard,
@@ -448,6 +452,7 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
     code = message.text.strip().replace(" ", "")
     user_id = message.from_user.id
     full_name = message.from_user.full_name
+    username = message.from_user.username
 
     if code.lower() in ["/cancel", "/chiqish", "/logout", "bekor", "cancel"]:
         await state.clear()

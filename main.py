@@ -409,9 +409,11 @@ async def main():
     tasks.append(asyncio.create_task(render_keepalive()))
 
     try:
-        await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks, return_exceptions=True)
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutdown signal received.")
+    except Exception as e:
+        logger.error(f"Unexpected error in background service: {e}")
     finally:
         if server:
             server.should_exit = True
