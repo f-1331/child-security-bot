@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=59" />
+  <link rel="stylesheet" href="style.css?v=60" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -435,47 +435,55 @@
         </div>
       </div>
 
-      <!-- Floating Map Controls (Right Vertical Frosted Glass Dock) -->
-      <div id="floatingMapControls" class="floating-glass-dock absolute right-3.5 top-3.5 z-20">
-        <!-- Toggle Fullscreen Map / Hide Nav & Bottom Menus -->
+      <!-- Floating Map Controls (Right Vertical Frosted Glass Dock - Compact & Collapsible) -->
+      <div id="floatingMapControls" class="floating-glass-dock absolute right-3 top-3 z-25">
+        <!-- 1. Center on Child (Primary) -->
+        <button id="btnCenterChild" onclick="centerOnChild()" class="text-blue-400 hover:text-blue-300 active:scale-95 transition" title="Farzandga yaqinlashtirish">
+          <i data-lucide="crosshair" class="w-4 h-4"></i>
+        </button>
+
+        <!-- 2. Remote Siren (Emergency) -->
+        <button id="btnParentSiren" onclick="triggerRemoteSiren()" class="text-rose-400 hover:text-rose-300 active:scale-95 transition" title="Signal chalish (Ovoz chiqarish)">
+          <i data-lucide="bell-ring" class="w-4 h-4"></i>
+        </button>
+
+        <!-- 3. Toggle Map Layer (Yo'ldosh/Ko'cha) -->
+        <button id="btnMapLayer" onclick="toggleMapLayer()" class="text-emerald-400 hover:text-emerald-300 active:scale-95 transition" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+        </button>
+
+        <!-- 4. Toggle Fullscreen Map Mode -->
         <button id="btnToggleFullscreenMap" onclick="toggleMapUiVisibility()" class="text-cyan-400 hover:text-cyan-300 active:scale-95 transition" title="To'liq xarita (Menyularni yashirish / ko'rsatish)">
           <i data-lucide="maximize-2" id="iconFullscreenMap" class="w-4 h-4"></i>
         </button>
 
-        <!-- Remote Siren -->
-        <button id="btnParentSiren" onclick="triggerRemoteSiren()" class="text-rose-400 hover:text-rose-300" title="Signal chalish (Ovoz chiqarish)">
-          <i data-lucide="bell-ring" class="w-4 h-4"></i>
-        </button>
+        <!-- 5. Secondary Tools: Always shown on desktop (md+), expandable on mobile -->
+        <div id="extraMapTools" class="hidden md:flex flex-col gap-1 transition-all duration-200">
+          <!-- Toggle Route History Polyline -->
+          <button id="btnToggleRoute" onclick="toggleRouteHistory()" class="text-amber-400 hover:text-amber-300 active:scale-95 transition" title="Bugungi harakat yo'li">
+            <i data-lucide="route" class="w-4 h-4"></i>
+          </button>
 
-        <!-- Center on Child -->
-        <button id="btnCenterChild" onclick="centerOnChild()" class="text-blue-400 hover:text-blue-300" title="Farzandga yaqinlashtirish">
-          <i data-lucide="crosshair" class="w-4 h-4"></i>
-        </button>
+          <!-- Refresh Data -->
+          <button id="btnRefresh" onclick="refreshAllData()" class="text-slate-300 hover:text-white active:scale-95 transition" title="Yangilash">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
 
-        <!-- Toggle Map Layer -->
-        <button id="btnMapLayer" onclick="toggleMapLayer()" class="text-emerald-400 hover:text-emerald-300" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
-          <i data-lucide="layers" class="w-4 h-4"></i>
-        </button>
+          <!-- Add Zone -->
+          <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="text-indigo-400 hover:text-indigo-300 active:scale-95 transition" title="Kerakli joy qo'shish">
+            <i data-lucide="map-pin" class="w-4 h-4"></i>
+          </button>
 
-        <!-- Toggle Route History Polyline -->
-        <button id="btnToggleRoute" onclick="toggleRouteHistory()" class="text-amber-400 hover:text-amber-300" title="Bugungi harakat yo'li">
-          <i data-lucide="route" class="w-4 h-4"></i>
-        </button>
+          <!-- Mobil Ilova Yuklab Olish (Map Dock) -->
+          <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="text-blue-400 hover:text-blue-300 relative group active:scale-95 transition" title="Mobil ilovani yuklab olish (Android APK)">
+            <i data-lucide="smartphone" class="w-4 h-4"></i>
+            <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+          </button>
+        </div>
 
-        <!-- Add Zone -->
-        <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="hidden sm:flex text-indigo-400 hover:text-indigo-300" title="Kerakli joy qo'shish">
-          <i data-lucide="map-pin" class="w-4 h-4"></i>
-        </button>
-
-                <!-- Mobil Ilova Yuklab Olish (Map Dock) -->
-        <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="hidden sm:flex text-blue-400 hover:text-blue-300 relative group" title="Mobil ilovani yuklab olish (Android APK)">
-          <i data-lucide="smartphone" class="w-4 h-4"></i>
-          <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-        </button>
-
-        <!-- Refresh Data -->
-        <button id="btnRefresh" onclick="refreshAllData()" class="text-slate-300 hover:text-white" title="Yangilash">
-          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        <!-- Mobile More/Less Tools Toggle Button -->
+        <button id="btnToggleExtraTools" onclick="toggleExtraMapTools()" class="md:hidden text-slate-400 hover:text-white active:scale-95 transition" title="Boshqa asboblarni ochish/yopish">
+          <i data-lucide="more-horizontal" id="iconMoreTools" class="w-4 h-4"></i>
         </button>
       </div>
 
@@ -2173,7 +2181,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=59"></script>
+  <script src="app.js?v=60"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">

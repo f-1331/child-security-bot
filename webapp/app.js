@@ -2523,6 +2523,31 @@ async function resolveCurrentSos() {
 // Bottom tab switching
 
 // Toggle Fullscreen Map Mode (Hide/Show Top Nav & Bottom HUD)
+
+// Toggle Mobile Extra Map Tools Dock
+function toggleExtraMapTools() {
+  haptic("light");
+  const tools = document.getElementById("extraMapTools");
+  const icon = document.getElementById("iconMoreTools");
+  const btn = document.getElementById("btnToggleExtraTools");
+  if (!tools) return;
+
+  const isHidden = tools.classList.contains("hidden");
+  if (isHidden) {
+    tools.classList.remove("hidden");
+    if (icon) icon.setAttribute("data-lucide", "chevron-up");
+    if (btn) btn.setAttribute("title", "Asboblarni yashirish");
+  } else {
+    tools.classList.add("hidden");
+    if (icon) icon.setAttribute("data-lucide", "more-horizontal");
+    if (btn) btn.setAttribute("title", "Boshqa asboblarni ochish");
+  }
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
+
 function toggleMapUiVisibility(forceState) {
   haptic("light");
   const isCurrentlyFullscreen = document.body.classList.contains("fullscreen-map-mode");

@@ -1270,35 +1270,64 @@ body.theme-daylight textarea {
   line-height: 1.15 !important;
 }
 
-/* 5. Floating Controls Dock */
+/* 5. Floating Controls Dock (Strictly bounded & non-overlapping) */
 .floating-glass-dock {
-  top: clamp(8px, 2.4vw, 12px) !important;
-  right: clamp(8px, 2.4vw, 12px) !important;
-  padding: clamp(4px, 1.2vw, 6px) !important;
-  gap: clamp(4px, 1.2vw, 6px) !important;
+  top: clamp(8px, 2vw, 12px) !important;
+  right: clamp(8px, 2vw, 12px) !important;
+  padding: clamp(3px, 1vw, 5px) !important;
+  gap: clamp(3px, 1vw, 5px) !important;
   border-radius: clamp(14px, 3.5vw, 18px) !important;
+  max-height: calc(100% - clamp(150px, 28vh, 210px)) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  scrollbar-width: none !important;
+  z-index: 25 !important;
+}
+
+.floating-glass-dock::-webkit-scrollbar {
+  display: none !important;
 }
 
 .floating-glass-dock button {
-  width: clamp(34px, 8.5vw, 38px) !important;
-  height: clamp(34px, 8.5vw, 38px) !important;
-  border-radius: clamp(10px, 2.5vw, 14px) !important;
+  width: clamp(32px, 7.8vw, 36px) !important;
+  height: clamp(32px, 7.8vw, 36px) !important;
+  border-radius: clamp(10px, 2.5vw, 12px) !important;
+  flex-shrink: 0 !important;
 }
 
 .floating-glass-dock button i,
 .floating-glass-dock button svg {
-  width: clamp(15px, 4vw, 17px) !important;
-  height: clamp(15px, 4vw, 17px) !important;
+  width: clamp(14px, 3.5vw, 16px) !important;
+  height: clamp(14px, 3.5vw, 16px) !important;
 }
 
-/* 6. Top Android App Download Banner */
+/* 6. Top Android App Download Banner (Safe margin from right dock) */
 #parentAppDownloadBanner {
   top: clamp(8px, 2.4vw, 12px) !important;
   left: clamp(8px, 2.4vw, 12px) !important;
-  right: clamp(52px, 14vw, 60px) !important;
+  right: calc(clamp(40px, 10vw, 48px) + 16px) !important;
   max-width: 440px !important;
   padding: clamp(6px, 1.8vw, 9px) clamp(8px, 2.2vw, 12px) !important;
   border-radius: clamp(14px, 3.5vw, 18px) !important;
+}
+
+/* Compact rules for small screen heights & landscape mode */
+@media (max-height: 680px) {
+  .floating-glass-dock {
+    max-height: calc(100% - 130px) !important;
+    gap: 2px !important;
+    padding: 2.5px !important;
+  }
+  .floating-glass-dock button {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 9px !important;
+  }
+  .floating-glass-dock button i,
+  .floating-glass-dock button svg {
+    width: 13.5px !important;
+    height: 13.5px !important;
+  }
 }
 
 /* 7. Dynamic Island */
