@@ -1659,3 +1659,16 @@ async def trigger_call_parent_endpoint(child_id: int, session: AsyncSession = De
         ],
         "sent_contacts": sent_contacts
     }
+
+# ---------------------------------------------------------
+# APK Download Endpoints (Fail-safe direct redirects)
+# ---------------------------------------------------------
+GITHUB_RELEASE_APK = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+
+@router.get("/download/apk", tags=["App"])
+@router.get("/download/parent-apk", tags=["App"])
+@router.get("/download/child-apk", tags=["App"])
+async def router_download_apk():
+    """Always redirect to high-speed GitHub Release APK CDN."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=GITHUB_RELEASE_APK, status_code=302)
