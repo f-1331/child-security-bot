@@ -327,17 +327,41 @@ body.theme-frost {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Inter", -system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  -webkit-user-select: none;
   background-color: var(--bg-main) !important;
   color: var(--text-main) !important;
-  height: 100vh;
+  height: 100%;
   height: 100dvh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   overflow: hidden;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
   transition: background-color 0.35s cubic-bezier(0.16, 1, 0.3, 1), color 0.35s ease;
   letter-spacing: -0.015em;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
+}
+
+button, a, input, select, textarea, .nav-tab, [onclick] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Subtle ambient mesh light in dark mode */
@@ -530,7 +554,7 @@ nav#mainNavBar {
    6. FIND MY / LIFE360 STYLE FLOATING STATUS CARD (PARENT SCREEN)
    -------------------------------------------------------------------------- */
 #parentBottomContainer {
-  bottom: calc(66px + max(8px, env(safe-area-inset-bottom, 0px))) !important;
+  bottom: calc(76px + max(8px, env(safe-area-inset-bottom, 0px))) !important;
   z-index: 21 !important;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -951,6 +975,186 @@ body.theme-daylight textarea {
 @keyframes toastFlyOut {
   from { opacity: 1; transform: translate(-50%, 0) scale(1); }
   to { opacity: 0; transform: translate(-50%, -12px) scale(0.92); }
+}
+
+
+/* --------------------------------------------------------------------------
+   8. MOBILE RESPONSIVENESS & TACTILE PHONE ERGONOMICS (< 640px)
+   -------------------------------------------------------------------------- */
+#map, .leaflet-container {
+  touch-action: pan-x pan-y pinch-zoom !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+#childViewSection,
+.custom-scroll,
+.tab-panel > div,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+}
+
+#parentUtilityBar {
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+}
+#parentUtilityBar::-webkit-scrollbar {
+  display: none !important;
+}
+
+#mainNavBar {
+  bottom: calc(max(8px, env(safe-area-inset-bottom, 0px))) !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  padding: 4px 6px !important;
+}
+
+@media (max-width: 640px) {
+  /* Prevent browser keyboard auto-zoom on mobile inputs */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Compact Floating Map Dock */
+  .floating-glass-dock {
+    top: 8px !important;
+    right: 8px !important;
+    padding: 3.5px !important;
+    gap: 4px !important;
+    border-radius: 16px !important;
+  }
+  .floating-glass-dock button {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 11px !important;
+  }
+  .floating-glass-dock button svg,
+  .floating-glass-dock button i {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* Floating Android App Banner clearance */
+  #parentAppDownloadBanner {
+    top: 8px !important;
+    left: 8px !important;
+    right: 54px !important;
+    padding: 6px 8px !important;
+    border-radius: 14px !important;
+  }
+  #parentAppDownloadBanner .w-8 {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 13px !important;
+    border-radius: 8px !important;
+  }
+
+  /* Parent Bottom Container Mobile Optimization */
+  #parentBottomContainer {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(72px + max(6px, env(safe-area-inset-bottom, 0px))) !important;
+    gap: 6px !important;
+  }
+  #parentMonitoringBar button {
+    padding: 6px 8px !important;
+    gap: 6px !important;
+    border-radius: 14px !important;
+  }
+  #parentMonitoringBar button .w-7 {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 8px !important;
+  }
+  #parentMonitoringBar button .w-7 svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+  #parentMonitoringBar button p.text-\[11px\] {
+    font-size: 10px !important;
+  }
+  #parentMonitoringBar button p.text-\[9px\] {
+    font-size: 8px !important;
+  }
+
+  /* Location Card Mobile Refinement */
+  #locationCard {
+    padding: 8px 10px !important;
+    border-radius: 18px !important;
+  }
+  #locationCard .w-8 {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 9px !important;
+  }
+  #locationCard .w-8 svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  #locationCard #addressText {
+    font-size: 11px !important;
+  }
+  #locationCard button {
+    padding: 5px 9px !important;
+    font-size: 11px !important;
+  }
+
+  /* Bottom Navigation Dock Mobile */
+  #mainNavBar {
+    left: 8px !important;
+    right: 8px !important;
+    border-radius: 22px !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 3px 4px !important;
+  }
+  .nav-tab {
+    min-height: 44px !important;
+    border-radius: 14px !important;
+  }
+  .nav-tab i, .nav-tab svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .nav-tab span {
+    font-size: 8.5px !important;
+    margin-top: 2px !important;
+  }
+
+  /* Dynamic Island Mobile */
+  .dynamic-island {
+    padding: 4px 10px !important;
+    height: 26px !important;
+    border-radius: 9999px !important;
+  }
+  .dynamic-island-dot {
+    width: 6px !important;
+    height: 6px !important;
+  }
+  #dynamicIslandText {
+    font-size: 10px !important;
+  }
+  #dynamicIslandBattery {
+    font-size: 9px !important;
+  }
+
+  /* Utility Bar Mobile */
+  #parentUtilityBar {
+    gap: 4px !important;
+    padding-top: 4px !important;
+  }
+  #parentUtilityBar button,
+  #parentUtilityBar div {
+    font-size: 9.5px !important;
+  }
+
+  /* Modals Mobile Bottom Sheet Optimization */
+  .tab-panel > div {
+    max-height: calc(90dvh - env(safe-area-inset-top, 0px)) !important;
+    border-top-left-radius: 24px !important;
+    border-top-right-radius: 24px !important;
+  }
 }
 
 /* Watermark Suppression */

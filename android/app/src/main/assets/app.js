@@ -2748,6 +2748,7 @@ function openAddZoneModal() {
   if (bottomContainer) bottomContainer.classList.add("hidden");
   document.getElementById("locationCard")?.classList.add("hidden");
   document.getElementById("parentMonitoringBar")?.classList.add("hidden");
+  document.getElementById("mainNavBar")?.classList.add("hidden");
 
   // 4. Show Zone Picker Top Bar & Bottom Dock
   const topBar = document.getElementById("zonePickerTopBar");
@@ -2815,6 +2816,7 @@ function closeAddZoneModal() {
   if (bottomContainer) bottomContainer.classList.remove("hidden");
   document.getElementById("locationCard")?.classList.remove("hidden");
   document.getElementById("parentMonitoringBar")?.classList.remove("hidden");
+  document.getElementById("mainNavBar")?.classList.remove("hidden");
 }
 
 function setZonePickerLocation(lat, lon, radius = null) {
@@ -5252,6 +5254,7 @@ function setupTelegramBackButton() {
 function handleTelegramBackPress() {
   haptic("light");
   const modalPriority = [
+    { id: "modalHelp", close: closeHelpModal },
     { id: "modalInstallApp", close: closeInstallAppModal },
     { id: "modalCallParent", close: closeCallParentModal },
     { id: "modal-walk-safe", close: closeWalkSafeModal },
@@ -5269,6 +5272,10 @@ function handleTelegramBackPress() {
     { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "modal-settings", close: closeSettingsModal },
+    { id: "modalHelp", close: closeHelpModal },
+    { id: "modalInstallApp", close: closeInstallAppModal },
+    { id: "modalCallParent", close: closeCallParentModal },
+    { id: "childOnboardingModal", close: () => { const m = document.getElementById("childOnboardingModal"); if (m) m.classList.add("hidden"); } },
     { id: "modalThemeSelector", close: closeThemeModal },
     { id: "modal-wallet", close: () => closeModal("wallet") },
     { id: "modal-history", close: () => closeModal("history") },
@@ -5344,6 +5351,9 @@ function updateTelegramBackButton() {
   const openModal = document.querySelector(
     "#modal-tasks:not(.hidden), #modal-wallet:not(.hidden), #modal-history:not(.hidden), " +
     "#modal-zones:not(.hidden), #modal-settings:not(.hidden), #modalInstallApp:not(.hidden), " +
+    "#modalHelp:not(.hidden), #modal-daily-report:not(.hidden), #modal-add-task:not(.hidden), " +
+    "#modal-task-schedule:not(.hidden), #modal-task-proof:not(.hidden), #modal-edit-wishlist:not(.hidden), " +
+    "#modal-walk-safe-checkin:not(.hidden), #parentInviteSpouseModal:not(.hidden), " +
     "#modalCallParent:not(.hidden), #modal-walk-safe:not(.hidden), #modal-coin-rate:not(.hidden), " +
     "#deleteChildModal:not(.hidden), #childInviteParentModal:not(.hidden), #zonePickerBottomDock:not(.hidden), " +
     "#modalThemeSelector:not(.hidden)"
@@ -6191,6 +6201,7 @@ function dismissAppBanner() {
 // HELP & FAQ MODAL CONTROLLER
 // =========================================================
 function openHelpModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
   const modal = document.getElementById("modalHelp");
   if (modal) {
@@ -6200,6 +6211,7 @@ function openHelpModal() {
 }
 
 function closeHelpModal() {
+  setTimeout(updateTelegramBackButton, 50);
   haptic("light");
   const modal = document.getElementById("modalHelp");
   if (modal) modal.classList.add("hidden");
