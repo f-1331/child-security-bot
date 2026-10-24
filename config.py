@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     BOT_TOKEN: str = "8899084854:AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA"
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
+    BACKEND_URL: str = "https://child-security-site.onrender.com"
     TGCLOUD_APP_TOKEN: Optional[str] = "app8899084854:fQx23Fw3jvg07CZMwsRlO6T24EjFAvzoS4d4O24Uu9A"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
@@ -47,21 +49,31 @@ class Settings(BaseSettings):
 
     @property
     def RESOLVED_WEBAPP_URL(self) -> str:
-        """Auto-detect HTTPS domain on Render or Railway."""
+        """Telegram WebApp frontend URL. Always prioritizes WEBAPP_BASE_URL (Vercel)."""
+        if self.WEBAPP_BASE_URL and self.WEBAPP_BASE_URL.strip():
+            return self.WEBAPP_BASE_URL.rstrip("/")
+        return "https://child-security-bot.vercel.app"
+
+    @property
+    def RESOLVED_BACKEND_URL(self) -> str:
+        """Backend API host on Render/Railway for API calls, keepalive pings and APK downloads."""
         render_url = os.environ.get("RENDER_EXTERNAL_URL")
         if render_url:
             return render_url.rstrip("/")
         railway_url = os.environ.get("RAILWAY_STATIC_URL")
         if railway_url:
             return f"https://{railway_url}".rstrip("/")
-        return self.WEBAPP_BASE_URL.rstrip("/")
+        if self.BACKEND_URL and self.BACKEND_URL.strip():
+            return self.BACKEND_URL.rstrip("/")
+        return "https://child-security-site.onrender.com"
 
     @property
     def MINI_APP_URL(self) -> str:
-        """URL for Telegram WebApp button with cache-busting version parameter."""
+        """URL for Telegram WebApp button with dynamic cache-busting timestamp."""
         base = self.RESOLVED_WEBAPP_URL
         sep = "&" if "?" in base else "?"
-        return f"{base}{sep}v=17"
+        # Cache busting timestamp ensures Telegram Webview never serves stale cached assets
+        return f"{base}{sep}v=2.5&t={int(time.time())}"
 
     @property
     def BASE_DIR(self) -> Path:

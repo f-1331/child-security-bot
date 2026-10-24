@@ -336,7 +336,7 @@ async def start_bot(bot: Bot, dp: Dispatcher):
 
 async def render_keepalive():
     """Periodically ping self on Render so the service never sleeps."""
-    render_url = settings.RESOLVED_WEBAPP_URL
+    render_url = settings.RESOLVED_BACKEND_URL
     if not render_url.startswith("https://"):
         return
     health_url = f"{render_url}/health"

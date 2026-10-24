@@ -4787,10 +4787,10 @@ function connectWebSocket(userId) {
     return;
   }
 
-  const isLocalOrFile = window.location.protocol === "file:" || !window.location.host;
-  const host = isLocalOrFile ? "child-security-site.onrender.com" : window.location.host;
-  const protocol = (window.location.protocol === "https:" || window.location.protocol === "file:") ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${host}/api/v1/webapp/ws/${userId}`;
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const wsHost = isLocalhost ? window.location.host : "child-security-site.onrender.com";
+  const wsProtocol = (window.location.protocol === "https:" || !isLocalhost) ? "wss:" : "ws:";
+  const wsUrl = `${wsProtocol}//${wsHost}/api/v1/webapp/ws/${userId}`;
 
   try {
     appWebSocket = new WebSocket(wsUrl);
