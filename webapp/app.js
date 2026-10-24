@@ -2524,29 +2524,69 @@ async function resolveCurrentSos() {
 
 // Toggle Fullscreen Map Mode (Hide/Show Top Nav & Bottom HUD)
 
-// Toggle Mobile Extra Map Tools Dock
-function toggleExtraMapTools() {
+// Toggle & Re-close Mobile Extra Map Tools Dock (Two-way collapse & outside-click dismiss)
+function closeExtraMapTools() {
+  const tools = document.getElementById("extraMapTools");
+  const btn = document.getElementById("btnToggleExtraTools");
+  if (!tools || tools.classList.contains("hidden")) return;
+
+  tools.classList.add("hidden");
+  if (btn) {
+    btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4"></i>';
+    btn.setAttribute("title", "Boshqa asboblarni ochish");
+    btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
+    btn.classList.add("text-slate-300");
+  }
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
+
+function closeExtraMapToolsOnMobile() {
+  if (window.innerWidth < 768) {
+    closeExtraMapTools();
+  }
+}
+
+function toggleExtraMapTools(forceState) {
   haptic("light");
   const tools = document.getElementById("extraMapTools");
-  const icon = document.getElementById("iconMoreTools");
   const btn = document.getElementById("btnToggleExtraTools");
   if (!tools) return;
 
-  const isHidden = tools.classList.contains("hidden");
-  if (isHidden) {
+  const isCurrentlyHidden = tools.classList.contains("hidden");
+  const shouldOpen = typeof forceState === "boolean" ? forceState : isCurrentlyHidden;
+
+  if (shouldOpen) {
     tools.classList.remove("hidden");
-    if (icon) icon.setAttribute("data-lucide", "chevron-up");
-    if (btn) btn.setAttribute("title", "Asboblarni yashirish");
+    if (btn) {
+      btn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i>';
+      btn.setAttribute("title", "Yopish (Asboblarni yashirish)");
+      btn.classList.remove("text-slate-300");
+      btn.classList.add("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
+    }
   } else {
     tools.classList.add("hidden");
-    if (icon) icon.setAttribute("data-lucide", "more-horizontal");
-    if (btn) btn.setAttribute("title", "Boshqa asboblarni ochish");
+    if (btn) {
+      btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4"></i>';
+      btn.setAttribute("title", "Boshqa asboblarni ochish");
+      btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
+      btn.classList.add("text-slate-300");
+    }
   }
 
   if (window.lucide) {
     lucide.createIcons();
   }
 }
+
+// Global outside-click dismiss for Extra Map Tools
+document.addEventListener("click", function(event) {
+  const dock = document.getElementById("floatingMapControls");
+  if (dock && !dock.contains(event.target)) {
+    closeExtraMapTools();
+  }
+});
 
 function toggleMapUiVisibility(forceState) {
   haptic("light");

@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=60" />
+  <link rel="stylesheet" href="style.css?v=61" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -243,7 +243,7 @@
         <!-- Mobil ilova (Android APK) -->
         <button onclick="openInstallAppModal()" class="px-2.5 py-1 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-400/40 text-blue-200 flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm shrink-0" title="Mobil ilovani o'rnatish (Android APK)">
           <i data-lucide="smartphone" class="w-3.5 h-3.5 text-blue-300"></i>
-          <span class="text-[10px] font-black">📲 APK</span>
+          <span class="text-[10px] font-black">APK</span>
         </button>
 
         <!-- Qo'llanma & Yordam -->
@@ -277,7 +277,7 @@
           <div id="childAvatarHero" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-xl text-base sm:text-xl border-2 border-white/80 active:scale-95 transition overflow-hidden">
             <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Hero Mascot" />
           </div>
-          <span class="absolute -top-1 -right-1 text-xs">👑</span>
+          <span class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-900/90 border border-amber-400/60 rounded-full flex items-center justify-center text-[10px] shadow-sm leading-none z-10 pointer-events-none">👑</span>
         </div>
         
         <div class="min-w-0">
@@ -438,51 +438,51 @@
       <!-- Floating Map Controls (Right Vertical Frosted Glass Dock - Compact & Collapsible) -->
       <div id="floatingMapControls" class="floating-glass-dock absolute right-3 top-3 z-25">
         <!-- 1. Center on Child (Primary) -->
-        <button id="btnCenterChild" onclick="centerOnChild()" class="text-blue-400 hover:text-blue-300 active:scale-95 transition" title="Farzandga yaqinlashtirish">
+        <button id="btnCenterChild" onclick="centerOnChild(); closeExtraMapToolsOnMobile();" class="text-blue-400 hover:text-blue-300 active:scale-95 transition" title="Farzandga yaqinlashtirish">
           <i data-lucide="crosshair" class="w-4 h-4"></i>
         </button>
 
         <!-- 2. Remote Siren (Emergency) -->
-        <button id="btnParentSiren" onclick="triggerRemoteSiren()" class="text-rose-400 hover:text-rose-300 active:scale-95 transition" title="Signal chalish (Ovoz chiqarish)">
+        <button id="btnParentSiren" onclick="triggerRemoteSiren(); closeExtraMapToolsOnMobile();" class="text-rose-400 hover:text-rose-300 active:scale-95 transition" title="Signal chalish (Ovoz chiqarish)">
           <i data-lucide="bell-ring" class="w-4 h-4"></i>
         </button>
 
         <!-- 3. Toggle Map Layer (Yo'ldosh/Ko'cha) -->
-        <button id="btnMapLayer" onclick="toggleMapLayer()" class="text-emerald-400 hover:text-emerald-300 active:scale-95 transition" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
+        <button id="btnMapLayer" onclick="toggleMapLayer(); closeExtraMapToolsOnMobile();" class="text-emerald-400 hover:text-emerald-300 active:scale-95 transition" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
           <i data-lucide="layers" class="w-4 h-4"></i>
         </button>
 
         <!-- 4. Toggle Fullscreen Map Mode -->
-        <button id="btnToggleFullscreenMap" onclick="toggleMapUiVisibility()" class="text-cyan-400 hover:text-cyan-300 active:scale-95 transition" title="To'liq xarita (Menyularni yashirish / ko'rsatish)">
+        <button id="btnToggleFullscreenMap" onclick="toggleMapUiVisibility(); closeExtraMapToolsOnMobile();" class="text-cyan-400 hover:text-cyan-300 active:scale-95 transition" title="To'liq xarita (Menyularni yashirish / ko'rsatish)">
           <i data-lucide="maximize-2" id="iconFullscreenMap" class="w-4 h-4"></i>
         </button>
 
         <!-- 5. Secondary Tools: Always shown on desktop (md+), expandable on mobile -->
         <div id="extraMapTools" class="hidden md:flex flex-col gap-1 transition-all duration-200">
           <!-- Toggle Route History Polyline -->
-          <button id="btnToggleRoute" onclick="toggleRouteHistory()" class="text-amber-400 hover:text-amber-300 active:scale-95 transition" title="Bugungi harakat yo'li">
+          <button id="btnToggleRoute" onclick="toggleRouteHistory(); closeExtraMapToolsOnMobile();" class="text-amber-400 hover:text-amber-300 active:scale-95 transition" title="Bugungi harakat yo'li">
             <i data-lucide="route" class="w-4 h-4"></i>
           </button>
 
           <!-- Refresh Data -->
-          <button id="btnRefresh" onclick="refreshAllData()" class="text-slate-300 hover:text-white active:scale-95 transition" title="Yangilash">
+          <button id="btnRefresh" onclick="refreshAllData(); closeExtraMapToolsOnMobile();" class="text-slate-300 hover:text-white active:scale-95 transition" title="Yangilash">
             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
           </button>
 
           <!-- Add Zone -->
-          <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="text-indigo-400 hover:text-indigo-300 active:scale-95 transition" title="Kerakli joy qo'shish">
+          <button id="btnAddZoneMap" onclick="openAddZoneModal(); closeExtraMapToolsOnMobile();" class="text-indigo-400 hover:text-indigo-300 active:scale-95 transition" title="Kerakli joy qo'shish">
             <i data-lucide="map-pin" class="w-4 h-4"></i>
           </button>
 
           <!-- Mobil Ilova Yuklab Olish (Map Dock) -->
-          <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="text-blue-400 hover:text-blue-300 relative group active:scale-95 transition" title="Mobil ilovani yuklab olish (Android APK)">
+          <button id="btnMapInstallApp" onclick="openInstallAppModal(); closeExtraMapToolsOnMobile();" class="text-blue-400 hover:text-blue-300 relative group active:scale-95 transition" title="Mobil ilovani yuklab olish (Android APK)">
             <i data-lucide="smartphone" class="w-4 h-4"></i>
-            <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+            <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
           </button>
         </div>
 
-        <!-- Mobile More/Less Tools Toggle Button -->
-        <button id="btnToggleExtraTools" onclick="toggleExtraMapTools()" class="md:hidden text-slate-400 hover:text-white active:scale-95 transition" title="Boshqa asboblarni ochish/yopish">
+        <!-- Mobile More/Less Tools Toggle Button (Clicking opens, clicking again closes!) -->
+        <button id="btnToggleExtraTools" onclick="toggleExtraMapTools()" class="md:hidden text-slate-300 hover:text-white active:scale-95 transition" title="Boshqa asboblarni ochish / yopish">
           <i data-lucide="more-horizontal" id="iconMoreTools" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1394,9 +1394,11 @@
       </div>
 
       <!-- Telegram Bot Direct Clickable Button -->
-      <a href="https://t.me/child_security_bot" target="_blank" class="w-full py-2.5 mb-2.5 bg-gradient-to-r from-sky-600/25 via-blue-600/25 to-indigo-600/25 hover:from-sky-600/40 hover:to-blue-600/40 border border-sky-400/40 text-sky-200 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm">
-        <i data-lucide="send" class="w-4 h-4 text-sky-400"></i>
-        <span>Telegram Botdan Kirish Kodini Olish (@child_security_bot)</span>
+      <a href="https://t.me/child_security_bot" target="_blank" class="w-full py-2.5 mb-2.5 bg-gradient-to-r from-sky-600/30 via-blue-600/30 to-indigo-600/30 hover:from-sky-600/45 hover:to-blue-600/45 border border-sky-400/40 text-sky-200 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm">
+        <svg class="w-4 h-4 shrink-0 fill-current text-sky-400" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+        </svg>
+        <span class="truncate">Telegram Botdan Kirish Kodini Olish (@child_security_bot)</span>
       </a>
 
       <!-- Telegram Bot Info Helper -->
@@ -1849,22 +1851,24 @@
         </p>
       </div>
 
-      <!-- Action Buttons -->
+      <!-- Action Buttons (Crisp centered icons, zero emoji distortion) -->
       <div class="w-full flex flex-col gap-2.5">
-        <button onclick="callParent()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
-          <i data-lucide="phone-call" class="w-4 h-4"></i>
-          <span>📞 Ota-onaga qo'ng'iroq qilish</span>
+        <button onclick="callParent()" class="w-full py-3 px-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
+          <i data-lucide="phone-call" class="w-4 h-4 shrink-0"></i>
+          <span>Ota-onaga qo'ng'iroq qilish</span>
         </button>
 
-        <button onclick="openParentChat()" class="w-full py-2.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-bold text-xs rounded-xl border border-slate-600 flex items-center justify-center gap-2 transition">
-          <i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>
-          <span>💬 Telegram orqali yozish</span>
+        <button onclick="openParentChat()" class="w-full py-2.5 px-3 bg-sky-600/20 hover:bg-sky-600/30 active:scale-95 text-sky-200 hover:text-white font-bold text-xs rounded-xl border border-sky-500/40 flex items-center justify-center gap-2 transition shadow-sm">
+          <svg class="w-4 h-4 shrink-0 fill-current text-sky-400" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+          </svg>
+          <span class="truncate">Telegram orqali yozish</span>
         </button>
 
         <!-- Safe / Resolve SOS Button -->
-        <button onclick="cancelChildSOS()" class="w-full mt-2 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-900/50 flex items-center justify-center gap-2 transition border border-emerald-400/50">
-          <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-          <span>✅ Hammasi yaxshi / Xavf o'tdi (To'xtatish)</span>
+        <button onclick="cancelChildSOS()" class="w-full mt-2 py-3 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-900/50 flex items-center justify-center gap-2 transition border border-emerald-400/50">
+          <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0"></i>
+          <span>Hammasi yaxshi (Xavf o'tdi)</span>
         </button>
       </div>
     </div>
@@ -1990,8 +1994,10 @@
         <p class="text-2xs text-slate-400 mt-0.5">Ushbu kod faqat o'zingizning sarguzasht profilingizga kirish uchun kerak.</p>
       </div>
 
-      <button id="btnShareChildInviteTg" onclick="shareChildInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition flex items-center justify-center gap-2">
-        <i data-lucide="send" class="w-4 h-4"></i>
+      <button id="btnShareChildInviteTg" onclick="shareChildInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition flex items-center justify-center gap-2">
+        <svg class="w-4 h-4 shrink-0 fill-current text-sky-200" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+        </svg>
         <span>Telegram orqali ota-onamga yuborish</span>
       </button>
     </div>
@@ -2023,8 +2029,10 @@
         </div>
       </div>
 
-      <button id="btnShareParentInviteTg" onclick="shareParentInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-900/40 transition flex items-center justify-center gap-2">
-        <i data-lucide="send" class="w-4 h-4"></i>
+      <button id="btnShareParentInviteTg" onclick="shareParentInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-900/40 transition flex items-center justify-center gap-2">
+        <svg class="w-4 h-4 shrink-0 fill-current text-indigo-200" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+        </svg>
         <span>Turmush o'rtog'imga yuborish</span>
       </button>
     </div>
@@ -2181,7 +2189,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=60"></script>
+  <script src="app.js?v=61"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -2207,8 +2215,10 @@
         </a>
 
         <!-- 2. Telegram Direct Call / Chat -->
-        <button id="btnModalParentTelegram" onclick="openParentTelegramChat()" class="w-full py-3 px-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 active:scale-95 text-blue-300 hover:text-white font-bold text-xs rounded-2xl transition flex items-center justify-center gap-2">
-          <i data-lucide="send" class="w-4 h-4"></i>
+        <button id="btnModalParentTelegram" onclick="openParentTelegramChat()" class="w-full py-3 px-4 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 active:scale-95 text-sky-300 hover:text-white font-bold text-xs rounded-2xl transition flex items-center justify-center gap-2 shadow-sm">
+          <svg class="w-4 h-4 shrink-0 fill-current text-sky-400" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+          </svg>
           <span>Telegram orqali qo'ng'iroq / yozish</span>
         </button>
 
@@ -2349,16 +2359,19 @@
         </div>
       </div>
 
-      <!-- Segmented Tab Selector -->
+      <!-- Segmented Tab Selector (Evenly spaced, responsive on all devices) -->
       <div class="flex items-center gap-1.5 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/80 mb-4">
-        <button id="installTabBtn-android" onclick="switchInstallTab('android')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md transition">
-          🤖 Android APK
+        <button id="installTabBtn-android" onclick="switchInstallTab('android')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-black bg-blue-600 text-white shadow-md transition flex items-center justify-center gap-1">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5 shrink-0"></i>
+          <span>Android</span>
         </button>
-        <button id="installTabBtn-ios" onclick="switchInstallTab('ios')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition">
-          🍎 iPhone (iOS)
+        <button id="installTabBtn-ios" onclick="switchInstallTab('ios')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
+          <i data-lucide="apple" class="w-3.5 h-3.5 shrink-0"></i>
+          <span>iPhone</span>
         </button>
-        <button id="installTabBtn-pwa" onclick="switchInstallTab('pwa')" class="flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition">
-          🌐 Brauzer PWA
+        <button id="installTabBtn-pwa" onclick="switchInstallTab('pwa')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
+          <i data-lucide="globe" class="w-3.5 h-3.5 shrink-0"></i>
+          <span>PWA</span>
         </button>
       </div>
 
