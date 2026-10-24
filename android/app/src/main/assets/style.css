@@ -385,9 +385,11 @@ body::before {
   background: var(--glass-bg);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--glass-border) !important;
   box-shadow: inset 0 1px 0 0 var(--glass-highlight), var(--glass-shadow);
-  border-radius: 24px;
+  border-radius: clamp(16px, 4vw, 22px) !important;
+  padding: clamp(12px, 3.2vw, 16px) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ios-glass-pill {
@@ -434,14 +436,51 @@ nav#mainNavBar {
 #childOnboardingModal > div,
 #childInviteParentModal > div,
 #parentInviteSpouseModal > div,
-#deleteChildModal > div {
+#deleteChildModal > div,
+#modalCallParent > div {
   background: var(--bg-surface) !important;
   backdrop-filter: blur(32px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 24px 60px -8px rgba(0, 0, 0, 0.75) !important;
   color: var(--text-main) !important;
+  max-width: 480px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  border-top-left-radius: clamp(20px, 5.5vw, 28px) !important;
+  border-top-right-radius: clamp(20px, 5.5vw, 28px) !important;
+  padding: clamp(14px, 4vw, 20px) !important;
+  max-height: min(88dvh, calc(100dvh - 54px)) !important;
   transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+@media (min-width: 640px) {
+  .tab-panel {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+  }
+  .tab-panel > div,
+  #modal-add-zone > div,
+  #modal-add-task > div,
+  #modal-task-schedule > div,
+  #modal-task-proof > div,
+  #authGateModal > div,
+  #modal-coin-rate > div,
+  #modal-theme > div,
+  #modal-settings > div,
+  #modal-wallet > div,
+  #modal-walk-safe > div,
+  #modal-edit-wishlist > div,
+  #childOnboardingModal > div,
+  #childInviteParentModal > div,
+  #parentInviteSpouseModal > div,
+  #deleteChildModal > div,
+  #modalCallParent > div {
+    border-radius: 26px !important;
+    max-height: min(84dvh, 720px) !important;
+  }
 }
 
 /* Dynamic Surfaces */
@@ -1055,203 +1094,251 @@ body.theme-daylight textarea {
   height: 17px !important;
 }
 
-/* Parent Bottom HUD (Monitoring Buttons + Location Card) */
+/* ==========================================================================
+   FLUID RESPONSIVE ENGINE (ALL SCREENS: 320px -> 4K)
+   Self-adapting typography, proportional touch buttons, and constrained frames
+   ========================================================================== */
+
+/* 1. Universal Typography Fluid Normalization */
+.text-2xs {
+  font-size: clamp(10px, 2.6vw, 11px) !important;
+  line-height: 1.25 !important;
+}
+
+.text-xs {
+  font-size: clamp(11.5px, 2.9vw, 12.5px) !important;
+  line-height: 1.35 !important;
+}
+
+.text-sm {
+  font-size: clamp(13px, 3.2vw, 14.5px) !important;
+  line-height: 1.4 !important;
+}
+
+.text-base {
+  font-size: clamp(14.5px, 3.8vw, 16px) !important;
+  line-height: 1.45 !important;
+}
+
+/* 2. Responsive Content Wrapper for Child Section (Prevents stretching on wide screens) */
+#childViewSection {
+  max-width: 520px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  padding-left: clamp(10px, 3vw, 16px) !important;
+  padding-right: clamp(10px, 3vw, 16px) !important;
+  padding-top: clamp(8px, 2.2vw, 12px) !important;
+  padding-bottom: calc(84px + max(12px, env(safe-area-inset-bottom, 0px))) !important;
+  gap: clamp(10px, 2.6vw, 14px) !important;
+}
+
+/* 3. Parent Bottom HUD: Centered, never over-stretches, scales smoothly on small screens */
 #parentBottomContainer {
-  bottom: calc(82px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: calc(100% - clamp(16px, 4vw, 24px)) !important;
+  max-width: 440px !important;
+  bottom: calc(76px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
   z-index: 22 !important;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex !important;
   flex-direction: column !important;
-  gap: 8px !important;
+  gap: clamp(6px, 1.8vw, 8px) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 #parentMonitoringBar {
   display: flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: clamp(6px, 1.8vw, 8px) !important;
   width: 100% !important;
 }
 
 #parentMonitoringBar button {
-  padding: 10px 12px !important;
-  min-height: 48px !important;
-  border-radius: 18px !important;
+  padding: clamp(7px, 2vw, 10px) clamp(8px, 2.4vw, 12px) !important;
+  min-height: clamp(42px, 11vw, 48px) !important;
+  border-radius: clamp(14px, 3.5vw, 18px) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 8px !important;
+  gap: clamp(5px, 1.8vw, 8px) !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
 }
 
 #parentMonitoringBar button .w-7 {
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: 10px !important;
+  width: clamp(24px, 6.5vw, 28px) !important;
+  height: clamp(24px, 6.5vw, 28px) !important;
+  border-radius: clamp(8px, 2vw, 10px) !important;
   flex-shrink: 0 !important;
 }
 
-#parentMonitoringBar button .w-7 svg {
-  width: 16px !important;
-  height: 16px !important;
+#parentMonitoringBar button .w-7 svg,
+#parentMonitoringBar button .w-7 i {
+  width: clamp(13px, 3.6vw, 16px) !important;
+  height: clamp(13px, 3.6vw, 16px) !important;
 }
 
-#parentMonitoringBar button p {
+#parentMonitoringBar button p.font-bold,
+#parentMonitoringBar button p.font-black,
+#parentMonitoringBar button p.text-\[11px\] {
+  font-size: clamp(10.5px, 2.9vw, 12px) !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
   white-space: nowrap !important;
 }
 
-#parentMonitoringBar button p.text-\[11px\] {
-  font-size: 11px !important;
-  font-weight: 800 !important;
-}
-
+#parentMonitoringBar button p.font-medium,
 #parentMonitoringBar button p.text-\[9px\] {
-  font-size: 9.5px !important;
+  font-size: clamp(9.5px, 2.5vw, 10.5px) !important;
   font-weight: 600 !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
 }
 
 #locationCard {
-  padding: 10px 14px !important;
-  border-radius: 20px !important;
-  min-height: 54px !important;
+  padding: clamp(8px, 2.2vw, 11px) clamp(10px, 2.8vw, 14px) !important;
+  border-radius: clamp(16px, 3.8vw, 20px) !important;
+  min-height: clamp(48px, 12vw, 54px) !important;
 }
 
 #locationCard .w-8 {
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 10px !important;
+  width: clamp(26px, 7vw, 32px) !important;
+  height: clamp(26px, 7vw, 32px) !important;
+  border-radius: clamp(8px, 2vw, 10px) !important;
   flex-shrink: 0 !important;
 }
 
-#locationCard .w-8 svg {
-  width: 16px !important;
-  height: 16px !important;
+#locationCard .w-8 svg,
+#locationCard .w-8 i {
+  width: clamp(13px, 3.8vw, 16px) !important;
+  height: clamp(13px, 3.8vw, 16px) !important;
 }
 
 #locationCard #addressText {
-  font-size: 11.5px !important;
+  font-size: clamp(11px, 3vw, 12.5px) !important;
   font-weight: 700 !important;
 }
 
-#locationCard button {
-  padding: 7px 12px !important;
-  font-size: 11.5px !important;
-  font-weight: 800 !important;
-  border-radius: 12px !important;
+#locationCard #zoneStatusText {
+  font-size: clamp(10px, 2.6vw, 11px) !important;
+  font-weight: 600 !important;
 }
 
-/* Bottom Navigation Bar: Spacious Apple iOS Dock */
+#locationCard button {
+  padding: clamp(6px, 1.8vw, 8px) clamp(9px, 2.5vw, 12px) !important;
+  font-size: clamp(11px, 2.8vw, 12px) !important;
+  font-weight: 800 !important;
+  border-radius: clamp(10px, 2.5vw, 12px) !important;
+}
+
+/* 4. Bottom Navigation Bar: Centered Apple Island Dock (never over-stretches) */
 #mainNavBar {
-  bottom: calc(max(10px, env(safe-area-inset-bottom, 0px))) !important;
-  height: 64px !important;
-  min-height: 64px !important;
-  padding: 4px 8px !important;
-  border-radius: 26px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: calc(100% - clamp(16px, 4vw, 24px)) !important;
+  max-width: 440px !important;
+  bottom: calc(max(8px, env(safe-area-inset-bottom, 0px))) !important;
+  height: clamp(58px, 14vw, 64px) !important;
+  min-height: clamp(58px, 14vw, 64px) !important;
+  padding: 3px clamp(4px, 1.2vw, 8px) !important;
+  border-radius: clamp(20px, 5vw, 26px) !important;
   display: grid !important;
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  gap: 4px !important;
+  gap: clamp(2px, 0.8vw, 4px) !important;
 }
 
 .nav-tab {
-  min-height: 54px !important;
+  min-height: clamp(48px, 12vw, 54px) !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 16px !important;
-  padding: 4px 2px !important;
+  border-radius: clamp(12px, 3vw, 16px) !important;
+  padding: 3px 2px !important;
 }
 
 .nav-tab i, .nav-tab svg {
-  width: 20px !important;
-  height: 20px !important;
+  width: clamp(17px, 4.4vw, 20px) !important;
+  height: clamp(17px, 4.4vw, 20px) !important;
 }
 
 .nav-tab span {
-  font-size: 10px !important;
-  font-weight: 600 !important;
-  margin-top: 3px !important;
-  line-height: 1.1 !important;
+  font-size: clamp(10px, 2.6vw, 11px) !important;
+  font-weight: 700 !important;
+  margin-top: 2px !important;
+  line-height: 1.15 !important;
 }
 
-@media (max-width: 640px) {
-  /* Prevent browser keyboard auto-zoom on mobile inputs */
-  input, select, textarea {
-    font-size: 16px !important;
-  }
+/* 5. Floating Controls Dock */
+.floating-glass-dock {
+  top: clamp(8px, 2.4vw, 12px) !important;
+  right: clamp(8px, 2.4vw, 12px) !important;
+  padding: clamp(4px, 1.2vw, 6px) !important;
+  gap: clamp(4px, 1.2vw, 6px) !important;
+  border-radius: clamp(14px, 3.5vw, 18px) !important;
+}
 
-  /* Compact Floating Dock on mobile: 36px buttons, 5px gap */
-  .floating-glass-dock {
-    top: 10px !important;
-    right: 10px !important;
-    padding: 4px !important;
-    gap: 5px !important;
-    border-radius: 18px !important;
-  }
-  .floating-glass-dock button {
-    width: 36px !important;
-    height: 36px !important;
-    border-radius: 12px !important;
-  }
-  .floating-glass-dock button i,
-  .floating-glass-dock button svg {
-    width: 16px !important;
-    height: 16px !important;
-  }
+.floating-glass-dock button {
+  width: clamp(34px, 8.5vw, 38px) !important;
+  height: clamp(34px, 8.5vw, 38px) !important;
+  border-radius: clamp(10px, 2.5vw, 14px) !important;
+}
 
-  /* Floating Android App Banner clearance */
-  #parentAppDownloadBanner {
-    top: 10px !important;
-    left: 10px !important;
-    right: 58px !important;
-    padding: 7px 10px !important;
-    border-radius: 16px !important;
-  }
+.floating-glass-dock button i,
+.floating-glass-dock button svg {
+  width: clamp(15px, 4vw, 17px) !important;
+  height: clamp(15px, 4vw, 17px) !important;
+}
 
-  /* Bottom Container on mobile */
-  #parentBottomContainer {
-    left: 10px !important;
-    right: 10px !important;
-    bottom: calc(80px + max(8px, env(safe-area-inset-bottom, 0px))) !important;
-    gap: 7px !important;
-  }
+/* 6. Top Android App Download Banner */
+#parentAppDownloadBanner {
+  top: clamp(8px, 2.4vw, 12px) !important;
+  left: clamp(8px, 2.4vw, 12px) !important;
+  right: clamp(52px, 14vw, 60px) !important;
+  max-width: 440px !important;
+  padding: clamp(6px, 1.8vw, 9px) clamp(8px, 2.2vw, 12px) !important;
+  border-radius: clamp(14px, 3.5vw, 18px) !important;
+}
 
-  /* Bottom Navigation Dock on mobile */
-  #mainNavBar {
-    left: 10px !important;
-    right: 10px !important;
-    height: 62px !important;
-    min-height: 62px !important;
-    padding: 3px 6px !important;
-    border-radius: 24px !important;
-  }
-  .nav-tab {
-    min-height: 52px !important;
-  }
-  .nav-tab i, .nav-tab svg {
-    width: 19px !important;
-    height: 19px !important;
-  }
-  .nav-tab span {
-    font-size: 9.5px !important;
-    margin-top: 2px !important;
-  }
+/* 7. Dynamic Island */
+.dynamic-island {
+  padding: clamp(4px, 1.2vw, 6px) clamp(10px, 2.8vw, 14px) !important;
+  height: clamp(28px, 7.5vw, 32px) !important;
+  border-radius: 9999px !important;
+}
 
-  /* Dynamic Island on mobile */
-  .dynamic-island {
-    padding: 5px 12px !important;
-    height: 28px !important;
-  }
-  #dynamicIslandText {
-    font-size: 10.5px !important;
-  }
-  #dynamicIslandBattery {
-    font-size: 9.5px !important;
-  }
+#dynamicIslandText {
+  font-size: clamp(10.5px, 2.8vw, 12px) !important;
+  font-weight: 700 !important;
+}
 
-  /* Modals Mobile Bottom Sheet */
-  .tab-panel > div {
-    max-height: calc(90dvh - env(safe-area-inset-top, 0px)) !important;
-    border-top-left-radius: 26px !important;
-    border-top-right-radius: 26px !important;
+#dynamicIslandBattery {
+  font-size: clamp(9.5px, 2.5vw, 11px) !important;
+  font-weight: 600 !important;
+}
+
+/* 8. Input Fields Across All Modals */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+select,
+textarea {
+  min-height: clamp(40px, 10.5vw, 46px) !important;
+  padding: clamp(8px, 2.2vw, 11px) clamp(10px, 2.8vw, 14px) !important;
+  border-radius: clamp(12px, 2.8vw, 14px) !important;
+  font-size: 16px !important; /* Prevents auto-zoom on iOS mobile */
+}
+
+@media (min-width: 640px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 14.5px !important;
   }
 }
 

@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=54" />
+  <link rel="stylesheet" href="style.css?v=55" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -283,7 +283,7 @@
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
             <h1 id="childHeroName" class="text-xs sm:text-sm font-black text-white truncate max-w-[100px] xs:max-w-[150px] sm:max-w-none">Yosh Qahramon</h1>
-            <span id="childHeroLevelBadge" class="text-[9px] bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+            <span id="childHeroLevelBadge" class="text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
           </div>
           <p id="childHeroGreeting" class="text-[10px] sm:text-[11px] text-emerald-400 font-bold mt-0.5 truncate flex items-center gap-1">
             <span>🚀</span> <span id="childHeroStatusText">Missiyalarga tayyormisiz?</span>
@@ -306,12 +306,12 @@
         </button>
 
         <!-- Mobil ilova (Android APK / iPhone) -->
-        <button onclick="openInstallAppModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
+        <button onclick="openInstallAppModal()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
           <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
         </button>
 
         <!-- Qo'llanma & Yordam -->
-        <button onclick="openHelpModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-cyan-500/30 text-cyan-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Yordam">
+        <button onclick="openHelpModal()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-cyan-500/30 text-cyan-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Yordam">
           <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
         </button>
 
@@ -321,7 +321,7 @@
         </button>
 
         <!-- Logout -->
-        <button onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
+        <button onclick="logoutSession()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
         </button>
 
@@ -355,7 +355,7 @@
         <i data-lucide="alert-triangle" class="w-4 h-4 text-white shrink-0 animate-bounce"></i>
         <div class="min-w-0 flex-1">
           <p class="text-[11px] sm:text-xs font-black leading-tight truncate">🚨 Farzandingiz SOS signalini yoqdi!</p>
-          <p class="text-[9px] text-red-100 font-medium leading-none truncate mt-0.5">Tezkor yordam talab qilinmoqda</p>
+          <p class="text-2xs text-red-100 font-medium leading-none truncate mt-0.5">Tezkor yordam talab qilinmoqda</p>
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
@@ -402,9 +402,9 @@
           <div class="min-w-0">
             <div class="flex items-center gap-1.5">
               <h4 class="text-[11px] sm:text-xs font-black text-white truncate">Android Mobil Ilova</h4>
-              <span class="text-[8px] sm:text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black animate-pulse">24/7 GPS</span>
+              <span class="text-2xs font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black animate-pulse">24/7 GPS</span>
             </div>
-            <p class="text-[9px] sm:text-[10px] text-blue-200/90 font-medium truncate mt-0.5">Ekran o'chiq bo'lsa ham foniy kuzatuv</p>
+            <p class="text-xs text-blue-200/90 font-medium truncate mt-0.5">Ekran o'chiq bo'lsa ham foniy kuzatuv</p>
           </div>
         </div>
         <div class="flex items-center gap-1 shrink-0">
@@ -430,7 +430,7 @@
       <div id="parentWalkSafeBanner" class="hidden absolute top-4 left-4 z-20 bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-slate-900/90 border border-amber-500/40 text-amber-200 px-3.5 py-2 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold backdrop-blur-2xl animate-pulse">
         <span class="text-lg">🚶‍♂️</span>
         <div class="leading-tight">
-          <p class="text-[9px] text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
+          <p class="text-2xs text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
           <p id="parentWalkSafeText" class="text-xs text-white font-bold">14:20 qoldi (Uyga qaytish)</p>
         </div>
       </div>
@@ -485,7 +485,7 @@
             </div>
             <div class="text-left min-w-0">
               <p class="text-[11px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
-              <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
+              <p class="text-2xs text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
             </div>
           </button>
 
@@ -496,7 +496,7 @@
             </div>
             <div class="text-left min-w-0">
               <p class="text-[11px] font-black text-white leading-tight truncate">Hozirgi joylashuvi</p>
-              <p class="text-[9px] text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
+              <p class="text-2xs text-blue-100/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
             </div>
           </button>
         </div>
@@ -510,7 +510,7 @@
             <div class="min-w-0">
               <div class="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
                 <span data-i18n="current_address">Joriy Manzil</span>
-                <span id="speedBadge" class="hidden text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
+                <span id="speedBadge" class="hidden text-2xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md font-black">🚗 <span id="speedValue">0 km/h</span></span>
               </div>
               <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
               <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
@@ -534,7 +534,7 @@
         <div class="flex items-center gap-2 min-w-0">
           <span class="text-xl shrink-0">🚶‍♂️</span>
           <div class="min-w-0">
-            <p class="text-[9px] font-black uppercase tracking-wider text-slate-950">Xavfsiz Yo'l Faol</p>
+            <p class="text-2xs font-black uppercase tracking-wider text-slate-950">Xavfsiz Yo'l Faol</p>
             <p id="childWalkSafeCountdown" class="text-xs font-black text-white truncate">19:45 qoldi (Uyga qaytish)</p>
           </div>
         </div>
@@ -557,7 +557,7 @@
           <div class="min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap">
               <h2 id="childDashboardHeroName" class="text-sm sm:text-base font-black text-white truncate max-w-[140px] sm:max-w-none">Yosh Qahramon</h2>
-              <span id="childDashboardLevelBadge" class="text-[9px] bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+              <span id="childDashboardLevelBadge" class="text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
             </div>
             <p id="childDashboardHeroTitle" class="text-[10px] sm:text-[11px] text-purple-300 font-bold mt-0.5 flex items-center gap-1 truncate">
               <span>🌱</span> <span>Yangi Sayohatchi</span>
@@ -565,13 +565,13 @@
             <div class="mt-1.5 w-36 sm:w-48 xp-progress-bar">
               <div id="childDashboardXpFill" class="xp-progress-fill" style="width: 0%;"></div>
             </div>
-            <p id="childDashboardXpText" class="text-[8px] sm:text-[9px] text-slate-400 mt-1">Keyingi darajagacha 500 XP qoldi</p>
+            <p id="childDashboardXpText" class="text-2xs font-bold text-slate-400 mt-1">Keyingi darajagacha 500 XP qoldi</p>
           </div>
         </div>
         <div class="text-center shrink-0 bg-white/5 px-2.5 py-1.5 rounded-2xl border border-white/10 backdrop-blur-md">
           <span class="text-xl sm:text-2xl">🔥</span>
           <p id="childStreakDaysText" class="text-[10px] font-black text-amber-400 leading-tight">1 kun</p>
-          <p class="text-[7px] text-slate-400 uppercase tracking-wider font-bold">Seriya</p>
+          <p class="text-2xs text-slate-400 uppercase tracking-wider font-bold">Seriya</p>
         </div>
       </div>
 
@@ -689,7 +689,7 @@
             <i data-lucide="shield-alert" class="w-5 h-5 text-red-400"></i>
             <span class="text-xs font-black uppercase tracking-wider">Favqulodda Xavfsizlik</span>
           </div>
-          <span class="text-[9px] bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full font-bold">5s Ovoz Snapshot</span>
+          <span class="text-2xs bg-red-500/20 text-red-300 border border-red-500/30 px-2 py-0.5 rounded-full font-bold">5s Ovoz Snapshot</span>
         </div>
 
         <!-- Radiating SOS Center Button -->
@@ -704,15 +704,15 @@
 
         <!-- 3 Quick Child Lifelines -->
         <div class="grid grid-cols-3 gap-2">
-          <button onclick="triggerChildCheckIn()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-emerald-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-emerald-500/30 active:scale-95 transition">
+          <button onclick="triggerChildCheckIn()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-emerald-300 rounded-2xl font-bold text-xs flex flex-col items-center gap-1 border border-emerald-500/30 active:scale-95 transition">
             <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
             <span data-i18n="check_in">Yetib keldim</span>
           </button>
-          <button onclick="navigateChildHome()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-amber-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-amber-500/30 active:scale-95 transition">
+          <button onclick="navigateChildHome()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-amber-300 rounded-2xl font-bold text-xs flex flex-col items-center gap-1 border border-amber-500/30 active:scale-95 transition">
             <i data-lucide="home" class="w-4 h-4 text-amber-400"></i>
             <span data-i18n="go_home">Uyga yo'l</span>
           </button>
-          <button onclick="callParent()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-blue-300 rounded-2xl font-bold text-[10px] flex flex-col items-center gap-1 border border-blue-500/30 active:scale-95 transition">
+          <button onclick="callParent()" class="py-2.5 px-1 bg-white/5 hover:bg-white/10 text-blue-300 rounded-2xl font-bold text-xs flex flex-col items-center gap-1 border border-blue-500/30 active:scale-95 transition">
             <i data-lucide="phone" class="w-4 h-4 text-blue-400"></i>
             <span data-i18n="call_parent">Ota-onam</span>
           </button>
@@ -783,27 +783,27 @@
   <nav id="mainNavBar" class="fixed bottom-3 left-3 right-3 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[480px] z-30 px-2 py-1.5 grid grid-cols-5 gap-1 shadow-2xl safe-bottom transition-all duration-300">
     <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active text-blue-400 hover:text-blue-300">
       <i id="tabIcon-map" data-lucide="map" class="w-5 h-5"></i>
-      <span id="tabLabel-map" class="text-[9px] sm:text-xs font-bold mt-1 truncate">Xarita</span>
+      <span id="tabLabel-map" class="text-2xs sm:text-xs font-bold mt-1 truncate">Xarita</span>
     </button>
 
     <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-zones" data-lucide="map-pin" class="w-5 h-5"></i>
-      <span id="tabLabel-zones" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Joylar</span>
+      <span id="tabLabel-zones" class="text-2xs sm:text-xs font-medium mt-1 truncate">Joylar</span>
     </button>
 
     <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-tasks" data-lucide="check-square" class="w-5 h-5"></i>
-      <span id="tabLabel-tasks" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Vazifalar</span>
+      <span id="tabLabel-tasks" class="text-2xs sm:text-xs font-medium mt-1 truncate">Vazifalar</span>
     </button>
 
     <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-history" data-lucide="history" class="w-5 h-5"></i>
-      <span id="tabLabel-history" class="text-[9px] sm:text-xs font-medium mt-1 truncate">Tarix</span>
+      <span id="tabLabel-history" class="text-2xs sm:text-xs font-medium mt-1 truncate">Tarix</span>
     </button>
 
     <button onclick="switchTab('settings')" id="tabBtn-settings" class="nav-tab text-purple-400 hover:text-purple-300">
       <i id="tabIcon-settings" data-lucide="palette" class="w-5 h-5"></i>
-      <span id="tabLabel-settings" class="text-[9px] sm:text-xs font-medium mt-1 truncate" data-i18n="tab_settings">Dizayn</span>
+      <span id="tabLabel-settings" class="text-2xs sm:text-xs font-medium mt-1 truncate" data-i18n="tab_settings">Dizayn</span>
     </button>
   </nav>
 
@@ -933,17 +933,17 @@
           <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
             <span class="text-2xl">🏆</span>
             <span class="text-[11px] font-bold text-white mt-1">Dars A'lochisi</span>
-            <span class="text-[9px] text-emerald-400 font-medium">+5 topshiriq</span>
+            <span class="text-2xs text-emerald-400 font-medium">+5 topshiriq</span>
           </div>
           <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
             <span class="text-2xl">⏰</span>
             <span class="text-[11px] font-bold text-white mt-1">Vaqt ustasi</span>
-            <span class="text-[9px] text-amber-400 font-medium">O'z vaqtida</span>
+            <span class="text-2xs text-amber-400 font-medium">O'z vaqtida</span>
           </div>
           <div class="bg-slate-800/90 border border-slate-700 p-2.5 rounded-xl flex flex-col items-center text-center">
             <span class="text-2xl">🛡</span>
             <span class="text-[11px] font-bold text-white mt-1">Intizomli</span>
-            <span class="text-[9px] text-indigo-400 font-medium">Xavfsiz bola</span>
+            <span class="text-2xs text-indigo-400 font-medium">Xavfsiz bola</span>
           </div>
         </div>
       </div>
@@ -1164,7 +1164,7 @@
             <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
             <span>O'zingiz aniq vaqtni tanlang</span>
           </span>
-          <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black">
+          <span class="text-2xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-black">
             ✨ Bugun avtomatik
           </span>
         </div>
@@ -1173,7 +1173,7 @@
         <div>
           <label class="block text-[11px] font-bold text-slate-300 mb-1 flex items-center justify-between">
             <span>📅 Bajarish sanasi:</span>
-            <span class="text-[9px] text-emerald-400 font-medium">Bugungi kun tayyor</span>
+            <span class="text-2xs text-emerald-400 font-medium">Bugungi kun tayyor</span>
           </label>
           <input
             id="scheduleCustomDate"
@@ -1317,7 +1317,7 @@
           <span class="text-xs font-black text-white flex items-center gap-1.5">
             <span>📲</span> <span>Mobil Ilovalar (Android APK)</span>
           </span>
-          <span class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded-md font-bold">Rasmiy</span>
+          <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded-md font-bold">Rasmiy</span>
         </div>
         <div class="grid grid-cols-2 gap-2 mt-1">
           <a href="/download/parent-apk" target="_blank" class="py-2 px-2.5 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex items-center justify-center gap-1 shadow-sm">
@@ -1435,7 +1435,7 @@
         <div>
           <h4 class="text-xs font-black text-white flex items-center gap-1.5">
             <span>Child Security Bot</span>
-            <span class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded-md font-bold">PRO</span>
+            <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded-md font-bold">PRO</span>
           </h4>
           <p class="text-[10px] text-slate-400 mt-0.5">Aqlli Bolalar Xavfsizlik & Rag'bat Tizimi</p>
         </div>
@@ -1524,7 +1524,7 @@
               <div>
                 <p class="text-xs font-bold text-white flex items-center gap-1.5">
                   <span>🌌 Kosmik Neon</span>
-                  <span class="text-[9px] bg-purple-500/30 text-purple-300 px-1.5 py-0.2 rounded-full font-bold">Neon</span>
+                  <span class="text-2xs bg-purple-500/30 text-purple-300 px-1.5 py-0.2 rounded-full font-bold">Neon</span>
                 </p>
                 <p class="text-[10px] text-purple-300">Yulduzli tun, binafsha & pushti</p>
               </div>
@@ -1543,7 +1543,7 @@
               <div>
                 <p class="text-xs font-bold text-white flex items-center gap-1.5">
                   <span>🛡️ Taktik Qora</span>
-                  <span class="text-[9px] bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded-full font-bold">OLED</span>
+                  <span class="text-2xs bg-blue-500/30 text-blue-300 px-1.5 py-0.2 rounded-full font-bold">OLED</span>
                 </p>
                 <p class="text-[10px] text-blue-300">Tungi qora & safir moviy</p>
               </div>
@@ -1562,7 +1562,7 @@
               <div>
                 <p class="text-xs font-bold text-white flex items-center gap-1.5">
                   <span>🦸 Super Qahramon</span>
-                  <span class="text-[9px] bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full font-bold">Komiks</span>
+                  <span class="text-2xs bg-amber-500/30 text-amber-300 px-1.5 py-0.2 rounded-full font-bold">Komiks</span>
                 </p>
                 <p class="text-[10px] text-amber-300">Quvnoq komiks, oltin & qizil</p>
               </div>
@@ -1852,7 +1852,7 @@
     <div class="min-w-0 flex-1 text-left">
       <h4 class="text-xs font-black text-white flex items-center gap-1.5">
         <span>Joylashuv tekshirildi</span>
-        <span class="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-full font-mono font-bold" id="childCheckTimeText">12:00</span>
+        <span class="text-2xs bg-white/25 px-1.5 py-0.5 rounded-full font-mono font-bold" id="childCheckTimeText">12:00</span>
       </h4>
       <p class="text-xs text-blue-100 font-semibold mt-0.5 leading-snug">
         Ota-onangiz joylashuvingizni tekshirdi 📍
@@ -1893,7 +1893,7 @@
         <p class="text-[11px] text-indigo-300">
           🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code id="childOwnCodeText" class="font-mono font-bold text-amber-300 bg-black/40 px-1.5 py-0.5 rounded">------</code>
         </p>
-        <p class="text-[9px] text-slate-400 mt-0.5">Ushbu kod faqat o'zingizning sarguzasht profilingizga kirish uchun kerak.</p>
+        <p class="text-2xs text-slate-400 mt-0.5">Ushbu kod faqat o'zingizning sarguzasht profilingizga kirish uchun kerak.</p>
       </div>
 
       <button id="btnShareChildInviteTg" onclick="shareChildInviteToTelegram()" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-900/40 transition flex items-center justify-center gap-2">
@@ -2087,7 +2087,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=54"></script>
+  <script src="app.js?v=55"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -2271,7 +2271,7 @@
       <!-- PANE 1: ANDROID APK (24/7 BACKGROUND GPS) -->
       <div id="installTabPane-android" class="flex flex-col gap-3">
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-800 to-indigo-950/60 border border-emerald-500/40">
-          <span class="inline-block text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full mb-1.5">
+          <span class="inline-block text-2xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full mb-1.5">
             ⚡ Tavsiya etiladi (Farzand uchun)
           </span>
           <h4 class="text-xs sm:text-sm font-black text-white">24/7 Doimiy Foniy GPS Monitoring</h4>
