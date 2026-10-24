@@ -4907,11 +4907,20 @@ function connectWebSocket(userId) {
 
     appWebSocket.onopen = () => {
       console.log("WebSocket connected for user:", userId);
+      clearInterval(window._wsPingTimer);
+      window._wsPingTimer = setInterval(() => {
+        if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
+          try {
+            appWebSocket.send(JSON.stringify({ type: "ping" }));
+          } catch (e) {}
+        }
+      }, 25000);
     };
 
     appWebSocket.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg && msg.type === "pong") return;
         handleIncomingWebSocketMessage(msg);
       } catch (e) {
         console.error("WS message parse error:", e);
@@ -4919,12 +4928,13 @@ function connectWebSocket(userId) {
     };
 
     appWebSocket.onclose = () => {
+      clearInterval(window._wsPingTimer);
       clearTimeout(wsReconnectTimer);
       wsReconnectTimer = setTimeout(() => {
         if (currentRole === "child" || currentRole === "parent") {
           connectWebSocket(userId);
         }
-      }, 5000);
+      }, 4000);
     };
 
     appWebSocket.onerror = (err) => {

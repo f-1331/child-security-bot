@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -140,6 +141,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Enable high-speed GZip compression for responses > 1KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Register API routers
 app.include_router(telemetry_router)
@@ -334,6 +338,26 @@ async def start_bot(bot: Bot, dp: Dispatcher):
             logger.info("Bot commands registered successfully in Telegram.")
         except Exception as e:
             logger.warning(f"Could not register bot commands: {e}")
+
+        # Register official bot descriptions in Telegram
+        try:
+            await bot.set_my_description(
+                description=(
+                    "🛡️ Smart Parental Control & Farzandlar Xavfsizligi Boti.\n\n"
+                    "📍 Farzandingizning jonli joylashuvini 24/7 xaritada kuzating.\n"
+                    "🔋 Batareya 20% dan kam qolganda va tezlik oshganda ogohlantirish oling.\n"
+                    "🛡️ Kerakli joylar (uy, maktab) geohududlari va nazorat tizimi.\n"
+                    "🚨 Favqulodda SOS signallari va 5 soniyalik audio yozuvlar.\n"
+                    "💰 Tangalar kursi va rag'batlantiruvchi foydali vazifalar.\n\n"
+                    "Boshlash uchun pastdagi «Start» tugmasini bosing!"
+                )
+            )
+            await bot.set_my_short_description(
+                short_description="Farzandlar xavfsizligi, 24/7 jonli GPS kuzatuv va SOS himoya tizimi."
+            )
+            logger.info("Bot official descriptions registered successfully in Telegram.")
+        except Exception as e:
+            logger.warning(f"Could not register bot descriptions: {e}")
 
         # Drop pending updates to avoid processing stale backlog
         await bot.delete_webhook(drop_pending_updates=True)
