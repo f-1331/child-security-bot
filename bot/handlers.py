@@ -598,6 +598,16 @@ async def on_locate_child_callback(callback: CallbackQuery, bot: Bot):
 
 async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, session: AsyncSession):
     """Send child's native Telegram location pin, Kerakli joy status, battery, and address info."""
+    # Trigger real-time wake up alert to child on Mobile App / WebApp
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child.id, {
+            "type": "active_check",
+            "time": datetime.now().strftime("%H:%M")
+        })
+    except Exception:
+        pass
+
     latest_loc = await crud.get_latest_location(session, child.id)
 
     if not latest_loc:

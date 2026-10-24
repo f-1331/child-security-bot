@@ -974,12 +974,24 @@ async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(
             except Exception as e:
                 logger.error(f"Failed to notify parent {p.id} of checkin: {e}")
 
+    # Broadcast real-time check-in to parents on WebApp / Parent Mobile App
+    for p in parents:
+        try:
+            await ws_manager.send_to_user(p.id, {
+                "type": "child_checkin",
+                "child_id": child_id,
+                "child_name": child_name,
+                "message": f"Farzandingiz ({child_name}) manzilga yetib kelganini tasdiqladi."
+            })
+        except Exception:
+            pass
+
     return {"status": "success", "child_id": child_id, "notified_parents": len(parents)}
 
 
 @router.post("/child/{child_id}/siren")
 async def parent_siren_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
-    """Parent triggers remote siren / sound ping to child's phone."""
+    """Parent triggers remote siren / sound ping to child's phone across Telegram Bot and Mobile App."""
     if telemetry.telegram_bot:
         try:
             await telemetry.telegram_bot.send_message(
@@ -989,6 +1001,14 @@ async def parent_siren_endpoint(child_id: int, session: AsyncSession = Depends(g
             )
         except Exception as e:
             logger.error(f"Failed to send siren alert to child {child_id}: {e}")
+
+    try:
+        await ws_manager.send_to_user(child_id, {
+            "type": "remote_siren",
+            "message": "Ota-onangiz telefoningizga qidiruv signali yubordi!"
+        })
+    except Exception:
+        pass
 
     return {"status": "success", "child_id": child_id}
 

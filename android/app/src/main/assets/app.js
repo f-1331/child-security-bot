@@ -4825,9 +4825,28 @@ function connectWebSocket(userId) {
 function handleIncomingWebSocketMessage(msg) {
   if (!msg) return;
 
-  // 1. Active check alert for Child
+  // 1. Active check alert for Child (from Bot or Parent App)
   if (msg.type === "active_check") {
     showChildActiveCheckBanner(msg.time || new Date().toLocaleTimeString().slice(0, 5));
+    // Trigger fresh high-accuracy location acquisition automatically
+    if (typeof sendLocationUpdate === "function") {
+      try { sendLocationUpdate(); } catch(e) {}
+    }
+    return;
+  }
+
+  // 1.1 Remote siren signal for Child
+  if (msg.type === "remote_siren" && currentRole === "child") {
+    playSirenSound();
+    haptic("heavy");
+    showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+    return;
+  }
+
+  // 1.2 Child checkin notification for Parent
+  if (msg.type === "child_checkin" && currentRole === "parent") {
+    showToast(`✅ ${msg.child_name || 'Farzandingiz'}: "Men manzilga yetib keldim" deb xabar berdi!`);
+    haptic("medium");
     return;
   }
 
