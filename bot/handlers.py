@@ -286,32 +286,25 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
         # If user is already assigned a role
         if user.role == "parent":
             children = await crud.get_children_for_parent(session, user.id)
+            await state.clear()
+
+            phone_prompt = ""
             if not user.phone_number:
-                await state.set_state(PhoneSaveState.waiting_for_phone)
-                await message.answer(
-                    f"Assalomu alaykum, **{full_name}**!\n\n"
-                    f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
-                    f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
-                    f"⚠️ **DIQQAT — SOS Xavfsizlik talabi:**\n"
-                    f"Farzandingiz xavf ostida qolib **🚨 SOS (Xavf tugmasi)**ni bosganida, uning telefonidan to'g'ridan-to'g'ri bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
-                    f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki telefon raqamingizni yozib yuboring (masalan: `+998901234567`):",
-                    reply_markup=get_contact_request_keyboard(),
-                    parse_mode="Markdown"
+                phone_prompt = (
+                    "\n\n⚠️ **Eslatma:** SOS xavf tugmasi bosilganda sizga avtomatik qo'ng'iroq ketishi uchun "
+                    "pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni ulab qo'yishingiz mumkin."
                 )
-                return
 
             start_inline_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
+                            text="📥 Ilovani yuklab olish (.apk)",
+                            callback_data="download_apk_direct"
+                        ),
+                        InlineKeyboardButton(
                             text="🌐 Web App (Sayt)ni ochish",
                             web_app=WebAppInfo(url=settings.MINI_APP_URL)
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="📲 Android APK Yuklab Olish (Doimiy GPS)",
-                            callback_data="download_apk_direct"
                         )
                     ]
                 ]
@@ -320,9 +313,8 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 f"Assalomu alaykum, **{full_name}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
                 f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
-                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **'📍 Farzandning hozirgi joylashuvi'** tugmasini bosing.\n\n"
-                f"📲 **Android Mobil Ilova (24/7 Foniy GPS):**\n"
-                f"Farzandingiz telefoniga ilovani o'rnatish uchun pastdagi **«📲 Android APK Yuklab Olish»** tugmasini bosing yoki `/apk` yozing.",
+                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n"
+                f"📲 Farzand telefoniga doimiy 24/7 foniy GPS o'rnatish uchun pastdagi **«📥 Ilovani yuklab olish»** tugmasini bosing yoki `/apk` deb yozing.{phone_prompt}",
                 reply_markup=get_parent_main_keyboard(user.id),
                 parse_mode="Markdown"
             )
@@ -406,12 +398,26 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
                 reply_markup=get_pairing_share_keyboard(bot_info.username, code),
                 parse_mode="Markdown"
             )
-            await state.set_state(PhoneSaveState.waiting_for_phone)
+            await state.clear()
+            role_inline = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="📥 Ilovani yuklab olish (.apk)",
+                            callback_data="download_apk_direct"
+                        )
+                    ]
+                ]
+            )
             await callback.message.answer(
-                f"⚠️ **MUHIM QADAM — Oila favqulodda kontakti:**\n\n"
-                f"Farzandingiz xavf ostida qolib **🚨 SOS (Xavf tugmasi)**ni bosganida, uning telefonidan bir bosishda sizga **qo'ng'iroq ketishi** uchun telefon raqamingizni ulab qo'ying!\n\n"
-                f"Pastdagi **«📱 Raqamimni ulash»** tugmasini bosing yoki raqamingizni yozib yuboring (masalan: `+998901234567`):",
-                reply_markup=get_contact_request_keyboard(),
+                f"📲 **Farzandingiz telefoniga ilovani o'rnatish:**\n"
+                f"Pastdagi **«📥 Ilovani yuklab olish»** menyu tugmasini bosing yoki quyidagi tugma orqali to'g'ridan-to'g'ri yuklab oling:",
+                reply_markup=get_parent_main_keyboard(user_id),
+                parse_mode="Markdown"
+            )
+            await callback.message.answer(
+                "⚡ **Tezkor yuklab olish tugmasi:**",
+                reply_markup=role_inline,
                 parse_mode="Markdown"
             )
 
@@ -1289,10 +1295,19 @@ async def on_contact_received(message: Message, state: FSMContext):
 
 
 @router.message(PhoneSaveState.waiting_for_phone, F.text)
-async def on_phone_entered(message: Message, state: FSMContext):
+async def on_phone_entered(message: Message, state: FSMContext, bot: Bot):
     """Parent enters phone number manually as text."""
     raw_text = message.text.strip()
     parent_id = message.from_user.id
+
+    # If user pressed any app button or command, exit state immediately!
+    if any(w in raw_text.lower() for w in ["ilova", "apk", "mobil", "yuklab", "yuklash", "app", "start"]):
+        await state.clear()
+        if "start" in raw_text.lower():
+            await message.answer("Bosh menyu:", reply_markup=get_parent_main_keyboard(parent_id))
+        else:
+            await on_download_app_pressed(message, bot)
+        return
 
     if "keyinroq" in raw_text.lower():
         await state.clear()
@@ -2576,19 +2591,29 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
 
 
 @router.message(F.text.in_([
+    "📥 Ilovani yuklab olish",
+    "📥 Ilovani yuklab olish (APK)",
+    "📲 Ilovani yuklab olish",
+    "Ilovani yuklab olish",
+    "Ilovani yuklash",
     "📲 Mobil ilova (Android APK)",
     "📲 Mobil ilova",
     "📲 Mobil ilova (Android & iPhone)",
     "Mobil ilova",
-    "📲 Ilovani yuklab olish",
-    "Ilovani yuklash",
     "Ilova",
+    "ilova",
     "APK",
     "apk",
-    "Android APK"
+    "Android APK",
+    "android apk",
+    "ilova qani",
+    "ilovani ber",
+    "ilovani topolmadim",
+    "app",
+    "prilojenie"
 ]))
-@router.message(Command("app", "download", "apk", "ilova", "mobil"))
-@router.message(F.text.regexp(r"(?i)^(📲\s*)?(mobil\s*ilova|ilova(ni)?|apk|android).*"))
+@router.message(Command("app", "download", "apk", "ilova", "mobil", "programma"))
+@router.message(F.text.regexp(r"(?i).*(yuklab\s*olish|ilovani|mobil\s*ilova|apk|android).*"))
 async def on_download_app_pressed(message: Message, bot: Bot):
     """Provide mobile application download links and send APK file directly into chat."""
     webapp_url = settings.RESOLVED_WEBAPP_URL

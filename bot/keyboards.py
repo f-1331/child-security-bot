@@ -25,6 +25,12 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
                     callback_data="set_role:child"
                 ),
             ],
+            [
+                InlineKeyboardButton(
+                    text="📥 Ilovani yuklab olish (.apk)",
+                    callback_data="download_apk_direct"
+                ),
+            ],
         ]
     )
 
@@ -32,15 +38,15 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Includes Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
+    Includes Download App, Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
     """
     keyboard = [
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
-            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
+            KeyboardButton(text="📥 Ilovani yuklab olish"),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
         ],
         [
-            KeyboardButton(text="📲 Mobil ilova (Android APK)"),
+            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
             KeyboardButton(text="📍 Kerakli joylar")
         ],
         [
@@ -78,15 +84,15 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
 def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
-    Includes Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
+    Includes Download App, Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
     """
     keyboard = [
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
-            KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
+            KeyboardButton(text="📥 Ilovani yuklab olish"),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
         ],
         [
-            KeyboardButton(text="📲 Mobil ilova (Android APK)"),
+            KeyboardButton(text="🚨 SOS (Xavf tugmasi)"),
             KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True)
         ],
         [
@@ -355,6 +361,7 @@ def get_contact_request_keyboard() -> ReplyKeyboardMarkup:
     """Keyboard prompting parent to link their phone number for SOS emergency calls."""
     return ReplyKeyboardMarkup(
         keyboard=[
+            [KeyboardButton(text="📥 Ilovani yuklab olish")],
             [KeyboardButton(text="📱 Raqamimni ulash (Kontaktni yuborish)", request_contact=True)],
             [KeyboardButton(text="⏭ Keyinroq ulash")]
         ],
