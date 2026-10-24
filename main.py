@@ -65,6 +65,32 @@ def prevent_windows_sleep():
             logger.warning(f"Could not configure Windows sleep prevention: {e}")
 
 
+
+async def ensure_cached_apk():
+    """Ensure ChildSecurity.apk is available locally for instant bot and web downloads."""
+    downloads_dir = Path(settings.BASE_DIR) / "downloads"
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    apk_file = downloads_dir / "ChildSecurity.apk"
+    if apk_file.exists() and apk_file.stat().st_size > 1_000_000:
+        logger.info(f"Local APK cache verified: {apk_file} ({apk_file.stat().st_size} bytes)")
+        return
+
+    direct_url = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+    logger.info(f"Downloading APK cache from {direct_url} ...")
+    try:
+        import httpx
+        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+            resp = await client.get(direct_url)
+            if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                with open(apk_file, "wb") as f_out:
+                    f_out.write(resp.content)
+                logger.info(f"Downloaded and cached APK to {apk_file} ({len(resp.content)} bytes).")
+            else:
+                logger.warning(f"Failed to fetch APK cache: HTTP {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"Could not pre-cache APK: {e}")
+
+
 # Lifespan context manager for FastAPI
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -72,6 +98,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database schema...")
     await init_db()
     logger.info("Database initialized successfully.")
+    asyncio.create_task(ensure_cached_apk())
     yield
     logger.info("Application shutting down...")
 
@@ -134,10 +161,18 @@ async def download_android_apk():
     import os
     from fastapi.responses import FileResponse, RedirectResponse
 
+    downloads_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
     local_apk = os.path.join(settings.BASE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
-    if os.path.exists(local_apk):
+
+    target_apk = None
+    if os.path.exists(downloads_apk) and os.path.getsize(downloads_apk) > 1_000_000:
+        target_apk = downloads_apk
+    elif os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
+        target_apk = local_apk
+
+    if target_apk:
         return FileResponse(
-            local_apk,
+            target_apk,
             filename="ChildSecurity.apk",
             media_type="application/vnd.android.package-archive"
         )
@@ -205,6 +240,20 @@ async def start_bot(bot: Bot, dp: Dispatcher):
             logger.info(f"Telegram chat menu button configured: {settings.MINI_APP_URL}")
         except Exception as e:
             logger.warning(f"Could not configure chat menu button: {e}")
+
+        # Register bot commands menu in Telegram
+        try:
+            from aiogram.types import BotCommand
+            await bot.set_my_commands([
+                BotCommand(command="start", description="🔄 Bosh menyu / Botni yangilash"),
+                BotCommand(command="apk", description="📲 Android Mobil Ilovani yuklab olish (.apk)"),
+                BotCommand(command="app", description="🌐 Web App (Sayt)ni ochish"),
+                BotCommand(command="sos", description="🚨 SOS Favqulodda signal"),
+                BotCommand(command="help", description="ℹ️ Qo'llanma va yordam"),
+            ])
+            logger.info("Bot commands registered successfully in Telegram.")
+        except Exception as e:
+            logger.warning(f"Could not register bot commands: {e}")
 
         # Drop pending updates to avoid processing stale backlog
         await bot.delete_webhook(drop_pending_updates=True)

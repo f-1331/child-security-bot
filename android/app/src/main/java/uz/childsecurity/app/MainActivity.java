@@ -38,7 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 2001;
     public static final String PRODUCTION_URL = "https://child-security-bot.vercel.app?source=apk";
-    public static final String OFFLINE_URL = "file:///android_asset/index.html";
+    public static final String OFFLINE_URL = "file:///android_asset/index.html?source=native_apk";
 
     private WebView webView;
 
@@ -108,6 +108,12 @@ public class MainActivity extends AppCompatActivity {
                     Log.w(TAG, "Network failed, loading local bundled offline assets");
                     view.loadUrl(OFFLINE_URL);
                 }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                view.evaluateJavascript("if (typeof syncWithNativeAndroidBridge === 'function') { syncWithNativeAndroidBridge(); }", null);
             }
         });
 

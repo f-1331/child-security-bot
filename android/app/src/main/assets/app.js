@@ -1,3 +1,15 @@
+// Universal API Base Resolver (Supports Web, Telegram Mini App, and Native Android APK)
+const REMOTE_API_HOST = "https://child-security-site.onrender.com";
+const _nativeFetch = window.fetch;
+window.fetch = function (resource, init) {
+  if (typeof resource === "string" && resource.startsWith("/api/")) {
+    const isLocalOrFile = window.location.protocol === "file:" || !window.location.host || window.location.host.includes("localhost");
+    const base = isLocalOrFile ? REMOTE_API_HOST : "";
+    resource = base + resource;
+  }
+  return _nativeFetch.call(this, resource, init);
+};
+
 // Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
 let tg = window.Telegram?.WebApp;
@@ -750,6 +762,7 @@ function applyAuthenticatedUser(data) {
 }
 
 function applyParentUI(data) {
+  syncWithNativeAndroidBridge();
   document.getElementById("childOnboardingModal")?.classList.add("hidden");
   currentRole = "parent";
   document.body.classList.remove("role-child");
@@ -934,6 +947,7 @@ function updateChildLevelAndXP(coins = 0, completedTasksCount = 0) {
 }
 
 function applyChildUI(user) {
+  syncWithNativeAndroidBridge();
   currentRole = "child";
   document.body.classList.remove("role-parent");
   document.body.classList.add("role-child");
@@ -1150,6 +1164,9 @@ function logoutSession() {
     if (window._tgLocationPollInterval) {
       clearInterval(window._tgLocationPollInterval);
       window._tgLocationPollInterval = null;
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopBackgroundTracking === "function") {
+      try { window.AndroidBridge.stopBackgroundTracking(); } catch (e) {}
     }
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = "";
@@ -2411,7 +2428,7 @@ function toggleSosBanner(isActive) {
     if (!lastSosAlertState) {
       haptic("heavy");
       playSirenSound();
-      showToast("🚨 DIQQAT: Farzandingiz SOS xavf signalini yoqdi!");
+      showToast("🚨 SOS: Farzandingiz xavf signalini yoqdi!");
     }
     lastSosAlertState = true;
   } else {
@@ -4017,7 +4034,7 @@ async function triggerChildSOS() {
       if (window.lucide) window.lucide.createIcons();
     }
   
-    showToast("🚨 SOS XAVF SIGNALI FAOLLASHTIRILDI! Ota-onangizga xabar ketmoqda...");
+    showToast("🚨 SOS yuborildi! Ota-onangizga xabar ketmoqda...");
   
     // Coordinates fallback
     let fallbackLat = DEFAULT_LAT;
@@ -4080,7 +4097,7 @@ async function triggerChildSOS() {
         const data = await res.json();
         if (data && data.status === "success") {
           if (data.parent_phone) parentPhone = data.parent_phone;
-          showToast("🚨 Ota-onangizga SOS va joriy lokatsiyangiz yetkazildi!");
+          showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
         }
       } catch (err) {
         console.error("SOS dispatch error:", err);
@@ -4514,6 +4531,16 @@ let activeBannerTimer = null;
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
+  // 0. If running inside Native Android APK, trigger 24/7 background GPS tracking service immediately!
+  if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function") {
+    try {
+      window.AndroidBridge.startBackgroundTracking(String(childId), window.location.origin);
+      console.log("Native Android 24/7 background GPS tracking active for child:", childId);
+    } catch (e) {
+      console.warn("AndroidBridge startBackgroundTracking note:", e);
+    }
+  }
+
   // Connect real-time WebSocket for instant alerts
   connectWebSocket(childId);
 
@@ -4757,8 +4784,10 @@ function connectWebSocket(userId) {
     return;
   }
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/api/v1/webapp/ws/${userId}`;
+  const isLocalOrFile = window.location.protocol === "file:" || !window.location.host;
+  const host = isLocalOrFile ? "child-security-site.onrender.com" : window.location.host;
+  const protocol = (window.location.protocol === "https:" || window.location.protocol === "file:") ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${host}/api/v1/webapp/ws/${userId}`;
 
   try {
     appWebSocket = new WebSocket(wsUrl);
@@ -4818,7 +4847,7 @@ function handleIncomingWebSocketMessage(msg) {
         if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1 });
       }
     } else {
-      showToast(`🚨 DIQQAT: ${msg.child_name || 'Farzandingiz'} SOS xavf signalini yoqdi!`);
+      showToast(`🚨 SOS: ${msg.child_name || 'Farzandingiz'} xavf signalini yoqdi!`);
       playSirenSound();
       haptic("heavy");
     }
@@ -5180,7 +5209,6 @@ function setupTelegramBackButton() {
         tgApp.BackButton.onClick(() => {
           handleTelegramBackPress();
         });
-        tgApp.BackButton.show();
       }
     } catch (e) {
       console.warn("setupTelegramBackButton note:", e);
@@ -5195,20 +5223,14 @@ function setupTelegramBackButton() {
     });
   } catch (e) {}
 
-  // Android hardware back button & swipe gestures
-  try {
-    window.history.pushState({ app: "smart_tracker_root" }, "");
-    window.addEventListener("popstate", () => {
-      handleTelegramBackPress();
-      // Restore dummy state so next back press also triggers popstate
-      window.history.pushState({ app: "smart_tracker_root" }, "");
-    });
-  } catch (e) {}
+  // Update BackButton state initially
+  updateTelegramBackButton();
 }
 
 function handleTelegramBackPress() {
   haptic("light");
   const modalPriority = [
+    { id: "modalInstallApp", close: closeInstallAppModal },
     { id: "modalCallParent", close: closeCallParentModal },
     { id: "modal-walk-safe", close: closeWalkSafeModal },
     { id: "modal-walk-safe-checkin", close: closeWalkSafeCheckInModal },
@@ -5225,6 +5247,7 @@ function handleTelegramBackPress() {
     { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "modal-settings", close: closeSettingsModal },
+    { id: "modalThemeSelector", close: closeThemeModal },
     { id: "modal-wallet", close: () => closeModal("wallet") },
     { id: "modal-history", close: () => closeModal("history") },
     { id: "modal-tasks", close: () => closeModal("tasks") },
@@ -5260,7 +5283,12 @@ function handleTelegramBackPress() {
 }
 
 function closeWebApp() {
-  haptic("light");
+  haptic("medium");
+  if (window.AndroidBridge && typeof window.AndroidBridge.minimizeApp === "function") {
+    window.AndroidBridge.minimizeApp();
+    return;
+  }
+
   const tgApp = window.Telegram?.WebApp;
   if (tgApp) {
     try {
@@ -5271,21 +5299,45 @@ function closeWebApp() {
     try {
       if (typeof tgApp.close === "function") {
         tgApp.close();
-        return;
       }
     } catch (e) {}
   }
+
   try {
     window.close();
   } catch (e) {}
+
+  // Instant fallback to return directly to Telegram chat
+  setTimeout(() => {
+    try {
+      window.location.href = "https://t.me/child_security_bot";
+    } catch (e) {}
+  }, 120);
 }
 
 function updateTelegramBackButton() {
   const tgApp = window.Telegram?.WebApp;
   if (!tgApp || !tgApp.BackButton) return;
+
+  const openModal = document.querySelector(
+    "#modal-tasks:not(.hidden), #modal-wallet:not(.hidden), #modal-history:not(.hidden), " +
+    "#modal-zones:not(.hidden), #modal-settings:not(.hidden), #modalInstallApp:not(.hidden), " +
+    "#modalCallParent:not(.hidden), #modal-walk-safe:not(.hidden), #modal-coin-rate:not(.hidden), " +
+    "#deleteChildModal:not(.hidden), #childInviteParentModal:not(.hidden), #zonePickerBottomDock:not(.hidden), " +
+    "#modalThemeSelector:not(.hidden)"
+  );
+
+  const activeTab = document.querySelector(".nav-tab.active");
+  const isSubTab = activeTab && activeTab.id !== "tabBtn-map";
+
   try {
-    // Keep BackButton ALWAYS visible so the user can ALWAYS navigate back or return to Telegram!
-    tgApp.BackButton.show();
+    if (openModal || isSubTab) {
+      // Sub-screen is open: show BackButton to return to map
+      tgApp.BackButton.show();
+    } else {
+      // Main screen: HIDE BackButton so Telegram natively displays its own Close [X] button!
+      tgApp.BackButton.hide();
+    }
   } catch (e) {}
 }
 
@@ -5983,3 +6035,132 @@ window.loadWishlist = loadWishlist;
 
 window.openDailyReportModal = openDailyReportModal;
 window.closeDailyReportModal = closeDailyReportModal;
+
+// =========================================================
+// PWA & SERVICE WORKER REGISTRATION + NATIVE INSTALL ENGINE
+// =========================================================
+let deferredInstallPrompt = null;
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then((reg) => {
+        console.log("Child Security PWA Service Worker registered:", reg.scope);
+      })
+      .catch((err) => {
+        console.warn("Service Worker registration note:", err);
+      });
+  });
+}
+
+// Capture Android/Chrome install banner prompt
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
+
+function openInstallAppModal() {
+  haptic("medium");
+  const modal = document.getElementById("modalInstallApp");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeInstallAppModal() {
+  haptic("light");
+  const modal = document.getElementById("modalInstallApp");
+  if (modal) modal.classList.add("hidden");
+}
+
+function switchInstallTab(tab) {
+  haptic("light");
+  ["android", "ios", "pwa"].forEach((t) => {
+    const pane = document.getElementById(`installTabPane-${t}`);
+    const btn = document.getElementById(`installTabBtn-${t}`);
+    if (pane) {
+      if (t === tab) pane.classList.remove("hidden");
+      else pane.classList.add("hidden");
+    }
+    if (btn) {
+      if (t === tab) {
+        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md transition";
+      } else {
+        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition";
+      }
+    }
+  });
+}
+
+async function triggerPwaInstall() {
+  haptic("medium");
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    console.log("Install prompt outcome:", outcome);
+    deferredInstallPrompt = null;
+    closeInstallAppModal();
+  } else {
+    showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
+  }
+}
+
+// =========================================================
+// NATIVE ANDROID BRIDGE & PRO APP INTEGRATION
+// =========================================================
+function syncWithNativeAndroidBridge() {
+  const isNative = Boolean(
+    window.AndroidBridge ||
+    window.location.protocol === "file:" ||
+    new URLSearchParams(window.location.search).get("source") === "apk" ||
+    new URLSearchParams(window.location.search).get("source") === "native_apk"
+  );
+
+  const nativeStatusCard = document.getElementById("nativeAppStatusCard");
+  const childDownloadCard = document.getElementById("childAppDownloadCard");
+  const parentBanner = document.getElementById("parentAppDownloadBanner");
+
+  if (isNative) {
+    if (nativeStatusCard) nativeStatusCard.classList.remove("hidden");
+    if (childDownloadCard) childDownloadCard.classList.add("hidden");
+    if (parentBanner) parentBanner.classList.add("hidden");
+
+    // Auto-register child with native background service if child logged in
+    if (window.AndroidBridge && currentRole === "child" && currentChildId) {
+      try {
+        window.AndroidBridge.startBackgroundTracking(String(currentChildId), REMOTE_API_HOST);
+      } catch(e) {}
+    }
+  } else {
+    // Web visitor: check if user previously dismissed banner
+    try {
+      const dismissed = localStorage.getItem("hide_app_banner") === "1";
+      if (parentBanner && !dismissed && currentRole === "parent") {
+        parentBanner.classList.remove("hidden");
+      }
+    } catch(e) {}
+  }
+}
+
+function requestNativeBatteryOptimization() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestBatteryOptimizationExemption === "function") {
+    window.AndroidBridge.requestBatteryOptimizationExemption();
+  } else {
+    showToast("Ushbu funksiya faqat Android ilovasida ishlaydi");
+  }
+}
+
+function minimizeNativeApp() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.minimizeApp === "function") {
+    window.AndroidBridge.minimizeApp();
+  } else {
+    showToast("Ilova orqa fonda ishlamoqda");
+  }
+}
+
+function dismissAppBanner() {
+  const b = document.getElementById("parentAppDownloadBanner");
+  if (b) b.classList.add("hidden");
+  try { localStorage.setItem("hide_app_banner", "1"); } catch(e) {}
+}

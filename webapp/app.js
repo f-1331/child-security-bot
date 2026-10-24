@@ -1,3 +1,15 @@
+// Universal API Base Resolver (Supports Web, Telegram Mini App, and Native Android APK)
+const REMOTE_API_HOST = "https://child-security-site.onrender.com";
+const _nativeFetch = window.fetch;
+window.fetch = function (resource, init) {
+  if (typeof resource === "string" && resource.startsWith("/api/")) {
+    const isLocalOrFile = window.location.protocol === "file:" || !window.location.host || window.location.host.includes("localhost");
+    const base = isLocalOrFile ? REMOTE_API_HOST : "";
+    resource = base + resource;
+  }
+  return _nativeFetch.call(this, resource, init);
+};
+
 // Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
 let tg = window.Telegram?.WebApp;
@@ -750,6 +762,7 @@ function applyAuthenticatedUser(data) {
 }
 
 function applyParentUI(data) {
+  syncWithNativeAndroidBridge();
   document.getElementById("childOnboardingModal")?.classList.add("hidden");
   currentRole = "parent";
   document.body.classList.remove("role-child");
@@ -934,6 +947,7 @@ function updateChildLevelAndXP(coins = 0, completedTasksCount = 0) {
 }
 
 function applyChildUI(user) {
+  syncWithNativeAndroidBridge();
   currentRole = "child";
   document.body.classList.remove("role-parent");
   document.body.classList.add("role-child");
@@ -4770,8 +4784,10 @@ function connectWebSocket(userId) {
     return;
   }
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/api/v1/webapp/ws/${userId}`;
+  const isLocalOrFile = window.location.protocol === "file:" || !window.location.host;
+  const host = isLocalOrFile ? "child-security-site.onrender.com" : window.location.host;
+  const protocol = (window.location.protocol === "https:" || window.location.protocol === "file:") ? "wss:" : "ws:";
+  const wsUrl = `${protocol}//${host}/api/v1/webapp/ws/${userId}`;
 
   try {
     appWebSocket = new WebSocket(wsUrl);
@@ -6088,4 +6104,63 @@ async function triggerPwaInstall() {
   } else {
     showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
   }
+}
+
+// =========================================================
+// NATIVE ANDROID BRIDGE & PRO APP INTEGRATION
+// =========================================================
+function syncWithNativeAndroidBridge() {
+  const isNative = Boolean(
+    window.AndroidBridge ||
+    window.location.protocol === "file:" ||
+    new URLSearchParams(window.location.search).get("source") === "apk" ||
+    new URLSearchParams(window.location.search).get("source") === "native_apk"
+  );
+
+  const nativeStatusCard = document.getElementById("nativeAppStatusCard");
+  const childDownloadCard = document.getElementById("childAppDownloadCard");
+  const parentBanner = document.getElementById("parentAppDownloadBanner");
+
+  if (isNative) {
+    if (nativeStatusCard) nativeStatusCard.classList.remove("hidden");
+    if (childDownloadCard) childDownloadCard.classList.add("hidden");
+    if (parentBanner) parentBanner.classList.add("hidden");
+
+    // Auto-register child with native background service if child logged in
+    if (window.AndroidBridge && currentRole === "child" && currentChildId) {
+      try {
+        window.AndroidBridge.startBackgroundTracking(String(currentChildId), REMOTE_API_HOST);
+      } catch(e) {}
+    }
+  } else {
+    // Web visitor: check if user previously dismissed banner
+    try {
+      const dismissed = localStorage.getItem("hide_app_banner") === "1";
+      if (parentBanner && !dismissed && currentRole === "parent") {
+        parentBanner.classList.remove("hidden");
+      }
+    } catch(e) {}
+  }
+}
+
+function requestNativeBatteryOptimization() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestBatteryOptimizationExemption === "function") {
+    window.AndroidBridge.requestBatteryOptimizationExemption();
+  } else {
+    showToast("Ushbu funksiya faqat Android ilovasida ishlaydi");
+  }
+}
+
+function minimizeNativeApp() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.minimizeApp === "function") {
+    window.AndroidBridge.minimizeApp();
+  } else {
+    showToast("Ilova orqa fonda ishlamoqda");
+  }
+}
+
+function dismissAppBanner() {
+  const b = document.getElementById("parentAppDownloadBanner");
+  if (b) b.classList.add("hidden");
+  try { localStorage.setItem("hide_app_banner", "1"); } catch(e) {}
 }

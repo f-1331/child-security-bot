@@ -300,12 +300,35 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 )
                 return
 
+            start_inline_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🌐 Web App (Sayt)ni ochish",
+                            web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="📲 Android APK Yuklab Olish (Doimiy GPS)",
+                            callback_data="download_apk_direct"
+                        )
+                    ]
+                ]
+            )
             await message.answer(
                 f"Assalomu alaykum, **{full_name}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
                 f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
-                f"Farzandingiz qayerdaligini bilish uchun pastdagi **'📍 Farzandning hozirgi joylashuvi'** tugmasini bosing.",
+                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **'📍 Farzandning hozirgi joylashuvi'** tugmasini bosing.\n\n"
+                f"📲 **Android Mobil Ilova (24/7 Foniy GPS):**\n"
+                f"Farzandingiz telefoniga ilovani o'rnatish uchun pastdagi **«📲 Android APK Yuklab Olish»** tugmasini bosing yoki `/apk` yozing.",
                 reply_markup=get_parent_main_keyboard(user.id),
+                parse_mode="Markdown"
+            )
+            await message.answer(
+                "⚡ **Tezkor kirish va Mobil ilova:**",
+                reply_markup=start_inline_kb,
                 parse_mode="Markdown"
             )
             return
@@ -313,12 +336,34 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
         elif user.role == "child":
             parents = await crud.get_parents_for_child(session, user.id)
             parent_names = ", ".join([p.full_name or str(p.id) for p in parents]) if parents else "Ulangan ota-ona yo'q"
+            child_inline_kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🌐 Web App (Sayt)ni ochish",
+                            web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="📲 Android APK Yuklab Olish (Doimiy GPS)",
+                            callback_data="download_apk_direct"
+                        )
+                    ]
+                ]
+            )
             await message.answer(
                 f"Salom, **{full_name}**!\n\n"
                 f"👦 Siz **Farzand** rejimidasiz.\n"
                 f"Ulangan ota-ona: **{parent_names}**.\n\n"
-                f"Har qanday favqulodda vaziyatda darhol **'🚨 SOS'** tugmasini bosing!",
+                f"Har qanday favqulodda vaziyatda darhol **'🚨 SOS'** tugmasini bosing!\n\n"
+                f"📲 **Child Security Android APK** ilovasini o'rnatish uchun pastdagi **«📲 Android APK Yuklab Olish»** tugmasini bosing.",
                 reply_markup=get_child_main_keyboard(),
+                parse_mode="Markdown"
+            )
+            await message.answer(
+                "⚡ **Tezkor kirish va Mobil ilova:**",
+                reply_markup=child_inline_kb,
                 parse_mode="Markdown"
             )
             return
@@ -2595,20 +2640,63 @@ async def on_download_app_pressed(message: Message, bot: Bot):
 
     # Send the actual APK document directly into the Telegram chat!
     local_apk_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
-    try:
-        if os.path.exists(local_apk_path):
-            doc = FSInputFile(local_apk_path, filename="ChildSecurity.apk")
-        else:
-            doc = URLInputFile(direct_github_apk, filename="ChildSecurity.apk")
+    debug_apk_path = os.path.join(settings.BASE_DIR, "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+    
+    target_apk = None
+    if os.path.exists(local_apk_path) and os.path.getsize(local_apk_path) > 1_000_000:
+        target_apk = local_apk_path
+    elif os.path.exists(debug_apk_path) and os.path.getsize(debug_apk_path) > 1_000_000:
+        target_apk = debug_apk_path
 
-        await message.answer_document(
-            document=doc,
-            caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
-                    "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️",
-            parse_mode="Markdown"
-        )
+    try:
+        if target_apk:
+            doc = FSInputFile(target_apk, filename="ChildSecurity.apk")
+            await message.answer_document(
+                document=doc,
+                caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
+                        "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
+                parse_mode="Markdown"
+            )
+        else:
+            import httpx
+            from aiogram.types import BufferedInputFile
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_github_apk)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    os.makedirs(os.path.dirname(local_apk_path), exist_ok=True)
+                    with open(local_apk_path, "wb") as f_out:
+                        f_out.write(resp.content)
+                    doc = BufferedInputFile(resp.content, filename="ChildSecurity.apk")
+                    await message.answer_document(
+                        document=doc,
+                        caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
+                                "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    await message.answer(
+                        f"📲 **Child Security APK faylini yuklab olish manzili:**\n\n"
+                        f"📥 Havola: {apk_download_url}\n"
+                        f"⚡ Zaxira havola: {direct_github_apk}",
+                        disable_web_page_preview=False
+                    )
     except Exception as e:
         logger.warning(f"Could not send APK document directly: {e}")
+        try:
+            await message.answer(
+                f"📥 **APK faylini brauzer orqali yuklab olish:**\n\n"
+                f"Quyidagi havola orqali 1 bosishda yuklab oling:\n{apk_download_url}",
+                disable_web_page_preview=False
+            )
+        except Exception:
+            pass
+
+@router.callback_query(F.data == "download_apk_direct")
+async def on_download_apk_callback(callback: CallbackQuery, bot: Bot):
+    """Handle 1-click APK download request from inline keyboard button."""
+    await callback.answer("📲 APK fayl tayyorlanmoqda...")
+    await on_download_app_pressed(callback.message, bot)
+
 
 
 @router.message(F.text.in_([

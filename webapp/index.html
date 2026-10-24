@@ -383,6 +383,30 @@
       <!-- Live Map Canvas -->
       <div id="map" class="w-full h-full"></div>
 
+      <!-- Prominent Android App Download Floating Banner (High Visibility on Web) -->
+      <div id="parentAppDownloadBanner" class="absolute top-3.5 left-3.5 right-14 md:right-auto md:max-w-md z-22 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-slate-900/95 border border-blue-400/50 rounded-2xl p-2.5 sm:p-3 shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-2.5 animate-fade-in pointer-events-auto">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base sm:text-lg shadow-lg shrink-0">
+            📲
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h4 class="text-[11px] sm:text-xs font-black text-white truncate">Android Mobil Ilova</h4>
+              <span class="text-[8px] sm:text-[9px] bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black animate-pulse">24/7 GPS</span>
+            </div>
+            <p class="text-[9px] sm:text-[10px] text-blue-200/90 font-medium truncate mt-0.5">Ekran o'chiq bo'lsa ham foniy kuzatuv</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <a href="/download/apk" target="_blank" onclick="haptic('heavy')" class="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 active:scale-95 text-white text-[10px] sm:text-xs font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center gap-1 transition shrink-0">
+            <i data-lucide="download" class="w-3 h-3 sm:w-3.5 sm:h-3.5"></i>
+            <span>Yuklab olish</span>
+          </a>
+          <button onclick="dismissAppBanner()" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 text-xs shrink-0" title="Yopish">✕</button>
+        </div>
+      </div>
+
+
       <!-- Child Back Button from Fullscreen Map Mode -->
       <button id="btnChildBackFromMap" onclick="closeChildMapModal()" class="hidden absolute top-4 left-4 z-30 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-2xl text-xs font-black shadow-2xl border border-white/20 backdrop-blur-xl flex items-center gap-1.5 active:scale-95 transition">
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
@@ -426,6 +450,12 @@
         <!-- Add Zone -->
         <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="text-indigo-400 hover:text-indigo-300" title="Kerakli joy qo'shish">
           <i data-lucide="map-pin" class="w-4 h-4"></i>
+        </button>
+
+                <!-- Mobil Ilova Yuklab Olish (Map Dock) -->
+        <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="text-blue-400 hover:text-blue-300 relative group" title="Mobil ilovani yuklab olish (Android APK)">
+          <i data-lucide="smartphone" class="w-4 h-4"></i>
+          <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
         </button>
 
         <!-- Refresh Data -->
@@ -532,8 +562,32 @@
         </div>
       </div>
 
-      <!-- 1.4. Mobil Ilovani O'rnatish (Android APK) -->
-      <div class="ios-glass-card p-3.5 flex items-center justify-between gap-2.5 border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/60 shadow-lg">
+      <!-- 1.4. NATIVE PRO APP STATUS (Only shown when running inside Android App) -->
+      <div id="nativeAppStatusCard" class="hidden ios-glass-card p-3.5 flex flex-col gap-2.5 border border-emerald-500/40 bg-gradient-to-r from-emerald-950/70 via-slate-900/80 to-slate-900/80 shadow-xl">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="text-xs font-black text-emerald-300">24/7 Foniy GPS Xizmati Faol</span>
+          </div>
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">NATIVE PRO</span>
+        </div>
+        <p class="text-[11px] text-slate-300 leading-relaxed">
+          Ilova yopilgan yoki telefon qulflangan holatda ham ota-onangizga joylashuv to'xtovsiz yuboriladi.
+        </p>
+        <div class="grid grid-cols-2 gap-2 mt-1">
+          <button onclick="requestNativeBatteryOptimization()" class="py-2 px-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 border border-white/15">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Batareya cheklovini yechish</span>
+          </button>
+          <button onclick="minimizeNativeApp()" class="py-2 px-2.5 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 border border-blue-500/40">
+            <i data-lucide="minimize-2" class="w-3.5 h-3.5"></i>
+            <span>Orqa fonga berkitish</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1.4. Mobil Ilovani O'rnatish (Android APK) (Shown on website) -->
+      <div id="childAppDownloadCard" class="ios-glass-card p-3.5 flex items-center justify-between gap-2.5 border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/60 shadow-lg">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center text-lg shrink-0">
             📲
@@ -543,7 +597,7 @@
             <p class="text-[10px] text-emerald-200/80 truncate">24/7 foniy GPS va ekran o'chiq holda ishlash</p>
           </div>
         </div>
-        <a href="/download/apk" target="_blank" class="px-3 py-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
+        <a href="/download/apk" target="_blank" onclick="haptic('heavy')" class="px-3 py-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-400 active:scale-95 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 shrink-0">
           <i data-lucide="download" class="w-3.5 h-3.5"></i>
           <span>Yuklab olish</span>
         </a>
