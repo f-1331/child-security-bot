@@ -6,7 +6,8 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse
@@ -117,6 +118,25 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI application
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app;"
+        )
+        response.headers["Permissions-Policy"] = (
+            "camera=(self \"https://child-security-bot.vercel.app\"), "
+            "geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\"), "
+            "microphone=(self \"https://child-security-bot.vercel.app\")"
+        )
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
 app = FastAPI(
     title="Smart Parental Control & Child Location Tracker API",
     description="Production-grade API for Telegram Mini App & Background GPS Telemetry",
@@ -144,6 +164,9 @@ app.add_middleware(
 
 # Enable high-speed GZip compression for responses > 1KB
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Enterprise Security Headers Middleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Register API routers
 app.include_router(telemetry_router)

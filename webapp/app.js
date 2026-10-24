@@ -269,6 +269,18 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTelegramBackButton();
 });
 
+
+// Enterprise XSS Defense: Global HTML entity escaper for safe DOM rendering
+function escapeHtml(unsafe) {
+  if (unsafe === null || unsafe === undefined) return "";
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Trigger haptic feedback when Telegram WebApp is available
 function haptic(type = "light") {
   if (tg && tg.HapticFeedback) {
