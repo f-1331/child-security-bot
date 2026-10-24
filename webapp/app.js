@@ -6186,3 +6186,31 @@ function dismissAppBanner() {
   if (b) b.classList.add("hidden");
   try { localStorage.setItem("hide_app_banner", "1"); } catch(e) {}
 }
+
+// =========================================================
+// HELP & FAQ MODAL CONTROLLER
+// =========================================================
+function openHelpModal() {
+  haptic("medium");
+  const modal = document.getElementById("modalHelp");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function closeHelpModal() {
+  haptic("light");
+  const modal = document.getElementById("modalHelp");
+  if (modal) modal.classList.add("hidden");
+}
+
+function toggleHelpFaq(id) {
+  haptic("light");
+  const el = document.getElementById(`faq-content-${id}`);
+  const arrow = document.getElementById(`faq-arrow-${id}`);
+  if (el) {
+    el.classList.toggle("hidden");
+    if (arrow) arrow.classList.toggle("rotate-180");
+  }
+}

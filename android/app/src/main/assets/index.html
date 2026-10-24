@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=50" />
+  <link rel="stylesheet" href="style.css?v=52" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -246,6 +246,11 @@
           <span class="text-[10px] font-black">📲 APK</span>
         </button>
 
+        <!-- Qo'llanma & Yordam -->
+        <button onclick="openHelpModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Qo'llanma va Yordam">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+        </button>
+
         <!-- Rang mavzulari -->
         <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn ranglarini tanlash">
           <i data-lucide="palette" class="w-3.5 h-3.5"></i>
@@ -303,6 +308,11 @@
         <!-- Mobil ilova (Android APK / iPhone) -->
         <button onclick="openInstallAppModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
           <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+        </button>
+
+        <!-- Qo'llanma & Yordam -->
+        <button onclick="openHelpModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-cyan-500/30 text-cyan-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Yordam">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
         </button>
 
         <!-- Theme Palette -->
@@ -2077,7 +2087,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=50"></script>
+  <script src="app.js?v=52"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -2121,6 +2131,112 @@
       </div>
     </div>
   </div>
+
+  <!-- MODAL: HELP & DOCUMENTATION CENTER -->
+  <div id="modalHelp" class="hidden fixed inset-0 z-[2500] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+    <div class="relative bg-slate-900 border border-cyan-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-lg shadow-2xl text-left max-h-[92dvh] overflow-y-auto custom-scroll">
+      <button onclick="closeHelpModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg border-2 border-white/20 shrink-0">
+          <i data-lucide="book-open" class="w-6 h-6 text-white"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-black text-white">Qo'llanma va Yordam 📖</h3>
+          <p class="text-[11px] text-cyan-300 font-medium">Child Security tizimidan to'liq foydalanish yo'riqnomasi</p>
+        </div>
+      </div>
+
+      <div class="space-y-2.5 text-xs">
+        <!-- FAQ 1: Mobil ilovalar -->
+        <div class="rounded-2xl bg-slate-800/80 border border-slate-700/80 overflow-hidden">
+          <button onclick="toggleHelpFaq(1)" class="w-full p-3.5 text-left font-black text-white flex items-center justify-between gap-2 hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span class="text-base">📱</span>
+              <span>Mobil ilovalar va 24/7 Foniy GPS qanday ishlaydi?</span>
+            </span>
+            <i id="faq-arrow-1" data-lucide="chevron-down" class="w-4 h-4 text-cyan-400 transition-transform"></i>
+          </button>
+          <div id="faq-content-1" class="hidden p-3.5 pt-0 text-slate-300 border-t border-slate-700/50 leading-relaxed text-[11px] space-y-2">
+            <p><strong>Farzand ilovasi (Child App):</strong> Telefon ekrani o'chiq, qulflangan yoki ilova berkitilgan holatda ham doimiy ravishda joylashuvni yangilab turadi.</p>
+            <p><strong>Ota-ona ilovasi (Parent App):</strong> O'z telefoningizdan bolangizni xaritada kuzatish, masofaviy sirena chalish va vazifalar berish imkonini beradi.</p>
+            <p class="text-amber-300">💡 O'rnatishdan so'ng ilovaga «Joylashuvga doimiy ruxsat berish» (Allow all the time) va «Batareyani cheklamaslik» ruxsatlarini bering.</p>
+          </div>
+        </div>
+
+        <!-- FAQ 2: Farzandni ulash -->
+        <div class="rounded-2xl bg-slate-800/80 border border-slate-700/80 overflow-hidden">
+          <button onclick="toggleHelpFaq(2)" class="w-full p-3.5 text-left font-black text-white flex items-center justify-between gap-2 hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span class="text-base">🔗</span>
+              <span>Farzand va Ikkinchi ota-onani qanday ulayman?</span>
+            </span>
+            <i id="faq-arrow-2" data-lucide="chevron-down" class="w-4 h-4 text-cyan-400 transition-transform"></i>
+          </button>
+          <div id="faq-content-2" class="hidden p-3.5 pt-0 text-slate-300 border-t border-slate-700/50 leading-relaxed text-[11px] space-y-2">
+            <p><strong>Farzandni ulash:</strong> Botda «➕ Farzand ulash (Kodi)» tugmasini bosing va 6 xonali kodni farzand botiga kiriting yoki taklif havolasini bolaga yuboring.</p>
+            <p><strong>Ikkinchi ota-ona:</strong> «👨‍👩‍👧 Ikkinchi ota-onani taklif qilish» orqali turmush o'rtog'ingizga havola yuborsangiz, barcha bolalar ikkalangizga birgalikda biriktiriladi.</p>
+          </div>
+        </div>
+
+        <!-- FAQ 3: SOS & Sirena -->
+        <div class="rounded-2xl bg-slate-800/80 border border-slate-700/80 overflow-hidden">
+          <button onclick="toggleHelpFaq(3)" class="w-full p-3.5 text-left font-black text-white flex items-center justify-between gap-2 hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span class="text-base">🚨</span>
+              <span>SOS xavf signali va Masofaviy Sirena nima?</span>
+            </span>
+            <i id="faq-arrow-3" data-lucide="chevron-down" class="w-4 h-4 text-cyan-400 transition-transform"></i>
+          </button>
+          <div id="faq-content-3" class="hidden p-3.5 pt-0 text-slate-300 border-t border-slate-700/50 leading-relaxed text-[11px] space-y-2">
+            <p><strong>SOS signali:</strong> Farzand favqulodda vaziyatda SOS tugmasini bossa, barcha ota-onalarga baland ogohlantirish, koordinata va qo'ng'iroq tugmasi boradi.</p>
+            <p><strong>Masofaviy Sirena:</strong> Farzand telefonini topolmayotgan bo'lsa yoki telefon ovozsiz rejimda bo'lsa, ota-ona saytdan yoki botdan sirena chalib, telefonni baland ovozda yangratishi mumkin.</p>
+          </div>
+        </div>
+
+        <!-- FAQ 4: Kerakli joylar -->
+        <div class="rounded-2xl bg-slate-800/80 border border-slate-700/80 overflow-hidden">
+          <button onclick="toggleHelpFaq(4)" class="w-full p-3.5 text-left font-black text-white flex items-center justify-between gap-2 hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span class="text-base">🛡️</span>
+              <span>Kerakli joylar (Geozonalar) nima uchun kerak?</span>
+            </span>
+            <i id="faq-arrow-4" data-lucide="chevron-down" class="w-4 h-4 text-cyan-400 transition-transform"></i>
+          </button>
+          <div id="faq-content-4" class="hidden p-3.5 pt-0 text-slate-300 border-t border-slate-700/50 leading-relaxed text-[11px] space-y-2">
+            <p>Maktab, uy, bog'cha yoki o'quv markazini xaritada belgilang. Farzandingiz ushbu hududga kirganida va chiqqanida bot darhol sizga avtomatik xabar beradi.</p>
+          </div>
+        </div>
+
+        <!-- FAQ 5: Topshiriqlar va Tangalar -->
+        <div class="rounded-2xl bg-slate-800/80 border border-slate-700/80 overflow-hidden">
+          <button onclick="toggleHelpFaq(5)" class="w-full p-3.5 text-left font-black text-white flex items-center justify-between gap-2 hover:bg-slate-800 transition">
+            <span class="flex items-center gap-2">
+              <span class="text-base">💰</span>
+              <span>Vazifalar, Missiyalar va Tangalar tizimi</span>
+            </span>
+            <i id="faq-arrow-5" data-lucide="chevron-down" class="w-4 h-4 text-cyan-400 transition-transform"></i>
+          </button>
+          <div id="faq-content-5" class="hidden p-3.5 pt-0 text-slate-300 border-t border-slate-700/50 leading-relaxed text-[11px] space-y-2">
+            <p>Farzandga kitob o'qish, dars qilish kabi foydali vazifalar belgilang. Bola fotosurat bilan hisobot yuboradi, ota-ona tasdiqlasa, bolaga virtual tangalar beriladi. Tangalar kursini mustaqil belgilashingiz mumkin.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
+        <a href="https://t.me/child_security_bot" target="_blank" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition active:scale-95 shadow">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Telegram Botimiz</span>
+        </a>
+        <button onclick="closeHelpModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs transition active:scale-95">
+          Tushunarli
+        </button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- MODAL: INSTALL MOBILE APP (ANDROID APK & IPHONE PWA) -->
   <div id="modalInstallApp" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">

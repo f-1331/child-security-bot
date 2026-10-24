@@ -2534,23 +2534,224 @@ async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
         pass
 
 
-@router.message(F.text == "ℹ️ Yordam")
-async def on_help_pressed(message: Message):
-    text = (
-        f"📖 **Qo'llanma va Yordam**\n\n"
-        f"**Smart Bolalar Nazorati Tizimi** farzandingiz xavfsizligini Telegram orqali to'g'ridan-to'g'ri ta'minlaydi:\n\n"
-        f"1. **📍 Hozirgi joylashuv:** '📍 Farzandning hozirgi joylashuvi' tugmasini bosishingiz bilan farzandingizning aniq geolokatsiyasi va koordinatasi Telegram xaritasi sifatida chatga tashlanadi.\n"
-        f"2. **📍 Kerakli joylar:** Maktab, uy yoki kurs manzillarini kiriting. Bola yetib kelganda yoki chiqqanda bot avtomatik xabar beradi. Istalgan lokatsiyani chatga tashlash orqali ham yangi joy qo'sha olasiz.\n"
-        f"3. **🚨 SOS va Tezkor Qo'ng'iroq:** Bola xavf tugmasini bossa, darhol lokatsiya yuboriladi va bolaning ekranida ota-onaga 1-bosishda qo'ng'iroq qilish tugmasi chiqadi.\n"
-        f"4. **🪫 Batareya Nazorati:** Telefon quvvati **20%** dan tushib ketsa, ota-onaga avtomatik ogohlantirish keladi.\n"
-        f"5. **📋 Vazifalar va Tangalar:** Farzandingizga rag'batlantiruvchi vazifalar belgilang."
+# ---------------------------------------------------------
+# Comprehensive Interactive Help & Documentation Center
+# ---------------------------------------------------------
+
+def get_help_main_keyboard() -> InlineKeyboardMarkup:
+    """Main categorized Help navigation keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📱 Mobil Ilovalar (O'rnatish & Foniy GPS)",
+                    callback_data="help_topic:apps"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔗 Farzand & Ota-onani ulash tartibi",
+                    callback_data="help_topic:pairing"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚨 SOS, Masofaviy Sirena & Aloqa",
+                    callback_data="help_topic:safety"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🛡️ Kerakli joylar (Geozonalar) & Batareya",
+                    callback_data="help_topic:zones"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💰 Topshiriqlar & Tangalar tizimi",
+                    callback_data="help_topic:tasks"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Web App (Sayt) & Kirish kodi",
+                    callback_data="help_topic:webapp"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📥 Ilovani yuklab olish (.apk)",
+                    url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+                )
+            ]
+        ]
     )
-    await message.answer(text, parse_mode="Markdown")
+
+def get_help_back_keyboard() -> InlineKeyboardMarkup:
+    """Back button to Help index."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔙 Barcha mavzular (Yordam)",
+                    callback_data="help_topic:main"
+                )
+            ]
+        ]
+    )
+
+@router.message(F.text.in_(["ℹ️ Yordam", "Yordam", "yordam", "Qo'llanma", "qollanma"]))
+@router.message(Command("help", "yordam", "faq", "info", "qollanma", "yoriqnoma"))
+async def on_help_pressed(message: Message):
+    """Display rich categorized Help menu."""
+    text = (
+        "ℹ️ **CHILD SECURITY — TO'LIQ QO'LLANMA & YORDAM**\n\n"
+        "**Smart Bolalar Nazorati Tizimi** orqali farzandlaringiz xavfsizligini 24/7 nazorat qilishingiz, "
+        "ularning joylashuvini jonli xaritada ko'rishingiz va foydali topshiriqlar bilan rag'batlantirishingiz mumkin.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌟 **Asosiy imkoniyatlar qisqacha:**\n"
+        "• **📍 Jonli Xarita:** Farzandning hozirgi joylashuvini 1 tugmada ko'rish.\n"
+        "• **📱 Foniy GPS:** Ekran o'chiq bo'lsa ham 24/7 joylashuv to'xtovsiz yuboriladi.\n"
+        "• **🛡️ Xavfsiz Makonlar:** Maktab, uy, bog'chaga kirib-chiqqanini avtomatik bilish.\n"
+        "• **🚨 SOS Signal:** Bola 1 bosishda ota-onaga xavf signali va koordinata yuboradi.\n"
+        "• **🔔 Masofaviy Sirena:** Farzand telefonida ovozsiz rejimda ham baland ovoz chiqarish.\n"
+        "• **📋 Topshiriqlar & Tangalar:** Vazifalar berish, fotosuratli hisobot va mukofotlar.\n"
+        "• **🌐 Rasmiy Sayt (Vercel):** https://child-security-bot.vercel.app\n\n"
+        "👇 **Batafsil ma'lumot olish uchun quyidagi bo'limlardan birini tanlang:**"
+    )
+    await message.answer(text, reply_markup=get_help_main_keyboard(), parse_mode="Markdown")
+
+@router.callback_query(F.data.startswith("help_topic:"))
+async def on_help_topic_callback(callback: CallbackQuery):
+    """Handle interactive topic selection in Help menu."""
+    topic = callback.data.split(":")[1]
+
+    if topic == "main":
+        text = (
+            "ℹ️ **CHILD SECURITY — TO'LIQ QO'LLANMA & YORDAM**\n\n"
+            "Qo'shimcha ma'lumot olish uchun quyidagi mavzulardan birini tanlang:"
+        )
+        await callback.message.edit_text(text, reply_markup=get_help_main_keyboard(), parse_mode="Markdown")
+        await callback.answer()
+        return
+
+    elif topic == "apps":
+        text = (
+            "📱 **MOBIL ILOVALAR (ANDROID APK) QO'LLANMASI**\n\n"
+            "Tizimda 2 ta alohida moslashtirilgan ilova mavjud:\n\n"
+            "👨‍👩‍👧 **1. Ota-ona ilovasi (Parent App):**\n"
+            "• O'zingizning telefoningizga o'rnatiladi.\n"
+            "• Barcha farzandlaringizni jonli xaritada kuzatish.\n"
+            "• Masofaviy sirena chalish va ovoz chiqarish.\n"
+            "• Xavfsiz makonlar (geozonalar) qo'shish va boshqarish.\n"
+            "• Farzandlarga vazifalar berish va hisobotlarini tasdiqlash.\n\n"
+            "👦 **2. Farzand ilovasi (Child App):**\n"
+            "• Farzandingizning telefoniga o'rnatiladi.\n"
+            "• **24/7 Foniy GPS:** Telefon ekrani o'chirilgan, qulflangan yoki ilova yopilgan holatda ham GPS koordinatalarini to'xtovsiz ota-onaga yuboradi.\n"
+            "• **Avtomatik ishga tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlab ketadi.\n"
+            "• **🚨 SOS xavf tugmasi:** 1 bosishda barcha ota-onalarga baland signal yuborish.\n"
+            "• **Missiyalar:** Vazifalarni bajarib, virtual tangalar yig'ish.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ **Muhim o'rnatish qoidasi:**\n"
+            "Farzand telefoniga o'rnatgach, telefon sozlamalaridan:\n"
+            "1. *«Joylashuvga doimiy ruxsat berish» (Allow all the time)*;\n"
+            "2. *«Batareyani tejashni cheklamaslik» (No battery restrictions / Unrestricted)*\n"
+            "ruxsatlarini bering. Shunda tizim hech qachon to'xtamaydi."
+        )
+
+    elif topic == "pairing":
+        text = (
+            "🔗 **ULANISH VA OILAVIY GURUH YARATISH TARTIBI**\n\n"
+            "Tizimda hisoblarni bog'lashning 3 ta oson usuli bor:\n\n"
+            "🔹 **1. Farzandni 6 xonali kod orqali ulash:**\n"
+            "1️⃣ Ota-ona botida **«➕ Farzand ulash (Kodi)»** tugmasini bosing.\n"
+            "2️⃣ Bot sizga 6 xonali ulanish kodini beradi (masalan: `482910`).\n"
+            "3️⃣ Farzandingiz o'z telefonida botga kirib, «Farzand» rolini tanlaydi va shu kodni kiritadi.\n"
+            "4️⃣ Ulanish darhol tasdiqlanadi va farzand xaritangizda paydo bo'ladi.\n\n"
+            "🔹 **2. Taklif havolasi orqali (Tezkor 1-bosish):**\n"
+            "1️⃣ Ota-ona botidagi «➕ Farzand ulash (Kodi)» bo'limidagi taklif havolasini Telegram orqali bolaga yuboring.\n"
+            "2️⃣ Bola havolani bosishi bilan hisoblar avtomatik ulanadi.\n\n"
+            "🔹 **3. Ikkinchi ota-onani (Hamkorni) taklif qilish:**\n"
+            "• Ota va ona birgalikda farzandlarni kuzatishi uchun **«👨‍👩‍👧 Ikkinchi ota-onani taklif qilish»** tugmasini bosing va turmush o'rtog'ingizga havolani yuboring.\n"
+            "• U havolani bosishi bilan barcha farzandlar unga ham avtomatik biriktiriladi va ikkalangiz ham to'liq monitoring qilasizlar."
+        )
+
+    elif topic == "safety":
+        text = (
+            "🚨 **SOS, MASOFAVIY SIRENA VA FAVQULODDA ALOQA**\n\n"
+            "🛡️ **1. SOS (Xavf signali):**\n"
+            "• Farzand har qanday xavfli yoki shubhali vaziyatda **«🚨 SOS (Xavf tugmasi)»** ni bosadi.\n"
+            "• Barcha ota-onalarning telefoniga (bot, sayt va ilovada) darhol **qizil signal, jonli lokatsiya va ogohlantirish** yetib boradi.\n"
+            "• Farzandning ekranida esa ota-onaga 1 bosishda qo'ng'iroq qilish tugmasi chiqadi.\n\n"
+            "🔔 **2. Masofaviy Sirena (Qidiruv signali):**\n"
+            "• Farzandingiz telefonini qayergadir qo'yib topolmayotgan bo'lsa yoki ovozsiz (bez zvuk) rejimda bo'lsa:\n"
+            "• Ota-ona saytdan yoki botdan **«🔔 Sirena chalish»** tugmasini bosadi.\n"
+            "• Farzandning telefonida (hatto ovozsiz rejimda ham) eng baland ovozda signal yangraydi va vibratsiya ishga tushadi.\n\n"
+            "✅ **3. «Men yetib keldim» (Check-in):**\n"
+            "• Farzand maktab, uy yoki manzilga eson-omon yetib borganda «✅ Yetib keldim» tugmasini bosadi va ota-onalarga darhol bildirishnoma boradi."
+        )
+
+    elif topic == "zones":
+        text = (
+            "🛡️ **KERAKLI JOYLAR (GEOZONALAR) VA BATAREYA NAZORATI**\n\n"
+            "📍 **1. Kerakli joylar (Xavfsiz makonlar) nima?**\n"
+            "• Bu — maktab, uy, buvisi, o'quv markazi kabi muhim hududlar.\n"
+            "• Siz xaritada ushbu joylarni belgilab qo'yasiz (masalan: 200 metr radiusda).\n"
+            "• Farzandingiz maktabga kirganida: *«✅ Farzandingiz Maktab hududiga yetib bordi»* deb xabar keladi.\n"
+            "• Maktabdan chiqqanida: *«⚠️ Farzandingiz Maktab hududidan chiqdi»* deb avtomatik bildirishnoma olasiz.\n\n"
+            "📍 **Joy qo'shish usullari:**\n"
+            "1️⃣ Botda **«📍 Kerakli joylar»** ➡️ **«➕ Yangi joy qo'shish»** ni bosing.\n"
+            "2️⃣ Yoki Telegram orqali istalgan lokatsiya nuqtasini chatga tashlang.\n"
+            "3️⃣ Yoki Web App xaritasidan to'g'ridan-to'g'ri nuqta tanlang.\n\n"
+            "🔋 **2. Batareya va Holat nazorati:**\n"
+            "• Farzand telefonining quvvati **20% dan pastga tushsa**, bot sizga avtomatik eslatma yuboradi.\n"
+            "• Shuningdek, telefon hozir quvvatlanayotgani yoki quvvatlanmayotgani, ovoz rejimi (ovozli / vibratsiya / ovozsiz) doim ko'rinib turadi.\n\n"
+            "🚗 **3. Tezlik nazorati:**\n"
+            "• Farzand tezligi 30 km/soat dan oshsa (transportda ketayotganida), bot ota-onaga tezlik va xarita havolasini yuboradi."
+        )
+
+    elif topic == "tasks":
+        text = (
+            "💰 **TOPSHIRIQLAR, MISSIYALAR VA VIRTUAL TANGALAR**\n\n"
+            "Farzandni foydali ishlarga o'rgatish va rag'batlantirish tizimi:\n\n"
+            "📋 **1. Topshiriq yaratish:**\n"
+            "• Ota-ona bot yoki sayt orqali yangi vazifa qo'shadi (masalan: *«Kitob o'qish (30 bet)»*, *«Uy vazifasini bajarish»*, *«Xonani yig'ishtirish»*).\n"
+            "• Vazifaga mukofot tangalari belgilanadi (masalan: 50 tanga).\n\n"
+            "📸 **2. Farzandning hisobot topshirishi:**\n"
+            "• Farzand vazifani bajargach, bot yoki ilova orqali **fotosurat bilan hisobot** yuboradi.\n\n"
+            "✅ **3. Ota-onaning tasdiqlashi:**\n"
+            "• Ota-ona botda kelgan fotosuratni ko'rib, **«✅ Tasdiqlash»** yoki **«❌ Qaytarish»** tugmasini bosadi.\n"
+            "• Tasdiqlansa, tangalar farzandning virtual hamyoniga o'tadi.\n\n"
+            "💱 **4. Tangalar kursi:**\n"
+            "• Ota-ona **«💰 Tangalar kursini sozlash»** orqali 100 tanga necha so'mga teng bo'lishini (masalan: 100 tanga = 10,000 so'm) mustaqil belgilaydi.\n"
+            "• Farzand yig'ilgan tangalarni orzu qilgan sovg'asiga almashtirishi mumkin!"
+        )
+
+    elif topic == "webapp":
+        text = (
+            "🌐 **WEB APP (SAYT) VA SHAXSIY KODLAR**\n\n"
+            "🔗 **Rasmiy manzil:** https://child-security-bot.vercel.app\n\n"
+            "🔑 **Saytga qanday kiriladi?**\n"
+            "• Saytga kirish uchun murakkab login yoki parol eslab qolish shart emas!\n"
+            "• Botda **«🔑 Saytga kirish kodi»** tugmasini bosing yoki `/sayt` deb yozing.\n"
+            "• Bot sizga 6 xonali shaxsiy kod beradi.\n"
+            "• Sayt ochilganda ushbu 6 xonali kodni kiritasiz — bo'ldi!\n\n"
+            "🌟 **Saytdagi imkoniyatlar:**\n"
+            "• Katta to'liq ekranli jonli xarita.\n"
+            "• Yo'ldosh (Satellite) va ko'cha xaritalarini almashtirish.\n"
+            "• Bugungi harakatlar tarixi (marshrut chizig'i va animatsion ko'rish).\n"
+            "• Kunlik xavfsizlik hisoboti (qancha vaqt qayerda bo'lgani, bosib o'tgan masofasi).\n"
+            "• 12 xil zamonaviy rang mavzulari (Kosmik, Neon, Qahramon, Zümrad...).\n"
+            "• To'g'ridan-to'g'ri masofaviy sirena va joylashuv yangilash."
+        )
+
+    else:
+        text = "Mavzu topilmadi."
+
+    await callback.message.edit_text(text, reply_markup=get_help_back_keyboard(), parse_mode="Markdown")
+    await callback.answer()
 
 
-# ---------------------------------------------------------
-# Settings & 2-Step Logout (Role Reset) Handlers
-# ---------------------------------------------------------
 
 @router.message(Command("reset_all_data", "baza_tozalash", "restart_all"))
 async def on_reset_all_data_command(message: Message, state: FSMContext, bot: Bot):
