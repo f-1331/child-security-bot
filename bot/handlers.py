@@ -2575,6 +2575,12 @@ async def on_download_app_pressed(message: Message):
             ],
             [
                 InlineKeyboardButton(
+                    text="⚡ To'g'ridan-to'g'ri yuklab olish (Zaxira)",
+                    url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="🌐 Web App Saytini ochish",
                     web_app=WebAppInfo(url=settings.MINI_APP_URL)
                 )

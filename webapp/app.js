@@ -1151,6 +1151,9 @@ function logoutSession() {
       clearInterval(window._tgLocationPollInterval);
       window._tgLocationPollInterval = null;
     }
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopBackgroundTracking === "function") {
+      try { window.AndroidBridge.stopBackgroundTracking(); } catch (e) {}
+    }
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = "";
     showAuthGateModal();

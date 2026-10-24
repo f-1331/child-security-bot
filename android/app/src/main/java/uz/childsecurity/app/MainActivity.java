@@ -230,6 +230,8 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void stopBackgroundTracking() {
             try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                prefs.edit().remove(ChildTrackingService.KEY_CHILD_ID).apply();
                 Intent intent = new Intent(context, ChildTrackingService.class);
                 context.stopService(intent);
             } catch (Exception e) {

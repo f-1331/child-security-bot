@@ -70,6 +70,7 @@ class ChildLocationUpdate(BaseModel):
     longitude: float = Field(..., ge=-180.0, le=180.0)
     accuracy: Optional[float] = None
     speed: Optional[float] = None
+    speed_kmh: Optional[float] = None
     battery_level: Optional[int] = None
     is_charging: Optional[bool] = False
     sound_mode: Optional[str] = "normal"
@@ -1053,13 +1054,14 @@ async def update_child_live_location_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Receive live telemetry from child's watchPosition and save to database."""
+    effective_speed = payload.speed if payload.speed is not None else payload.speed_kmh
     log = await crud.log_location(
         session=session,
         child_id=child_id,
         latitude=payload.latitude,
         longitude=payload.longitude,
         accuracy=payload.accuracy,
-        speed=payload.speed,
+        speed=effective_speed,
         battery_level=payload.battery_level,
         is_charging=payload.is_charging or False,
         sound_mode=payload.sound_mode or "normal",
@@ -1067,7 +1069,7 @@ async def update_child_live_location_endpoint(
     )
 
     # Speed alert check (>= 30 km/h) with 15-min cooldown
-    if payload.speed is not None and payload.speed >= 30.0 and telemetry.telegram_bot:
+    if effective_speed is not None and effective_speed >= 30.0 and telemetry.telegram_bot:
         now_utc = datetime.now(timezone.utc)
         last_spd = telemetry.last_speed_alert_map.get(child_id)
         if not last_spd or (now_utc - last_spd) > timedelta(minutes=15):
@@ -1078,7 +1080,7 @@ async def update_child_live_location_endpoint(
             spd_msg = (
                 f"🚗 **TEZLIK OGOHLANTIRISHI!**\n\n"
                 f"👤 Farzandingiz: **{ch_name}**\n"
-                f"🚀 Harakat tezligi: **{payload.speed:.0f} km/soat**\n"
+                f"🚀 Harakat tezligi: **{effective_speed:.0f} km/soat**\n"
                 f"📍 Holat: **Avtomobil yoki jamoat transportida harakatlanmoqda**\n\n"
                 f"🗺 [Xaritada ko'rish (Google Maps)]({maps_url})"
             )

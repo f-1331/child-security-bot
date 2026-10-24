@@ -207,15 +207,39 @@ public class ChildTrackingService extends Service implements LocationListener {
             payload.put("latitude", lat);
             payload.put("longitude", lon);
             payload.put("accuracy", accuracy);
+            payload.put("speed", speedKmh);
             payload.put("speed_kmh", speedKmh);
             payload.put("battery_level", batteryLevel);
             payload.put("is_charging", isCharging);
             payload.put("sound_mode", soundMode);
             payload.put("is_sos_active", false);
 
-            String endpoint = serverUrl.replaceAll("/+$", "") + "/api/v1/webapp/child/" + childId.trim() + "/location";
+            byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
+            String primaryBase = (serverUrl != null && !serverUrl.trim().isEmpty()) ? serverUrl.trim() : DEFAULT_SERVER_URL;
+            String fallbackBase = primaryBase.contains("onrender.com")
+                    ? "https://child-security-bot.vercel.app"
+                    : "https://child-security-site.onrender.com";
+
+            boolean success = postTelemetry(primaryBase, childId, postData);
+            if (!success && !primaryBase.equals(fallbackBase)) {
+                success = postTelemetry(fallbackBase, childId, postData);
+            }
+
+            if (success) {
+                lastSentTime = System.currentTimeMillis();
+                Log.d(TAG, "Sent background GPS telemetry (" + lat + ", " + lon + ") SUCCESS");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to send background GPS telemetry: " + e.getMessage());
+        }
+    }
+
+    private boolean postTelemetry(String baseUrl, String childId, byte[] postData) {
+        HttpURLConnection conn = null;
+        try {
+            String endpoint = baseUrl.replaceAll("/+$", "") + "/api/v1/webapp/child/" + childId.trim() + "/location";
             URL url = new URL(endpoint);
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setRequestProperty("Accept", "application/json");
@@ -223,18 +247,20 @@ public class ChildTrackingService extends Service implements LocationListener {
             conn.setReadTimeout(8000);
             conn.setDoOutput(true);
 
-            byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(postData);
                 os.flush();
             }
 
             int code = conn.getResponseCode();
-            conn.disconnect();
-            lastSentTime = System.currentTimeMillis();
-            Log.d(TAG, "Sent background GPS telemetry (" + lat + ", " + lon + ") Code: " + code);
+            return code >= 200 && code < 300;
         } catch (Exception e) {
-            Log.w(TAG, "Failed to send background GPS telemetry: " + e.getMessage());
+            Log.w(TAG, "Telemetry post error to " + baseUrl + ": " + e.getMessage());
+            return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
