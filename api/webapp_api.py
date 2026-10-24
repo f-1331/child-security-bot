@@ -6,7 +6,12 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, WebSocket, WebSocketDisconnect, Request
+import hashlib
+import hmac
+import time
+from urllib.parse import parse_qsl
+from config import settings
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.types import FSInputFile
@@ -67,6 +72,85 @@ ws_manager = ConnectionManager()
 pending_child_notifications: dict[int, list[dict]] = defaultdict(list)
 
 
+class RateLimiter:
+    """In-memory rate limiter for defensive brute-force and DoS prevention."""
+    def __init__(self):
+        self.failed_auth: dict[str, list[float]] = defaultdict(list)
+        self.upload_requests: dict[str, list[float]] = defaultdict(list)
+        self.last_location_update: dict[int, float] = {}
+
+    def check_auth_rate_limit(self, ip: str, max_attempts: int = 5, window_seconds: int = 300) -> tuple[bool, int]:
+        now = time.time()
+        self.failed_auth[ip] = [t for t in self.failed_auth[ip] if now - t < window_seconds]
+        if len(self.failed_auth[ip]) >= max_attempts:
+            oldest = self.failed_auth[ip][0]
+            retry_after = max(1, int(window_seconds - (now - oldest)))
+            return False, retry_after
+        return True, 0
+
+    def record_auth_failure(self, ip: str):
+        self.failed_auth[ip].append(time.time())
+
+    def reset_auth_failures(self, ip: str):
+        if ip in self.failed_auth:
+            del self.failed_auth[ip]
+
+    def check_upload_rate_limit(self, ip: str, max_uploads: int = 15, window_seconds: int = 60) -> bool:
+        now = time.time()
+        self.upload_requests[ip] = [t for t in self.upload_requests[ip] if now - t < window_seconds]
+        if len(self.upload_requests[ip]) >= max_uploads:
+            return False
+        self.upload_requests[ip].append(now)
+        return True
+
+    def check_location_throttle(self, child_id: int, min_interval_seconds: float = 1.0) -> bool:
+        now = time.time()
+        last = self.last_location_update.get(child_id, 0.0)
+        if (now - last) < min_interval_seconds:
+            return False
+        self.last_location_update[child_id] = now
+        return True
+
+
+rate_limiter = RateLimiter()
+
+
+def verify_telegram_init_data(init_data: str, bot_token: str, max_age_seconds: int = 86400) -> Optional[dict]:
+    """
+    Verifies Telegram WebApp initData string using HMAC-SHA256 according to Telegram specs:
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+    """
+    try:
+        parsed_data = dict(parse_qsl(init_data, keep_blank_values=True))
+        if "hash" not in parsed_data:
+            return None
+
+        received_hash = parsed_data.pop("hash")
+
+        # Check auth_date expiration to prevent replay attacks
+        auth_date = int(parsed_data.get("auth_date", 0))
+        if (time.time() - auth_date) > max_age_seconds:
+            logger.warning("Telegram initData expired")
+            return None
+
+        # Build data check string: key=value in alphabetical order separated by \n
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+
+        # secret_key = HMAC_SHA256("WebAppData", bot_token)
+        secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
+
+        # calculated_hash = HMAC_SHA256(secret_key, data_check_string).hexdigest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+        if hmac.compare_digest(calculated_hash, received_hash):
+            user_data = json.loads(parsed_data.get("user", "{}"))
+            return user_data
+    except Exception as e:
+        logger.error(f"Telegram initData verification error: {e}")
+        return None
+    return None
+
+
 class ChildLocationUpdate(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
@@ -91,6 +175,10 @@ class AuthCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
 
 
+class TelegramAuthRequest(BaseModel):
+    init_data: str = Field(..., min_length=10, description="Raw initData string from window.Telegram.WebApp.initData")
+
+
 class ChildSOSRequest(BaseModel):
     is_sos_active: bool = True
     latitude: Optional[float] = None
@@ -99,17 +187,9 @@ class ChildSOSRequest(BaseModel):
     battery_level: Optional[int] = None
 
 
-@router.post("/auth/code")
-async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSession = Depends(get_db)):
-    """Verify web access code or pairing code and return authenticated user context."""
-    code = payload.code.strip().replace(" ", "").replace("-", "")
-    user = await crud.get_user_by_web_access_code(session, code)
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="Kiritilgan kod noto'g'ri yoki mavjud emas. Iltimos, Telegram bot orqali kodni tekshiring."
-        )
-
+async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -> dict:
+    """Standardized user auth payload builder for both code and Telegram initData authentications."""
+    effective_code = user.web_access_code or user.pairing_code or code
     rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user.id)
 
     if user.role == "parent":
@@ -147,7 +227,7 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
                 "role": "parent",
                 "coin_rate_coins": rate_coins,
                 "coin_rate_som": rate_som,
-                "web_access_code": user.web_access_code or code
+                "web_access_code": effective_code
             },
             "children": children_data
         }
@@ -180,7 +260,7 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
             "is_sos_active": user.is_sos_active,
             "parent_phone": parent.phone_number if parent and parent.phone_number else None,
             "parent_name": parent.full_name if parent and parent.full_name else None,
-            "web_access_code": user.web_access_code or code,
+            "web_access_code": effective_code,
             "location": {
                 "latitude": latest.latitude if latest else None,
                 "longitude": latest.longitude if latest else None,
@@ -208,6 +288,67 @@ async def verify_auth_code_endpoint(payload: AuthCodeRequest, session: AsyncSess
             "username": parent.username if parent else None
         } if parent else None
     }
+
+
+@router.post("/auth/code")
+async def verify_auth_code_endpoint(
+    request: Request,
+    payload: AuthCodeRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Verify web access code or pairing code with rate limiting."""
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = rate_limiter.check_auth_rate_limit(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Xavfsizlik tizimi: Ko'p noto'g'ri urinishlar aniqlandi. Iltimos, {retry_after} soniyadan so'ng qayta urinib ko'ring."
+        )
+
+    code = payload.code.strip().replace(" ", "").replace("-", "")
+    user = await crud.get_user_by_web_access_code(session, code)
+    if not user:
+        rate_limiter.record_auth_failure(client_ip)
+        raise HTTPException(
+            status_code=404,
+            detail="Kiritilgan kod noto'g'ri yoki mavjud emas. Iltimos, Telegram bot orqali kodni tekshiring."
+        )
+
+    rate_limiter.reset_auth_failures(client_ip)
+    return await build_user_auth_payload(user, session, code=code)
+
+
+@router.post("/auth/telegram")
+async def verify_telegram_auth_endpoint(
+    payload: TelegramAuthRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Cryptographically verify Telegram WebApp initData HMAC-SHA256 signature and return authenticated context.
+    Prevents unauthorized access and Telegram ID spoofing.
+    """
+    user_data = verify_telegram_init_data(payload.init_data, settings.BOT_TOKEN)
+    if not user_data or "id" not in user_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram orqali avtorizatsiya tasdiqlanmadi (imzo noto'g'ri yoki sessiya muddati o'tgan)."
+        )
+
+    telegram_id = int(user_data["id"])
+    user = await crud.get_user(session, telegram_id)
+    if not user:
+        full_name = (user_data.get("first_name", "") + " " + user_data.get("last_name", "")).strip() or "Telegram Foydalanuvchisi"
+        user, _ = await crud.get_or_create_user(
+            session=session,
+            user_id=telegram_id,
+            role="parent",
+            full_name=full_name,
+            username=user_data.get("username")
+        )
+        await crud.generate_pairing_code(session, telegram_id)
+        await session.commit()
+
+    return await build_user_auth_payload(user, session)
 
 
 class UpdateCoinRateRequest(BaseModel):
@@ -431,8 +572,15 @@ async def delete_geofence_endpoint(
 
 
 @router.post("/upload")
-async def upload_file_endpoint(file: UploadFile = File(...)):
-    """Upload media file (photo or video) for task assignment or proof."""
+async def upload_file_endpoint(request: Request, file: UploadFile = File(...)):
+    """Upload media file (photo or video) for task assignment or proof with rate limiting."""
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limiter.check_upload_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Fayl yuklash limiti oshib ketdi. Iltimos, biroz kuting."
+        )
+
     ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".mov", ".avi", ".webm", ".mkv", ".3gp"}
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -444,6 +592,8 @@ async def upload_file_endpoint(file: UploadFile = File(...)):
     contents = await file.read()
     if len(contents) > 25 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Fayl hajmi 25 MB dan oshmasligi kerak")
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Fayl bo'sh bo'lishi mumkin emas")
 
     unique_filename = f"{uuid.uuid4().hex}{ext if ext else '.jpg'}"
     target_path = uploads_dir / unique_filename
@@ -1075,7 +1225,14 @@ async def update_child_live_location_endpoint(
     payload: ChildLocationUpdate,
     session: AsyncSession = Depends(get_db)
 ):
-    """Receive live telemetry from child's watchPosition and save to database."""
+    """Receive live telemetry from child's watchPosition and save to database with resource throttling."""
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    if not rate_limiter.check_location_throttle(child_id, min_interval_seconds=1.0):
+        return {"status": "throttled", "message": "Location ping throttled to conserve resources"}
+
     effective_speed = payload.speed if payload.speed is not None else payload.speed_kmh
     log = await crud.log_location(
         session=session,
@@ -1341,28 +1498,45 @@ async def get_coparent_invite_info(parent_id: int, session: AsyncSession = Depen
 @router.post("/child/{child_id}/sos/media")
 async def upload_sos_snapshot_media(
     child_id: int,
+    request: Request,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_db)
 ):
     """
     Accepts 5-second ambient audio recording or camera snapshot triggered on SOS.
-    Dispatches directly to linked parents via Telegram voice memo or photo.
+    Dispatches directly to linked parents via Telegram voice memo or photo with rate limiting and validation.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limiter.check_upload_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Fayl yuklash so'rovlari chegarasi oshdi."
+        )
+
     child = await crud.get_user(session, child_id)
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
 
-    upload_dir = Path("uploads/sos_snapshots")
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
+    ALLOWED_SOS_EXTENSIONS = {".webm", ".ogg", ".wav", ".mp3", ".m4a", ".jpg", ".jpeg", ".png", ".webp"}
     ext = Path(file.filename or "").suffix.lower()
     if not ext:
         ext = ".webm" if "audio" in (file.content_type or "") else ".jpg"
 
+    if ext not in ALLOWED_SOS_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Yaroqsiz media formati")
+
+    upload_dir = Path("uploads/sos_snapshots")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    contents = await file.read()
+    if len(contents) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="SOS fayl hajmi 15 MB dan oshmasligi kerak")
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Fayl bo'sh bo'lishi mumkin emas")
+
     safe_filename = f"sos_{child_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = upload_dir / safe_filename
 
-    contents = await file.read()
     with open(file_path, "wb") as f_out:
         f_out.write(contents)
 

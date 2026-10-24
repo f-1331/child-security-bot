@@ -6,7 +6,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -123,12 +123,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for Telegram Mini App WebView
+# Enable hardened CORS for Telegram Mini App WebView & Frontend Clients
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://child-security-bot.vercel.app",
+        "https://child-security-site.onrender.com",
+        "http://localhost:8000",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:5500",
+    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -137,9 +146,11 @@ app.include_router(telemetry_router)
 app.include_router(webapp_router)
 
 
-@app.get("/api/sentry-debug", tags=["Debug"])
+@app.get("/api/sentry-debug", tags=["Debug"], include_in_schema=False)
 async def trigger_sentry_debug_error():
-    """Endpoint for verifying Sentry error monitoring connection."""
+    """Endpoint for verifying Sentry error monitoring connection (disabled in production)."""
+    if not settings.DEBUG:
+        raise HTTPException(status_code=403, detail="Debug endpoint disabled in production")
     logger.info("Triggering intentional test exception for Sentry verification...")
     division_by_zero = 1 / 0
     return {"result": division_by_zero}

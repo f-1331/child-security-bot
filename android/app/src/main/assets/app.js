@@ -446,26 +446,30 @@ async function checkAuthenticationState() {
     }
   }
 
-  // 3. Telegram WebApp auto-authentication by user ID if available
-  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (tgUser && tgUser.id) {
+  // 3. Telegram WebApp cryptographic auto-authentication if inside Telegram Mini App
+  const initData = window.Telegram?.WebApp?.initData;
+  if (initData && initData.length > 10) {
     try {
-      const tgRes = await fetch("/api/v1/webapp/auth/code", {
+      const tgRes = await fetch("/api/v1/webapp/auth/telegram", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: String(tgUser.id) })
+        body: JSON.stringify({ init_data: initData })
       });
-      const tgData = await tgRes.json();
-      if (tgData && tgData.status === "success") {
-        localStorage.setItem("smart_tracker_session", JSON.stringify(tgData));
-        localStorage.setItem("smart_tracker_auth_code", String(tgUser.id));
-        localStorage.setItem("smart_tracker_role", tgData.role);
-        localStorage.setItem(AUTH_PROMPT_KEY, "2");
-        hideAuthGateModal();
-        applyAuthenticatedUser(tgData);
-        return;
+      if (tgRes.ok) {
+        const tgData = await tgRes.json();
+        if (tgData && tgData.status === "success") {
+          localStorage.setItem("smart_tracker_session", JSON.stringify(tgData));
+          localStorage.setItem("smart_tracker_auth_code", tgData.user?.web_access_code || "");
+          localStorage.setItem("smart_tracker_role", tgData.role);
+          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          hideAuthGateModal();
+          applyAuthenticatedUser(tgData);
+          return;
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn("Telegram cryptographic auth verification error:", e);
+    }
   }
 
   // 4. Check prompt count: Prompt code AT MOST 2 TIMES!

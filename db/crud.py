@@ -160,15 +160,7 @@ async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optio
     if user:
         return user
 
-    # 3. Direct Telegram ID fallback (used by Telegram WebApp auto-login)
-    if code_clean.isdigit():
-        try:
-            uid = int(code_clean)
-            user_by_id = await get_user(session, uid)
-            if user_by_id:
-                return user_by_id
-        except Exception:
-            pass
+    # Telegram ID fallback removed for defensive security (requires cryptographically signed initData or valid 6-digit access code)
 
     return None
 
