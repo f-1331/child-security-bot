@@ -979,7 +979,7 @@ body.theme-daylight textarea {
 
 
 /* --------------------------------------------------------------------------
-   8. MOBILE RESPONSIVENESS & TACTILE PHONE ERGONOMICS (< 640px)
+   8. MOBILE ERGONOMICS & PREMIUM SPACIOUS TOUCH TARGETS (NO SQUISHING)
    -------------------------------------------------------------------------- */
 #map, .leaflet-container {
   touch-action: pan-x pan-y pinch-zoom !important;
@@ -995,19 +995,181 @@ body.theme-daylight textarea {
   overscroll-behavior-y: contain !important;
 }
 
+/* Header Utility Bar: Horizontal scrolling with NO item squeezing */
 #parentUtilityBar {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 6px !important;
+  overflow-x: auto !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
   -webkit-overflow-scrolling: touch !important;
   scrollbar-width: none !important;
 }
 #parentUtilityBar::-webkit-scrollbar {
   display: none !important;
 }
+#parentUtilityBar > * {
+  flex-shrink: 0 !important;
+  min-height: 28px !important;
+}
 
+/* Floating Map Controls Dock: Comfortable touch targets */
+.floating-glass-dock {
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 0 var(--glass-highlight), 0 14px 34px -4px rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  top: 12px !important;
+  right: 12px !important;
+}
+
+.floating-glass-dock button {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.floating-glass-dock button:active {
+  transform: scale(0.9) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+.floating-glass-dock button i,
+.floating-glass-dock button svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* Parent Bottom HUD (Monitoring Buttons + Location Card) */
+#parentBottomContainer {
+  bottom: calc(82px + max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  z-index: 22 !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+#parentMonitoringBar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+#parentMonitoringBar button {
+  padding: 10px 12px !important;
+  min-height: 48px !important;
+  border-radius: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+#parentMonitoringBar button .w-7 {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+#parentMonitoringBar button .w-7 svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+#parentMonitoringBar button p {
+  white-space: nowrap !important;
+}
+
+#parentMonitoringBar button p.text-\[11px\] {
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+#parentMonitoringBar button p.text-\[9px\] {
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+}
+
+#locationCard {
+  padding: 10px 14px !important;
+  border-radius: 20px !important;
+  min-height: 54px !important;
+}
+
+#locationCard .w-8 {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+#locationCard .w-8 svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+#locationCard #addressText {
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+}
+
+#locationCard button {
+  padding: 7px 12px !important;
+  font-size: 11.5px !important;
+  font-weight: 800 !important;
+  border-radius: 12px !important;
+}
+
+/* Bottom Navigation Bar: Spacious Apple iOS Dock */
 #mainNavBar {
-  bottom: calc(max(8px, env(safe-area-inset-bottom, 0px))) !important;
-  height: 58px !important;
-  min-height: 58px !important;
-  padding: 4px 6px !important;
+  bottom: calc(max(10px, env(safe-area-inset-bottom, 0px))) !important;
+  height: 64px !important;
+  min-height: 64px !important;
+  padding: 4px 8px !important;
+  border-radius: 26px !important;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+}
+
+.nav-tab {
+  min-height: 54px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 16px !important;
+  padding: 4px 2px !important;
+}
+
+.nav-tab i, .nav-tab svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.nav-tab span {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  margin-top: 3px !important;
+  line-height: 1.1 !important;
 }
 
 @media (max-width: 640px) {
@@ -1016,144 +1178,80 @@ body.theme-daylight textarea {
     font-size: 16px !important;
   }
 
-  /* Compact Floating Map Dock */
+  /* Compact Floating Dock on mobile: 36px buttons, 5px gap */
   .floating-glass-dock {
-    top: 8px !important;
-    right: 8px !important;
-    padding: 3.5px !important;
-    gap: 4px !important;
-    border-radius: 16px !important;
+    top: 10px !important;
+    right: 10px !important;
+    padding: 4px !important;
+    gap: 5px !important;
+    border-radius: 18px !important;
   }
   .floating-glass-dock button {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 11px !important;
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 12px !important;
   }
-  .floating-glass-dock button svg,
-  .floating-glass-dock button i {
-    width: 14px !important;
-    height: 14px !important;
+  .floating-glass-dock button i,
+  .floating-glass-dock button svg {
+    width: 16px !important;
+    height: 16px !important;
   }
 
   /* Floating Android App Banner clearance */
   #parentAppDownloadBanner {
-    top: 8px !important;
-    left: 8px !important;
-    right: 54px !important;
-    padding: 6px 8px !important;
-    border-radius: 14px !important;
-  }
-  #parentAppDownloadBanner .w-8 {
-    width: 26px !important;
-    height: 26px !important;
-    font-size: 13px !important;
-    border-radius: 8px !important;
+    top: 10px !important;
+    left: 10px !important;
+    right: 58px !important;
+    padding: 7px 10px !important;
+    border-radius: 16px !important;
   }
 
-  /* Parent Bottom Container Mobile Optimization */
+  /* Bottom Container on mobile */
   #parentBottomContainer {
-    left: 8px !important;
-    right: 8px !important;
-    bottom: calc(72px + max(6px, env(safe-area-inset-bottom, 0px))) !important;
-    gap: 6px !important;
-  }
-  #parentMonitoringBar button {
-    padding: 6px 8px !important;
-    gap: 6px !important;
-    border-radius: 14px !important;
-  }
-  #parentMonitoringBar button .w-7 {
-    width: 24px !important;
-    height: 24px !important;
-    border-radius: 8px !important;
-  }
-  #parentMonitoringBar button .w-7 svg {
-    width: 13px !important;
-    height: 13px !important;
-  }
-  #parentMonitoringBar button p.text-\[11px\] {
-    font-size: 10px !important;
-  }
-  #parentMonitoringBar button p.text-\[9px\] {
-    font-size: 8px !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(80px + max(8px, env(safe-area-inset-bottom, 0px))) !important;
+    gap: 7px !important;
   }
 
-  /* Location Card Mobile Refinement */
-  #locationCard {
-    padding: 8px 10px !important;
-    border-radius: 18px !important;
-  }
-  #locationCard .w-8 {
-    width: 28px !important;
-    height: 28px !important;
-    border-radius: 9px !important;
-  }
-  #locationCard .w-8 svg {
-    width: 14px !important;
-    height: 14px !important;
-  }
-  #locationCard #addressText {
-    font-size: 11px !important;
-  }
-  #locationCard button {
-    padding: 5px 9px !important;
-    font-size: 11px !important;
-  }
-
-  /* Bottom Navigation Dock Mobile */
+  /* Bottom Navigation Dock on mobile */
   #mainNavBar {
-    left: 8px !important;
-    right: 8px !important;
-    border-radius: 22px !important;
-    height: 56px !important;
-    min-height: 56px !important;
-    padding: 3px 4px !important;
+    left: 10px !important;
+    right: 10px !important;
+    height: 62px !important;
+    min-height: 62px !important;
+    padding: 3px 6px !important;
+    border-radius: 24px !important;
   }
   .nav-tab {
-    min-height: 44px !important;
-    border-radius: 14px !important;
+    min-height: 52px !important;
   }
   .nav-tab i, .nav-tab svg {
-    width: 18px !important;
-    height: 18px !important;
+    width: 19px !important;
+    height: 19px !important;
   }
   .nav-tab span {
-    font-size: 8.5px !important;
+    font-size: 9.5px !important;
     margin-top: 2px !important;
   }
 
-  /* Dynamic Island Mobile */
+  /* Dynamic Island on mobile */
   .dynamic-island {
-    padding: 4px 10px !important;
-    height: 26px !important;
-    border-radius: 9999px !important;
-  }
-  .dynamic-island-dot {
-    width: 6px !important;
-    height: 6px !important;
+    padding: 5px 12px !important;
+    height: 28px !important;
   }
   #dynamicIslandText {
-    font-size: 10px !important;
+    font-size: 10.5px !important;
   }
   #dynamicIslandBattery {
-    font-size: 9px !important;
-  }
-
-  /* Utility Bar Mobile */
-  #parentUtilityBar {
-    gap: 4px !important;
-    padding-top: 4px !important;
-  }
-  #parentUtilityBar button,
-  #parentUtilityBar div {
     font-size: 9.5px !important;
   }
 
-  /* Modals Mobile Bottom Sheet Optimization */
+  /* Modals Mobile Bottom Sheet */
   .tab-panel > div {
     max-height: calc(90dvh - env(safe-area-inset-top, 0px)) !important;
-    border-top-left-radius: 24px !important;
-    border-top-right-radius: 24px !important;
+    border-top-left-radius: 26px !important;
+    border-top-right-radius: 26px !important;
   }
 }
 

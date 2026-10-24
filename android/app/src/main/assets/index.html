@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=52" />
+  <link rel="stylesheet" href="style.css?v=53" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -458,12 +458,12 @@
         </button>
 
         <!-- Add Zone -->
-        <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="text-indigo-400 hover:text-indigo-300" title="Kerakli joy qo'shish">
+        <button id="btnAddZoneMap" onclick="openAddZoneModal()" class="hidden sm:flex text-indigo-400 hover:text-indigo-300" title="Kerakli joy qo'shish">
           <i data-lucide="map-pin" class="w-4 h-4"></i>
         </button>
 
                 <!-- Mobil Ilova Yuklab Olish (Map Dock) -->
-        <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="text-blue-400 hover:text-blue-300 relative group" title="Mobil ilovani yuklab olish (Android APK)">
+        <button id="btnMapInstallApp" onclick="openInstallAppModal()" class="hidden sm:flex text-blue-400 hover:text-blue-300 relative group" title="Mobil ilovani yuklab olish (Android APK)">
           <i data-lucide="smartphone" class="w-4 h-4"></i>
           <span class="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
         </button>
