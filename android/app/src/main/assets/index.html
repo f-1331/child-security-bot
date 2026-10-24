@@ -30,7 +30,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=56" />
+  <link rel="stylesheet" href="style.css?v=57" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -125,7 +125,7 @@
 <body class="bg-slate-950 text-slate-100 flex flex-col h-full h-[100dvh] max-h-[100dvh] overflow-hidden select-none">
 
   <!-- TOP HEADER (APPLE DYNAMIC ISLAND & FROSTED GLASS CAPSULE) -->
-  <header class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top">
+  <header id="mainAppHeader" class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top">
     <!-- 0. IOS DYNAMIC ISLAND (Centrally Anchored Floating Capsule) -->
     <div id="dynamicIslandContainer" class="flex justify-center w-full">
       <div id="dynamicIslandPill" onclick="centerOnChild()" class="dynamic-island cursor-pointer active:scale-95 transition" title="Jonli holat / Farzandga yaqinlashtirish">
@@ -437,6 +437,11 @@
 
       <!-- Floating Map Controls (Right Vertical Frosted Glass Dock) -->
       <div id="floatingMapControls" class="floating-glass-dock absolute right-3.5 top-3.5 z-20">
+        <!-- Toggle Fullscreen Map / Hide Nav & Bottom Menus -->
+        <button id="btnToggleFullscreenMap" onclick="toggleMapUiVisibility()" class="text-cyan-400 hover:text-cyan-300 active:scale-95 transition" title="To'liq xarita (Menyularni yashirish / ko'rsatish)">
+          <i data-lucide="maximize-2" id="iconFullscreenMap" class="w-4 h-4"></i>
+        </button>
+
         <!-- Remote Siren -->
         <button id="btnParentSiren" onclick="triggerRemoteSiren()" class="text-rose-400 hover:text-rose-300" title="Signal chalish (Ovoz chiqarish)">
           <i data-lucide="bell-ring" class="w-4 h-4"></i>
@@ -476,6 +481,14 @@
 
       <!-- Ota-ona Pastki Paneli (Monitoring tugmalari va Joriy manzil kartasi) -->
       <div id="parentBottomContainer" class="absolute left-3.5 right-3.5 md:right-auto md:left-6 z-20 md:max-w-md pointer-events-none flex flex-col gap-2">
+        <!-- Menyularni yashirish / Xaritani to'liq ko'rish tugmasi -->
+        <div class="w-full flex justify-center pointer-events-auto">
+          <button id="btnHideMenusBar" onclick="toggleMapUiVisibility(true)" class="py-1 px-3.5 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-slate-300 hover:text-white border border-white/15 rounded-full text-2xs font-bold shadow-lg flex items-center gap-1.5 backdrop-blur-xl transition group" title="Xaritani to'liq ko'rish uchun menyularni yashirish">
+            <span>Xaritani to'liq ko'rish</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-cyan-400 group-hover:translate-y-0.5 transition"></i>
+          </button>
+        </div>
+
         <!-- 1. Passiv monitoring va Hozirgi joylashuvi -->
         <div id="parentMonitoringBar" class="w-full flex items-center gap-2 pointer-events-auto">
           <!-- Passiv monitoring (Silent check) -->
@@ -778,6 +791,14 @@
       </div>
     </div>
   </main>
+
+  <!-- Floating Restore Menus Button (Visible only when menus are hidden in Fullscreen Map Mode) -->
+  <button id="btnRestoreMenus" onclick="toggleMapUiVisibility(false)" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 bg-slate-900/95 hover:bg-slate-800 active:scale-95 text-white rounded-full text-xs font-black shadow-2xl border border-cyan-400/60 backdrop-blur-2xl flex items-center gap-2 transition-all duration-300 group shadow-cyan-500/25 pointer-events-auto" title="Menyularni qaytarish">
+    <div class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center group-hover:scale-110 transition shrink-0">
+      <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+    </div>
+    <span class="tracking-wide">Menyularni ko'rsatish</span>
+  </button>
 
   <!-- 5-BUTTON BOTTOM NAVIGATION BAR (Floating Frosted Glass Dock) -->
   <nav id="mainNavBar" class="fixed bottom-3 left-3 right-3 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[480px] z-30 px-2 py-1.5 grid grid-cols-5 gap-1 shadow-2xl safe-bottom transition-all duration-300">
@@ -2087,7 +2108,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=56"></script>
+  <script src="app.js?v=57"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">

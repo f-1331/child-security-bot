@@ -2521,7 +2521,57 @@ async function resolveCurrentSos() {
 }
 
 // Bottom tab switching
+
+// Toggle Fullscreen Map Mode (Hide/Show Top Nav & Bottom HUD)
+function toggleMapUiVisibility(forceState) {
+  haptic("light");
+  const isCurrentlyFullscreen = document.body.classList.contains("fullscreen-map-mode");
+  const newState = typeof forceState === "boolean" ? forceState : !isCurrentlyFullscreen;
+
+  const btnRestore = document.getElementById("btnRestoreMenus");
+  const icon = document.getElementById("iconFullscreenMap");
+  const btnDock = document.getElementById("btnToggleFullscreenMap");
+
+  if (newState) {
+    document.body.classList.add("fullscreen-map-mode");
+    if (btnRestore) btnRestore.classList.remove("hidden");
+    if (icon) icon.setAttribute("data-lucide", "minimize-2");
+    if (btnDock) {
+      btnDock.setAttribute("title", "Menyularni ko'rsatish");
+      btnDock.classList.add("text-rose-400");
+      btnDock.classList.remove("text-cyan-400");
+    }
+    showToast("🗺️ Xarita to'liq kengaytirildi. Menyuni ochish uchun pastdagi tugmani bosing.");
+  } else {
+    document.body.classList.remove("fullscreen-map-mode");
+    if (btnRestore) btnRestore.classList.add("hidden");
+    if (icon) icon.setAttribute("data-lucide", "maximize-2");
+    if (btnDock) {
+      btnDock.setAttribute("title", "To'liq xarita (Menyularni yashirish)");
+      btnDock.classList.remove("text-rose-400");
+      btnDock.classList.add("text-cyan-400");
+    }
+  }
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+
+  // Ensure Leaflet map recalculates its full viewport immediately and after CSS transition
+  if (window.map) {
+    window.map.invalidateSize();
+    setTimeout(() => {
+      try {
+        window.map.invalidateSize();
+      } catch (e) {}
+    }, 320);
+  }
+}
+
 function switchTab(tabName) {
+  if (tabName !== "map" && document.body.classList.contains("fullscreen-map-mode")) {
+    toggleMapUiVisibility(false);
+  }
   haptic("light");
 
   // In child mode, Tab 4 routes to child wallet
