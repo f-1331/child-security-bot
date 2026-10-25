@@ -1,6 +1,22 @@
 {
   "rewrites": [
     {
+      "source": "/download/desktop-windows",
+      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+    },
+    {
+      "source": "/download/desktop",
+      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+    },
+    {
+      "source": "/download/ios-profile",
+      "destination": "/downloads/ChildSecurity.mobileconfig"
+    },
+    {
+      "source": "/download/ios-app",
+      "destination": "/downloads/ChildSecurity.mobileconfig"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://child-security-site.onrender.com/api/$1"
     },

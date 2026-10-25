@@ -28,9 +28,9 @@ from bot.geofence import evaluate_geofences_and_notify, haversine_distance
 
 # Permanent Telegram CDN cached file_ids for zero-delay instant document delivery
 TG_FILE_ID_PARENT_APK = "BQACAgIAAxkDAAIC5mreMhe2YYW7kXQ3dRC_RDdx4BrAAAJYpAACkXzxSqCXbmUrcbZgPQQ"
-TG_FILE_ID_CHILD_APK = "BQACAgIAAxkDAAIC6GreMjrspfxKqP3TTU64vZmwbxPfAAJZpAACkXzxSpQJ0c774dgsPQQ"
-TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIC6WreMjq9xWYkPZq8P0TeWpRRcELKAAJapAACkXzxSiJOn8-Ny45HPQQ"
-TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIC6mreMjvc9e0X-zI8GZXTnSauecdfAAJbpAACkXzxSmsBddhrPfmIPQQ"
+TG_FILE_ID_CHILD_APK = "BQACAgIAAxkDAAIDAmreN2MZxN9GawxtrRnCVUZUj6aeAAKnpAACkXzxSpPrP6AaP55sPQQ"
+TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIDA2reN2Qg5ftn-jj-yWZm5fWZ7W5kAAKppAACkXzxSgGocqOALSEcPQQ"
+TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIDBGreN2RP4HQZPqZFSP0xiRIiSYxhAAKqpAACkXzxSk1ziz3geGp_PQQ"
 from bot.keyboards import (
     get_role_selection_keyboard,
     get_parent_main_keyboard,
@@ -3502,34 +3502,72 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
         "@echo off\r\n"
         "chcp 65001 >nul\r\n"
         "title Child Security - Noutbuk uchun dastur\r\n"
+        "cls\r\n"
         "echo ============================================================\r\n"
         "echo          Child Security - Oila va Farzand Nazorati\r\n"
         "echo           Noutbuk va Windows uchun Desktop Dasturi\r\n"
         "echo ============================================================\r\n"
         "echo.\r\n"
-        "echo Ish stoliga (Desktop) Child Security yorlig'i o'rnatilmoqda...\r\n"
+        "echo Ish stoliga (Desktop) dastur yorlig'i o'rnatilmoqda...\r\n"
         "set URL=https://child-security-bot.vercel.app\r\n"
-        "set DESKTOP=%USERPROFILE%\\Desktop\\Child Security.url\r\n"
-        "echo [InternetShortcut] > \"%DESKTOP%\"\r\n"
-        "echo URL=%URL% >> \"%DESKTOP%\"\r\n"
-        "echo IconIndex=0 >> \"%DESKTOP%\"\r\n"
-        "echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESKTOP%\"\r\n"
+        "set \"DESK_PATH=%USERPROFILE%\\Desktop\"\r\n"
+        "for /f \"usebackq delims=\" %%d in (`powershell -NoProfile -Command \"[Environment]::GetFolderPath('Desktop')\"`) do (\r\n"
+        "    set \"DESK_PATH=%%d\"\r\n"
+        ")\r\n"
+        "if exist \"%DESK_PATH%\" (\r\n"
+        "    echo [InternetShortcut] > \"%DESK_PATH%\\Child Security.url\"\r\n"
+        "    echo URL=%URL% >> \"%DESK_PATH%\\Child Security.url\"\r\n"
+        "    echo IconIndex=0 >> \"%DESK_PATH%\\Child Security.url\"\r\n"
+        "    echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESK_PATH%\\Child Security.url\"\r\n"
+        ")\r\n"
+        "if exist \"%USERPROFILE%\\Desktop\" (\r\n"
+        "    copy /y \"%DESK_PATH%\\Child Security.url\" \"%USERPROFILE%\\Desktop\\Child Security.url\" >nul 2>&1\r\n"
+        ")\r\n"
+        "if exist \"%USERPROFILE%\\OneDrive\\Desktop\" (\r\n"
+        "    copy /y \"%DESK_PATH%\\Child Security.url\" \"%USERPROFILE%\\OneDrive\\Desktop\\Child Security.url\" >nul 2>&1\r\n"
+        ")\r\n"
         "echo.\r\n"
         "echo [OK] Child Security ish stolingizga muvaffaqiyatli o'rnatildi!\r\n"
         "echo Dastur ishga tushirilmoqda...\r\n"
-        "start msedge.exe --app=\"%URL%\" 2>nul || start chrome.exe --app=\"%URL%\" 2>nul || start \"\" \"%URL%\"\r\n"
-        "exit\r\n"
+        "echo.\r\n"
+        "set \"EDGE_X86=%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe\"\r\n"
+        "set \"EDGE_64=%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe\"\r\n"
+        "set \"CHROME_64=%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe\"\r\n"
+        "set \"CHROME_X86=%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe\"\r\n"
+        "if exist \"%EDGE_X86%\" (\r\n"
+        "    start \"\" \"%EDGE_X86%\" --app=\"%URL%\"\r\n"
+        "    exit /b 0\r\n"
+        ")\r\n"
+        "if exist \"%EDGE_64%\" (\r\n"
+        "    start \"\" \"%EDGE_64%\" --app=\"%URL%\"\r\n"
+        "    exit /b 0\r\n"
+        ")\r\n"
+        "if exist \"%CHROME_64%\" (\r\n"
+        "    start \"\" \"%CHROME_64%\" --app=\"%URL%\"\r\n"
+        "    exit /b 0\r\n"
+        ")\r\n"
+        "if exist \"%CHROME_X86%\" (\r\n"
+        "    start \"\" \"%CHROME_X86%\" --app=\"%URL%\"\r\n"
+        "    exit /b 0\r\n"
+        ")\r\n"
+        "start \"\" \"%URL%\"\r\n"
+        "exit /b 0\r\n"
     )
+
+    desktop_caption = (
+        "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
+        "1️⃣ Ushbu <code>ChildSecurity_Desktop_Setup.bat</code> faylini yuklab oling va ustiga bosing.\n"
+        "2️⃣ <b>Eslatma:</b> Agar Windows himoyasi (SmartScreen) chiqsa:\n"
+        "   👉 <i>«Подробнее» (Batafsil)</i> -> <i>«Выполнить в любом случае» (Baribir bajarish)</i> tugmasini bosing.\n"
+        "3️⃣ Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va alohida qulay dastur oynasida ishga tushadi! 🚀\n\n"
+        "💡 <i>MacBook (macOS) yoki Linux uchun: saytni brauzerda ochib, manzil satridagi ⬇️ «Dasturni o'rnatish» tugmasini bosing!</i>"
+    )
+
     # Priority 1: Instant delivery via Telegram CDN cached file_id
     try:
         await message.answer_document(
             document=TG_FILE_ID_DESKTOP_BAT,
-            caption=(
-                "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
-                "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
-                "2. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi!\n"
-                "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
-            ),
+            caption=desktop_caption,
             parse_mode=ParseMode.HTML
         )
     except Exception as e_fid:
@@ -3539,12 +3577,7 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
             doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
             await message.answer_document(
                 document=doc,
-                caption=(
-                    "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
-                    "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
-                    "2. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi!\n"
-                    "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
-                ),
+                caption=desktop_caption,
                 parse_mode=ParseMode.HTML
             )
         except Exception as e:
