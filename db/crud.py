@@ -13,6 +13,7 @@ from db.models import (
     GeofenceState,
     Task,
     BatteryAlertLog,
+    AdminUser,
 )
 
 
@@ -990,3 +991,223 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
         "earned_coins": earned_coins,
         "wishlist": wishlist
     }
+
+
+# ==============================================================================
+# SUPER-ADMIN & OWNER BOT CRUD OPERATIONS
+# ==============================================================================
+
+async def get_admin_user(session: AsyncSession, user_id: int) -> Optional[AdminUser]:
+    res = await session.execute(select(AdminUser).where(AdminUser.id == user_id))
+    return res.scalar_one_or_none()
+
+
+async def is_owner_or_admin(session: AsyncSession, user_id: int, username: Optional[str] = None) -> Tuple[bool, bool]:
+    """Returns (is_admin, is_owner). Checks owner username 'fayzbek1331' and DB admin table."""
+    from config import settings
+    clean_uname = (username or "").lower().lstrip("@")
+    owner_uname = (settings.OWNER_USERNAME or "fayzbek1331").lower().lstrip("@")
+    
+    if clean_uname and clean_uname == owner_uname:
+        return True, True
+    
+    admin = await get_admin_user(session, user_id)
+    if admin:
+        return True, admin.is_owner
+    return False, False
+
+
+async def ensure_owner_registered(session: AsyncSession, user_id: int, username: Optional[str], full_name: Optional[str]) -> AdminUser:
+    """Ensures @fayzbek1331 is registered with is_owner=True in DB."""
+    from config import settings
+    admin = await get_admin_user(session, user_id)
+    clean_username = (username or settings.OWNER_USERNAME).lstrip("@")
+    if not admin:
+        admin = AdminUser(
+            id=user_id,
+            username=clean_username,
+            full_name=full_name or "Fayzbek (Loyiha asoschisi)",
+            is_owner=True
+        )
+        session.add(admin)
+        await session.commit()
+    else:
+        if not admin.is_owner or admin.username != clean_username:
+            admin.is_owner = True
+            admin.username = clean_username
+            await session.commit()
+    return admin
+
+
+async def add_admin_user(session: AsyncSession, user_id: int, username: Optional[str], full_name: Optional[str], added_by: int) -> AdminUser:
+    admin = await get_admin_user(session, user_id)
+    clean_uname = username.lstrip("@") if username else None
+    if not admin:
+        admin = AdminUser(
+            id=user_id,
+            username=clean_uname,
+            full_name=full_name or f"Admin #{user_id}",
+            is_owner=False,
+            added_by=added_by
+        )
+        session.add(admin)
+    else:
+        if clean_uname:
+            admin.username = clean_uname
+    await session.commit()
+    return admin
+
+
+async def remove_admin_user(session: AsyncSession, user_id: int) -> bool:
+    res = await session.execute(delete(AdminUser).where(AdminUser.id == user_id, AdminUser.is_owner == False))
+    await session.commit()
+    return res.rowcount > 0
+
+
+async def list_admin_users(session: AsyncSession) -> List[AdminUser]:
+    res = await session.execute(select(AdminUser).order_by(AdminUser.is_owner.desc(), AdminUser.created_at.asc()))
+    return list(res.scalars().all())
+
+
+async def get_system_overview_stats(session: AsyncSession) -> dict:
+    from sqlalchemy import func
+    total_users = (await session.execute(select(func.count(User.id)))).scalar_one() or 0
+    total_parents = (await session.execute(select(func.count(User.id)).where(User.role == "parent"))).scalar_one() or 0
+    total_children = (await session.execute(select(func.count(User.id)).where(User.role == "child"))).scalar_one() or 0
+    active_sos = (await session.execute(select(func.count(User.id)).where(User.is_sos_active == True))).scalar_one() or 0
+    total_geofences = (await session.execute(select(func.count(Geofence.id)))).scalar_one() or 0
+    total_tasks = (await session.execute(select(func.count(Task.id)))).scalar_one() or 0
+    total_locs = (await session.execute(select(func.count(LocationLog.id)))).scalar_one() or 0
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_users = (await session.execute(select(func.count(User.id)).where(User.created_at >= today_start))).scalar_one() or 0
+
+    return {
+        "total_users": total_users,
+        "total_parents": total_parents,
+        "total_children": total_children,
+        "today_users": today_users,
+        "active_sos": active_sos,
+        "total_geofences": total_geofences,
+        "total_tasks": total_tasks,
+        "total_location_logs": total_locs
+    }
+
+
+async def search_user_by_query(session: AsyncSession, query: str) -> Optional[User]:
+    """Search user by numeric ID or username."""
+    from sqlalchemy import func
+    clean_q = query.strip()
+    if clean_q.startswith("@"):
+        clean_q = clean_q[1:]
+
+    if clean_q.isdigit():
+        user = await get_user(session, int(clean_q))
+        if user:
+            return user
+
+    res = await session.execute(select(User).where(func.lower(User.username) == clean_q.lower()))
+    user = res.scalar_one_or_none()
+    if user:
+        return user
+
+    # Try searching by full_name pattern
+    res_name = await session.execute(select(User).where(User.full_name.ilike(f"%{clean_q}%")).limit(1))
+    return res_name.scalar_one_or_none()
+
+
+async def get_user_full_dossier(session: AsyncSession, user_id: int) -> Optional[dict]:
+    user = await get_user(session, user_id)
+    if not user:
+        return None
+
+    latest_loc = await get_latest_location(session, user_id)
+    parents = await get_parents_for_child(session, user_id)
+    children = await get_children_for_parent(session, user_id)
+    tasks = await get_tasks_for_child(session, user_id) if user.role == "child" else []
+    geofences = await get_geofences_for_parent(session, user_id) if user.role == "parent" else []
+
+    rate_coins, rate_som = await get_coin_rate_for_user(session, user_id)
+    balance_som = calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
+
+    return {
+        "user": user,
+        "latest_location": latest_loc,
+        "parents": parents,
+        "children": children,
+        "tasks": tasks,
+        "geofences": geofences,
+        "balance_som": balance_som,
+        "rate_coins": rate_coins,
+        "rate_som": rate_som
+    }
+
+
+async def get_active_sos_list(session: AsyncSession) -> List[User]:
+    res = await session.execute(select(User).where(User.is_sos_active == True).order_by(User.updated_at.desc()))
+    return list(res.scalars().all())
+
+
+async def get_recent_registered_users(session: AsyncSession, limit: int = 10) -> List[User]:
+    res = await session.execute(select(User).order_by(User.created_at.desc()).limit(limit))
+    return list(res.scalars().all())
+
+
+async def force_regenerate_user_code(session: AsyncSession, user_id: int) -> Optional[str]:
+    """Force regenerates pairing code or web access code for a user."""
+    user = await get_user(session, user_id)
+    if not user:
+        return None
+    if user.role == "parent":
+        for _ in range(30):
+            chars = string.ascii_uppercase + string.digits
+            new_code = "".join(random.choices(chars, k=6))
+            existing = await session.execute(
+                select(User).where((User.pairing_code == new_code) | (User.web_access_code == new_code))
+            )
+            if not existing.scalars().first():
+                user.pairing_code = new_code
+                user.pairing_code_created_at = datetime.now(timezone.utc)
+                await session.commit()
+                return new_code
+    else:
+        for _ in range(30):
+            new_code = "".join(random.choices(string.digits, k=6))
+            existing = await session.execute(
+                select(User).where((User.web_access_code == new_code) | (User.pairing_code == new_code))
+            )
+            if not existing.scalars().first():
+                user.web_access_code = new_code
+                await session.commit()
+                return new_code
+    return None
+
+
+async def unlink_all_for_user(session: AsyncSession, user_id: int) -> int:
+    """Deletes all ParentChildLink associations for this user (both parent and child side)."""
+    res = await session.execute(
+        delete(ParentChildLink).where(
+            or_(ParentChildLink.parent_id == user_id, ParentChildLink.child_id == user_id)
+        )
+    )
+    await session.commit()
+    return res.rowcount
+
+
+async def add_coins_to_user(session: AsyncSession, user_id: int, amount: int) -> Optional[int]:
+    """Adds (or removes if negative) virtual coins to a user."""
+    user = await get_user(session, user_id)
+    if not user:
+        return None
+    user.virtual_balance = max(0, (user.virtual_balance or 0) + amount)
+    await session.commit()
+    return user.virtual_balance
+
+
+async def get_all_user_ids_by_role(session: AsyncSession, role: Optional[str] = None) -> List[int]:
+    """Get all user Telegram IDs, optionally filtered by role ('parent', 'child', or None for all)."""
+    stmt = select(User.id).where(User.is_active == True)
+    if role in ("parent", "child"):
+        stmt = stmt.where(User.role == role)
+    res = await session.execute(stmt)
+    return list(res.scalars().all())

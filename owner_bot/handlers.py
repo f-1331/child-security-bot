@@ -1,0 +1,886 @@
+import asyncio
+import logging
+from typing import Any, Callable, Dict, Optional
+
+from aiogram import Bot, F, Router
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    TelegramObject,
+)
+
+import db.crud as crud
+from config import settings
+from db.database import async_session_maker
+from owner_bot.keyboards import (
+    get_admin_management_keyboard,
+    get_broadcast_confirm_keyboard,
+    get_broadcast_target_keyboard,
+    get_cancel_keyboard,
+    get_owner_main_keyboard,
+    get_unlink_confirm_keyboard,
+    get_user_dossier_inline_keyboard,
+)
+from owner_bot.logger_buffer import get_recent_logs
+from owner_bot.service import (
+    format_dossier_html,
+    get_main_bot,
+    get_system_diagnostic_html,
+)
+
+logger = logging.getLogger("smart_parental_tracker.owner_bot")
+
+owner_bot_router = Router()
+
+
+# ==============================================================================
+# FSM STATES
+# ==============================================================================
+class OwnerBotStates(StatesGroup):
+    waiting_for_user_query = State()
+    waiting_for_direct_msg = State()
+    waiting_for_add_admin_id = State()
+    waiting_for_broadcast_content = State()
+    waiting_for_broadcast_confirm = State()
+
+
+# ==============================================================================
+# AUTHORIZATION MIDDLEWARE
+# ==============================================================================
+async def check_admin_access(event: TelegramObject) -> Optional[Dict[str, Any]]:
+    """Check whether the user is @fayzbek1331 or registered admin.
+    Returns dict with user details and admin flags if allowed, or None if forbidden.
+    """
+    from_user = getattr(event, "from_user", None)
+    if not from_user:
+        return None
+
+    clean_uname = (from_user.username or "").lower().lstrip("@")
+    owner_uname = (settings.OWNER_USERNAME or "fayzbek1331").lower().lstrip("@")
+    is_owner = bool(clean_uname and clean_uname == owner_uname)
+
+    async with async_session_maker() as session:
+        if is_owner:
+            await crud.ensure_owner_registered(
+                session,
+                from_user.id,
+                from_user.username,
+                from_user.full_name,
+            )
+            return {"is_admin": True, "is_owner": True, "user_id": from_user.id}
+
+        admin = await crud.get_admin_user(session, from_user.id)
+        if admin:
+            return {
+                "is_admin": True,
+                "is_owner": admin.is_owner,
+                "user_id": from_user.id,
+            }
+
+    return None
+
+
+@owner_bot_router.message.outer_middleware()
+@owner_bot_router.callback_query.outer_middleware()
+async def owner_bot_auth_middleware(
+    handler: Callable[[TelegramObject, Dict[str, Any]], Any],
+    event: TelegramObject,
+    data: Dict[str, Any],
+) -> Any:
+    """Outer middleware rejecting any user not matching @fayzbek1331 or admin_users."""
+    auth_info = await check_admin_access(event)
+    if not auth_info:
+        from_user = getattr(event, "from_user", None)
+        user_desc = (
+            f"ID: {from_user.id}, @{from_user.username}, {from_user.full_name}"
+            if from_user
+            else "Noma'lum"
+        )
+        logger.warning(f"Unauthorized access attempt to Owner Bot: {user_desc}")
+
+        if isinstance(event, Message):
+            await event.answer(
+                "⛔️ <b>Kirish taqiqlangan!</b>\n\n"
+                f"Ushbu bot faqat tizim asoschisi (<b>@{settings.OWNER_USERNAME}</b>) "
+                "va vakolatli adminlar uchun maxsus himoyalangan boshqaruv konsolidir.\n\n"
+                f"Sizning ID: <code>{from_user.id if from_user else 'N/A'}</code>\n"
+                "<i>Ruxsatsiz urinish xavfsizlik jurnalida qayd etildi.</i>",
+                parse_mode="HTML",
+            )
+        elif isinstance(event, CallbackQuery):
+            await event.answer("⛔️ Kirish huquqingiz yo'q!", show_alert=True)
+        return None
+
+    data["auth_info"] = auth_info
+    return await handler(event, data)
+
+
+# ==============================================================================
+# CANCEL & NAVIGATION
+# ==============================================================================
+@owner_bot_router.message(F.text == "❌ Bekor qilish")
+async def handle_cancel(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    await state.clear()
+    await message.answer(
+        "Amal bekor qilindi. Boshqaruv panelidasiz:",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+    )
+
+
+@owner_bot_router.callback_query(F.data == "adm_back_main")
+async def handle_back_main(callback: CallbackQuery, state: FSMContext, auth_info: Dict[str, Any]):
+    await state.clear()
+    await callback.message.edit_text(
+        "Boshqaruv konsoli bosh menyusiga qaytdingiz. Kerakli bo'limni tanlang:",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+# ==============================================================================
+# /START & DASHBOARD MENU
+# ==============================================================================
+@owner_bot_router.message(CommandStart())
+@owner_bot_router.message(Command("menu"))
+async def handle_start(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    await state.clear()
+    role_title = "👑 Bosh Ega (Loyiha asoschisi)" if auth_info["is_owner"] else "👮‍♂️ Tizim Administratori"
+
+    welcome_text = (
+        f"👑 <b>Assalomu alaykum, {message.from_user.full_name}!</b>\n"
+        f"Mansab: <b>{role_title}</b>\n\n"
+        "🛡 <b>Smart Parental Control & Child Security</b>\n"
+        "Maxsus Ega va Administrator Boshqaruv Tizimiga xush kelibsiz!\n\n"
+        "⚡️ <i>Bu konsol orqali barcha foydalanuvchilar dosyesini, jonli GPS telemetriyasini, "
+        "ulanish kodlarini tekshirishingiz, muammolarni bartaraf etishingiz va platformani to'liq "
+        "boshqarishingiz mumkin.</i>\n\n"
+        "Quyidagi boshqaruv panelidan kerakli bo'limni tanlang:"
+    )
+    await message.answer(
+        welcome_text,
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML",
+    )
+
+
+# ==============================================================================
+# STATISTIKA
+# ==============================================================================
+@owner_bot_router.message(F.text == "📊 Umumiy Statistika")
+@owner_bot_router.message(Command("stats"))
+async def handle_statistics(message: Message):
+    async with async_session_maker() as session:
+        stats = await crud.get_system_overview_stats(session)
+
+    text = (
+        "📊 <b>PLATFORMA BO'YICHA UMUMIY STATISTIKA</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 <b>Jami foydalanuvchilar:</b> <code>{stats['total_users']}</code> ta\n"
+        f"👨‍👩‍👧 <b>Ota-onalar (Parents):</b> <code>{stats['total_parents']}</code> ta\n"
+        f"👦 <b>Farzandlar (Children):</b> <code>{stats['total_children']}</code> ta\n"
+        f"📅 <b>Bugun ro'yxatdan o'tganlar:</b> <code>{stats['today_users']}</code> ta\n\n"
+        f"🚨 <b>Faol SOS signallari:</b> <code>{stats['active_sos']}</code> ta\n"
+        f"🛡 <b>Nazorat zonalari (Geofence):</b> <code>{stats['total_geofences']}</code> ta\n"
+        f"📋 <b>Berilgan vazifalar (Tasks):</b> <code>{stats['total_tasks']}</code> ta\n"
+        f"📍 <b>Saqlangan GPS nuqtalar:</b> <code>{stats['total_location_logs']}</code> ta\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🟢 <i>Barcha hisoblagichlar real vaqt rejimida yangilanadi.</i>"
+    )
+    await message.answer(text, parse_mode="HTML")
+
+
+# ==============================================================================
+# FOYDALANUVCHINI TEKSHIRISH (ID / USERNAME QUERY)
+# ==============================================================================
+@owner_bot_router.message(F.text == "🔍 ID bo'yicha tekshirish")
+@owner_bot_router.message(Command("inspect"))
+async def prompt_user_query(message: Message, state: FSMContext):
+    await state.set_state(OwnerBotStates.waiting_for_user_query)
+    await message.answer(
+        "🔍 <b>Foydalanuvchini qidirish va tekshirish</b>\n\n"
+        "Iltimos, foydalanuvchining <b>Telegram ID</b> raqamini yoki <b>@username</b>ini kiriting:\n\n"
+        "<i>Misol: <code>123456789</code> yoki <code>@fayzbek1331</code></i>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_user_query)
+async def process_user_query(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    query = message.text.strip()
+    await state.clear()
+
+    async with async_session_maker() as session:
+        user = await crud.search_user_by_query(session, query)
+        if not user:
+            await message.answer(
+                f"❌ <b>'{query}'</b> bo'yicha foydalanuvchi topilmadi.\n"
+                "Iltimos, Telegram ID yoki to'g'ri usernameni qayta tekshirib ko'ring.",
+                reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+                parse_mode="HTML",
+            )
+            return
+
+        dossier = await crud.get_user_full_dossier(session, user.id)
+
+    if not dossier:
+        await message.answer("❌ Dosye yuklashda xatolik yuz berdi.", reply_markup=get_owner_main_keyboard(auth_info["is_owner"]))
+        return
+
+    text = format_dossier_html(dossier)
+    kb = get_user_dossier_inline_keyboard(
+        user_id=user.id,
+        is_sos=user.is_sos_active,
+        has_location=bool(dossier.get("latest_location")),
+        role=user.role,
+    )
+    await message.answer(
+        text,
+        reply_markup=kb,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+    await message.answer(
+        "Tanlangan foydalanuvchi ustida quyidagi amallarni bajarishingiz mumkin:",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+    )
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_inspect:"))
+async def callback_inspect_user(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        dossier = await crud.get_user_full_dossier(session, user_id)
+
+    if not dossier:
+        await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
+        return
+
+    user = dossier["user"]
+    text = format_dossier_html(dossier)
+    kb = get_user_dossier_inline_keyboard(
+        user_id=user.id,
+        is_sos=user.is_sos_active,
+        has_location=bool(dossier.get("latest_location")),
+        role=user.role,
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=kb,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+    await callback.answer()
+
+
+# ==============================================================================
+# DOSSIER ACTIONS: LOCATION, DIRECT MSG, CODE REGEN, SOS, COINS, UNLINK
+# ==============================================================================
+@owner_bot_router.callback_query(F.data.startswith("adm_loc:"))
+async def callback_show_location(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        loc = await crud.get_latest_location(session, user_id)
+        user = await crud.get_user(session, user_id)
+
+    if not loc:
+        await callback.answer("Ushbu foydalanuvchining GPS signali hali mavjud emas!", show_alert=True)
+        return
+
+    name = user.full_name if user else f"Foydalanuvchi #{user_id}"
+    await callback.message.bot.send_location(
+        chat_id=callback.message.chat.id,
+        latitude=loc.latitude,
+        longitude=loc.longitude,
+    )
+    await callback.message.answer(
+        f"📍 <b>{name}</b>ning so'nggi ma'lum joylashuvi.\n"
+        f"🎯 Aniqlik: ±{loc.accuracy:.1f}m | Tezlik: {loc.speed or 0:.1f} km/s\n"
+        f"🔗 <a href=\"https://www.google.com/maps?q={loc.latitude},{loc.longitude}\">Google Maps orqali ko'rish</a>",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_msg:"))
+async def callback_prompt_direct_message(callback: CallbackQuery, state: FSMContext):
+    user_id = int(callback.data.split(":")[1])
+    await state.set_state(OwnerBotStates.waiting_for_direct_msg)
+    await state.update_data(target_user_id=user_id)
+
+    await callback.message.answer(
+        f"✉️ <b>Foydalanuvchi (ID: <code>{user_id}</code>)ga to'g'ridan-to'g'ri xabar yuborish</b>\n\n"
+        "Iltimos, yubormoqchi bo'lgan xabaringiz matnini kiriting:",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_direct_msg)
+async def process_direct_message(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    data = await state.get_data()
+    target_user_id = data.get("target_user_id")
+    await state.clear()
+
+    if not target_user_id:
+        await message.answer("Xatolik: Maqsadli foydalanuvchi aniqlanmadi.", reply_markup=get_owner_main_keyboard(auth_info["is_owner"]))
+        return
+
+    msg_body = (
+        "🛡 <b>Tizim Ma'muriyatidan Rasmiy Xabar:</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{message.text}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Aloqa va savollar uchun: @{settings.OWNER_USERNAME}</i>"
+    )
+
+    # Attempt to send via main public bot first
+    main_bot = get_main_bot()
+    delivered = False
+    err_msg = ""
+
+    if main_bot:
+        try:
+            await main_bot.send_message(chat_id=target_user_id, text=msg_body, parse_mode="HTML")
+            delivered = True
+        except Exception as e:
+            err_msg = str(e)
+
+    # Fallback to current owner bot
+    if not delivered:
+        try:
+            await message.bot.send_message(chat_id=target_user_id, text=msg_body, parse_mode="HTML")
+            delivered = True
+        except Exception as e:
+            err_msg = str(e)
+
+    if delivered:
+        await message.answer(
+            f"✅ Xabar foydalanuvchiga (ID: <code>{target_user_id}</code>) muvaffaqiyatli yetkazildi!",
+            reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(
+            f"❌ Xabarni yetkazib bo'lmadi.\nSabab: <code>{err_msg}</code>\n"
+            "<i>(Ehtimol, foydalanuvchi botni bloklagan yoki hali start bosmagan)</i>",
+            reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+            parse_mode="HTML",
+        )
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_code:"))
+async def callback_regenerate_code(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        new_code = await crud.force_regenerate_user_code(session, user_id)
+        user = await crud.get_user(session, user_id)
+
+    if not new_code:
+        await callback.answer("Kod yangilashda xatolik yuz berdi!", show_alert=True)
+        return
+
+    code_type = "Ulanish kodi (Pairing)" if user.role == "parent" else "Veb kirish kodi (Web PIN)"
+    await callback.message.answer(
+        f"✅ <b>Foydalanuvchi ({user.full_name}) uchun yangi {code_type}:</b>\n\n"
+        f"🔑 <code>{new_code}</code>\n\n"
+        "<i>Ushbu yangi kodni foydalanuvchiga taqdim etishingiz mumkin.</i>",
+        parse_mode="HTML",
+    )
+    await callback.answer("Kod muvaffaqiyatli yangilandi!")
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_sos_off:"))
+async def callback_clear_sos(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        await crud.set_child_sos(session, user_id, is_active=False)
+
+    # Notify child
+    main_bot = get_main_bot()
+    if main_bot:
+        try:
+            await main_bot.send_message(
+                chat_id=user_id,
+                text="🟢 <b>SOS Favqulodda holati ma'muriyat tomonidan bekor qilindi.</b> Tizim normal rejimda ishlamoqda.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    await callback.message.answer(
+        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning SOS favqulodda holati bekor qilindi.",
+        parse_mode="HTML",
+    )
+    await callback.answer("SOS bekor qilindi!")
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_coin:"))
+async def callback_add_coins(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    user_id = int(parts[1])
+    amount = int(parts[2])
+
+    async with async_session_maker() as session:
+        new_balance = await crud.add_coins_to_user(session, user_id, amount)
+
+    # Notify child
+    main_bot = get_main_bot()
+    if main_bot:
+        try:
+            await main_bot.send_message(
+                chat_id=user_id,
+                text=f"🎁 <b>Tabriklaymiz!</b> Administrator sizga <b>+{amount} ta virtual tanga</b> taqdim etdi!\n"
+                     f"💰 Yangi balansingiz: <b>{new_balance} tanga</b>.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+    await callback.answer(f"✅ +{amount} tanga qo'shildi! Yangi balans: {new_balance}", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_unlink_ask:"))
+async def callback_unlink_ask(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    await callback.message.edit_text(
+        f"⚠️ <b>DIQQAT! Foydalanuvchi (ID: <code>{user_id}</code>)ning barcha oilaviy aloqalarini uzmoqchimisiz?</b>\n\n"
+        "Bu amal ushbu foydalanuvchining barcha ota-onalar va bolalar bilan bog'lanishlarini tozalaydi. "
+        "Ular qaytadan ulanish kodini kiritishlari kerak bo'ladi.",
+        reply_markup=get_unlink_confirm_keyboard(user_id),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_unlink_do:"))
+async def callback_unlink_execute(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        count = await crud.unlink_all_for_user(session, user_id)
+
+    await callback.message.edit_text(
+        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning <b>{count} ta</b> bog'lanishi muvaffaqiyatli tozalandi.",
+        parse_mode="HTML",
+    )
+    await callback.answer("Bog'lanishlar tozalandi!")
+
+
+# ==============================================================================
+# FAOL SOS SIGNALLARI
+# ==============================================================================
+@owner_bot_router.message(F.text == "🚨 Faol SOS signallari")
+@owner_bot_router.message(Command("sos_list"))
+async def handle_active_sos(message: Message):
+    async with async_session_maker() as session:
+        sos_users = await crud.get_active_sos_list(session)
+
+    if not sos_users:
+        await message.answer(
+            "🟢 <b>Ajoyib! Hozirda hech qanday faol SOS signali yo'q.</b>\n"
+            "Barcha bolalar xavfsiz va xotirjam holatda.",
+            parse_mode="HTML",
+        )
+        return
+
+    text = f"🚨 <b>FAOL SOS SIGNALLARI ({len(sos_users)} ta):</b>\n\n"
+    buttons = []
+    for u in sos_users:
+        name = u.full_name or f"Farzand #{u.id}"
+        uname = f"(@{u.username})" if u.username else ""
+        text += f"• 🚨 <b>{name}</b> {uname} — ID: <code>{u.id}</code>\n"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🔍 {name} dosyesini ochish",
+                callback_data=f"adm_inspect:{u.id}",
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+# ==============================================================================
+# ADMINLARNI BOSHQARISH (FAQAT @fayzbek1331 UCHUN)
+# ==============================================================================
+@owner_bot_router.message(F.text == "👥 Adminlarni boshqarish")
+@owner_bot_router.message(Command("admins"))
+async def handle_admin_management(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer(
+            f"⛔️ <b>Ruxsat etilmagan!</b>\n\nAdminlarni qo'shish va o'chirish huquqi "
+            f"faqat loyiha egasi (<b>@{settings.OWNER_USERNAME}</b>)ga tegishli.",
+            parse_mode="HTML",
+        )
+        return
+
+    await message.answer(
+        "👥 <b>ADMINLARNI BOSHQARISH MARKAZI</b>\n\n"
+        "Siz bu bo'lim orqali yangi adminlar qo'shishingiz, mavjud adminlar ro'yxatini ko'rishingiz "
+        "yoki ularning huquqlarini bekor qilishingiz mumkin.",
+        reply_markup=get_admin_management_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.callback_query(F.data == "adm_list_admins")
+async def callback_list_admins(callback: CallbackQuery):
+    async with async_session_maker() as session:
+        admins = await crud.list_admin_users(session)
+
+    text = "📋 <b>TIZIM ADMINISTRATORLARI RO'YXATI:</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
+    for a in admins:
+        role = "👑 Bosh Ega (Loyiha asoschisi)" if a.is_owner else "👮‍♂️ Admin"
+        uname = f"@{a.username}" if a.username else "N/A"
+        date_str = a.created_at.strftime("%d.%m.%Y") if a.created_at else ""
+        text += (
+            f"• <b>{a.full_name or 'Admin'}</b> ({uname})\n"
+            f"  ID: <code>{a.id}</code> | Mansab: <b>{role}</b>\n"
+            f"  Sana: {date_str}\n\n"
+        )
+    text += "━━━━━━━━━━━━━━━━━━━━━"
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back_to_admins")]]
+    )
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "adm_back_to_admins")
+async def callback_back_to_admins(callback: CallbackQuery):
+    await callback.message.edit_text(
+        "👥 <b>ADMINLARNI BOSHQARISH MARKAZI</b>\n\nKerakli amalni tanlang:",
+        reply_markup=get_admin_management_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "adm_add_admin_prompt")
+async def callback_prompt_add_admin(callback: CallbackQuery, state: FSMContext, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega admin qo'sha oladi!", show_alert=True)
+        return
+
+    await state.set_state(OwnerBotStates.waiting_for_add_admin_id)
+    await callback.message.answer(
+        "➕ <b>Yangi Admin qo'shish</b>\n\n"
+        "Admin qilmoqchi bo'lgan foydalanuvchining <b>Telegram ID</b> raqamini kiriting:\n\n"
+        "<i>(Foydalanuvchi o'z ID raqamini @userinfobot orqali bilishi mumkin)</i>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_add_admin_id)
+async def process_add_admin_id(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    text = message.text.strip()
+    if not text.isdigit():
+        await message.answer("❌ Telegram ID faqat raqamlardan iborat bo'lishi kerak. Qaytadan kiriting:")
+        return
+
+    new_admin_id = int(text)
+    await state.clear()
+
+    async with async_session_maker() as session:
+        # Check if user exists in users table to pull their username/name if possible
+        existing_user = await crud.get_user(session, new_admin_id)
+        uname = existing_user.username if existing_user else None
+        fname = existing_user.full_name if existing_user else f"Admin #{new_admin_id}"
+
+        admin = await crud.add_admin_user(
+            session=session,
+            user_id=new_admin_id,
+            username=uname,
+            full_name=fname,
+            added_by=message.from_user.id,
+        )
+
+    await message.answer(
+        f"✅ <b>Yangi Administrator muvaffaqiyatli qo'shildi!</b>\n\n"
+        f"👤 Ism: <b>{admin.full_name}</b>\n"
+        f"🆔 Telegram ID: <code>{admin.id}</code>\n"
+        f"🌐 Username: @{admin.username if admin.username else 'N/A'}\n\n"
+        f"<i>Endi ushbu foydalanuvchi @child_security_owner_bot ga kirib boshqaruvdan foydalanishi mumkin.</i>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.callback_query(F.data == "adm_remove_admin_list")
+async def callback_remove_admin_list(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega adminni o'chira oladi!", show_alert=True)
+        return
+
+    async with async_session_maker() as session:
+        admins = await crud.list_admin_users(session)
+
+    secondary_admins = [a for a in admins if not a.is_owner]
+    if not secondary_admins:
+        await callback.answer("Hozirda boshqa ikkilamchi adminlar yo'q.", show_alert=True)
+        return
+
+    buttons = []
+    for a in secondary_admins:
+        name = a.full_name or f"Admin #{a.id}"
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🗑 {name} (ID: {a.id})",
+                callback_data=f"adm_del_admin:{a.id}",
+            )
+        ])
+    buttons.append([InlineKeyboardButton(text="🔙 Orqaga", callback_data="adm_back_to_admins")])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await callback.message.edit_text(
+        "🗑 <b>O'chirmoqchi bo'lgan adminni tanlang:</b>",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_del_admin:"))
+async def callback_delete_admin(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega adminni o'chira oladi!", show_alert=True)
+        return
+
+    target_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        removed = await crud.remove_admin_user(session, target_id)
+
+    if removed:
+        await callback.answer(f"Admin (ID: {target_id}) o'chirildi!", show_alert=True)
+        await callback.message.edit_text(
+            f"✅ Admin (ID: <code>{target_id}</code>) vakolatlari bekor qilindi.",
+            reply_markup=get_admin_management_keyboard(),
+            parse_mode="HTML",
+        )
+    else:
+        await callback.answer("Ushbu adminni o'chirib bo'lmadi (ehtimol u bosh ega).", show_alert=True)
+
+
+# ==============================================================================
+# HAMMAGA XABAR (BROADCAST)
+# ==============================================================================
+@owner_bot_router.message(F.text == "📢 Hammaga xabar (Broadcast)")
+@owner_bot_router.message(Command("broadcast"))
+async def handle_broadcast_start(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "📢 <b>OMMAVIY XABAR TARQATISH (BROADCAST)</b>\n\n"
+        "Xabarni qaysi auditoriyaga yubormoqchisiz?",
+        reply_markup=get_broadcast_target_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.callback_query(F.data.startswith("bc_target:"))
+async def callback_broadcast_target(callback: CallbackQuery, state: FSMContext):
+    target = callback.data.split(":")[1]
+    await state.update_data(broadcast_target=target)
+    await state.set_state(OwnerBotStates.waiting_for_broadcast_content)
+
+    target_labels = {
+        "parent": "Ota-onalarga",
+        "child": "Farzandlarga",
+        "all": "Barcha foydalanuvchilarga",
+    }
+    await callback.message.edit_text(
+        f"📢 Tanlangan auditoriya: <b>{target_labels.get(target, target)}</b>\n\n"
+        "Endi yubormoqchi bo'lgan xabaringizni yozing (matn, emoji, formatlash yoki rasm bilan):",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_broadcast_content)
+async def process_broadcast_content(message: Message, state: FSMContext):
+    await state.update_data(
+        content_text=message.html_text or message.text or message.caption or "",
+        photo_file_id=message.photo[-1].file_id if message.photo else None,
+    )
+    await state.set_state(OwnerBotStates.waiting_for_broadcast_confirm)
+
+    preview_prefix = "📋 <b>XABAR KELTIRILGAN PREVIEW:</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
+    await message.answer(
+        preview_prefix + (message.html_text or message.text or message.caption or ""),
+        parse_mode="HTML",
+    )
+    await message.answer(
+        "Haqiqatan ham ushbu xabarni yuborishni tasdiqlaysizmi?",
+        reply_markup=get_broadcast_confirm_keyboard(),
+    )
+
+
+@owner_bot_router.callback_query(F.data == "bc_confirm_send")
+async def callback_broadcast_execute(callback: CallbackQuery, state: FSMContext, auth_info: Dict[str, Any]):
+    data = await state.get_data()
+    await state.clear()
+
+    target = data.get("broadcast_target", "all")
+    content_text = data.get("content_text", "")
+    photo_file_id = data.get("photo_file_id")
+
+    role_filter = None if target == "all" else target
+    async with async_session_maker() as session:
+        user_ids = await crud.get_all_user_ids_by_role(session, role_filter)
+
+    total_count = len(user_ids)
+    if total_count == 0:
+        await callback.message.edit_text("❌ Yuborish uchun hech qanday foydalanuvchi topilmadi.")
+        return
+
+    status_msg = await callback.message.edit_text(
+        f"🚀 <b>Tarqatish boshlandi...</b>\nJami: <code>{total_count}</code> ta foydalanuvchi.",
+        parse_mode="HTML",
+    )
+
+    main_bot = get_main_bot() or callback.message.bot
+    success = 0
+    failed = 0
+
+    for idx, uid in enumerate(user_ids, 1):
+        try:
+            if photo_file_id:
+                await main_bot.send_photo(
+                    chat_id=uid,
+                    photo=photo_file_id,
+                    caption=content_text,
+                    parse_mode="HTML",
+                )
+            else:
+                await main_bot.send_message(
+                    chat_id=uid,
+                    text=content_text,
+                    parse_mode="HTML",
+                )
+            success += 1
+        except Exception:
+            failed += 1
+
+        # Periodic status update & Telegram rate limiting avoidance
+        if idx % 25 == 0 or idx == total_count:
+            try:
+                await status_msg.edit_text(
+                    f"🚀 <b>Tarqatilmoqda...</b>\n"
+                    f"Yuborildi: <code>{idx}/{total_count}</code>\n"
+                    f"✅ Yetkazildi: {success} | ❌ Xatolik: {failed}",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        await asyncio.sleep(0.04)
+
+    await status_msg.edit_text(
+        f"🎉 <b>Ommaviy xabar muvaffaqiyatli tarqatildi!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 Jami qamrov: <b>{total_count}</b> ta\n"
+        f"✅ Yetkazildi: <b>{success}</b> ta\n"
+        f"❌ Xatolik (bot bloklangan): <b>{failed}</b> ta\n"
+        f"━━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="HTML",
+    )
+    await callback.message.answer(
+        "Boshqaruv menyusidasiz:",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+    )
+
+
+# ==============================================================================
+# SERVER & TIZIM HOLATI DIAGNOSTIKASI
+# ==============================================================================
+@owner_bot_router.message(F.text == "🌐 Server & Xavfsizlik")
+@owner_bot_router.message(Command("server"))
+async def handle_system_status(message: Message):
+    async with async_session_maker() as session:
+        html = await get_system_diagnostic_html(session)
+    await message.answer(html, parse_mode="HTML", disable_web_page_preview=True)
+
+
+# ==============================================================================
+# SO'NGGI FOYDALANUVCHILAR
+# ==============================================================================
+@owner_bot_router.message(F.text == "📜 So'nggi foydalanuvchilar")
+@owner_bot_router.message(Command("recent"))
+async def handle_recent_users(message: Message):
+    async with async_session_maker() as session:
+        users = await crud.get_recent_registered_users(session, limit=10)
+
+    if not users:
+        await message.answer("Hozircha tizimda foydalanuvchilar yo'q.")
+        return
+
+    text = "📜 <b>SO'NGGI RO'YXATDAN O'TGAN 10 FOYDALANUVCHI:</b>\n━━━━━━━━━━━━━━━━━━━━━\n"
+    buttons = []
+    for u in users:
+        role_icon = "👨‍👩‍👧" if u.role == "parent" else "👦" if u.role == "child" else "⚪️"
+        uname = f"@{u.username}" if u.username else "N/A"
+        date_str = u.created_at.strftime("%d.%m %H:%M") if u.created_at else ""
+        text += (
+            f"{role_icon} <b>{u.full_name or 'Foydalanuvchi'}</b> ({uname})\n"
+            f"  ID: <code>{u.id}</code> | Roli: <code>{u.role}</code> | Vaqt: {date_str}\n\n"
+        )
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"🔍 {u.full_name or u.id} dosyesi",
+                callback_data=f"adm_inspect:{u.id}",
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+# ==============================================================================
+# SERVER LOGLARI
+# ==============================================================================
+@owner_bot_router.message(F.text == "📑 Server loglari")
+@owner_bot_router.message(Command("logs"))
+async def handle_server_logs(message: Message):
+    logs = get_recent_logs(limit=25)
+    log_text = "\n".join(logs)
+    if len(log_text) > 3800:
+        log_text = log_text[-3800:]
+
+    html = (
+        "📑 <b>SO'NGGI TIZIM JURNALLARI (LOGS):</b>\n"
+        f"<pre>{log_text}</pre>"
+    )
+    await message.answer(html, parse_mode="HTML")
+
+
+# ==============================================================================
+# /HELP QO'LLANMA
+# ==============================================================================
+@owner_bot_router.message(Command("help"))
+async def handle_help(message: Message, auth_info: Dict[str, Any]):
+    help_text = (
+        "📖 <b>EGA VA ADMIN BOTI BO'YICHA QO'LLANMA</b>\n\n"
+        "⚡️ <b>Asosiy buyruqlar:</b>\n"
+        "• /start yoki /menu — Asosiy boshqaruv menyusini ochish\n"
+        "• /stats — Platforma bo'yicha jonli statistika\n"
+        "• /inspect — ID yoki username bo'yicha foydalanuvchini to'liq tekshirish\n"
+        "• /sos_list — Faol SOS signallari ro'yxati\n"
+        "• /admins — Adminlarni boshqarish (faqat bosh ega uchun)\n"
+        "• /broadcast — Ommaviy xabar yuborish\n"
+        "• /server — Server, xotira, DB va xavfsizlik diagnostikasi\n"
+        "• /recent — So'nggi ro'yxatdan o'tgan foydalanuvchilar\n"
+        "• /logs — Real vaqt rejimida server loglari\n\n"
+        "👑 <b>Bosh ega:</b> @fayzbek1331"
+    )
+    await message.answer(
+        help_text,
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML",
+    )

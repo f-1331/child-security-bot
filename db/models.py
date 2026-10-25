@@ -148,3 +148,14 @@ class BatteryAlertLog(Base):
     child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     last_alerted_level: Mapped[int] = mapped_column(Integer)
     last_alerted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)  # Telegram User ID
+    username: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    full_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+    added_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

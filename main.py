@@ -25,6 +25,8 @@ from db.database import init_db
 from bot.handlers import router as bot_router
 from api.telemetry import router as telemetry_router, set_bot_instance
 from api.webapp_api import router as webapp_router
+import owner_bot.logger_buffer  # noqa: F401
+from owner_bot import owner_bot_router, set_main_bot
 
 # Configure logging
 logging.basicConfig(
@@ -392,6 +394,50 @@ async def start_bot(bot: Bot, dp: Dispatcher):
         )
 
 
+async def start_owner_bot(bot: Bot, dp: Dispatcher):
+    """Run dedicated Owner Bot aiogram polling loop for @fayzbek1331."""
+    try:
+        owner_info = await bot.get_me()
+        logger.info(f"Owner Bot initialized successfully: @{owner_info.username} (ID: {owner_info.id})")
+        from aiogram.types import BotCommand
+        try:
+            await bot.set_my_commands([
+                BotCommand(command="start", description="👑 Boshqaruv menyusi"),
+                BotCommand(command="stats", description="📊 Tizim statistikasi"),
+                BotCommand(command="inspect", description="🔍 ID / username bo'yicha tekshirish"),
+                BotCommand(command="sos_list", description="🚨 Faol SOS signallari"),
+                BotCommand(command="admins", description="👥 Adminlarni boshqarish"),
+                BotCommand(command="broadcast", description="📢 Ommaviy xabar yuborish"),
+                BotCommand(command="server", description="🌐 Server & Xavfsizlik holati"),
+                BotCommand(command="recent", description="📜 So'nggi foydalanuvchilar"),
+                BotCommand(command="logs", description="📑 Server loglari"),
+                BotCommand(command="help", description="ℹ️ Qo'llanma"),
+            ])
+            logger.info("Owner Bot commands registered successfully in Telegram.")
+        except Exception as e:
+            logger.warning(f"Could not register Owner Bot commands: {e}")
+
+        try:
+            await bot.set_my_description(
+                description=(
+                    "👑 Smart Parental Control — Maxsus Ega va Boshqaruv Boti.\n\n"
+                    "Ushbu bot faqat loyiha asoschisi (@fayzbek1331) va tizim administratorlari "
+                    "uchun mo'ljallangan yopiq boshqaruv konsolidir."
+                )
+            )
+            await bot.set_my_short_description(
+                short_description="Smart Parental Control platformasi yopiq boshqaruv konsoli."
+            )
+        except Exception as e:
+            logger.warning(f"Could not register Owner Bot description: {e}")
+
+        await bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Owner Bot polling active.")
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(f"Owner Bot polling error: {e}")
+
+
 async def render_keepalive():
     """Periodically ping self on Render so the service never sleeps."""
     render_url = settings.RESOLVED_BACKEND_URL
@@ -437,6 +483,7 @@ async def main():
     )
 
     bot: Bot | None = None
+    owner_bot: Bot | None = None
     tasks = []
 
     if is_token_configured:
@@ -445,6 +492,7 @@ async def main():
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         set_bot_instance(bot)
+        set_main_bot(bot)
 
         dp = Dispatcher(storage=MemoryStorage())
         dp.include_router(bot_router)
@@ -464,6 +512,22 @@ async def main():
             "========================================================================"
         )
         tasks.append(asyncio.create_task(start_uvicorn(server)))
+
+    # Start dedicated Owner Bot if configured
+    is_owner_token_configured = (
+        bool(settings.OWNER_BOT_TOKEN)
+        and ":" in settings.OWNER_BOT_TOKEN
+    )
+    if is_owner_token_configured:
+        owner_bot = Bot(
+            token=settings.OWNER_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        owner_dp = Dispatcher(storage=MemoryStorage())
+        owner_dp.include_router(owner_bot_router)
+        tasks.append(asyncio.create_task(start_owner_bot(owner_bot, owner_dp)))
+        logger.info("Dedicated Owner Bot task scheduled.")
+
     tasks.append(asyncio.create_task(render_keepalive()))
 
     try:
@@ -477,6 +541,8 @@ async def main():
             server.should_exit = True
         if bot:
             await bot.session.close()
+        if owner_bot:
+            await owner_bot.session.close()
         logger.info("System gracefully stopped.")
 
 
