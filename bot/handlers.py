@@ -545,9 +545,10 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
             await state.set_state(ChildLinkState.waiting_for_code)
             await callback.message.answer(
                 "👦 **Farzand hisobi tanlandi!**\n\n"
-                "Iltimos, ota-onangiz bergan **6 xonali ulanish kodi**ni kiriting (masalan: `123456`):\n\n"
-                "*(Agar adashib bosgan bo'lsangiz, bekor qilish uchun /chiqish deb yozing)*",
-                reply_markup=ReplyKeyboardRemove(),
+                "1️⃣ Ota-onangiz bergan **6 xonali ulanish kodi**ni kiriting (masalan: `123456`)\n"
+                "2️⃣ Yoki pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasi orqali joylashuvingizni ulashing!\n\n"
+                "*(Rolni almashtirish uchun istalgan payt /chiqish deb yozing)*",
+                reply_markup=get_child_main_keyboard(),
                 parse_mode="Markdown"
             )
 
@@ -1516,6 +1517,24 @@ async def on_phone_invalid_media(message: Message):
     )
 
 
+@router.message(F.text.in_([
+    "📍 Jonli joylashuvimni yuborish",
+    "Jonli joylashuvimni yuborish",
+    "jonli joylashuvni yuborish",
+    "Jonli joylashuv",
+    "jonli joylashuv",
+    "Joylashuvni yuborish"
+]))
+async def on_send_location_text_hint(message: Message):
+    """Guide user on how to share native location if sent as text."""
+    await message.answer(
+        "📍 **Jonli joylashuvni yuborish uchun:**\n\n"
+        "1️⃣ Pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasini bosing va 'Ulashish / Share' ni tasdiqlang.\n"
+        "2️⃣ Yoki Telegram xabar yozish joyidagi qog'oz qisqich (📎) belgisini bosib, **Joylashuv (Location)** -> **Jonli joylashuvimni ulashish (Share Live Location)** ni tanlang.",
+        parse_mode="Markdown"
+    )
+
+
 # ---------------------------------------------------------
 # Child Native Location Handling (Location Button or Live)
 # ---------------------------------------------------------
@@ -1540,26 +1559,46 @@ async def on_location_received(message: Message, bot: Bot):
         if not user:
             return
 
-        # If user is parent and sent location -> Ask to add as Kerakli joy!
+        # If user is parent and sent location:
         if user.role == "parent":
-            caption = message.caption or "Yangi kerakli joy"
-            await crud.create_geofence(
-                session=session,
-                parent_id=user_id,
-                name=caption,
-                latitude=lat,
-                longitude=lon,
-                radius_meters=200.0
-            )
-            await session.commit()
-            await message.answer(
-                f"✅ **Yangi kerakli joy avtomatik qo'shildi!**\n\n"
-                f"📍 Nomi: **{caption}**\n"
-                f"📏 Radiusi: **200 metr**\n"
-                f"📌 Koordinata: `{lat:.5f}, {lon:.5f}`\n\n"
-                f"Farzandingiz ushbu manzilga yetib borganda sizga darhol xabar keladi.",
-                parse_mode="Markdown"
-            )
+            caption = message.caption
+            if caption:
+                await crud.create_geofence(
+                    session=session,
+                    parent_id=user_id,
+                    name=caption,
+                    latitude=lat,
+                    longitude=lon,
+                    radius_meters=200.0
+                )
+                await session.commit()
+                await message.answer(
+                    f"✅ **Yangi kerakli joy avtomatik qo'shildi!**\n\n"
+                    f"📍 Nomi: **{caption}**\n"
+                    f"📏 Radiusi: **200 metr**\n"
+                    f"📌 Koordinata: `{lat:.5f}, {lon:.5f}`\n\n"
+                    f"Farzandingiz ushbu manzilga yetib borganda sizga darhol xabar keladi.",
+                    reply_markup=get_parent_main_keyboard(user_id),
+                    parse_mode="Markdown"
+                )
+            else:
+                await crud.log_location(
+                    session=session,
+                    child_id=user_id,
+                    latitude=lat,
+                    longitude=lon,
+                    accuracy=accuracy,
+                    source=source
+                )
+                await session.commit()
+                await message.answer(
+                    f"📍 **Joylashuvingiz muvaffaqiyatli qabul qilindi!**\n\n"
+                    f"📌 Koordinata: `{lat:.5f}, {lon:.5f}`\n"
+                    f"🕒 Vaqt: Hozirgina\n\n"
+                    f"Farzandingiz joylashuvini ko'rish uchun **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.",
+                    reply_markup=get_parent_main_keyboard(user_id),
+                    parse_mode="Markdown"
+                )
             return
 
         if user.role != "child":

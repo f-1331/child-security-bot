@@ -32,13 +32,17 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
                     text="👦 Farzand ilovasi (.apk)",
                     callback_data="download_child_apk"
                 ),
-            ],
-            [
                 InlineKeyboardButton(
-                    text="💻 Noutbuk / Kompyuter uchun dastur",
+                    text="💻 Noutbuk dasturi",
                     callback_data="download_desktop"
                 ),
             ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Web App (Sayt)ni ochish",
+                    web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                )
+            ]
         ]
     )
 
@@ -46,7 +50,7 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Includes Parent App, Child App, Laptop App, Web App Mini App, Instant Location, Kerakli joylar, Telemetry, and Tasks.
+    Includes Parent App, Child App, Laptop App, Instant Location, Send Live Location, Web App Mini App, Kerakli joylar, Telemetry, and Tasks.
     """
     keyboard = [
         [
@@ -56,11 +60,11 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True)
         ],
         [
-            KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
-            KeyboardButton(text="📍 Kerakli joylar")
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
+            KeyboardButton(text="📱 Ilovalar & Ekran tahlili")
         ],
         [
             KeyboardButton(text="📍 Kerakli joylar"),
@@ -75,17 +79,15 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔑 Saytga kirish kodi")
         ],
         [
-            KeyboardButton(text="📊 Bugungi hisobot")
+            KeyboardButton(text="📊 Bugungi hisobot"),
+            KeyboardButton(text="💰 Tangalar kursini sozlash")
         ],
         [
-            KeyboardButton(text="💰 Tangalar kursini sozlash"),
-            KeyboardButton(text="📞 Oila kontaktlari")
+            KeyboardButton(text="📞 Oila kontaktlari"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish")
         ],
         [
-            KeyboardButton(text="🔄 Rolni o'zgartirish"),
-            KeyboardButton(text="ℹ️ Yordam")
-        ],
-        [
+            KeyboardButton(text="ℹ️ Yordam"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -100,26 +102,28 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
 def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
-    Includes Child App, Laptop App, Web App Mini App, instant SOS, Check-in, Request Location, and Emergency Call.
+    Includes Parent App, Child App, Laptop App, instant Location sharing, instant SOS, Check-in, Web App, and Emergency Call.
     """
     keyboard = [
         [
+            KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
             KeyboardButton(text="👦 Farzand ilovasi (APK)"),
             KeyboardButton(text="💻 Noutbuk uchun dastur")
         ],
         [
-            KeyboardButton(text="🚨 SOS (Xavf tugmasi)"),
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True),
+            KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [
-            KeyboardButton(text="✅ Yetib keldim (Check-in)"),
-            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq")
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
+            KeyboardButton(text="✅ Yetib keldim (Check-in)")
         ],
         [
-            KeyboardButton(text="🔑 Saytga kirish kodi"),
-            KeyboardButton(text="📋 Vazifalarim va Tangalar")
+            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq"),
+            KeyboardButton(text="🔑 Saytga kirish kodi")
         ],
         [
+            KeyboardButton(text="📋 Vazifalarim va Tangalar"),
             KeyboardButton(text="👨‍👩‍👧 Ota-onamni taklif qilish")
         ],
         [
