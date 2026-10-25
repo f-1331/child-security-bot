@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
     BACKEND_URL: str = "https://child-security-site.onrender.com"
     TGCLOUD_APP_TOKEN: Optional[str] = "app8899084854:fQx23Fw3jvg07CZMwsRlO6T24EjFAvzoS4d4O24Uu9A"
+    OWNER_TGCLOUD_APP_TOKEN: Optional[str] = "app8832152819:GBXPNDMrWyAo1-NmelZJbwnkrGcl_8C1PaPqL_s6Yqw"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     PORT: Optional[int] = None
