@@ -235,6 +235,13 @@ async def trigger_sentry_debug_error():
     return {"result": division_by_zero}
 
 
+@app.get("/api/system/logs", tags=["System"], include_in_schema=False)
+async def get_system_logs():
+    """Retrieve recent server execution logs for remote diagnosis."""
+    from owner_bot.logger_buffer import get_recent_logs
+    return {"logs": get_recent_logs(50)}
+
+
 @app.get("/api/neon/status", tags=["Neon"])
 async def neon_status_endpoint():
     """Verify and return the operational status of wired Neon services."""
