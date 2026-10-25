@@ -1622,4 +1622,70 @@ button {
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
 }
 
+/* --------------------------------------------------------------------------
+   9. INTERACTIVE ROUTE PLAYBACK SCRUBBER & HUD
+   -------------------------------------------------------------------------- */
+#routePlaybackHud {
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.25);
+  animation: slideUpHud 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpHud {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#routeTimelineScrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+#routeTimelineScrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.9);
+  transition: transform 0.15s ease;
+}
+
+#routeTimelineScrubber::-webkit-slider-thumb:hover,
+#routeTimelineScrubber::-webkit-slider-thumb:active {
+  transform: scale(1.3);
+}
+
+#routeTimelineScrubber::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.9);
+}
+
+.filter-time-pill {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.filter-time-pill:active {
+  transform: scale(0.94);
+}
+
 

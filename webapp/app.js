@@ -2866,49 +2866,349 @@ function renderHistoryToMapAndList(points) {
     routeLayerGroup.addTo(map);
   }
 
-  // 4. Populate Detailed History List with Repeat Badges & Zoom triggers
-  if (container) {
-    container.innerHTML = points
-      .slice()
-      .reverse()
-      .map((p, idx) => {
-        const origIdx = points.length - 1 - idx;
-        const visitMeta = pointVisitInfo.get(origIdx) || { passNumber: 1, totalPasses: 1 };
-        let timeWithSec = "--:--:--";
-        if (p.recorded_at) {
-          let s = String(p.recorded_at).trim();
-          if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
-          timeWithSec = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        }
-        const batteryStr = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
-        const chargingIcon = p.is_charging ? "⚡" : "";
-        const speedStr = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/s` : "Piyoda";
+  // 4. Calculate Route Stats & Populate Summary Cards
+  calculateRouteStats(points);
 
-        const repeatBadge = visitMeta.totalPasses > 1
-          ? `<span class="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full text-[10px] font-black">🔁 ${visitMeta.passNumber}-o'tish (jami ${visitMeta.totalPasses})</span>`
-          : "";
+  // 5. Populate Detailed History List with Repeat Badges & Zoom triggers
+  renderHistoryListItems(points);
+}
 
-        return `
-          <div onclick="focusRoutePoint(${p.latitude}, ${p.longitude})" class="bg-slate-800/80 hover:bg-slate-800 active:scale-[0.99] border border-slate-700/60 hover:border-amber-500/50 p-2.5 rounded-2xl flex flex-col gap-1.5 text-xs transition cursor-pointer shadow-sm">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <span class="w-5 h-5 rounded-full bg-amber-400/20 text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40">#${origIdx + 1}</span>
-                <span class="font-mono text-slate-200 text-xs font-bold">${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}</span>
-              </div>
-              <span class="font-mono font-black text-amber-400 text-xs">🕒 ${timeWithSec}</span>
-            </div>
-            <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-700/40">
-              <div class="flex items-center gap-2">
-                <span>🔋 ${batteryStr} ${chargingIcon}</span>
-                <span>⚡ ${speedStr}</span>
-              </div>
-              <div>${repeatBadge}</div>
-            </div>
-          </div>
-        `;
-      })
-      .join("");
+// Calculate total distance, max speed, stops, and steps
+function calculateRouteStats(points) {
+  if (!points || points.length === 0) {
+    document.getElementById("statTotalDistance") && (document.getElementById("statTotalDistance").textContent = "0.0 km");
+    document.getElementById("statTotalSteps") && (document.getElementById("statTotalSteps").textContent = "0 ta");
+    document.getElementById("statMaxSpeed") && (document.getElementById("statMaxSpeed").textContent = "0 km/s");
+    document.getElementById("statTotalStops") && (document.getElementById("statTotalStops").textContent = "0 joy");
+    return;
   }
+
+  let totalDistM = 0;
+  let maxSpd = 0;
+  let stops = 0;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const d = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+    if (d < 50000) {
+      totalDistM += d;
+    }
+    if (p2.speed && p2.speed > maxSpd) {
+      maxSpd = Math.round(p2.speed);
+    }
+    if (p1.recorded_at && p2.recorded_at) {
+      const t1 = new Date(p1.recorded_at.endsWith("Z") ? p1.recorded_at : p1.recorded_at + "Z").getTime();
+      const t2 = new Date(p2.recorded_at.endsWith("Z") ? p2.recorded_at : p2.recorded_at + "Z").getTime();
+      if ((t2 - t1) >= 300000 && d <= 30) { // 5 minutes stopped in one place
+        stops++;
+      }
+    }
+  }
+
+  const distKm = (totalDistM / 1000).toFixed(1);
+  const elDist = document.getElementById("statTotalDistance");
+  const elSteps = document.getElementById("statTotalSteps");
+  const elSpeed = document.getElementById("statMaxSpeed");
+  const elStops = document.getElementById("statTotalStops");
+
+  if (elDist) elDist.textContent = `${distKm} km`;
+  if (elSteps) elSteps.textContent = `${points.length} ta`;
+  if (elSpeed) elSpeed.textContent = `${maxSpd} km/s`;
+  if (elStops) elStops.textContent = `${stops} joy`;
+}
+
+// Filter History List by Time of Day (All, Morning, Afternoon, Evening)
+let currentHistoryFilter = "all";
+function filterHistoryByTime(filterType) {
+  haptic("light");
+  currentHistoryFilter = filterType;
+
+  document.querySelectorAll(".filter-time-pill").forEach((btn) => {
+    btn.classList.remove("bg-blue-600", "text-white");
+    btn.classList.add("bg-slate-800", "text-slate-300");
+  });
+  const activeBtn = document.getElementById(`btnFilterTime-${filterType}`);
+  if (activeBtn) {
+    activeBtn.classList.remove("bg-slate-800", "text-slate-300");
+    activeBtn.classList.add("bg-blue-600", "text-white");
+  }
+
+  renderHistoryListItems(routePointsCache);
+}
+
+function renderHistoryListItems(points) {
+  const container = document.getElementById("historyListContainer");
+  if (!container || !points) return;
+
+  let filtered = points.slice();
+  if (currentHistoryFilter === "morning") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 6 && h < 12;
+    });
+  } else if (currentHistoryFilter === "afternoon") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 12 && h < 18;
+    });
+  } else if (currentHistoryFilter === "evening") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 18 || h < 6;
+    });
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Ushbu vaqt oralig'ida harakatlar topilmadi.</p>`;
+    return;
+  }
+
+  container.innerHTML = filtered
+    .slice()
+    .reverse()
+    .map((p, idx) => {
+      const origIdx = points.indexOf(p);
+      let timeWithSec = "--:--:--";
+      if (p.recorded_at) {
+        let s = String(p.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        timeWithSec = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+      const batteryStr = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
+      const chargingIcon = p.is_charging ? "⚡" : "";
+      const speedStr = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/s` : "Piyoda";
+
+      return `
+        <div onclick="focusRoutePoint(${p.latitude}, ${p.longitude})" class="bg-slate-800/80 hover:bg-slate-800 active:scale-[0.99] border border-slate-700/60 hover:border-amber-500/50 p-2.5 rounded-2xl flex flex-col gap-1.5 text-xs transition cursor-pointer shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-amber-400/20 text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40">#${origIdx + 1}</span>
+              <span class="font-mono text-slate-200 text-xs font-bold">${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}</span>
+            </div>
+            <span class="font-mono font-black text-amber-400 text-xs">🕒 ${timeWithSec}</span>
+          </div>
+          <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-700/40">
+            <div class="flex items-center gap-2">
+              <span>🔋 ${batteryStr} ${chargingIcon}</span>
+              <span>⚡ ${speedStr}</span>
+            </div>
+            <span class="text-cyan-400 font-bold text-[10px] flex items-center gap-1">📍 Xaritada ko'rish</span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+// =========================================================
+// 8. INTERACTIVE ROUTE PLAYBACK HUD & SCRUBBER ENGINE
+// =========================================================
+let replayCurrentStep = 0;
+let replaySpeedMultiplier = 1; // 1x, 2x, 4x, 8x
+let isReplayPlaying = false;
+
+function showRoutePlaybackHud() {
+  const hud = document.getElementById("routePlaybackHud");
+  if (!hud) return;
+  hud.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+
+  const scrubber = document.getElementById("routeTimelineScrubber");
+  if (scrubber && routePointsCache.length > 0) {
+    scrubber.min = "0";
+    scrubber.max = String(routePointsCache.length - 1);
+    scrubber.value = String(replayCurrentStep);
+  }
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function hideRoutePlaybackHud() {
+  const hud = document.getElementById("routePlaybackHud");
+  if (hud) hud.classList.add("hidden");
+}
+
+function updateRoutePlaybackHud(stepIdx) {
+  if (!routePointsCache || routePointsCache.length === 0) return;
+  const clampedIdx = Math.max(0, Math.min(stepIdx, routePointsCache.length - 1));
+  const pt = routePointsCache[clampedIdx];
+
+  const timeEl = document.getElementById("routeHudTimeText");
+  const speedEl = document.getElementById("routeHudSpeedText");
+  const statsEl = document.getElementById("routeHudStatsText");
+  const scrubber = document.getElementById("routeTimelineScrubber");
+
+  if (pt && pt.recorded_at) {
+    const s = pt.recorded_at.endsWith("Z") ? pt.recorded_at : pt.recorded_at + "Z";
+    const tStr = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    if (timeEl) timeEl.textContent = `🕒 ${tStr}`;
+  }
+  if (speedEl) {
+    const spd = typeof pt.speed === "number" && pt.speed > 0 ? `${Math.round(pt.speed)} km/s` : "0 km/s";
+    speedEl.textContent = `⚡ ${spd}`;
+  }
+  if (statsEl) {
+    statsEl.textContent = `${clampedIdx + 1} / ${routePointsCache.length} ta`;
+  }
+  if (scrubber) {
+    scrubber.value = String(clampedIdx);
+  }
+}
+
+function onRouteScrubberInput(val) {
+  const idx = parseInt(val, 10);
+  if (isNaN(idx) || !routePointsCache || !routePointsCache[idx]) return;
+  replayCurrentStep = idx;
+
+  ensureReplayMarkerAt(replayCurrentStep);
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function stepRoutePrev() {
+  haptic("light");
+  if (replayCurrentStep > 0) {
+    replayCurrentStep--;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+  }
+}
+
+function stepRouteNext() {
+  haptic("light");
+  if (routePointsCache && replayCurrentStep < routePointsCache.length - 1) {
+    replayCurrentStep++;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+  }
+}
+
+function cycleRouteSpeed() {
+  haptic("light");
+  const speeds = [1, 2, 4, 8];
+  const curIdx = speeds.indexOf(replaySpeedMultiplier);
+  replaySpeedMultiplier = speeds[(curIdx + 1) % speeds.length];
+
+  const btn = document.getElementById("btnRouteSpeed");
+  if (btn) btn.textContent = `${replaySpeedMultiplier}x`;
+
+  if (isReplayPlaying) {
+    clearInterval(replayTimer);
+    const intervalMs = Math.max(80, Math.round(500 / replaySpeedMultiplier));
+    replayTimer = setInterval(routePlaybackTick, intervalMs);
+  }
+}
+
+function ensureReplayMarkerAt(idx) {
+  if (!routePointsCache || !routePointsCache[idx]) return;
+  const pt = routePointsCache[idx];
+
+  if (!replayMarker && map) {
+    const replayIcon = L.divIcon({
+      html: `
+        <div class="relative transform -translate-x-1/2 -translate-y-1/2">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-600 flex items-center justify-center text-white shadow-2xl border-2 border-white animate-pulse">
+            🚶‍♂️
+          </div>
+          <span class="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full border border-white animate-ping"></span>
+        </div>
+      `,
+      className: "custom-replay-icon",
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+    replayMarker = L.marker([pt.latitude, pt.longitude], { icon: replayIcon }).addTo(map);
+  } else if (replayMarker) {
+    smoothMoveMarker(replayMarker, pt.latitude, pt.longitude, 350);
+  }
+
+  if (map) {
+    map.panTo([pt.latitude, pt.longitude], { animate: true, duration: 0.35 });
+  }
+}
+
+function routePlaybackTick() {
+  if (!routePointsCache || routePointsCache.length < 2) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+    updatePlayPauseButtonUI();
+    return;
+  }
+
+  replayCurrentStep++;
+  if (replayCurrentStep >= routePointsCache.length) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+    updatePlayPauseButtonUI();
+    showToast("🏁 Harakat yakunlandi");
+    return;
+  }
+
+  ensureReplayMarkerAt(replayCurrentStep);
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function toggleRoutePlayPause() {
+  haptic("medium");
+  if (!routePointsCache || routePointsCache.length < 2) {
+    showToast("Harakat nuqtalari yetarli emas");
+    return;
+  }
+
+  if (isReplayPlaying) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+  } else {
+    if (replayCurrentStep >= routePointsCache.length - 1) {
+      replayCurrentStep = 0;
+    }
+    isReplayPlaying = true;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+
+    clearInterval(replayTimer);
+    const intervalMs = Math.max(80, Math.round(500 / replaySpeedMultiplier));
+    replayTimer = setInterval(routePlaybackTick, intervalMs);
+  }
+
+  updatePlayPauseButtonUI();
+}
+
+function updatePlayPauseButtonUI() {
+  const icon = document.getElementById("iconRoutePlayPause");
+  const label = document.getElementById("labelRoutePlayPause");
+  const btn = document.getElementById("btnRoutePlayPause");
+
+  if (isReplayPlaying) {
+    if (icon) icon.setAttribute("data-lucide", "pause");
+    if (label) label.textContent = "Pauza";
+    if (btn) {
+      btn.classList.remove("bg-amber-500", "hover:bg-amber-400");
+      btn.classList.add("bg-rose-500", "hover:bg-rose-400");
+    }
+  } else {
+    if (icon) icon.setAttribute("data-lucide", "play");
+    if (label) label.textContent = replayCurrentStep > 0 ? "Davom" : "Boshlash";
+    if (btn) {
+      btn.classList.remove("bg-rose-500", "hover:bg-rose-400");
+      btn.classList.add("bg-amber-500", "hover:bg-amber-400");
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function exitRouteView() {
+  haptic("light");
+  clearInterval(replayTimer);
+  isReplayPlaying = false;
+  if (replayMarker && map) {
+    try { map.removeLayer(replayMarker); } catch (e) {}
+    replayMarker = null;
+  }
+  hideRoutePlaybackHud();
+  toggleRouteHistory(false);
 }
 
 // Render Demo History
@@ -2928,7 +3228,7 @@ function renderDemoHistory() {
   renderHistoryToMapAndList(demoPoints);
 }
 
-// Smooth Route Playback Animation
+// Smooth Route Playback Animation Entrypoint
 function startRoutePlayback() {
   haptic("medium");
   if (!routePointsCache || routePointsCache.length < 2) {
@@ -2941,52 +3241,13 @@ function startRoutePlayback() {
     switchTab("map");
   }
   toggleMapUiVisibility(true); // Automatically switch to fullscreen mode!
-  showToast("▶ Marshrut harakati animatsiyada ko'rsatilmoqda...");
 
-  if (replayMarker && map) {
-    try { map.removeLayer(replayMarker); } catch (e) {}
-    replayMarker = null;
-  }
+  // Reveal the interactive Scrubber HUD
+  showRoutePlaybackHud();
 
-  const replayIcon = L.divIcon({
-    html: `
-      <div class="relative transform -translate-x-1/2 -translate-y-1/2">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-600 flex items-center justify-center text-white shadow-2xl border-2 border-white animate-pulse">
-          🚶‍♂️
-        </div>
-        <span class="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full border border-white animate-ping"></span>
-      </div>
-    `,
-    className: "custom-replay-icon",
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
-  });
-
-  const firstPt = routePointsCache[0];
-  replayMarker = L.marker([firstPt.latitude, firstPt.longitude], { icon: replayIcon }).addTo(map);
-  map.panTo([firstPt.latitude, firstPt.longitude], { animate: true, duration: 0.5 });
-
-  let step = 0;
-  clearInterval(replayTimer);
-
-  replayTimer = setInterval(() => {
-    step++;
-    if (step >= routePointsCache.length) {
-      clearInterval(replayTimer);
-      showToast("🏁 Harakat yakunlandi");
-      setTimeout(() => {
-        if (replayMarker && map) {
-          try { map.removeLayer(replayMarker); } catch (e) {}
-          replayMarker = null;
-        }
-      }, 3000);
-      return;
-    }
-
-    const currentPt = routePointsCache[step];
-    smoothMoveMarker(replayMarker, currentPt.latitude, currentPt.longitude, 400);
-    map.panTo([currentPt.latitude, currentPt.longitude], { animate: true, duration: 0.4 });
-  }, 500);
+  // Reset and start playback
+  replayCurrentStep = 0;
+  toggleRoutePlayPause();
 }
 
 // Toggle route history polyline on map
@@ -2999,12 +3260,10 @@ async function toggleRouteHistory(forceState) {
     switchTab("map");
   }
 
-  // Automatically switch to FULLSCREEN mode!
-  toggleMapUiVisibility(true);
-
   const btn = document.getElementById("btnToggleRoute");
 
   if (isRouteVisible) {
+    toggleMapUiVisibility(true);
     if (btn) {
       btn.classList.add("text-amber-400");
       btn.classList.remove("text-slate-500");
@@ -3022,6 +3281,7 @@ async function toggleRouteHistory(forceState) {
         }
       } catch (e) {}
     }
+    showRoutePlaybackHud();
     showToast("🗺️ Marshrut to'liq xaritada ochildi");
   } else {
     if (routeLayerGroup && map) {
@@ -3031,6 +3291,7 @@ async function toggleRouteHistory(forceState) {
       btn.classList.remove("text-amber-400");
       btn.classList.add("text-slate-500");
     }
+    hideRoutePlaybackHud();
     showToast("Marshrut yashirildi");
   }
 }
