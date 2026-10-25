@@ -354,6 +354,7 @@ async def start_bot(bot: Bot, dp: Dispatcher):
             from aiogram.types import BotCommand
             await bot.set_my_commands([
                 BotCommand(command="start", description="🔄 Bosh menyu / Botni yangilash"),
+                BotCommand(command="clean", description="🧹 Chatni tozalash (Eski xabarlarni o'chirish)"),
                 BotCommand(command="parent_app", description="👨‍👩‍👧 Ota-ona ilovasi (Boshqaruv & Xarita)"),
                 BotCommand(command="child_app", description="👦 Farzand ilovasi (24/7 Foniy GPS & SOS)"),
                 BotCommand(command="app", description="🌐 Web App (Sayt)ni ochish"),
@@ -411,6 +412,8 @@ async def start_owner_bot(bot: Bot, dp: Dispatcher):
                 BotCommand(command="server", description="🌐 Server & Xavfsizlik holati"),
                 BotCommand(command="recent", description="📜 So'nggi foydalanuvchilar"),
                 BotCommand(command="logs", description="📑 Server loglari"),
+                BotCommand(command="backup", description="💾 Baza zaxirasini yuklab olish"),
+                BotCommand(command="clean", description="🧹 Chatni tozalash"),
                 BotCommand(command="help", description="ℹ️ Qo'llanma"),
             ])
             logger.info("Owner Bot commands registered successfully in Telegram.")

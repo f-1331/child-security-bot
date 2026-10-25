@@ -3866,6 +3866,42 @@ async def on_parent_invite_coparent(message: Message, bot: Bot):
         )
 
 
+@router.message(Command("clean"))
+@router.message(Command("tozala"))
+@router.message(F.text.lower().in_(["🧹 chatni tozalash", "chatni tozalash", "tozalash", "/clean", "/tozala"]))
+async def handle_clean_chat_command(message: Message, bot: Bot):
+    """Purge up to 50 previous messages and ads from chat and deliver a fresh, clean menu."""
+    from bot.anti_ad_middleware import purge_chat_history
+    start_mid = message.message_id
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    await purge_chat_history(bot, message.chat.id, start_mid, limit=50)
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, message.from_user.id)
+        role = user.role if user else "unassigned"
+        if role == "parent":
+            kb = get_parent_main_keyboard(message.from_user.id)
+        elif role == "child":
+            kb = get_child_main_keyboard()
+        else:
+            kb = get_role_selection_keyboard()
+
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=(
+                "🧹 **Chat to'liq tozalandi!**\n\n"
+                "Barcha eski xabarlar, e'lonlar va nojo'ya qoldiqlar muvaffaqiyatli o'chirildi. "
+                "Quyidagi xavfsiz boshqaruv menyusidan foydalanishingiz mumkin:"
+            ),
+            reply_markup=kb,
+            parse_mode="Markdown"
+        )
+
+
 @router.message(F.text)
 async def fallback_text_handler(message: Message):
     """Fallback handler for unrecognized text messages: automatically restores and refreshes the main keyboard."""

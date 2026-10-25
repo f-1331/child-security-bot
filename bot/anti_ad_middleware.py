@@ -70,6 +70,27 @@ async def delete_after_delay(msg: Message, delay: int = 7):
         pass
 
 
+async def clean_preceding_messages(bot, chat_id: int, current_mid: int, count: int = 5):
+    """Purge preceding messages in case ad was delivered across multiple bubbles."""
+    for mid in range(current_mid - 1, max(1, current_mid - count), -1):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+        except Exception:
+            pass
+
+
+async def purge_chat_history(bot, chat_id: int, start_mid: int, limit: int = 50) -> int:
+    """Retroactively delete old clutter, messages, and ads in chat history."""
+    deleted = 0
+    for mid in range(start_mid, max(1, start_mid - limit), -1):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
+            deleted += 1
+        except Exception:
+            pass
+    return deleted
+
+
 class AntiAdShieldMiddleware(BaseMiddleware):
     """Outer middleware intercepting and auto-deleting all advertisements and spam messages."""
 
@@ -96,6 +117,10 @@ class AntiAdShieldMiddleware(BaseMiddleware):
                 except Exception:
                     pass
 
+                asyncio.create_task(
+                    clean_preceding_messages(message.bot, message.chat.id, message.message_id, 5)
+                )
+
                 try:
                     warn = await message.answer(
                         "🚫 <b>Reklama va spam taqiqlangan!</b>\n\n"
@@ -117,6 +142,10 @@ class AntiAdShieldMiddleware(BaseMiddleware):
                 await message.delete()
             except Exception:
                 pass
+
+            asyncio.create_task(
+                clean_preceding_messages(message.bot, message.chat.id, message.message_id, 5)
+            )
 
             try:
                 warn = await message.answer(

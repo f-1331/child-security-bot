@@ -871,6 +871,25 @@ async def handle_backup_command(message: Message):
     await send_db_backup_to_chat(message.bot, message.chat.id)
 
 
+@owner_bot_router.message(Command("clean"))
+@owner_bot_router.message(Command("tozala"))
+async def handle_owner_clean_chat(message: Message, bot: Bot):
+    """Purge up to 50 previous messages and ads from chat in owner bot."""
+    from bot.anti_ad_middleware import purge_chat_history
+    start_mid = message.message_id
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    await purge_chat_history(bot, message.chat.id, start_mid, limit=50)
+    await message.answer(
+        "🧹 <b>Konsol to'liq tozalandi!</b>\n\nBarcha eski xabarlar va qoldiqlar o'chirildi.",
+        reply_markup=get_owner_main_keyboard(True),
+        parse_mode="HTML"
+    )
+
+
 # ==============================================================================
 # /HELP QO'LLANMA
 # ==============================================================================

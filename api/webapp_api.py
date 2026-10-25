@@ -329,6 +329,8 @@ async def verify_telegram_auth_endpoint(
     Prevents unauthorized access and Telegram ID spoofing.
     """
     user_data = verify_telegram_init_data(payload.init_data, settings.BOT_TOKEN)
+    if (not user_data or "id" not in user_data) and settings.OWNER_BOT_TOKEN:
+        user_data = verify_telegram_init_data(payload.init_data, settings.OWNER_BOT_TOKEN)
     if not user_data or "id" not in user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
