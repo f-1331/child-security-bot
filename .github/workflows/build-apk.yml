@@ -36,11 +36,11 @@ jobs:
       - name: Build APK and Play Store AAB with Gradle
         run: |
           cd android
-          gradle assembleDebug bundleRelease --no-daemon --stacktrace
+          gradle assembleDebug bundle --no-daemon --stacktrace
           mkdir -p build_dist
-          cp app/build/outputs/apk/parent/debug/app-parent-debug.apk build_dist/ChildSecurity_Parent.apk || cp app/build/outputs/apk/debug/app-debug.apk build_dist/ChildSecurity_Parent.apk
-          cp app/build/outputs/apk/child/debug/app-child-debug.apk build_dist/ChildSecurity_Child.apk || cp app/build/outputs/apk/debug/app-debug.apk build_dist/ChildSecurity_Child.apk
-          cp build_dist/ChildSecurity_Child.apk build_dist/app-debug.apk
+          find app/build/outputs/apk/ -name "*parent*debug*.apk" -exec cp {} build_dist/ChildSecurity_Parent.apk \;
+          find app/build/outputs/apk/ -name "*child*debug*.apk" -exec cp {} build_dist/ChildSecurity_Child.apk \;
+          cp build_dist/ChildSecurity_Child.apk build_dist/app-debug.apk || cp build_dist/ChildSecurity_Parent.apk build_dist/app-debug.apk || true
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
