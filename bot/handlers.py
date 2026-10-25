@@ -123,44 +123,74 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                         return
 
                     target_child_id = int(clean_arg)
+
+                    # Agar bola o'zining havolasini o'zi bosgan bo'lsa
+                    if target_child_id == user_id:
+                        await message.answer(
+                            "ℹ️ **Bu sizning shaxsiy ulanish havolangiz!**\n\n"
+                            "Ota-onangiz sizning xavfsizligingizni kuzatib borishi va topshiriqlar bera olishi uchun "
+                            "ushbu havolani **ota-onangizga yuboring**.",
+                            reply_markup=get_child_main_keyboard(),
+                            parse_mode="Markdown"
+                        )
+                        return
+
                     child_user = await crud.get_user(session, target_child_id)
                     if not child_user:
                         child_user, _ = await crud.get_or_create_user(session, target_child_id, role="child")
+
                     if child_user:
-                        await crud.update_user_role(session, user_id, "parent")
-                        await crud.link_parent_child(session, user_id, target_child_id, nickname=child_user.full_name)
                         parent_code = await crud.generate_pairing_code(session, user_id)
+
+                        # Farzand allaqachon hisobga ulanganligini tekshirish (qayta-qayta ulandi xabarlarining oldini olish)
+                        existing_link = await crud.get_parent_child_link(session, user_id, target_child_id)
+                        if existing_link:
+                            await session.commit()
+                            await message.answer(
+                                f"ℹ️ **{child_user.full_name or 'Farzandingiz'} allaqachon hisobingizga ulangan!**\n\n"
+                                f"👦 Farzand: **{child_user.full_name or 'Farzandingiz'}**\n"
+                                f"🔑 **Sizning oilaviy sayt kodingiz:** ` {parent_code} `\n"
+                                f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                                f"Qaytadan ulash shart emas. Farzandingiz joylashuvini pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasi orqali ko'rishingiz mumkin.",
+                                reply_markup=get_parent_main_keyboard(user_id),
+                                parse_mode="Markdown"
+                            )
+                            return
+
+                        await crud.update_user_role(session, user_id, "parent")
+                        link, is_new = await crud.link_parent_child(session, user_id, target_child_id, nickname=child_user.full_name)
                         await session.commit()
 
-                        await message.answer(
-                            f"🎉 **Tabriklaymiz! Farzandingiz muvaffaqiyatli ulandi!**\n\n"
-                            f"👦 Farzand: **{child_user.full_name or 'Farzandingiz'}**\n"
-                            f"🔑 **Sizning oilaviy sayt kodingiz:** ` {parent_code} `\n"
-                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
-                            f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz.",
-                            reply_markup=get_parent_main_keyboard(user_id),
-                            parse_mode="Markdown"
-                        )
-
-                        if not user.phone_number:
+                        if is_new:
                             await message.answer(
-                                "⚠️ **Eslatma:** Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
-                                "istalgan paytda pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
+                                f"🎉 **Tabriklaymiz! Farzandingiz muvaffaqiyatli ulandi!**\n\n"
+                                f"👦 Farzand: **{child_user.full_name or 'Farzandingiz'}**\n"
+                                f"🔑 **Sizning oilaviy sayt kodingiz:** ` {parent_code} `\n"
+                                f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                                f"Endi farzandingizning joriy joylashuvini bir tugma bilan ko'ra olasiz.",
+                                reply_markup=get_parent_main_keyboard(user_id),
                                 parse_mode="Markdown"
                             )
 
-                        try:
-                            await bot.send_message(
-                                chat_id=target_child_id,
-                                text=(
-                                    f"🎉 **Ajoyib yangilik!**\n\n"
-                                    f"Ota-onangiz (**{full_name}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
-                                ),
-                                reply_markup=get_child_main_keyboard(),
-                                parse_mode="Markdown"
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to notify child about parent link: {e}")
+                            if not user.phone_number:
+                                await message.answer(
+                                    "⚠️ **Eslatma:** Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
+                                    "istalgan paytda pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
+                                    parse_mode="Markdown"
+                                )
+
+                            try:
+                                await bot.send_message(
+                                    chat_id=target_child_id,
+                                    text=(
+                                        f"🎉 **Ajoyib yangilik!**\n\n"
+                                        f"Ota-onangiz (**{full_name}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
+                                    ),
+                                    reply_markup=get_child_main_keyboard(),
+                                    parse_mode="Markdown"
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to notify child about parent link: {e}")
                         return
                     else:
                         await message.answer(
@@ -177,46 +207,73 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             elif args.startswith("coparent_") or args.startswith("parent_"):
                 try:
                     primary_parent_id = int(args.replace("coparent_", "").replace("parent_", "").strip())
-                    if primary_parent_id != user_id:
-                        primary_parent = await crud.get_user(session, primary_parent_id)
-                        linked_children = await crud.link_co_parent(session, primary_parent_id, user_id)
-                        co_parent_code = await crud.generate_pairing_code(session, user_id)
-                        await session.commit()
-
-                        child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in linked_children]) or "barcha farzandlar"
-
+                    if primary_parent_id == user_id:
                         await message.answer(
-                            f"🎉 **Ajoyib! Siz oilaviy monitoring guruhiga muvaffaqiyatli qo'shildingiz!**\n\n"
-                            f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
-                            f"👶 Biriktirilgan farzandlar ({len(linked_children)} nafar): **{child_names}**\n\n"
-                            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
-                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
-                            f"Endi siz ham barcha farzandlaringiz joylashuvini birgalikda kuzatishingiz va topshiriqlar berishingiz mumkin.",
+                            "ℹ️ **Bu sizning ikkinchi ota-onani taklif qilish havolangiz!**\n\n"
+                            "Turmush o'rtog'ingiz (dada yoki oyi) ham bolalarni birga kuzatishi uchun ushbu havolani unga yuboring.",
                             reply_markup=get_parent_main_keyboard(user_id),
                             parse_mode="Markdown"
                         )
-
-                        if not user.phone_number:
-                            await message.answer(
-                                "⚠️ **Eslatma:** Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
-                                "istalgan paytda pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
-                                parse_mode="Markdown"
-                            )
-
-                        try:
-                            await bot.send_message(
-                                chat_id=primary_parent_id,
-                                text=(
-                                    f"🎉 **Oilangizga ikkinchi ota-ona qo'shildi!**\n\n"
-                                    f"👤 Hamkor: **{full_name}**\n\n"
-                                    f"Endi ikkalangiz ham farzandlaringiz xavfsizligini birgalikda kuzatishingiz mumkin. 🛡️"
-                                ),
-                                reply_markup=get_parent_main_keyboard(primary_parent_id),
-                                parse_mode="Markdown"
-                            )
-                        except Exception as e:
-                            logger.error(f"Failed to notify primary parent: {e}")
                         return
+
+                    primary_parent = await crud.get_user(session, primary_parent_id)
+                    co_parent_code = await crud.generate_pairing_code(session, user_id)
+                    existing_children = await crud.get_children_for_parent(session, primary_parent_id)
+
+                    # Qayta bosilganda qayta-qayta ulandi xabari bormasligi uchun tekshirish
+                    current_children_ids = {c.id for c in await crud.get_children_for_parent(session, user_id)}
+                    primary_children_ids = {c.id for c in existing_children}
+
+                    if primary_children_ids and primary_children_ids.issubset(current_children_ids):
+                        child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in existing_children]) or "barcha farzandlar"
+                        await message.answer(
+                            f"ℹ️ **Siz allaqachon ushbu oila guruhiga ulangansiz!**\n\n"
+                            f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
+                            f"👶 Biriktirilgan farzandlar: **{child_names}**\n\n"
+                            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
+                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
+                        return
+
+                    linked_children = await crud.link_co_parent(session, primary_parent_id, user_id)
+                    await session.commit()
+
+                    child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in linked_children]) or "barcha farzandlar"
+
+                    await message.answer(
+                        f"🎉 **Ajoyib! Siz oilaviy monitoring guruhiga muvaffaqiyatli qo'shildingiz!**\n\n"
+                        f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
+                        f"👶 Biriktirilgan farzandlar ({len(linked_children)} nafar): **{child_names}**\n\n"
+                        f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
+                        f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                        f"Endi siz ham barcha farzandlaringiz joylashuvini birgalikda kuzatishingiz va topshiriqlar berishingiz mumkin.",
+                        reply_markup=get_parent_main_keyboard(user_id),
+                        parse_mode="Markdown"
+                    )
+
+                    if not user.phone_number:
+                        await message.answer(
+                            "⚠️ **Eslatma:** Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
+                            "istalgan paytda pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
+                            parse_mode="Markdown"
+                        )
+
+                    try:
+                        await bot.send_message(
+                            chat_id=primary_parent_id,
+                            text=(
+                                f"🎉 **Oilangizga ikkinchi ota-ona qo'shildi!**\n\n"
+                                f"👤 Hamkor: **{full_name}**\n\n"
+                                f"Endi ikkalangiz ham farzandlaringiz xavfsizligini birgalikda kuzatishingiz mumkin. 🛡️"
+                            ),
+                            reply_markup=get_parent_main_keyboard(primary_parent_id),
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to notify primary parent: {e}")
+                    return
                 except Exception as e:
                     logger.error(f"Failed to process coparent invite: {e}")
 
@@ -224,74 +281,100 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 pairing_code = args.replace("pair_", "").strip()
                 parent = await crud.get_parent_by_pairing_code(session, pairing_code)
                 if parent:
+                    # O'zining kodi orqali o'ziga ulanishga urinishdan himoya
+                    if parent.id == user_id:
+                        await message.answer(
+                            "ℹ️ **Bu sizning shaxsiy oilaviy kodingiz!**\n\n"
+                            "Ushbu kodni farzandingiz telefonida kiritishingiz kerak, shunda u hisobingizga ulanadi.",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
+                        return
+
+                    child_web_code = await crud.generate_web_access_code(session, user_id)
+
+                    # Farzand allaqachon ushbu ota-onaga ulangan bo'lsa, qayta ulandi deb bezovta qilmaslik
+                    existing_link = await crud.get_parent_child_link(session, parent.id, user_id)
+                    if existing_link:
+                        safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
+                        await message.answer(
+                            f"ℹ️ <b>Siz allaqachon {safe_parent_name} hisobiga ulangansiz!</b>\n\n"
+                            f"🔑 <b>Saytga (Web App) kirish kodingiz:</b> <code>{child_web_code}</code>\n"
+                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                            f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
+                            reply_markup=get_child_main_keyboard(),
+                            parse_mode="HTML"
+                        )
+                        return
+
                     user.role = "child"
                     user.full_name = full_name
                     user.username = username
                     await crud.update_user_role(session, user_id, "child")
-                    await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
-                    child_web_code = await crud.generate_web_access_code(session, user_id)
+                    link, is_new = await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
                     await session.commit()
 
-                    # Notify child with safe HTML
-                    safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
-                    await message.answer(
-                        f"🎉 <b>Tabriklaymiz!</b>\n\n"
-                        f"Siz <b>{safe_parent_name}</b> hisobiga muvaffaqiyatli ulandingiz.\n\n"
-                        f"🔑 <b>Saytga (Web App) kirish kodingiz:</b> <code>{child_web_code}</code>\n"
-                        f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
-                        f"<i>(Saytga kirganda ushbu 6 xonali shaxsiy kodingizni kiriting)</i>\n\n"
-                        f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
-                        reply_markup=get_child_main_keyboard(),
-                        parse_mode="HTML"
-                    )
-
-                    # Notify parent with requested format:
-                    safe_child_name = html.escape(full_name or "Farzand")
-                    safe_child_username = f"@{html.escape(username)}" if username else "Mavjud emas"
-
-                    parent_notify_html = (
-                        f"🎉 <b>Yangi farzand muvaffaqiyatli ulandi!</b>\n\n"
-                        f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
-                        f"🔹 <b>Foydalanuvchi nomi:</b> {safe_child_username}\n"
-                        f"🔹 <b>Ismi (Nick):</b> {safe_child_name}\n"
-                        f"🆔 <b>ID:</b> <code>{user_id}</code>\n\n"
-                        f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin. 🛡️"
-                    )
-
-                    try:
-                        await bot.send_message(
-                            chat_id=parent.id,
-                            text=parent_notify_html,
-                            reply_markup=get_parent_main_keyboard(parent.id),
+                    if is_new:
+                        # Notify child with safe HTML
+                        safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
+                        await message.answer(
+                            f"🎉 <b>Tabriklaymiz!</b>\n\n"
+                            f"Siz <b>{safe_parent_name}</b> hisobiga muvaffaqiyatli ulandingiz.\n\n"
+                            f"🔑 <b>Saytga (Web App) kirish kodingiz:</b> <code>{child_web_code}</code>\n"
+                            f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                            f"<i>(Saytga kirganda ushbu 6 xonali shaxsiy kodingizni kiriting)</i>\n\n"
+                            f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
+                            reply_markup=get_child_main_keyboard(),
                             parse_mode="HTML"
                         )
-                    except Exception as e:
-                        logger.error(f"HTML send failed, fallback to plain text: {e}")
-                        raw_parent_notify = (
-                            f"🎉 Yangi farzand muvaffaqiyatli ulandi!\n\n"
+
+                        # Notify parent with requested format:
+                        safe_child_name = html.escape(full_name or "Farzand")
+                        safe_child_username = f"@{html.escape(username)}" if username else "Mavjud emas"
+
+                        parent_notify_html = (
+                            f"🎉 <b>Yangi farzand muvaffaqiyatli ulandi!</b>\n\n"
                             f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
-                            f"🔹 Foydalanuvchi nomi: {f'@{username}' if username else 'Mavjud emas'}\n"
-                            f"🔹 Ismi (Nick): {full_name or 'Farzand'}\n"
-                            f"🆔 ID: {user_id}\n\n"
+                            f"🔹 <b>Foydalanuvchi nomi:</b> {safe_child_username}\n"
+                            f"🔹 <b>Ismi (Nick):</b> {safe_child_name}\n"
+                            f"🆔 <b>ID:</b> <code>{user_id}</code>\n\n"
                             f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin. 🛡️"
                         )
-                        await bot.send_message(
-                            chat_id=parent.id,
-                            text=raw_parent_notify,
-                            reply_markup=get_parent_main_keyboard(parent.id)
-                        )
 
-                    # Also notify WebApp parent dashboard in real-time
-                    try:
-                        from api.webapp_api import ws_manager
-                        await ws_manager.send_to_user(parent.id, {
-                            "type": "child_linked",
-                            "child_id": user_id,
-                            "full_name": full_name,
-                            "username": username
-                        })
-                    except Exception:
-                        pass
+                        try:
+                            await bot.send_message(
+                                chat_id=parent.id,
+                                text=parent_notify_html,
+                                reply_markup=get_parent_main_keyboard(parent.id),
+                                parse_mode="HTML"
+                            )
+                        except Exception as e:
+                            logger.error(f"HTML send failed, fallback to plain text: {e}")
+                            raw_parent_notify = (
+                                f"🎉 Yangi farzand muvaffaqiyatli ulandi!\n\n"
+                                f"Siz quyidagi farzandingizni hisobingizga uladingiz:\n"
+                                f"🔹 Foydalanuvchi nomi: {f'@{username}' if username else 'Mavjud emas'}\n"
+                                f"🔹 Ismi (Nick): {full_name or 'Farzand'}\n"
+                                f"🆔 ID: {user_id}\n\n"
+                                f"Endi farzandingizning joylashuvini bir bosishda ko'rishingiz mumkin. 🛡️"
+                            )
+                            await bot.send_message(
+                                chat_id=parent.id,
+                                text=raw_parent_notify,
+                                reply_markup=get_parent_main_keyboard(parent.id)
+                            )
+
+                        # Also notify WebApp parent dashboard in real-time
+                        try:
+                            from api.webapp_api import ws_manager
+                            await ws_manager.send_to_user(parent.id, {
+                                "type": "child_linked",
+                                "child_id": user_id,
+                                "full_name": full_name,
+                                "username": username
+                            })
+                        except Exception:
+                            pass
                     return
                 else:
                     await message.answer(
@@ -496,6 +579,34 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             )
             return
 
+        # O'zining kodi orqali o'ziga ulanishga urinishdan himoya
+        if parent.id == user_id:
+            await state.clear()
+            await message.answer(
+                "ℹ️ **Bu sizning shaxsiy oilaviy kodingiz!**\n\n"
+                "Ushbu kodni farzandingiz telefonida kiritishingiz kerak, shunda u hisobingizga ulanadi.",
+                reply_markup=get_parent_main_keyboard(user_id),
+                parse_mode="Markdown"
+            )
+            return
+
+        child_web_code = await crud.generate_web_access_code(session, user_id)
+
+        # Farzand allaqachon ushbu ota-onaga ulangan bo'lsa, qayta ulandi deb bezovta qilmaslik
+        existing_link = await crud.get_parent_child_link(session, parent.id, user_id)
+        if existing_link:
+            await state.clear()
+            safe_parent_name = html.escape(parent.full_name or "Ota-onangiz")
+            await message.answer(
+                f"ℹ️ <b>Siz allaqachon {safe_parent_name} hisobiga ulangansiz!</b>\n\n"
+                f"🔑 <b>Saytga kirish kodingiz:</b> <code>{child_web_code}</code>\n"
+                f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
+                f"Quyidagi xavfsizlik menyusi faol:",
+                reply_markup=get_child_main_keyboard(),
+                parse_mode="HTML"
+            )
+            return
+
         # Ensure child user role & profile in DB
         child_user = await crud.get_user(session, user_id)
         if child_user:
@@ -503,8 +614,7 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             child_user.full_name = full_name
             child_user.username = username
         await crud.update_user_role(session, user_id, "child")
-        await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
-        child_web_code = await crud.generate_web_access_code(session, user_id)
+        link, is_new = await crud.link_parent_child(session, parent.id, user_id, nickname=full_name)
         await session.commit()
         await state.clear()
 

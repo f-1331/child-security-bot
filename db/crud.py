@@ -255,8 +255,11 @@ async def link_parent_child(
     parent_id: int,
     child_id: int,
     nickname: Optional[str] = None
-) -> Tuple[ParentChildLink, bool]:
+) -> Tuple[Optional[ParentChildLink], bool]:
     """Link parent and child together, ensuring child role and nickname."""
+    if parent_id == child_id:
+        return None, False
+
     child_user = await get_user(session, child_id)
     if child_user:
         child_user.role = "child"
