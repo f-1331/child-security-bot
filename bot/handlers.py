@@ -3051,14 +3051,7 @@ async def on_webapp_requested(message: Message):
         )
 
 
-@router.message(F.text.in_([
-    "👨‍👩‍👧 Ota-ona ilovasi (APK)",
-    "Ota-ona ilovasi",
-    "ota-ona ilovasi",
-    "ota ona ilovasi",
-    "Parent app",
-    "parent app"
-]))
+@router.message(F.text.func(lambda t: t and ("ota-ona" in t.lower() or "ota ona" in t.lower() or "parent" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
 @router.message(Command("parent_app", "parentapp", "otaona"))
 @router.callback_query(F.data == "download_parent_apk")
 async def on_download_parent_apk(event, bot: Bot):
@@ -3067,7 +3060,7 @@ async def on_download_parent_apk(event, bot: Bot):
     if isinstance(event, CallbackQuery):
         await event.answer("👨‍👩‍👧 Ota-ona ilovasi tayyorlanmoqda...")
 
-    direct_github_parent_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
+    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
     direct_fallback_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/parent-apk"
 
@@ -3145,13 +3138,7 @@ async def on_download_parent_apk(event, bot: Bot):
         )
 
 
-@router.message(F.text.in_([
-    "👦 Farzand ilovasi (APK)",
-    "Farzand ilovasi",
-    "farzand ilovasi",
-    "Child app",
-    "child app"
-]))
+@router.message(F.text.func(lambda t: t and ("farzand" in t.lower() or "child" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
 @router.message(Command("child_app", "childapp", "farzand"))
 @router.callback_query(F.data == "download_child_apk")
 async def on_download_child_apk(event, bot: Bot):
@@ -3160,7 +3147,7 @@ async def on_download_child_apk(event, bot: Bot):
     if isinstance(event, CallbackQuery):
         await event.answer("👦 Farzand ilovasi tayyorlanmoqda...")
 
-    direct_github_child_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
+    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
     direct_fallback_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/child-apk"
 
