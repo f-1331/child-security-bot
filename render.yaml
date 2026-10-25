@@ -10,6 +10,10 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
+      - key: OWNER_BOT_TOKEN
+        value: "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68"
+      - key: OWNER_USERNAME
+        value: fayzbek1331
       - key: TIMEZONE
         value: Asia/Tashkent
       - key: DEBUG
