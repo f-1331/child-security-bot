@@ -2150,7 +2150,24 @@ async def upload_child_app_usage_endpoint(
     for p in parents:
         await ws_manager.send_to_user(p.id, usage_data)
 
-    return {"status": "success", "child_id": child_id, "recorded_date": report.report_date}
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    try:
+        blocked = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked = []
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "recorded_date": report.report_date,
+        "policy": {
+            "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "lockdown_reason": policy.lockdown_reason,
+            "blocked_packages": blocked,
+            "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "has_parent_pin": bool(policy.parent_pin_hash),
+        }
+    }
 
 
 @router.get("/child/{child_id}/device-policy")
@@ -2187,18 +2204,30 @@ async def update_child_device_policy_endpoint(
     """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
     parents = await crud.get_parents_for_child(session, child_id)
     parent_ids = [p.id for p in parents]
+
+    effective_parent_id = payload.parent_id
+    if not effective_parent_id and len(parent_ids) == 1:
+        effective_parent_id = parent_ids[0]
+
     if parent_ids:
-        if not payload.parent_id or payload.parent_id not in parent_ids:
-            logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {payload.parent_id}")
+        if effective_parent_id and effective_parent_id not in parent_ids:
+            logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {effective_parent_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
             )
+    elif effective_parent_id:
+        try:
+            await crud.link_parent_child(session, effective_parent_id, child_id)
+            parents = await crud.get_parents_for_child(session, child_id)
+            parent_ids = [effective_parent_id]
+        except Exception as e:
+            logger.warning(f"Auto-link parent error on policy update: {e}")
 
     policy = await crud.update_device_policy(
         session=session,
         child_id=child_id,
-        parent_id=payload.parent_id,
+        parent_id=effective_parent_id,
         is_all_apps_blocked=payload.is_all_apps_blocked,
         lockdown_reason=payload.lockdown_reason,
         blocked_packages=payload.blocked_packages,

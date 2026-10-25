@@ -7642,6 +7642,23 @@ function toggleHelpFaq(id) {
 // SCREEN TIME & DEVICE POLICY / APP BLOCKING CONTROLLER
 // ==============================================================================
 
+function getEffectiveParentId() {
+  if (parentId) return parentId;
+  if (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) {
+    return authenticatedSession.user.id;
+  }
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (tgUser && tgUser.id) return tgUser.id;
+  try {
+    const saved = localStorage.getItem("parent_user_id");
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : saved;
+    }
+  } catch (e) {}
+  return null;
+}
+
 let currentDevicePolicy = {
   is_all_apps_blocked: false,
   lockdown_reason: "Dars vaqti",
@@ -7651,6 +7668,74 @@ let currentDevicePolicy = {
 };
 
 let currentScreenTimeData = null;
+let currentMergedAppsList = [];
+let currentAppFilterQuery = "";
+let currentAppCategoryFilter = "all";
+
+const DEFAULT_POPULAR_APPS_LIST = [
+  { package: "com.zhiliaoapp.musically", app_name: "TikTok", category: "social", icon: "video" },
+  { package: "com.google.android.youtube", app_name: "YouTube", category: "video", icon: "youtube" },
+  { package: "com.instagram.android", app_name: "Instagram", category: "social", icon: "instagram" },
+  { package: "com.tencent.ig", app_name: "PUBG Mobile", category: "game", icon: "gamepad-2" },
+  { package: "com.roblox.client", app_name: "Roblox", category: "game", icon: "gamepad-2" },
+  { package: "com.supercell.brawlstars", app_name: "Brawl Stars", category: "game", icon: "gamepad-2" },
+  { package: "com.dts.freefireth", app_name: "Free Fire", category: "game", icon: "gamepad-2" },
+  { package: "com.supercell.clashofclans", app_name: "Clash of Clans", category: "game", icon: "gamepad-2" },
+  { package: "com.mojang.minecraftpe", app_name: "Minecraft", category: "game", icon: "gamepad-2" },
+  { package: "org.telegram.messenger", app_name: "Telegram", category: "chat", icon: "message-circle" },
+  { package: "com.whatsapp", app_name: "WhatsApp", category: "chat", icon: "message-circle" },
+  { package: "com.snapchat.android", app_name: "Snapchat", category: "social", icon: "video" },
+  { package: "video.like", app_name: "Likee", category: "social", icon: "video" },
+  { package: "com.android.chrome", app_name: "Google Chrome", category: "browser", icon: "globe" }
+];
+
+const KNOWN_PACKAGE_ALIASES = {
+  "tiktok": "com.zhiliaoapp.musically",
+  "tik": "com.zhiliaoapp.musically",
+  "youtube": "com.google.android.youtube",
+  "yt": "com.google.android.youtube",
+  "instagram": "com.instagram.android",
+  "insta": "com.instagram.android",
+  "pubg": "com.tencent.ig",
+  "pubgmobile": "com.tencent.ig",
+  "roblox": "com.roblox.client",
+  "telegram": "org.telegram.messenger",
+  "tg": "org.telegram.messenger",
+  "brawlstars": "com.supercell.brawlstars",
+  "brawl": "com.supercell.brawlstars",
+  "freefire": "com.dts.freefireth",
+  "ff": "com.dts.freefireth",
+  "clashofclans": "com.supercell.clashofclans",
+  "minecraft": "com.mojang.minecraftpe",
+  "snapchat": "com.snapchat.android",
+  "whatsapp": "com.whatsapp",
+  "likee": "video.like",
+  "chrome": "com.android.chrome"
+};
+
+function formatPackageDisplayName(pkg) {
+  if (!pkg) return "Noma'lum ilova";
+  const known = {
+    "com.zhiliaoapp.musically": "TikTok",
+    "com.google.android.youtube": "YouTube",
+    "com.instagram.android": "Instagram",
+    "com.tencent.ig": "PUBG Mobile",
+    "com.roblox.client": "Roblox",
+    "org.telegram.messenger": "Telegram",
+    "com.supercell.brawlstars": "Brawl Stars",
+    "com.dts.freefireth": "Free Fire",
+    "com.supercell.clashofclans": "Clash of Clans",
+    "com.mojang.minecraftpe": "Minecraft",
+    "com.snapchat.android": "Snapchat",
+    "com.whatsapp": "WhatsApp",
+    "video.like": "Likee",
+    "com.android.chrome": "Google Chrome"
+  };
+  if (known[pkg]) return known[pkg];
+  const parts = pkg.split(".");
+  const last = parts[parts.length - 1] || pkg;
+  return last.charAt(0).toUpperCase() + last.slice(1);
+}
 
 function updateDevicePolicyUI(policy) {
   if (!policy) return;
@@ -7666,7 +7751,7 @@ function updateDevicePolicyUI(policy) {
     }
   }
 
-  // 2. Map banner alert
+  // 2. Map banner alert in Parent Dashboard
   const lockdownBanner = document.getElementById("parentLockdownBanner");
   const lockdownText = document.getElementById("parentLockdownBannerText");
   if (lockdownBanner) {
@@ -7680,7 +7765,21 @@ function updateDevicePolicyUI(policy) {
     }
   }
 
-  // 3. Modal switches if open
+  // 3. Child Dashboard Alert Banner (if child is viewing)
+  const childLockBanner = document.getElementById("childLockdownAlertBanner");
+  const childLockReason = document.getElementById("childLockdownAlertReason");
+  if (childLockBanner) {
+    if (currentDevicePolicy.is_all_apps_blocked) {
+      childLockBanner.classList.remove("hidden");
+      if (childLockReason) {
+        childLockReason.textContent = `${currentDevicePolicy.lockdown_reason || "Ota-ona tomonidan cheklandi"}`;
+      }
+    } else {
+      childLockBanner.classList.add("hidden");
+    }
+  }
+
+  // 4. Modal switches if open
   const toggleLockAll = document.getElementById("toggleLockAllApps");
   if (toggleLockAll) {
     toggleLockAll.checked = Boolean(currentDevicePolicy.is_all_apps_blocked);
@@ -7697,7 +7796,18 @@ function updateDevicePolicyUI(policy) {
     blockedCountEl.textContent = `${count} ta bloklangan`;
   }
 
-  // 4. Android native bridge sync
+  // Reason buttons active styling
+  document.querySelectorAll(".btn-lock-reason").forEach(btn => {
+    if (currentDevicePolicy.lockdown_reason && btn.textContent.includes(currentDevicePolicy.lockdown_reason)) {
+      btn.classList.add("bg-rose-600", "text-white");
+      btn.classList.remove("bg-white/10");
+    } else {
+      btn.classList.remove("bg-rose-600");
+      btn.classList.add("bg-white/10");
+    }
+  });
+
+  // 5. Android native bridge sync
   if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
     try {
       window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
@@ -7760,6 +7870,48 @@ function renderScreenTimeChildSelector() {
   }).join("");
 }
 
+function checkNativeAppPermissions() {
+  const banner = document.getElementById("stNativePermissionBanner");
+  const text = document.getElementById("stNativePermissionText");
+  const btn = document.getElementById("btnGrantNativePermission");
+  if (!banner) return;
+
+  if (window.AndroidBridge) {
+    let missing = [];
+    if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
+      missing.push("Maxsus imkoniyatlar (Accessibility)");
+    }
+    if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
+      missing.push("Ekran vaqti telemetriyasi (Usage Access)");
+    }
+    if (missing.length > 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = `Ilovalarni bloklash to'liq ishlashi uchun telefonda ${missing.join(" va ")} ruxsatini yoqing:`;
+      if (btn) btn.textContent = "Ruxsat berish";
+      return;
+    }
+  }
+  banner.classList.add("hidden");
+}
+
+function requestNeededNativePermission() {
+  haptic("medium");
+  if (!window.AndroidBridge) return;
+  if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
+    if (typeof window.AndroidBridge.requestAccessibility === "function") {
+      window.AndroidBridge.requestAccessibility();
+      return;
+    }
+  }
+  if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
+    if (typeof window.AndroidBridge.requestUsageAccess === "function") {
+      window.AndroidBridge.requestUsageAccess();
+      return;
+    }
+  }
+  showToast("Barcha kerakli ruxsatlar yoqilgan ✅");
+}
+
 function openScreenTimeControlModal() {
   haptic("medium");
   setTimeout(updateTelegramBackButton, 50);
@@ -7767,6 +7919,7 @@ function openScreenTimeControlModal() {
   if (!modal) return;
   modal.classList.remove("hidden");
   renderScreenTimeChildSelector();
+  checkNativeAppPermissions();
   if (window.lucide) lucide.createIcons();
 
   loadScreenTimeAndPolicy();
@@ -7782,21 +7935,34 @@ function closeScreenTimeControlModal() {
 async function loadScreenTimeAndPolicy() {
   const container = document.getElementById("stAppsListContainer");
   if (container) {
-    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Ilovalar va statistika yuklanmoqda...</p>';
+    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6 animate-pulse">Ilovalar va statistika yuklanmoqda...</p>';
   }
 
+  checkNativeAppPermissions();
+
   if (isDemoMode || !currentChildId) {
-    const emptyData = {
-      total_screen_time_seconds: 0,
-      total_screen_time_formatted: "0 daqiqa",
-      unlock_count: 0,
+    const demoData = {
+      total_screen_time_seconds: 13500,
+      total_screen_time_formatted: "3 soat 45 daqiqa",
+      unlock_count: 42,
       is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
       lockdown_reason: currentDevicePolicy.lockdown_reason,
       anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
-      blocked_packages: currentDevicePolicy.blocked_packages || [],
-      apps: []
+      blocked_packages: currentDevicePolicy.blocked_packages || ["com.zhiliaoapp.musically"],
+      apps: [
+        { package: "com.zhiliaoapp.musically", app_name: "TikTok", category: "social", usage_seconds: 4500 },
+        { package: "com.google.android.youtube", app_name: "YouTube", category: "video", usage_seconds: 4320 },
+        { package: "com.tencent.ig", app_name: "PUBG Mobile", category: "game", usage_seconds: 3000 },
+        { package: "com.supercell.brawlstars", app_name: "Brawl Stars", category: "game", usage_seconds: 1500 },
+        { package: "org.telegram.messenger", app_name: "Telegram", category: "chat", usage_seconds: 1800 },
+        { package: "com.instagram.android", app_name: "Instagram", category: "social", usage_seconds: 900 },
+        { package: "com.roblox.client", app_name: "Roblox", category: "game", usage_seconds: 0 },
+        { package: "video.like", app_name: "Likee", category: "social", usage_seconds: 0 },
+        { package: "com.android.chrome", app_name: "Google Chrome", category: "browser", usage_seconds: 600 }
+      ],
+      popular_apps: DEFAULT_POPULAR_APPS_LIST
     };
-    renderScreenTimeData(emptyData);
+    renderScreenTimeData(demoData);
     return;
   }
 
@@ -7813,7 +7979,7 @@ async function loadScreenTimeAndPolicy() {
     console.warn("Screen time fetch error:", e);
   }
 
-  // Fallback real empty state if offline or no reports yet
+  // Fallback initial state if child has not uploaded usage yet
   renderScreenTimeData({
     total_screen_time_seconds: 0,
     total_screen_time_formatted: "0 daqiqa",
@@ -7822,12 +7988,13 @@ async function loadScreenTimeAndPolicy() {
     lockdown_reason: currentDevicePolicy.lockdown_reason,
     anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
     blocked_packages: currentDevicePolicy.blocked_packages || [],
-    apps: []
+    apps: [],
+    popular_apps: DEFAULT_POPULAR_APPS_LIST
   });
 }
 
 function renderScreenTimeData(data) {
-  currentScreenTimeData = data;
+  currentScreenTimeData = data || {};
 
   const totalEl = document.getElementById("stTotalTime");
   if (totalEl) totalEl.textContent = data.total_screen_time_formatted || "0 daqiqa";
@@ -7849,9 +8016,52 @@ function renderScreenTimeData(data) {
     }
   }
 
+  // Merge reported apps + popular apps + blocked apps
+  const popular = (data.popular_apps && data.popular_apps.length > 0) ? data.popular_apps : DEFAULT_POPULAR_APPS_LIST;
+  const reportedApps = Array.isArray(data.apps) ? data.apps : [];
+  const blockedList = data.blocked_packages || currentDevicePolicy.blocked_packages || [];
+
+  const appMap = new Map();
+
+  // 1. First insert telemetry apps reported from phone
+  reportedApps.forEach(a => {
+    if (a && a.package) {
+      appMap.set(a.package, {
+        package: a.package,
+        app_name: a.app_name || formatPackageDisplayName(a.package),
+        category: a.category || "other",
+        usage_seconds: a.usage_seconds || 0
+      });
+    }
+  });
+
+  // 2. Insert popular apps that parent may want to block
+  popular.forEach(p => {
+    if (p && p.package && !appMap.has(p.package)) {
+      appMap.set(p.package, {
+        package: p.package,
+        app_name: p.app_name || formatPackageDisplayName(p.package),
+        category: p.category || "other",
+        usage_seconds: 0
+      });
+    }
+  });
+
+  // 3. Insert any custom blocked package from database policy
+  blockedList.forEach(pkg => {
+    if (pkg && !appMap.has(pkg)) {
+      appMap.set(pkg, {
+        package: pkg,
+        app_name: formatPackageDisplayName(pkg),
+        category: "other",
+        usage_seconds: 0
+      });
+    }
+  });
+
   // Calculate category totals
   let gamesSec = 0, socialSec = 0, chatSec = 0, otherSec = 0;
-  (data.apps || []).forEach(a => {
+  appMap.forEach(a => {
     const s = a.usage_seconds || 0;
     if (a.category === "game") gamesSec += s;
     else if (a.category === "social" || a.category === "video") socialSec += s;
@@ -7874,74 +8084,118 @@ function renderScreenTimeData(data) {
   const barO = document.getElementById("barOther");
   if (barO) { barO.style.width = pOther + "%"; barO.title = `Boshqa: ${pOther}%`; }
 
+  // Convert to sorted array: blocked items first, then by usage time descending, then alphabetical
+  currentMergedAppsList = Array.from(appMap.values());
+  currentMergedAppsList.sort((a, b) => {
+    const aBlocked = blockedList.includes(a.package);
+    const bBlocked = blockedList.includes(b.package);
+    if (aBlocked && !bBlocked) return -1;
+    if (!aBlocked && bBlocked) return 1;
+    if ((b.usage_seconds || 0) !== (a.usage_seconds || 0)) {
+      return (b.usage_seconds || 0) - (a.usage_seconds || 0);
+    }
+    return (a.app_name || "").localeCompare(b.app_name || "");
+  });
+
   // Update policy UI
   updateDevicePolicyUI({
     is_all_apps_blocked: data.is_all_apps_blocked,
     lockdown_reason: data.lockdown_reason,
-    blocked_packages: data.blocked_packages,
+    blocked_packages: blockedList,
     anti_uninstall_enabled: data.anti_uninstall_enabled
   });
 
-  renderAppsList(data.apps || []);
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 }
 
-function renderAppsList(apps, filterText = "") {
+function renderAppsList(apps, filterText = "", categoryFilter = "all") {
   const container = document.getElementById("stAppsListContainer");
   if (!container) return;
 
   const q = (filterText || "").trim().toLowerCase();
-  const filtered = apps.filter(a => {
-    if (!q) return true;
-    return (a.app_name && a.app_name.toLowerCase().includes(q)) ||
-           (a.package && a.package.toLowerCase().includes(q));
+  const blockedList = currentDevicePolicy.blocked_packages || [];
+  const isMasterLocked = currentDevicePolicy.is_all_apps_blocked;
+
+  const filtered = (apps || []).filter(a => {
+    if (q) {
+      const matchName = a.app_name && a.app_name.toLowerCase().includes(q);
+      const matchPkg = a.package && a.package.toLowerCase().includes(q);
+      if (!matchName && !matchPkg) return false;
+    }
+    if (categoryFilter === "blocked") {
+      return blockedList.includes(a.package) || isMasterLocked;
+    }
+    if (categoryFilter === "game") {
+      return a.category === "game";
+    }
+    if (categoryFilter === "social") {
+      return a.category === "social" || a.category === "video";
+    }
+    if (categoryFilter === "chat") {
+      return a.category === "chat";
+    }
+    return true;
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Mos keluvchi ilovalar topilmadi</p>';
+    container.innerHTML = `
+      <div class="text-center py-6 px-4 bg-slate-800/40 rounded-2xl border border-white/5">
+        <span class="text-2xl block mb-1">🔍</span>
+        <p class="text-xs font-bold text-slate-300">Mos keluvchi ilovalar topilmadi</p>
+        <p class="text-2xs text-slate-500 mt-1">Yuqoridagi maydon orqali yangi ilovani tezkor bloklashingiz mumkin.</p>
+      </div>
+    `;
     return;
   }
-
-  const blockedList = currentDevicePolicy.blocked_packages || [];
-  const isMasterLocked = currentDevicePolicy.is_all_apps_blocked;
 
   let html = "";
   filtered.forEach(app => {
     const pkg = app.package;
-    const name = app.app_name || pkg;
+    const name = escapeHtml(app.app_name || formatPackageDisplayName(pkg));
     const isIndividuallyBlocked = blockedList.includes(pkg);
     const isEffectivelyBlocked = isMasterLocked || isIndividuallyBlocked;
 
     const sec = app.usage_seconds || 0;
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const durStr = h > 0 ? `${h}s ${m}d` : `${m} daqiqa`;
+    let durStr = "Bugun: Ishlatilmagan";
+    if (sec > 0) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      durStr = h > 0 ? `${h}s ${m}d` : `${m} daqiqa`;
+    }
 
-    let iconHtml = '<i data-lucide="smartphone" class="w-4 h-4"></i>';
+    let iconHtml = '<i data-lucide="smartphone" class="w-4 h-4 text-slate-300"></i>';
     if (app.category === "game") iconHtml = '<i data-lucide="gamepad-2" class="w-4 h-4 text-amber-400"></i>';
     else if (app.category === "video") iconHtml = '<i data-lucide="youtube" class="w-4 h-4 text-rose-500"></i>';
     else if (app.category === "social") iconHtml = '<i data-lucide="video" class="w-4 h-4 text-purple-400"></i>';
     else if (app.category === "chat") iconHtml = '<i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>';
+    else if (app.category === "browser") iconHtml = '<i data-lucide="globe" class="w-4 h-4 text-emerald-400"></i>';
+
+    const safePkgAttr = escapeHtml(pkg);
 
     html += `
-      <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border ${isEffectivelyBlocked ? 'border-rose-500/40 bg-rose-950/20' : 'border-white/5'} transition">
+      <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-800/70 border ${isEffectivelyBlocked ? 'border-rose-500/50 bg-rose-950/25 shadow-sm' : 'border-white/5'} transition">
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-xl bg-slate-700/60 flex items-center justify-center shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-slate-700/60 border border-white/5 flex items-center justify-center shrink-0 shadow-inner">
             ${iconHtml}
           </div>
           <div class="min-w-0">
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
               <h5 class="text-xs font-black text-white truncate max-w-[140px] sm:max-w-[200px]">${name}</h5>
-              ${isEffectivelyBlocked ? '<span class="text-2xs bg-rose-500/30 text-rose-300 px-1 rounded font-bold">BLOK</span>' : ''}
+              ${isMasterLocked
+                ? '<span class="text-[9px] bg-red-600/30 text-rose-300 border border-red-500/40 px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wide">CHEKLOV</span>'
+                : (isIndividuallyBlocked
+                    ? '<span class="text-[9px] bg-rose-500/30 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wide">BLOK</span>'
+                    : '')}
             </div>
             <p class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-              <span>⏱ Bugun:</span> <b class="text-slate-200 font-bold">${durStr}</b>
+              <span>⏱</span> <b class="${sec > 0 ? 'text-slate-200' : 'text-slate-500'} font-bold">${durStr}</b>
             </p>
           </div>
         </div>
 
         <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="${isIndividuallyBlocked ? 'Blokdan chiqarish' : 'Bloklash'}">
-          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${pkg}', this.checked)" class="sr-only peer">
-          <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${safePkgAttr}', this.checked)" class="sr-only peer">
+          <div class="w-10 h-5.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-rose-600 shadow-sm"></div>
         </label>
       </div>
     `;
@@ -7952,9 +8206,68 @@ function renderAppsList(apps, filterText = "") {
 }
 
 function filterAppsList(val) {
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps, val);
+  currentAppFilterQuery = val || "";
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
+}
+
+function filterAppsByCategory(cat) {
+  haptic("light");
+  currentAppCategoryFilter = cat || "all";
+
+  const tabs = [
+    { id: "stTabAll", key: "all" },
+    { id: "stTabBlocked", key: "blocked" },
+    { id: "stTabGame", key: "game" },
+    { id: "stTabSocial", key: "social" },
+    { id: "stTabChat", key: "chat" }
+  ];
+
+  tabs.forEach(t => {
+    const el = document.getElementById(t.id);
+    if (!el) return;
+    if (t.key === currentAppCategoryFilter) {
+      el.className = "st-cat-tab px-3 py-1 rounded-xl bg-rose-600 text-white transition active:scale-95 shrink-0 shadow-sm font-extrabold";
+    } else {
+      el.className = "st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0 font-bold";
+    }
+  });
+
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
+}
+
+function addCustomAppToBlock() {
+  const input = document.getElementById("inputCustomBlockApp");
+  if (!input) return;
+  const raw = (input.value || "").trim();
+  if (!raw) {
+    showToast("⚠️ Ilova nomi yoki paketini kiriting");
+    return;
   }
+
+  const cleanLower = raw.toLowerCase().replace(/\s+/g, "");
+  let pkg = KNOWN_PACKAGE_ALIASES[cleanLower];
+  if (!pkg) {
+    if (raw.includes(".") && !raw.includes(" ")) {
+      pkg = raw.trim();
+    } else {
+      const slug = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+      pkg = `com.${slug || "custom"}.app`;
+    }
+  }
+
+  const exists = currentMergedAppsList.find(a => a.package === pkg);
+  if (!exists) {
+    currentMergedAppsList.unshift({
+      package: pkg,
+      app_name: formatPackageDisplayName(pkg) || raw,
+      category: "other",
+      usage_seconds: 0
+    });
+  }
+
+  toggleAppBlock(pkg, true);
+  input.value = "";
+  showToast(`🛑 «${raw}» bloklandi!`);
 }
 
 async function handleMasterLockToggle(isChecked) {
@@ -7963,27 +8276,29 @@ async function handleMasterLockToggle(isChecked) {
   updateDevicePolicyUI(currentDevicePolicy);
 
   if (isChecked) {
-    showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason})`);
+    showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason || "Dars vaqti"})`);
   } else {
     showToast("✅ Barcha ilovalar cheklovi ochildi");
   }
 
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps);
-  }
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         is_all_apps_blocked: isChecked,
         lockdown_reason: currentDevicePolicy.lockdown_reason,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
+    if (!res.ok) {
+      console.warn("Master lock save returned status:", res.status);
+    }
   } catch (e) {
     console.warn("Master lock save error:", e);
   }
@@ -7995,16 +8310,7 @@ async function setLockdownReason(reason) {
   updateDevicePolicyUI(currentDevicePolicy);
   showToast(`Sabab o'rnatildi: «${reason}»`);
 
-  document.querySelectorAll(".btn-lock-reason").forEach(btn => {
-    if (btn.textContent.includes(reason)) {
-      btn.classList.add("bg-rose-600", "text-white");
-      btn.classList.remove("bg-white/10");
-    } else {
-      btn.classList.remove("bg-rose-600");
-      btn.classList.add("bg-white/10");
-    }
-  });
-
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -8013,7 +8319,7 @@ async function setLockdownReason(reason) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         lockdown_reason: reason,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}
@@ -8021,32 +8327,34 @@ async function setLockdownReason(reason) {
 
 async function toggleAppBlock(pkg, isBlocked) {
   haptic("medium");
-  let blocked = currentDevicePolicy.blocked_packages || [];
+  let blocked = [...(currentDevicePolicy.blocked_packages || [])];
   if (isBlocked) {
     if (!blocked.includes(pkg)) blocked.push(pkg);
-    showToast("Ilova bloklandi 🛑");
+    showToast(`🛑 Ilova bloklandi (${formatPackageDisplayName(pkg)})`);
   } else {
     blocked = blocked.filter(p => p !== pkg);
-    showToast("Ilovaga ruxsat berildi 🟢");
+    showToast(`🟢 Ilovaga ruxsat berildi (${formatPackageDisplayName(pkg)})`);
   }
   currentDevicePolicy.blocked_packages = blocked;
   updateDevicePolicyUI(currentDevicePolicy);
 
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps);
-  }
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         blocked_packages: blocked,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
+    if (!res.ok) {
+      console.warn("App block save returned status:", res.status);
+    }
   } catch (e) {
     console.warn("App block save error:", e);
   }
@@ -8063,6 +8371,7 @@ async function handleAntiUninstallToggle(isChecked) {
     showToast("⚠️ Sozlamalar himoyasi o'chirildi");
   }
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -8071,7 +8380,7 @@ async function handleAntiUninstallToggle(isChecked) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         anti_uninstall_enabled: isChecked,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}
@@ -8111,6 +8420,7 @@ async function saveNewParentPin() {
   showToast("✅ Ota-ona PIN-kodi muvaffaqiyatli saqlandi!");
   closeParentPinSetupModal();
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -8119,7 +8429,7 @@ async function saveNewParentPin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         new_pin: pin,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}

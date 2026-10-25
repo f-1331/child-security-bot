@@ -652,6 +652,16 @@
     <!-- 2. CHILD VIEW SECTION: GAMIFIED ADVENTURE PORTAL (Bola)   -->
     <!-- ========================================================= -->
     <div id="childViewSection" class="hidden relative w-full h-full overflow-y-auto custom-scroll p-3.5 sm:p-5 flex flex-col gap-3.5 pb-28">
+      <!-- 🛑 CHILD LOCKDOWN ALERT BANNER (When parent has activated total lockdown) -->
+      <div id="childLockdownAlertBanner" class="hidden p-4 rounded-2xl bg-gradient-to-r from-red-950/95 via-rose-900/90 to-red-950/95 border-2 border-red-500/60 shadow-2xl text-center">
+        <span class="text-3xl block animate-bounce">🛑</span>
+        <h3 class="text-sm sm:text-base font-black text-white mt-1">Barcha ilovalar bloklandi!</h3>
+        <p id="childLockdownAlertReason" class="text-xs text-rose-200 font-extrabold mt-0.5">Dars vaqti (Ota-ona tomonidan cheklandi)</p>
+        <p class="text-[11px] text-slate-300 mt-2 leading-relaxed">
+          Ota-onangiz telefoningizni vaqtincha cheklab qo'ydi. Faqat qo'ng'iroq qilish va SOS favqulodda tugmasi ochiq.
+        </p>
+      </div>
+
       <!-- Child Active Walk Safe Live Floating Bar -->
       <div id="childActiveWalkSafeBar" class="hidden bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-3.5 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl border border-white/40 animate-pulse">
         <div class="flex items-center gap-2 min-w-0">
@@ -2549,7 +2559,7 @@
         </div>
 
         <!-- 4. SELECTIVE APP BLOCKING LIST -->
-        <div class="space-y-2">
+        <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
               <span>📱</span> <span>Ilovalarni alohida bloklash</span>
@@ -2557,6 +2567,37 @@
             <span id="stBlockedCountText" class="text-2xs text-rose-300 font-bold bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
               0 ta bloklangan
             </span>
+          </div>
+
+          <!-- Native Permission Alert Banner (if opened inside native app with missing permissions) -->
+          <div id="stNativePermissionBanner" class="hidden p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-sm">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">⚠️</span>
+              <p id="stNativePermissionText" class="text-[11px] leading-tight font-medium">Ilovalarni to'liq bloklash va ekran vaqtini kuzatish uchun telefonda maxsus ruxsatlar zarur.</p>
+            </div>
+            <button id="btnGrantNativePermission" onclick="requestNeededNativePermission()" class="px-2.5 py-1 bg-amber-400 text-slate-950 font-black rounded-xl text-2xs shrink-0 active:scale-95 shadow">
+              Ruxsat berish
+            </button>
+          </div>
+
+          <!-- Quick-Add Custom App Bar -->
+          <div class="p-1 bg-slate-800/90 rounded-2xl border border-white/10 flex items-center gap-1.5 shadow-sm">
+            <div class="relative flex-1">
+              <i data-lucide="plus-circle" class="w-4 h-4 text-rose-400 absolute left-3 top-2.5"></i>
+              <input type="text" id="inputCustomBlockApp" placeholder="Boshqa ilovani bloklash (masalan: TikTok, PUBG)..." onkeydown="if(event.key==='Enter')addCustomAppToBlock()" class="w-full pl-9 pr-2 py-1.5 bg-transparent text-xs text-white placeholder-slate-400 outline-none">
+            </div>
+            <button onclick="addCustomAppToBlock()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 shrink-0 flex items-center gap-1">
+              <span>+ Qo'shish</span>
+            </button>
+          </div>
+
+          <!-- Category Filter Tabs -->
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-2xs font-extrabold">
+            <button id="stTabAll" onclick="filterAppsByCategory('all')" class="st-cat-tab px-3 py-1 rounded-xl bg-rose-600 text-white transition active:scale-95 shrink-0 shadow-sm">Barchasi</button>
+            <button id="stTabBlocked" onclick="filterAppsByCategory('blocked')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">🛑 Faqat bloklangan</button>
+            <button id="stTabGame" onclick="filterAppsByCategory('game')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">🎮 O'yinlar</button>
+            <button id="stTabSocial" onclick="filterAppsByCategory('social')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">📱 Ijtimoiy</button>
+            <button id="stTabChat" onclick="filterAppsByCategory('chat')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">💬 Muloqot</button>
           </div>
 
           <!-- Search Filter -->
@@ -2568,7 +2609,7 @@
           </div>
 
           <!-- Dynamic Apps List Container -->
-          <div id="stAppsListContainer" class="space-y-2 max-h-60 overflow-y-auto custom-scroll pr-1">
+          <div id="stAppsListContainer" class="space-y-2 max-h-64 overflow-y-auto custom-scroll pr-1">
             <p class="text-center text-xs text-slate-400 py-4">Ilovalar ro'yxati yuklanmoqda...</p>
           </div>
         </div>

@@ -167,14 +167,32 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
     except Exception as ws_err:
         logger.error(f"Failed to broadcast telemetry via WebSocket: {ws_err}")
 
+    # Fetch active device policy to return to native Android service
+    import json
+    policy = await crud.get_or_create_device_policy(session, payload.child_id)
+    try:
+        blocked_packages = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked_packages = []
+
+    policy_data = {
+        "is_all_apps_blocked": policy.is_all_apps_blocked,
+        "lockdown_reason": policy.lockdown_reason,
+        "blocked_packages": blocked_packages,
+        "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+        "has_parent_pin": bool(policy.parent_pin_hash),
+    }
+
     return {
         "status": "success",
         "message": "Telemetry processed successfully",
+        "policy": policy_data,
         "data": {
             "log_id": loc_entry.id,
             "child_id": payload.child_id,
             "battery_alert_triggered": battery_alert_triggered,
             "geofence_events": geofence_events,
-            "is_sos_active": child.is_sos_active
+            "is_sos_active": child.is_sos_active,
+            "policy": policy_data
         }
     }

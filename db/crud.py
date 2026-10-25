@@ -1246,8 +1246,13 @@ DEFAULT_POPULAR_APPS = [
     {"package": "com.instagram.android", "app_name": "Instagram", "category": "social", "icon": "instagram", "default_blocked": False},
     {"package": "com.tencent.ig", "app_name": "PUBG Mobile", "category": "game", "icon": "gamepad-2", "default_blocked": False},
     {"package": "com.roblox.client", "app_name": "Roblox", "category": "game", "icon": "gamepad-2", "default_blocked": False},
-    {"package": "org.telegram.messenger", "app_name": "Telegram", "category": "chat", "icon": "message-circle", "default_blocked": False},
     {"package": "com.supercell.brawlstars", "app_name": "Brawl Stars", "category": "game", "icon": "gamepad-2", "default_blocked": False},
+    {"package": "com.dts.freefireth", "app_name": "Free Fire", "category": "game", "icon": "gamepad-2", "default_blocked": False},
+    {"package": "com.supercell.clashofclans", "app_name": "Clash of Clans", "category": "game", "icon": "gamepad-2", "default_blocked": False},
+    {"package": "com.mojang.minecraftpe", "app_name": "Minecraft", "category": "game", "icon": "gamepad-2", "default_blocked": False},
+    {"package": "org.telegram.messenger", "app_name": "Telegram", "category": "chat", "icon": "message-circle", "default_blocked": False},
+    {"package": "com.whatsapp", "app_name": "WhatsApp", "category": "chat", "icon": "message-circle", "default_blocked": False},
+    {"package": "com.snapchat.android", "app_name": "Snapchat", "category": "social", "icon": "video", "default_blocked": False},
     {"package": "video.like", "app_name": "Likee", "category": "social", "icon": "video", "default_blocked": False},
     {"package": "com.android.chrome", "app_name": "Google Chrome", "category": "browser", "icon": "globe", "default_blocked": False},
 ]
@@ -1300,7 +1305,14 @@ async def update_device_policy(
     if lockdown_reason is not None:
         policy.lockdown_reason = lockdown_reason.strip()
     if blocked_packages is not None:
-        policy.blocked_packages = json.dumps(blocked_packages)
+        if isinstance(blocked_packages, list):
+            clean_list = []
+            for b in blocked_packages:
+                if b and isinstance(b, str) and b.strip() and b.strip() not in clean_list:
+                    clean_list.append(b.strip())
+            policy.blocked_packages = json.dumps(clean_list)
+        else:
+            policy.blocked_packages = str(blocked_packages)
     if anti_uninstall_enabled is not None:
         policy.anti_uninstall_enabled = anti_uninstall_enabled
 
@@ -1394,6 +1406,8 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
             apps = []
         total_seconds = report.total_screen_time_seconds
         unlock_count = report.unlock_count
+        if total_seconds == 0 and apps:
+            total_seconds = sum(int(a.get("usage_seconds") or 0) for a in apps)
     else:
         total_seconds = 0
         unlock_count = 0
@@ -1407,6 +1421,12 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
     minutes = (total_seconds % 3600) // 60
     formatted_time = f"{hours} soat {minutes} daqiqa" if hours > 0 else f"{minutes} daqiqa"
 
+    # Category breakdown
+    games_sec = sum(int(a.get("usage_seconds") or 0) for a in apps if a.get("category") == "game")
+    social_sec = sum(int(a.get("usage_seconds") or 0) for a in apps if a.get("category") in ("social", "video"))
+    chat_sec = sum(int(a.get("usage_seconds") or 0) for a in apps if a.get("category") == "chat")
+    other_sec = max(0, total_seconds - (games_sec + social_sec + chat_sec))
+
     return {
         "report_date": today_str,
         "total_screen_time_seconds": total_seconds,
@@ -1418,6 +1438,12 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
         "has_parent_pin": bool(policy.parent_pin_hash),
         "blocked_packages": blocked_list,
         "apps": apps,
-        "popular_apps": DEFAULT_POPULAR_APPS
+        "popular_apps": DEFAULT_POPULAR_APPS,
+        "breakdown": {
+            "games_seconds": games_sec,
+            "social_seconds": social_sec,
+            "chat_seconds": chat_sec,
+            "other_seconds": other_sec
+        }
     }
 
