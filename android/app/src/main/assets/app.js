@@ -7053,24 +7053,17 @@ async function loadScreenTimeAndPolicy() {
   }
 
   if (isDemoMode || !currentChildId) {
-    // High-fidelity realistic demo data
-    const demoData = {
-      total_screen_time_seconds: 13500,
-      total_screen_time_formatted: "3 soat 45 daq",
-      unlock_count: 38,
+    const emptyData = {
+      total_screen_time_seconds: 0,
+      total_screen_time_formatted: "0 daqiqa",
+      unlock_count: 0,
       is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
       lockdown_reason: currentDevicePolicy.lockdown_reason,
       anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
-      blocked_packages: currentDevicePolicy.blocked_packages || ["com.zhiliaoapp.musically"],
-      apps: [
-        { package: "com.google.android.youtube", app_name: "YouTube", usage_seconds: 5400, category: "video", icon: "youtube" },
-        { package: "com.zhiliaoapp.musically", app_name: "TikTok", usage_seconds: 3300, category: "social", icon: "video" },
-        { package: "com.tencent.ig", app_name: "PUBG Mobile", usage_seconds: 2400, category: "game", icon: "gamepad-2" },
-        { package: "org.telegram.messenger", app_name: "Telegram", usage_seconds: 1500, category: "chat", icon: "message-circle" },
-        { package: "com.roblox.client", app_name: "Roblox", usage_seconds: 900, category: "game", icon: "gamepad-2" }
-      ]
+      blocked_packages: currentDevicePolicy.blocked_packages || [],
+      apps: []
     };
-    renderScreenTimeData(demoData);
+    renderScreenTimeData(emptyData);
     return;
   }
 
@@ -7087,21 +7080,16 @@ async function loadScreenTimeAndPolicy() {
     console.warn("Screen time fetch error:", e);
   }
 
-  // Fallback demo data if offline or error
+  // Fallback real empty state if offline or no reports yet
   renderScreenTimeData({
-    total_screen_time_seconds: 10800,
-    total_screen_time_formatted: "3 soat 00 daq",
-    unlock_count: 26,
+    total_screen_time_seconds: 0,
+    total_screen_time_formatted: "0 daqiqa",
+    unlock_count: 0,
     is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
     lockdown_reason: currentDevicePolicy.lockdown_reason,
     anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
     blocked_packages: currentDevicePolicy.blocked_packages || [],
-    apps: [
-      { package: "com.google.android.youtube", app_name: "YouTube", usage_seconds: 4800, category: "video", icon: "youtube" },
-      { package: "com.zhiliaoapp.musically", app_name: "TikTok", usage_seconds: 3000, category: "social", icon: "video" },
-      { package: "com.tencent.ig", app_name: "PUBG Mobile", usage_seconds: 1800, category: "game", icon: "gamepad-2" },
-      { package: "org.telegram.messenger", app_name: "Telegram", usage_seconds: 1200, category: "chat", icon: "message-circle" }
-    ]
+    apps: []
   });
 }
 

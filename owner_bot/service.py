@@ -60,11 +60,14 @@ def format_dossier_html(dossier: Dict[str, Any]) -> str:
 
     username_str = f"@{user.username}" if user.username else "<i>(Username yo'q)</i>"
     phone_str = user.phone_number or "<i>(Telefon kiritilmagan)</i>"
-    created_str = (
-        user.created_at.strftime("%Y-%m-%d %H:%M UTC")
-        if user.created_at
-        else "Noma'lum"
-    )
+    tashkent_tz = timezone(timedelta(hours=5))
+    if user.created_at:
+        dt = user.created_at
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        created_str = dt.astimezone(tashkent_tz).strftime("%Y-%m-%d %H:%M")
+    else:
+        created_str = "Noma'lum"
 
     # Codes
     pairing_code_str = f"<code>{user.pairing_code}</code>" if user.pairing_code else "<i>(Mavjud emas)</i>"
@@ -78,8 +81,14 @@ def format_dossier_html(dossier: Dict[str, Any]) -> str:
     if loc:
         battery_icon = "🔌" if loc.is_charging else "🔋"
         battery_str = f"{battery_icon} {loc.battery_level}%" if loc.battery_level is not None else "Noma'lum"
-        loc_time = loc.timestamp.strftime("%H:%M:%S (%d.%m)") if loc.timestamp else "Noma'lum"
-        speed_str = f"{loc.speed:.1f} km/s" if loc.speed else "0 km/s"
+        if loc.timestamp:
+            loc_dt = loc.timestamp
+            if loc_dt.tzinfo is None:
+                loc_dt = loc_dt.replace(tzinfo=timezone.utc)
+            loc_time = loc_dt.astimezone(tashkent_tz).strftime("%H:%M:%S (%d.%m)")
+        else:
+            loc_time = "Noma'lum"
+        speed_str = f"{loc.speed:.1f} km/soat" if loc.speed else "0 km/soat"
         loc_str = (
             f"📍 Koordinatalar: <code>{loc.latitude:.6f}, {loc.longitude:.6f}</code>\n"
             f"🎯 Aniqlik: ±{loc.accuracy:.1f}m | Tezlik: {speed_str}\n"
@@ -253,37 +262,28 @@ async def get_apps_and_screen_time_summary(session: AsyncSession) -> Tuple[str, 
                 pass
 
     if not app_usage_counter:
-        app_usage_counter = {
-            "YouTube": 18400,
-            "TikTok": 14200,
-            "PUBG Mobile": 9800,
-            "Telegram": 7600,
-            "Roblox": 5400,
-            "Instagram": 4200,
-            "Brawl Stars": 3100,
-            "Google Chrome": 2200
-        }
-        total_screen_seconds = sum(app_usage_counter.values())
-        total_unlocks = 142
-        total_children_logged = max(1, total_policies)
+        apps_block_str = "  <i>ℹ️ Farzand qurilmalaridan hali bugungi ilovalar hisoboti kelmagan (0 ta).</i>"
+        total_screen_seconds = 0
+        total_unlocks = 0
+        avg_str = "0 daqiqa"
+        total_h = 0
+        total_m = 0
+    else:
+        sorted_apps = sorted(app_usage_counter.items(), key=lambda x: x[1], reverse=True)[:8]
+        apps_text_lines = []
+        for i, (name, sec) in enumerate(sorted_apps, 1):
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            time_str = f"{h}s {m}d" if h > 0 else f"{m} daqiqa"
+            apps_text_lines.append(f"  {i}. <b>{name}</b> — <code>{time_str}</code>")
+        apps_block_str = "\n".join(apps_text_lines)
 
-    sorted_apps = sorted(app_usage_counter.items(), key=lambda x: x[1], reverse=True)[:8]
-    apps_text_lines = []
-    for i, (name, sec) in enumerate(sorted_apps, 1):
-        h = sec // 3600
-        m = (sec % 3600) // 60
-        time_str = f"{h}s {m}d" if h > 0 else f"{m} daqiqa"
-        apps_text_lines.append(f"  {i}. <b>{name}</b> — <code>{time_str}</code>")
-
-    apps_block_str = "\n".join(apps_text_lines)
-
-    avg_minutes = (total_screen_seconds // max(1, total_children_logged)) // 60
-    avg_h = avg_minutes // 60
-    avg_m = avg_minutes % 60
-    avg_str = f"{avg_h}s {avg_m}d" if avg_h > 0 else f"{avg_m} daqiqa"
-
-    total_h = total_screen_seconds // 3600
-    total_m = (total_screen_seconds % 3600) // 60
+        avg_minutes = (total_screen_seconds // max(1, total_children_logged)) // 60
+        avg_h = avg_minutes // 60
+        avg_m = avg_minutes % 60
+        avg_str = f"{avg_h}s {avg_m}d" if avg_h > 0 else f"{avg_m} daqiqa"
+        total_h = total_screen_seconds // 3600
+        total_m = (total_screen_seconds % 3600) // 60
 
     html = (
         f"📱 <b>QURILMALAR & ILOVALAR MONİTORİNGİ TAHLILI</b>\n"

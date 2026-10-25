@@ -1083,8 +1083,10 @@ async def get_system_overview_stats(session: AsyncSession) -> dict:
     total_tasks = (await session.execute(select(func.count(Task.id)))).scalar_one() or 0
     total_locs = (await session.execute(select(func.count(LocationLog.id)))).scalar_one() or 0
 
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_users = (await session.execute(select(func.count(User.id)).where(User.created_at >= today_start))).scalar_one() or 0
+    tashkent_now = datetime.now(timezone(timedelta(hours=5)))
+    today_start_tashkent = tashkent_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start_utc = today_start_tashkent.astimezone(timezone.utc)
+    today_users = (await session.execute(select(func.count(User.id)).where(User.created_at >= today_start_utc))).scalar_one() or 0
 
     return {
         "total_users": total_users,
@@ -1383,15 +1385,9 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
         total_seconds = report.total_screen_time_seconds
         unlock_count = report.unlock_count
     else:
-        total_seconds = 13500  # 3 hours 45 min baseline
-        unlock_count = 38
-        apps = [
-            {"package": "com.google.android.youtube", "app_name": "YouTube", "usage_seconds": 5400, "category": "video", "icon": "youtube"},
-            {"package": "com.zhiliaoapp.musically", "app_name": "TikTok", "usage_seconds": 3300, "category": "social", "icon": "video"},
-            {"package": "com.tencent.ig", "app_name": "PUBG Mobile", "usage_seconds": 2400, "category": "game", "icon": "gamepad-2"},
-            {"package": "org.telegram.messenger", "app_name": "Telegram", "usage_seconds": 1500, "category": "chat", "icon": "message-circle"},
-            {"package": "com.roblox.client", "app_name": "Roblox", "usage_seconds": 900, "category": "game", "icon": "gamepad-2"},
-        ]
+        total_seconds = 0
+        unlock_count = 0
+        apps = []
 
     for a in apps:
         pkg = a.get("package")
