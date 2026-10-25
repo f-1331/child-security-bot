@@ -858,16 +858,16 @@ function enableChildDemoMode() {
   currentChildId = 2002;
   coinRateCoins = 1000;
   coinRateSom = 10000;
-  childBalanceCoins = 18000;
-  childBalanceSom = 180000;
+  childBalanceCoins = 0;
+  childBalanceSom = 0;
 
   childrenList = [
     {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 18000,
-      virtual_money_som: 180000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -875,8 +875,8 @@ function enableChildDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 24000,
-      virtual_money_som: 240000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -885,8 +885,8 @@ function enableChildDemoMode() {
   applyChildUI({
     id: 2002,
     full_name: "Azizbek Karimov (Farzand Demo)",
-    virtual_balance: 18000,
-    virtual_money_som: 180000,
+    virtual_balance: 0,
+    virtual_money_som: 0,
     coin_rate_coins: 1000,
     coin_rate_som: 10000,
     parent_phone: "+998901234567",
@@ -2037,8 +2037,8 @@ function enableDemoMode() {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 18000,
-      virtual_money_som: 180000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -2046,8 +2046,8 @@ function enableDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 24000,
-      virtual_money_som: 240000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -2577,7 +2577,7 @@ function renderFencesToMapAndList(fences) {
         </div>
         ${
           isChild
-            ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">🛡️ Xavfsiz</span>`
+            ? `<button onclick="openChildZoneOnMap('${f.id}', ${f.latitude || 0}, ${f.longitude || 0}, '${(f.name || '').replace(/'/g, "\\'")}', ${f.radius_meters || 100})" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>Xaritada</span> 🗺️</button>`
             : `<button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>`
@@ -2605,17 +2605,8 @@ function renderFencesToMapAndList(fences) {
 
 // Render Demo Geofences
 function renderDemoGeofences() {
-  if (!isDemoMode) {
-    geofencesList = [];
-    renderChildDashboardCastles();
-    return;
-  }
-  const demoFences = [
-    { id: 1, name: "🏠 Uyimiz (Chilonzor)", latitude: 41.2858, longitude: 69.2035, radius_meters: 200 },
-    { id: 2, name: "🏫 Maktab №45", latitude: 41.2915, longitude: 69.2120, radius_meters: 250 },
-    { id: 3, name: "📚 O'quv Markazi", latitude: 41.3000, longitude: 69.2250, radius_meters: 200 },
-  ];
-  renderFencesToMapAndList(demoFences);
+  geofencesList = [];
+  renderFencesToMapAndList([]);
 }
 
 // Focus a specific route checkpoint on map in Fullscreen mode
@@ -3732,24 +3723,7 @@ function renderChildDashboardQuests() {
   const container = document.getElementById("childDashboardTasksList");
   if (!container) return;
 
-  if (!isDemoMode && (!tasksList || tasksList.length === 0)) {
-    container.innerHTML = `
-      <div class="p-3.5 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center">
-        <span class="text-xl">🎯</span>
-        <p class="text-xs font-bold text-slate-300 mt-1">Hozircha topshiriqlar yo'q</p>
-        <p class="text-[10px] text-slate-400 mt-0.5">Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi</p>
-      </div>
-    `;
-    return;
-  }
-
-  const activeTasks = (tasksList && tasksList.length > 0)
-    ? tasksList.slice(0, 3)
-    : (isDemoMode ? [
-        { id: 901, title: "Matematika darslarini bajarish", reward_coins: 5000, status: "pending" },
-        { id: 902, title: "Xonani tozalash va tartibga keltirish", reward_coins: 3000, status: "scheduled", promised_time: "30 daqiqadan keyin" },
-        { id: 903, title: "Ingliz tili yangi lug'at yodlash", reward_coins: 4000, status: "completed_by_child" }
-      ] : []);
+  const activeTasks = (tasksList && tasksList.length > 0) ? tasksList.slice(0, 3) : [];
 
   if (activeTasks.length === 0) {
     container.innerHTML = `
@@ -3796,24 +3770,7 @@ function renderChildDashboardCastles() {
   const container = document.getElementById("childDashboardZonesList");
   if (!container) return;
 
-  if (!isDemoMode && (!geofencesList || geofencesList.length === 0)) {
-    container.innerHTML = `
-      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
-        <span class="text-lg">🛡️</span>
-        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
-        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
-      </div>
-    `;
-    return;
-  }
-
-  const places = (geofencesList && geofencesList.length > 0)
-    ? geofencesList
-    : (isDemoMode ? [
-        { name: "Uyimiz (Asosiy Baza 🏡)", radius_meters: 200 },
-        { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
-        { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
-      ] : []);
+  const places = (geofencesList && geofencesList.length > 0) ? geofencesList : [];
 
   if (places.length === 0) {
     container.innerHTML = `
@@ -3838,13 +3795,22 @@ function renderChildDashboardCastles() {
     else if (n.includes("sport") || n.includes("zal")) icon = "🥋";
     else if (n.includes("bobo") || n.includes("buvi") || n.includes("ota")) icon = "👵";
 
+    const fenceNameEscaped = (c.name || "").replace(/'/g, "\\'");
+    const fLat = c.latitude || 0;
+    const fLon = c.longitude || 0;
+    const fRad = c.radius_meters || 100;
+    const fId = c.id || (i + 1);
+
     return `
-      <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
-        <span class="text-xl shrink-0">${icon}</span>
-        <div class="min-w-0">
-          <p class="font-bold text-white text-xs truncate">${c.name}</p>
-          <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
+      <div onclick="openChildZoneOnMap('${fId}', ${fLat}, ${fLon}, '${fenceNameEscaped}', ${fRad})" class="cursor-pointer active:scale-95 transition bg-slate-950/60 hover:bg-slate-900 p-2.5 rounded-2xl border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between gap-2 shadow-sm" title="Xaritada ko'rish">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl shrink-0">${icon}</span>
+          <div class="min-w-0">
+            <p class="font-bold text-white text-xs truncate">${escapeHtml(c.name || 'Makon')}</p>
+            <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(fRad)}m)</p>
+          </div>
         </div>
+        <span class="text-slate-400 hover:text-emerald-400 text-xs shrink-0">🗺️</span>
       </div>
     `;
   }).join("");
@@ -4316,47 +4282,7 @@ async function loadTasks() {
 }
 
 function renderDemoTasks() {
-  tasksList = [
-    {
-      id: 991,
-      title: "Matematika darslarini qilish",
-      description: "45-sahifadagi 1-dan 5-gacha bo'lgan misollar",
-      reward_coins: 5000,
-      status: "pending",
-      media_type: null,
-      media_url: null,
-      seen_at: null,
-      promised_time: null,
-      proof_photo_url: null,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 992,
-      title: "Xonani tartibga keltirish",
-      description: "Kitoblarni taxlab, kiyimlarni joyiga qo'yish",
-      reward_coins: 3000,
-      status: "scheduled",
-      media_type: null,
-      media_url: null,
-      seen_at: new Date().toISOString(),
-      promised_time: "30 daqiqadan keyin",
-      proof_photo_url: null,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 993,
-      title: "Ingliz tili yangi lug'at yodlash",
-      description: "Unit 4 mavzusidagi 15 ta yangi so'zni daftarga yozib yodlash",
-      reward_coins: 4000,
-      status: "completed_by_child",
-      media_type: null,
-      media_url: null,
-      seen_at: new Date().toISOString(),
-      promised_time: "1 soat ichida",
-      proof_photo_url: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80",
-      created_at: new Date().toISOString()
-    }
-  ];
+  tasksList = [];
   renderTasksList();
 }
 
@@ -7265,12 +7191,13 @@ function renderParentWalkSafeBanner(walkSafe) {
 // FUNKSIYA 4: "ORZULAR QUTISI" (Wishlist / Bolaning maqsadi)
 // ----------------------------------------------------------------------------
 let currentWishlistData = {
-  title: "Yangi Velosiped 🚲",
-  target_som: 600000,
+  title: "",
+  target_som: 0,
   balance: 0,
   percent: 0,
-  remaining_som: 600000,
-  is_reached: false
+  remaining_som: 0,
+  is_reached: false,
+  has_custom_target: false
 };
 
 async function loadWishlist(childId) {
@@ -7289,10 +7216,13 @@ async function loadWishlist(childId) {
 
 function renderWishlistUI(wl) {
   if (!wl) return;
+  const hasTarget = Boolean(wl.target_som && wl.target_som > 0 && wl.title && wl.title.trim().length > 0 && wl.title !== "Yangi Velosiped 🚲");
   const titleEl = document.getElementById("wishlistTitleText");
-  if (titleEl) titleEl.textContent = `Maqsad: ${wl.title || 'Yangi Velosiped 🚲'}`;
+  if (titleEl) {
+    titleEl.textContent = hasTarget ? `Maqsad: ${wl.title}` : "Maqsad: Hali belgilanmagan 🎯";
+  }
 
-  const pct = Math.min(100, Math.max(0, wl.percent || 0));
+  const pct = hasTarget ? Math.min(100, Math.max(0, wl.percent || 0)) : 0;
   const pctEl = document.getElementById("wishlistPercentBadge");
   if (pctEl) pctEl.textContent = `${pct}%`;
 
@@ -7301,14 +7231,21 @@ function renderWishlistUI(wl) {
 
   const moneyEl = document.getElementById("wishlistMoneyProgress");
   if (moneyEl) {
-    const balStr = (wl.balance || 0).toLocaleString();
-    const tgtStr = (wl.target_som || 600000).toLocaleString();
-    moneyEl.textContent = `${balStr} / ${tgtStr} so'm`;
+    if (hasTarget) {
+      const balStr = (wl.balance || 0).toLocaleString();
+      const tgtStr = (wl.target_som || 0).toLocaleString();
+      moneyEl.textContent = `${balStr} / ${tgtStr} so'm`;
+    } else {
+      moneyEl.textContent = `0 / 0 so'm`;
+    }
   }
 
   const remEl = document.getElementById("wishlistRemainingText");
   if (remEl) {
-    if (wl.is_reached || pct >= 100) {
+    if (!hasTarget) {
+      remEl.textContent = "Orzu maqsadini belgilash uchun bosing ✏️";
+      remEl.className = "text-slate-400 font-medium";
+    } else if (wl.is_reached || pct >= 100) {
       remEl.textContent = "🎉 Orzu ushaldi! Tabriklaymiz!";
       remEl.className = "text-amber-300 font-bold animate-pulse";
     } else {
@@ -8544,3 +8481,56 @@ async function saveNewParentPin() {
   } catch (e) {}
 }
 
+
+
+// Child Interactive Safe Zone Map Explorer
+function openChildZoneOnMap(id, lat, lon, name, radius) {
+  haptic("medium");
+  const zonesModal = document.getElementById("modal-zones");
+  if (zonesModal) zonesModal.classList.add("hidden");
+
+  openChildMapModal();
+
+  if (map && lat && lon) {
+    setTimeout(() => {
+      map.invalidateSize();
+      map.flyTo([lat, lon], 17, { animate: true, duration: 1.0 });
+
+      L.popup({ offset: [0, -10] })
+        .setLatLng([lat, lon])
+        .setContent(`
+          <div class="p-2 text-center">
+            <p class="font-black text-sm text-slate-900">🛡️ ${escapeHtml(name || 'Xavfsiz Makon')}</p>
+            <p class="text-xs text-emerald-600 font-bold mt-1">Xavfsiz hudud radiusi: ${Math.round(radius || 100)}m</p>
+          </div>
+        `)
+        .openOn(map);
+    }, 150);
+  } else {
+    showToast(`📍 ${name || 'Xavfsiz makon'}`);
+  }
+}
+window.openChildZoneOnMap = openChildZoneOnMap;
+
+function openAllChildZonesOnMap() {
+  haptic("medium");
+  const zonesModal = document.getElementById("modal-zones");
+  if (zonesModal) zonesModal.classList.add("hidden");
+
+  openChildMapModal();
+
+  setTimeout(() => {
+    if (map) {
+      map.invalidateSize();
+      if (geofenceLayers && geofenceLayers.length > 0) {
+        const group = new L.featureGroup(geofenceLayers.concat(childMarker ? [childMarker] : []));
+        map.fitBounds(group.getBounds().pad(0.25));
+        showToast(`🛡️ ${geofencesList.length} ta xavfsiz makon xaritada`);
+      } else if (childMarker) {
+        centerOnChild();
+        showToast("Hozircha xavfsiz makonlar qo'shilmagan 🛡️");
+      }
+    }
+  }, 150);
+}
+window.openAllChildZonesOnMap = openAllChildZonesOnMap;

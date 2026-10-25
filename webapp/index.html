@@ -311,7 +311,7 @@
         <!-- Piggy Bank Vault Pill -->
         <button onclick="switchTab('wallet')" class="flex items-center gap-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 text-emerald-300 border border-emerald-500/35 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black shadow-md transition active:scale-95 shrink-0" title="Jamg'armam">
           <span class="text-xs">🐷</span>
-          <span id="childHeroMoneyText" class="truncate font-black max-w-[70px] xs:max-w-[95px] sm:max-w-none">180,000 so'm</span>
+          <span id="childHeroMoneyText" class="truncate font-black max-w-[70px] xs:max-w-[95px] sm:max-w-none">0 so'm</span>
         </button>
 
         <!-- Mobil ilova (Android APK / iPhone) -->
@@ -349,7 +349,7 @@
           <span>🌟</span> <span id="childBannerName">Bugungi sarguzasht</span>
         </p>
         <p class="text-emerald-300 font-bold text-[11px] mt-0.5" id="childBannerMoney">
-          💰 Sizda hozir 180,000 so'm bor! (18,000 tanga)
+          💰 Sizda hozir 0 so'm bor! (0 tanga)
         </p>
       </div>
       <button onclick="switchTab('tasks')" class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white rounded-xl font-black text-xs shadow-md transition active:scale-95 flex items-center gap-1">
@@ -760,7 +760,7 @@
           <div class="bg-black/30 p-2.5 rounded-2xl border border-emerald-500/20">
             <p class="text-[10px] text-slate-400">Hisobdagi tangalar:</p>
             <p id="childPortalCoinsText" class="text-sm font-black text-amber-300 flex items-center gap-1 mt-0.5">
-              <span>🪙</span> <span>18,000 tanga</span>
+              <span>🪙</span> <span>0 tanga</span>
             </p>
           </div>
           <div class="bg-black/30 p-2.5 rounded-2xl border border-emerald-500/20">
@@ -856,10 +856,16 @@
             <span>🛡️</span>
             <span data-i18n="safe_castles">Mening Xavfsiz Makonlarim</span>
           </h3>
-          <button onclick="switchTab('zones')" class="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-0.5">
-            <span>Ko'rish</span>
-            <i data-lucide="arrow-right" class="w-3 h-3"></i>
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button onclick="openAllChildZonesOnMap()" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 transition active:scale-95 shadow-sm">
+              <i data-lucide="map" class="w-3.5 h-3.5"></i>
+              <span>Xaritada</span>
+            </button>
+            <button onclick="switchTab('zones')" class="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-0.5">
+              <span>Ro'yxat</span>
+              <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </button>
+          </div>
         </div>
 
         <div id="childDashboardZonesList" class="grid grid-cols-2 gap-2 text-xs">
@@ -1056,7 +1062,7 @@
         </p>
         <p id="childWalletCoinsText" class="text-xs text-amber-400 font-bold mt-1 flex items-center gap-1">
           <i data-lucide="coins" class="w-3.5 h-3.5"></i>
-          <span>18,000 tanga (Kurs: 1k = 10,000 so'm)</span>
+          <span>0 tanga (Kurs: 1k = 10,000 so'm)</span>
         </p>
       </div>
 
@@ -1065,7 +1071,7 @@
         <div class="flex justify-between items-center text-xs font-bold mb-1.5">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="text-base shrink-0">🎯</span>
-            <span id="wishlistTitleText" class="text-white truncate">Maqsad: Yangi Velosiped 🚲</span>
+            <span id="wishlistTitleText" class="text-white truncate">Maqsad: Hali belgilanmagan 🎯</span>
             <button onclick="openEditWishlistModal()" class="p-1 text-emerald-400 hover:text-emerald-200 transition shrink-0" title="Maqsadni o'zgartirish">
               <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
             </button>
@@ -1076,8 +1082,8 @@
           <div id="wishlistProgressBar" class="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-amber-400 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
         <div class="flex justify-between items-center text-[10px] sm:text-[11px] text-slate-300 mt-1.5">
-          <span id="wishlistMoneyProgress">0 / 600,000 so'm</span>
-          <span id="wishlistRemainingText" class="text-emerald-300 font-semibold">Yuklanmoqda...</span>
+          <span id="wishlistMoneyProgress">0 / 0 so'm</span>
+          <span id="wishlistRemainingText" class="text-slate-400 font-medium">Orzu maqsadini belgilash uchun bosing ✏️</span>
         </div>
       </div>
 
