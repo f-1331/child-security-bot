@@ -7,9 +7,8 @@ if sys.stdout.encoding.lower() != 'utf-8':
 
 urls = [
     # Android APKs
-    ("Android Parent APK (Vercel redirect)", "https://child-security-bot.vercel.app/download/parent-apk"),
-    ("Android Child APK (Vercel redirect)", "https://child-security-bot.vercel.app/download/child-apk"),
-    ("Android APK generic (Vercel redirect)", "https://child-security-bot.vercel.app/download/apk"),
+    ("Android Parent APK (Vercel)", "https://child-security-bot.vercel.app/download/parent-apk"),
+    ("Android Child APK (Vercel)", "https://child-security-bot.vercel.app/download/child-apk"),
     
     # iOS (iPhone / iPad) Profile
     ("iOS MobileConfig (Vercel route)", "https://child-security-bot.vercel.app/download/ios-profile"),
@@ -17,12 +16,15 @@ urls = [
     
     # Windows Desktop
     ("Windows BAT setup (Vercel route)", "https://child-security-bot.vercel.app/download/desktop-windows"),
-    ("Windows BAT setup static (Vercel static)", "https://child-security-bot.vercel.app/downloads/ChildSecurity_Desktop_Setup.bat"),
+    ("Windows ZIP package (Vercel route)", "https://child-security-bot.vercel.app/download/desktop-windows-zip"),
     
     # Apple Mac Desktop
     ("Mac Setup ZIP (Vercel route)", "https://child-security-bot.vercel.app/download/desktop-mac"),
-    ("Mac Setup ZIP static (Vercel static)", "https://child-security-bot.vercel.app/downloads/ChildSecurity_Mac_Setup.zip"),
-    ("Mac Setup Command static (Vercel static)", "https://child-security-bot.vercel.app/downloads/ChildSecurity_Mac_Setup.command"),
+    
+    # Linux Desktop
+    ("Linux Setup ZIP (Vercel route)", "https://child-security-bot.vercel.app/download/desktop-linux"),
+    ("Linux Setup SH static", "https://child-security-bot.vercel.app/downloads/ChildSecurity_Linux_Setup.sh"),
+    ("Linux Desktop static", "https://child-security-bot.vercel.app/downloads/ChildSecurity.desktop"),
 
     # Direct Render backend endpoints
     ("Render Parent APK", "https://child-security-site.onrender.com/download/parent-apk"),
@@ -31,11 +33,11 @@ urls = [
     ("Render Windows BAT", "https://child-security-site.onrender.com/download/desktop-windows"),
 ]
 
-print("=== CHECKING ALL DOWNLOAD CHANNELS ACROSS ALL PLATFORMS ===")
+print("=== CHECKING ALL PLATFORMS (WINDOWS, MAC, LINUX, IOS, ANDROID) ===")
 all_passed = True
 for name, u in urls:
     try:
-        req = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)'})
+        req = urllib.request.Request(u, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
         res = urllib.request.urlopen(req, timeout=20)
         content_type = res.headers.get("Content-Type", "")
         content_length = res.headers.get("Content-Length", "unknown")
@@ -45,6 +47,6 @@ for name, u in urls:
         print(f"❌ [FAIL] {name}\n    URL: {u}\n    Error: {e}\n")
 
 if all_passed:
-    print("🎉 ALL DOWNLOAD PLATFORMS ARE 100% OPERATIONAL!")
+    print("🎉 ALL DOWNLOAD CHANNELS ACROSS WINDOWS, MAC, LINUX, IOS, ANDROID ARE 100% OPERATIONAL!")
 else:
     print("⚠️ SOME PLATFORMS NEED ATTENTION!")

@@ -1573,22 +1573,18 @@
           </span>
           <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded-md font-bold">Rasmiy</span>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1">
-          <a href="/download/parent-apk" target="_blank" class="py-2 px-1 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Ota-ona uchun Android ilovasi">
-            <i data-lucide="download" class="w-3.5 h-3.5 shrink-0"></i>
-            <span class="truncate">👨‍👩‍👧 Ota-ona</span>
-          </a>
-          <a href="/download/child-apk" target="_blank" class="py-2 px-1 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Farzand uchun Android ilovasi">
-            <i data-lucide="download" class="w-3.5 h-3.5 shrink-0"></i>
-            <span class="truncate">👦 Farzand</span>
-          </a>
-          <button type="button" onclick="openInstallAppModal('ios')" class="py-2 px-1 bg-slate-700/50 hover:bg-slate-700/80 border border-slate-500/40 text-slate-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Apple iPhone va iPad uchun qo'llanma">
-            <i data-lucide="apple" class="w-3.5 h-3.5 shrink-0 text-slate-200"></i>
-            <span class="truncate">🍎 iPhone</span>
+        <div class="grid grid-cols-3 gap-1.5 mt-1">
+          <button type="button" onclick="openInstallAppModal('android')" class="py-2.5 px-1 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-400/40 text-emerald-200 hover:text-white text-[11px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Android uchun universal ilova (.apk)">
+            <i data-lucide="smartphone" class="w-4 h-4 shrink-0 text-emerald-400"></i>
+            <span class="truncate">🤖 Android APK</span>
           </button>
-          <button type="button" onclick="openInstallAppModal('desktop')" class="py-2 px-1 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Windows va Mac noutbuklari uchun desktop o'rnatgichlar">
-            <i data-lucide="laptop" class="w-3.5 h-3.5 shrink-0 text-cyan-300"></i>
-            <span class="truncate">💻 Noutbuk</span>
+          <button type="button" onclick="openInstallAppModal('ios')" class="py-2.5 px-1 bg-slate-700/50 hover:bg-slate-700/80 border border-slate-500/40 text-slate-200 hover:text-white text-[11px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Apple iPhone va iPad uchun qo'llanma">
+            <i data-lucide="apple" class="w-4 h-4 shrink-0 text-slate-200"></i>
+            <span class="truncate">🍎 iPhone / iOS</span>
+          </button>
+          <button type="button" onclick="openInstallAppModal('desktop')" class="py-2.5 px-1 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 hover:text-white text-[11px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Windows, Mac va Linux uchun noutbuk dasturlari">
+            <i data-lucide="laptop" class="w-4 h-4 shrink-0 text-cyan-300"></i>
+            <span class="truncate">💻 Noutbuk (3 OS)</span>
           </button>
         </div>
       </div>
@@ -2781,23 +2777,14 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-          <a href="/download/parent-apk" target="_blank" class="py-2.5 px-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
+        <div class="mt-2 space-y-2">
+          <a href="/download/child-apk" target="_blank" class="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
             <i data-lucide="download" class="w-4 h-4 shrink-0"></i>
-            <span class="truncate">👨‍👩‍👧 Ota-ona</span>
+            <span>Universal Android Ilovasini Yuklab Olish (.apk)</span>
           </a>
-          <a href="/download/child-apk" target="_blank" class="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
-            <i data-lucide="download" class="w-4 h-4 shrink-0"></i>
-            <span class="truncate">👦 Farzand</span>
-          </a>
-          <button type="button" onclick="switchInstallTab('ios')" class="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-xs rounded-xl border border-slate-600 shadow-lg flex items-center justify-center gap-1.5 transition">
-            <i data-lucide="apple" class="w-4 h-4 shrink-0"></i>
-            <span class="truncate">🍎 iPhone</span>
-          </button>
-          <a href="/downloads/ChildSecurity_Desktop_Setup.bat" download="ChildSecurity_Desktop_Setup.bat" class="py-2.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
-            <i data-lucide="laptop" class="w-4 h-4 shrink-0 text-cyan-300"></i>
-            <span class="truncate">💻 Noutbuk</span>
-          </a>
+          <p class="text-[10px] text-slate-400 text-center">
+            💡 <i>Bitta ilovada ikkala rejim: o'rnatilgach «Ota-ona» yoki «Farzand» tanlanadi.</i>
+          </p>
         </div>
 
         <!-- Android Play Protect & Unknown Sources Guide -->

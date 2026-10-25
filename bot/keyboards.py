@@ -25,21 +25,17 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="👨‍👩‍👧 Ota-ona ilovasi (.apk)",
-                    callback_data="download_parent_apk"
+                    text="🤖 Android ilovasi (.apk)",
+                    callback_data="download_android"
                 ),
-                InlineKeyboardButton(
-                    text="👦 Farzand ilovasi (.apk)",
-                    callback_data="download_child_apk"
-                ),
-            ],
-            [
                 InlineKeyboardButton(
                     text="🍎 iPhone / iPad (iOS)",
                     callback_data="download_ios"
                 ),
+            ],
+            [
                 InlineKeyboardButton(
-                    text="💻 Noutbuk dasturi",
+                    text="💻 Noutbuk dasturi (PC / Mac / Linux)",
                     callback_data="download_desktop"
                 ),
             ],
@@ -56,16 +52,16 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
 def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     """
     Main persistent reply keyboard for Parent.
-    Includes Parent App, Child App, Laptop App, Instant Location, Send Live Location, Web App Mini App, Kerakli joylar, Telemetry, and Tasks.
+    Includes Mobile Apps (Android/iOS), Laptop App (PC/Mac/Linux), Instant Location, Send Live Location, Web App Mini App, Kerakli joylar, Telemetry, and Tasks.
     """
     keyboard = [
         [
-            KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
-            KeyboardButton(text="👦 Farzand ilovasi (APK)"),
+            KeyboardButton(text="📱 Telefon uchun ilova (Android & iOS)"),
+            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
+            KeyboardButton(text="🤖 Android ilovasi (APK)"),
             KeyboardButton(text="🍎 iPhone / iOS (O'rnatish)"),
-            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
@@ -115,12 +111,12 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
     """
     keyboard = [
         [
-            KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
-            KeyboardButton(text="👦 Farzand ilovasi (APK)"),
+            KeyboardButton(text="📱 Telefon uchun ilova (Android & iOS)"),
+            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
+            KeyboardButton(text="🤖 Android ilovasi (APK)"),
             KeyboardButton(text="🍎 iPhone / iOS (O'rnatish)"),
-            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
             KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True),
