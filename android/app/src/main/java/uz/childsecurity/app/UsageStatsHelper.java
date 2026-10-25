@@ -66,7 +66,7 @@ public class UsageStatsHelper {
                     long endTime = System.currentTimeMillis();
 
                     List<UsageStats> statsList = usm.queryUsageStats(
-                            UsageStatsManager.INTERVAL_DAILY,
+                            UsageStatsManager.INTERVAL_BEST,
                             startTime,
                             endTime
                     );
@@ -84,7 +84,7 @@ public class UsageStatsHelper {
 
                         for (UsageStats us : statsList) {
                             long fgMillis = us.getTotalTimeInForeground();
-                            if (fgMillis < 30000) continue; // Skip apps used < 30 seconds
+                            if (fgMillis < 5000) continue; // Skip apps used < 5 seconds
 
                             String pkg = us.getPackageName();
                             if (pkg.equals(context.getPackageName())) continue;

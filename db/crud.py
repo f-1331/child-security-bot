@@ -246,6 +246,8 @@ async def get_coin_rate_for_user(session: AsyncSession, user_id: int) -> tuple[i
 
     return (1000, 10000)
 
+get_user_coin_rate = get_coin_rate_for_user  # Alias for backward compatibility
+
 
 def calculate_som_from_coins(coins: int, rate_coins: int = 1000, rate_som: int = 10000) -> int:
     """Calculate equivalent real money in so'm for given coins."""
@@ -840,7 +842,7 @@ async def get_child_wishlist(session: AsyncSession, child_id: int) -> dict:
             "progress_percent": 0,
             "is_achieved": False
         }
-    rate_coins, rate_som = await get_user_coin_rate(session, child_id)
+    rate_coins, rate_som = await get_coin_rate_for_user(session, child_id)
     current_som = calculate_som_from_coins(child.virtual_balance or 0, rate_coins, rate_som)
     title = child.wishlist_title or "Yangi Velosiped 🚲"
     target_som = child.wishlist_target_som if child.wishlist_target_som and child.wishlist_target_som > 0 else 600000
@@ -957,8 +959,16 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
             if p2.speed > max_speed:
                 max_speed = p2.speed
 
-    first_signal = logs[0].recorded_at.strftime('%H:%M') if logs else None
-    last_signal = logs[-1].recorded_at.strftime('%H:%M') if logs else None
+    tashkent_tz = timezone(timedelta(hours=5))
+    first_signal = None
+    last_signal = None
+    if logs:
+        if logs[0].recorded_at:
+            dt0 = logs[0].recorded_at if logs[0].recorded_at.tzinfo else logs[0].recorded_at.replace(tzinfo=timezone.utc)
+            first_signal = dt0.astimezone(tashkent_tz).strftime('%H:%M')
+        if logs[-1].recorded_at:
+            dt1 = logs[-1].recorded_at if logs[-1].recorded_at.tzinfo else logs[-1].recorded_at.replace(tzinfo=timezone.utc)
+            last_signal = dt1.astimezone(tashkent_tz).strftime('%H:%M')
     battery_level = logs[-1].battery_level if logs and logs[-1].battery_level is not None else None
 
     # 2. Geofences visited today
@@ -986,7 +996,7 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
         )
     )
     completed_tasks = list(tasks_res.scalars().all())
-    rate_coins, rate_som = await get_user_coin_rate(session, child_id)
+    rate_coins, rate_som = await get_coin_rate_for_user(session, child_id)
     earned_coins = sum(t.reward_coins for t in completed_tasks)
     earned_som = calculate_som_from_coins(earned_coins, rate_coins, rate_som)
 
@@ -1358,8 +1368,9 @@ async def save_app_usage_report(
 ) -> AppUsageReport:
     """Save daily app usage telemetry from child's device."""
     stats = app_stats if app_stats is not None else (apps or [])
+    tashkent_tz = timezone(timedelta(hours=5))
     if not report_date:
-        report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        report_date = datetime.now(tashkent_tz).strftime("%Y-%m-%d")
     stmt = select(AppUsageReport).where(
         AppUsageReport.child_id == child_id,
         AppUsageReport.report_date == report_date
@@ -1389,13 +1400,24 @@ upsert_app_usage_report = save_app_usage_report
 
 async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> dict:
     """Fetch today's screen time report and per-app usage stats."""
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tashkent_tz = timezone(timedelta(hours=5))
+    today_tashkent = datetime.now(tashkent_tz).strftime("%Y-%m-%d")
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     stmt = select(AppUsageReport).where(
         AppUsageReport.child_id == child_id,
-        AppUsageReport.report_date == today_str
-    )
+        AppUsageReport.report_date.in_([today_tashkent, today_utc])
+    ).order_by(AppUsageReport.id.desc())
     res = await session.execute(stmt)
-    report = res.scalar_one_or_none()
+    report = res.scalars().first()
+
+    # Fallback to the latest available report if today has none yet
+    if not report:
+        stmt_fb = select(AppUsageReport).where(
+            AppUsageReport.child_id == child_id
+        ).order_by(AppUsageReport.id.desc()).limit(1)
+        res_fb = await session.execute(stmt_fb)
+        report = res_fb.scalars().first()
+
     policy = await get_or_create_device_policy(session, child_id)
     try:
         blocked_list = json.loads(policy.blocked_packages or "[]")
@@ -1431,7 +1453,7 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
     other_sec = max(0, total_seconds - (games_sec + social_sec + chat_sec))
 
     return {
-        "report_date": today_str,
+        "report_date": report.report_date if report else today_tashkent,
         "total_screen_time_seconds": total_seconds,
         "total_screen_time_formatted": formatted_time,
         "unlock_count": unlock_count,

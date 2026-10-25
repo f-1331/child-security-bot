@@ -883,7 +883,7 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
     try:
         await bot.send_message(
             chat_id=child.id,
-            text="🔔 Ota-onangiz joriy joylashuvingizni ko'rdi. Joyingiz o'zgarganda '📍 Jonli joylashuvimni yuborish' tugmasini bosishni unutmang.",
+            text="🛡️ **Ota-onangiz joylashuvingizni tekshirdi.**\n\nJoylashuvingiz va xavfsizligingiz avtomatik himoyada.",
             parse_mode="Markdown"
         )
     except Exception:
@@ -1220,7 +1220,8 @@ async def on_refresh_battery_callback(callback: CallbackQuery):
 # Daily Route Summary ("📊 Bugungi hisobot")
 # ---------------------------------------------------------
 
-@router.message(F.text == "📊 Bugungi hisobot")
+@router.message(Command("report", "hisobot", "kunlik"))
+@router.message(F.text.in_({"📊 Bugungi hisobot", "Bugungi hisobot", "Hisobot", "hisobot"}))
 async def on_daily_summary_pressed(message: Message):
     """Parent checks summary of movements and daily safety statistics today."""
     parent_id = message.from_user.id
@@ -1232,9 +1233,68 @@ async def on_daily_summary_pressed(message: Message):
             return
 
         for ch in children:
-            rep = await crud.generate_daily_safety_report(session, ch.id)
-            c_name = html.escape(rep["child_name"])
+            try:
+                rep = await crud.generate_daily_safety_report(session, ch.id)
+                c_name = html.escape(rep["child_name"])
 
+                zones_list = rep["visited_zones"]
+                if zones_list:
+                    zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
+                    est_time = sum(z["est_minutes"] for z in zones_list)
+                    hours = est_time // 60
+                    mins = est_time % 60
+                    time_str = f"{hours} soat {mins} daqiqa" if hours > 0 else f"{mins} daqiqa"
+                else:
+                    zones_str = "Hali qayd etilmagan"
+                    time_str = "0 daqiqa"
+
+                wishlist = rep.get("wishlist") or {}
+                w_title = html.escape(wishlist.get("title") or "Orzu")
+                w_prog = wishlist.get("progress_percent", 0)
+                w_cur = wishlist.get("current_som", 0)
+                w_tgt = wishlist.get("target_som", 0)
+
+                batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
+                spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
+
+                report_msg = (
+                    f"📊 <b>KUNLIK XAVFSIZLIK VA HARAKAT HISOBOTI</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Farzand:</b> {c_name}\n\n"
+                    f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
+                    f"   └ {zones_str}\n\n"
+                    f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
+                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {rep['total_distance_km']} km ({rep['points_count']} ta signal)\n"
+                    f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
+                    f"🔋 <b>Hozirgi batareya:</b> {batt_str}\n\n"
+                    f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
+                    f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
+                )
+                report_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🗺 Xaritada harakat marshrutini ko'rish", web_app=WebAppInfo(url=settings.MINI_APP_URL))],
+                    [InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"refresh_report:{ch.id}")]
+                ])
+                await message.answer(report_msg, reply_markup=report_kb, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Error generating daily summary for child {ch.id}: {e}", exc_info=True)
+                safe_name = html.escape(ch.full_name or "Farzand")
+                await message.answer(
+                    f"📊 <b>{safe_name}</b> uchun bugungi ma'lumotlar jamlanmoqda...\n"
+                    f"Farzandingiz telefonidan yangi GPS nuqtalari kelishi bilan hisobot to'liq shakllanadi.",
+                    parse_mode="HTML"
+                )
+
+
+@router.callback_query(F.data.startswith("refresh_report:"))
+async def on_refresh_report_callback(callback: CallbackQuery):
+    """Parent refreshes daily report inline."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        try:
+            rep = await crud.generate_daily_safety_report(session, child_id)
+            c_name = html.escape(rep["child_name"])
             zones_list = rep["visited_zones"]
             if zones_list:
                 zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
@@ -1270,7 +1330,15 @@ async def on_daily_summary_pressed(message: Message):
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
             )
-            await message.answer(report_msg, parse_mode="HTML")
+            report_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🗺 Xaritada harakat marshrutini ko'rish", web_app=WebAppInfo(url=settings.MINI_APP_URL))],
+                [InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"refresh_report:{child_id}")]
+            ])
+            await callback.message.edit_text(report_msg, reply_markup=report_kb, parse_mode="HTML")
+            await callback.answer("🔄 Hisobot yangilandi!")
+        except Exception as e:
+            logger.error(f"Error refreshing daily report: {e}")
+            await callback.answer("Hozircha yangi ma'lumot yo'q.")
 
 
 # ---------------------------------------------------------
@@ -4756,7 +4824,12 @@ def generate_screen_time_card(child, report, policy, all_children=None):
             bl = " 🛑 _Bloklangan_" if a.get("is_blocked") else ""
             apps_lines.append(f"{i}. {icon} **{name}** — `{dur_str}` ({pct}%)\\n   `[{bar}]`{bl}")
     else:
-        apps_lines.append("_Bugun hali telefon ishlatilmagan yoki ilovalar ochilmagan._")
+        apps_lines.append(
+            "_Bugun hali ilovalar sarfi qayd etilmagan._\n\n"
+            "💡 **Nega 0 daqiqa ko'rsatmoqda?**\n"
+            "1. **Android ilova (APK):** Boshqa ilovalar sarfini (YouTube, TikTok, o'yinlar) aniqlash uchun bola telefoniga **Android APK** ilovamiz o'rnatilgan bo'lishi lozim (brauzerlar boshqa ilovalarni ko'ra olmaydi);\n"
+            "2. **Maxsus ruxsat:** Farzand telefonida _Sozlamalar ➔ Maxsus kirish ➔ Foydalanish statistikasi (Usage Access)_ ruxsati yoqilgan bo'lishi shart."
+        )
 
     apps_text = "\n".join(apps_lines)
 

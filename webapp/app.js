@@ -5781,6 +5781,42 @@ window.sendLocationUpdate = function() {
   if (targetId) fetchInstantChildLocation(targetId);
 };
 
+// Web screen time accumulator for browser/Telegram visitors
+let _webScreenTimeAccumulatedSeconds = 0;
+
+function startChildWebSessionTracker(childId) {
+  if (!childId || isDemoMode) return;
+  if (window._childWebSessionTimer) clearInterval(window._childWebSessionTimer);
+
+  window._childWebSessionTimer = setInterval(async () => {
+    if (currentRole !== "child" || document.hidden) return;
+    _webScreenTimeAccumulatedSeconds += 30;
+
+    // Every 60 seconds of active browser usage, upload to backend if native APK isn't already reporting
+    if (_webScreenTimeAccumulatedSeconds >= 60 && !window.AndroidBridge) {
+      try {
+        await fetch(`/api/v1/webapp/child/${childId}/app-usage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            total_screen_time_seconds: _webScreenTimeAccumulatedSeconds,
+            unlock_count: 1,
+            app_stats: [
+              {
+                package: "org.telegram.messenger",
+                app_name: "Telegram & Mini App",
+                usage_seconds: _webScreenTimeAccumulatedSeconds,
+                category: "social",
+                icon: "smartphone"
+              }
+            ]
+          })
+        });
+      } catch (e) {}
+    }
+  }, 30000);
+}
+
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
@@ -5799,6 +5835,9 @@ function initChildPermissionsAndTracking(childId) {
 
   // Start HTTP fallback polling for active check alerts
   startChildNotificationPolling(childId);
+
+  // Start active screen time session tracker for web/Telegram visitors
+  startChildWebSessionTracker(childId);
 
   // ALWAYS attempt background telemetry acquisition immediately so live signal connects with 0 wait!
   trySilentBackgroundLocationTracking(childId);
