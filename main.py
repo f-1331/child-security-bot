@@ -71,40 +71,64 @@ def prevent_windows_sleep():
 
 
 async def ensure_cached_apk():
-    """Ensure ChildSecurity.apk is available locally for instant bot and web downloads."""
+    """Ensure ChildSecurity.apk, ChildSecurity_Parent.apk, and ChildSecurity_Child.apk are available locally for instant bot and web downloads."""
     downloads_dir = Path(settings.BASE_DIR) / "downloads"
     downloads_dir.mkdir(parents=True, exist_ok=True)
     apk_file = downloads_dir / "ChildSecurity.apk"
-    if apk_file.exists() and apk_file.stat().st_size > 1_000_000:
-        logger.info(f"Local APK cache verified: {apk_file} ({apk_file.stat().st_size} bytes)")
-        return
+    parent_apk = downloads_dir / "ChildSecurity_Parent.apk"
+    child_apk = downloads_dir / "ChildSecurity_Child.apk"
 
     direct_url = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
-    logger.info(f"Downloading APK cache from {direct_url} ...")
-    try:
-        import httpx
-        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
-            resp = await client.get(direct_url)
-            if resp.status_code == 200 and len(resp.content) > 1_000_000:
-                with open(apk_file, "wb") as f_out:
-                    f_out.write(resp.content)
-                logger.info(f"Downloaded and cached APK to {apk_file} ({len(resp.content)} bytes).")
-            else:
-                logger.warning(f"Failed to fetch APK cache: HTTP {resp.status_code}")
-    except Exception as e:
-        logger.warning(f"Could not pre-cache APK: {e}")
+    direct_parent = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
+    direct_child = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
 
-    try:
-        import shutil
-        parent_apk = downloads_dir / "ChildSecurity_Parent.apk"
-        child_apk = downloads_dir / "ChildSecurity_Child.apk"
-        if apk_file.exists():
-            if not parent_apk.exists() or parent_apk.stat().st_size != apk_file.stat().st_size:
+    import httpx
+    import shutil
+
+    # 1. Main APK pre-cache
+    if not (apk_file.exists() and apk_file.stat().st_size > 1_000_000):
+        try:
+            logger.info(f"Downloading APK cache from {direct_url} ...")
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_url)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    with open(apk_file, "wb") as f_out:
+                        f_out.write(resp.content)
+                    logger.info(f"Downloaded and cached APK to {apk_file} ({len(resp.content)} bytes).")
+                else:
+                    logger.warning(f"Failed to fetch APK cache: HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Could not pre-cache APK: {e}")
+
+    # 2. Parent APK pre-cache
+    if not (parent_apk.exists() and parent_apk.stat().st_size > 1_000_000):
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_parent)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    with open(parent_apk, "wb") as f_out:
+                        f_out.write(resp.content)
+                    logger.info(f"Downloaded and cached Parent APK ({len(resp.content)} bytes).")
+                elif apk_file.exists():
+                    shutil.copyfile(apk_file, parent_apk)
+        except Exception:
+            if apk_file.exists():
                 shutil.copyfile(apk_file, parent_apk)
-            if not child_apk.exists() or child_apk.stat().st_size != apk_file.stat().st_size:
+
+    # 3. Child APK pre-cache
+    if not (child_apk.exists() and child_apk.stat().st_size > 1_000_000):
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_child)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    with open(child_apk, "wb") as f_out:
+                        f_out.write(resp.content)
+                    logger.info(f"Downloaded and cached Child APK ({len(resp.content)} bytes).")
+                elif apk_file.exists():
+                    shutil.copyfile(apk_file, child_apk)
+        except Exception:
+            if apk_file.exists():
                 shutil.copyfile(apk_file, child_apk)
-    except Exception as e:
-        logger.warning(f"Could not duplicate parent/child APKs: {e}")
 
 
 # Lifespan context manager for FastAPI
@@ -164,8 +188,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enable high-speed GZip compression for responses > 1KB
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+class SelectiveGZipMiddleware(GZipMiddleware):
+    """
+    Apply GZip compression only to compressible web assets and JSON payloads.
+    Bypasses binary APKs, setup executables, and pre-compressed assets
+    so mobile installers and download managers receive raw files with accurate Content-Length.
+    """
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            # Exclude download routes and binary archives from GZip compression
+            if path.startswith("/download") or path.endswith((".apk", ".bat", ".zip", ".exe", ".gz")):
+                await self.app(scope, receive, send)
+                return
+        await super().__call__(scope, receive, send)
+
+
+# Enable high-speed GZip compression for responses > 1KB (excluding binary downloads)
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1000)
 
 # Enterprise Security Headers Middleware
 app.add_middleware(SecurityHeadersMiddleware)
@@ -289,10 +329,17 @@ async def download_android_apk():
         target_apk = local_apk
 
     if target_apk:
+        file_size = os.path.getsize(target_apk)
         return FileResponse(
             target_apk,
             filename="ChildSecurity.apk",
-            media_type="application/vnd.android.package-archive"
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff"
+            }
         )
     return RedirectResponse(
         url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
@@ -317,10 +364,17 @@ async def download_parent_apk():
             break
 
     if target:
+        file_size = os.path.getsize(target)
         return FileResponse(
             target,
             filename="ChildSecurity_Parent.apk",
-            media_type="application/vnd.android.package-archive"
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity_Parent.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff"
+            }
         )
     return RedirectResponse(
         url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk",
@@ -345,13 +399,31 @@ async def download_child_apk():
             break
 
     if target:
+        file_size = os.path.getsize(target)
         return FileResponse(
             target,
             filename="ChildSecurity_Child.apk",
-            media_type="application/vnd.android.package-archive"
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity_Child.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff"
+            }
         )
     return RedirectResponse(
         url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
+        status_code=302
+    )
+
+
+@app.get("/download/ios", tags=["App"])
+@app.get("/ios", tags=["App"])
+async def download_ios():
+    """Redirect Apple iOS (iPhone/iPad) users to WebApp PWA installation."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(
+        url="https://child-security-bot.vercel.app/#install-ios",
         status_code=302
     )
 

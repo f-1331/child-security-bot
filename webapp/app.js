@@ -6881,15 +6881,23 @@ window.addEventListener("beforeinstallprompt", (e) => {
   deferredInstallPrompt = e;
 });
 
-function openInstallAppModal() {
+function openInstallAppModal(targetTab) {
   haptic("medium");
   const modal = document.getElementById("modalInstallApp");
   if (modal) {
     modal.classList.remove("hidden");
-    // If opened on laptop/desktop, auto-switch to desktop tab
-    const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isDesktop && window.innerWidth >= 768) {
-      switchInstallTab("desktop");
+    if (targetTab) {
+      switchInstallTab(targetTab);
+    } else {
+      const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isIos) {
+        switchInstallTab("ios");
+      } else if (isDesktop && window.innerWidth >= 768) {
+        switchInstallTab("desktop");
+      } else {
+        switchInstallTab("android");
+      }
     }
     if (window.lucide) lucide.createIcons();
   }

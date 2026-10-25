@@ -3065,18 +3065,22 @@ async def on_download_parent_apk(event, bot: Bot):
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/parent-apk"
 
     text = (
-        "👨‍👩‍👧 **Child Security — Ota-ona Ilovasi (Android)**\n\n"
-        "Ushbu ilovani **o'zingizning telefoningizga** o'rnating:\n\n"
-        "💡 _Eslatma: Ushbu ilova sizning telefoningizni kuzatmaydi! Bu ota-onaning shaxsiy boshqaruv pulti bo'lib, barcha farzandlaringizni xaritada kuzatish va nazorat qilish uchun mo'ljallangan._\n\n"
+        "👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (Android)</b>\n\n"
+        "Ushbu ilovani <b>o'zingizning telefoningizga</b> o'rnating:\n\n"
+        "💡 <i>Eslatma: Ushbu ilova sizning telefoningizni kuzatmaydi! Bu ota-onaning shaxsiy boshqaruv pulti bo'lib, barcha farzandlaringizni xaritada kuzatish va nazorat qilish uchun mo'ljallangan.</i>\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🌟 **Ota-ona ilovasi imkoniyatlari:**\n"
-        "• **Jonli Xarita:** Farzandlaringiz qayerda va qanday tezlikda yurganini real-vaqtda ko'rish.\n"
-        "• **📱 Ilovalar & Ekran tahlili:** Farzandingiz bugun qaysi ilovalarda qancha o'tirganini ko'rish.\n"
-        "• **🛑 1-Bosishda Bloklash:** Kerak bo'lganda bolaning barcha ilovalarini masofadan qulflash (faqat qo'ng'iroq va SOS ochiq qoladi).\n"
-        "• **Masofaviy Sirena:** Farzand telefonida bezovta qilmaslik rejimida ham baland ovoz chiqarish.\n"
-        "• **Xavfsiz Makonlar (Geozonalar):** Maktab, uy, bog'chaga kirib-chiqqanini avtomatik bilish.\n"
-        "• **Topshiriqlar & Tangalar:** Farzandga foydali vazifalar berish va rag'batlantirish.\n\n"
-        f"📥 [To'g'ridan-to'g'ri yuklab olish]({apk_download_url})"
+        "🌟 <b>Ota-ona ilovasi imkoniyatlari:</b>\n"
+        "• <b>Jonli Xarita:</b> Farzandlaringiz qayerda va qanday tezlikda yurganini real-vaqtda ko'rish.\n"
+        "• 📱 <b>Ilovalar & Ekran tahlili:</b> Farzandingiz bugun qaysi ilovalarda qancha o'tirganini ko'rish.\n"
+        "• 🛑 <b>1-Bosishda Bloklash:</b> Kerak bo'lganda bolaning barcha ilovalarini masofadan qulflash.\n"
+        "• <b>Masofaviy Sirena:</b> Farzand telefonida baland ovozli sirena chalish.\n"
+        "• <b>Xavfsiz Makonlar (Geozonalar):</b> Maktab, uy, bog'chaga kirib-chiqqanini avtomatik bilish.\n"
+        "• <b>Topshiriqlar & Tangalar:</b> Farzandga foydali vazifalar berish va rag'batlantirish.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️ <b>Android'ga o'rnatishda muammo bo'lsa:</b>\n"
+        "1️⃣ <b>Noma'lum manbalar:</b> Agar telefon ogohlantirsa, <b>«Sozlamalar»</b> ➔ <b>«Ruxsat berish»</b> (Разрешить установку) ni yoqing.\n"
+        "2️⃣ <b>Google Play Protect:</b> Agar <i>«Xavfli bo'lishi mumkin»</i> desa, <b>«Batafsil» (Подробнее)</b> ➔ <b>«Baribir o'rnatish» (Все равно установить)</b> ni bosing.\n\n"
+        "🍎 <i>Sizda iPhone (Apple) bormi? Pastdagi «🍎 iPhone / iOS» tugmasini bosing!</i>"
     )
 
     kb = InlineKeyboardMarkup(
@@ -3089,8 +3093,18 @@ async def on_download_parent_apk(event, bot: Bot):
             ],
             [
                 InlineKeyboardButton(
-                    text="⚡ Tezkor zaxira havola (Vercel CDN)",
+                    text="⚡ Tezkor server havolasi",
                     url=apk_download_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🍎 iPhone / iPad (iOS qo'llanma)",
+                    callback_data="download_ios"
+                ),
+                InlineKeyboardButton(
+                    text="💻 Noutbuk dasturi",
+                    callback_data="download_desktop"
                 )
             ],
             [
@@ -3098,17 +3112,11 @@ async def on_download_parent_apk(event, bot: Bot):
                     text="🌐 Web App Saytini ochish",
                     web_app=WebAppInfo(url=settings.MINI_APP_URL)
                 )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💻 Noutbuk / Kompyuter uchun dastur",
-                    callback_data="download_desktop"
-                )
             ]
         ]
     )
 
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
     local_parent_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Parent.apk")
     local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
@@ -3120,20 +3128,36 @@ async def on_download_parent_apk(event, bot: Bot):
             doc = FSInputFile(target, filename="ChildSecurity_Parent.apk")
             await message.answer_document(
                 document=doc,
-                caption="👨‍👩‍👧 **Child Security — Ota-ona Ilovasi (v1.0.0)**\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
-                parse_mode="Markdown"
+                caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
+                parse_mode=ParseMode.HTML
             )
             sent = True
+        else:
+            import httpx
+            from aiogram.types import BufferedInputFile
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_github_apk)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    os.makedirs(os.path.dirname(local_parent_apk), exist_ok=True)
+                    with open(local_parent_apk, "wb") as f_out:
+                        f_out.write(resp.content)
+                    doc = BufferedInputFile(resp.content, filename="ChildSecurity_Parent.apk")
+                    await message.answer_document(
+                        document=doc,
+                        caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
+                        parse_mode=ParseMode.HTML
+                    )
+                    sent = True
     except Exception as e:
         logger.warning(f"Could not send parent APK document: {e}")
 
     if not sent:
         await message.answer(
-            f"📥 **Ota-ona ilovasini yuklab oling:**\n\n"
-            f"Faylni telefoningizga o'rnatish uchun quyidagi tugmani yoki havolani bosing:\n\n"
-            f"👉 [Ota-ona ilovasini yuklab olish (8.6 MB)]({direct_github_apk})\n\n"
+            f"📥 <b>Ota-ona ilovasini yuklab oling:</b>\n\n"
+            f"Faylni telefoningizga o'rnatish uchun quyidagi havolani bosing:\n\n"
+            f"👉 <a href=\"{direct_github_apk}\">Ota-ona ilovasini yuklab olish (8.7 MB)</a>\n\n"
             f"Yuklab olingach fayl ustiga bosing va o'rnating! 🛡️✨",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=False
         )
 
@@ -3152,19 +3176,23 @@ async def on_download_child_apk(event, bot: Bot):
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/child-apk"
 
     text = (
-        "👦 **Child Security — Farzand Ilovasi (Android)**\n\n"
-        "Ushbu ilovani **farzandingizning telefoniga** o'rnating:\n\n"
-        "💡 _Eslatma: Ushbu ilova farzand telefonida 24/7 doimiy xavfsizlik himoyachisi bo'lib xizmat qiladi._\n\n"
+        "👦 <b>Child Security — Farzand Ilovasi (Android)</b>\n\n"
+        "Ushbu ilovani <b>farzandingizning telefoniga</b> o'rnating:\n\n"
+        "💡 <i>Eslatma: Ushbu ilova farzand telefonida 24/7 doimiy xavfsizlik himoyachisi bo'lib xizmat qiladi.</i>\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 **Farzand ilovasi imkoniyatlari:**\n"
-        "• **24/7 Doimiy Foniy GPS:** Telefon ekrani o'chiq va qulflangan bo'lsa ham joylashuv to'xtovsiz ota-onaga boradi.\n"
-        "• **🚨 SOS Favqulodda Tugma:** 1 bosishda ota-onaga xavf signali va tezkor qo'ng'iroq.\n"
-        "• **📱 Ekran vaqti telemetriyasi:** Bolaning ilovalardan foydalanish vaqtini hisoblaydi.\n"
-        "• **🛑 Nojo'ya ilovalarni bloklash:** Ota-ona bloklagan ilovalarni (TikTok, o'yinlar) darhol berkitadi.\n"
-        "• **🔒 Sozlamalardan himoya:** Bola ilovani yoki GPS ruxsatini o'chira olmasligi uchun ota-ona PIN-kodi talab etiladi.\n"
-        "• **Avtomatik Ishga Tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
-        "• **Missiyalar & Tangalar:** Ota-onaning topshiriqlarini bajarib, virtual tangalar yig'ish.\n\n"
-        f"📥 [To'g'ridan-to'g'ri yuklab olish]({apk_download_url})"
+        "🚀 <b>Farzand ilovasi imkoniyatlari:</b>\n"
+        "• <b>24/7 Doimiy Foniy GPS:</b> Telefon ekrani o'chiq va qulflangan bo'lsa ham joylashuv to'xtovsiz ota-onaga boradi.\n"
+        "• 🚨 <b>SOS Favqulodda Tugma:</b> 1 bosishda ota-onaga xavf signali va tezkor qo'ng'iroq.\n"
+        "• 📱 <b>Ekran vaqti telemetriyasi:</b> Bolaning ilovalardan foydalanish vaqtini hisoblaydi.\n"
+        "• 🛑 <b>Nojo'ya ilovalarni bloklash:</b> Ota-ona bloklagan ilovalarni darhol berkitadi.\n"
+        "• 🔒 <b>Sozlamalardan himoya:</b> Bola ilovani yoki GPS ruxsatini o'chira olmasligi uchun PIN-kod talab etiladi.\n"
+        "• <b>Avtomatik Ishga Tushish:</b> Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
+        "• <b>Missiyalar & Tangalar:</b> Ota-onaning topshiriqlarini bajarib, virtual tangalar yig'ish.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🛡️ <b>Android'ga o'rnatishda muammo bo'lsa:</b>\n"
+        "1️⃣ <b>Noma'lum manbalar:</b> Agar telefon ogohlantirsa, <b>«Sozlamalar»</b> ➔ <b>«Ruxsat berish»</b> (Разрешить установку) ni yoqing.\n"
+        "2️⃣ <b>Google Play Protect:</b> Agar <i>«Xavfli bo'lishi mumkin»</i> desa, <b>«Batafsil» (Подробнее)</b> ➔ <b>«Baribir o'rnatish» (Все равно установить)</b> ni bosing.\n\n"
+        "🍎 <i>Sizda iPhone (Apple) bormi? Pastdagi «🍎 iPhone / iOS» tugmasini bosing!</i>"
     )
 
     kb = InlineKeyboardMarkup(
@@ -3177,8 +3205,18 @@ async def on_download_child_apk(event, bot: Bot):
             ],
             [
                 InlineKeyboardButton(
-                    text="⚡ Tezkor zaxira havola (Vercel CDN)",
+                    text="⚡ Tezkor server havolasi",
                     url=apk_download_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🍎 iPhone / iPad (iOS qo'llanma)",
+                    callback_data="download_ios"
+                ),
+                InlineKeyboardButton(
+                    text="💻 Noutbuk dasturi",
+                    callback_data="download_desktop"
                 )
             ],
             [
@@ -3190,7 +3228,7 @@ async def on_download_child_apk(event, bot: Bot):
         ]
     )
 
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
     local_child_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Child.apk")
     local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
@@ -3203,27 +3241,110 @@ async def on_download_child_apk(event, bot: Bot):
             await message.answer_document(
                 document=doc,
                 caption=(
-                    "👦 **Child Security — Farzand Ilovasi (v1.0.0)**\n\n"
-                    "⚠️ **O'RNATGANDAN SO'NG JUDA MUHIM QADAM:**\n"
+                    "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
+                    "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
                     "1️⃣ Farzand telefonida ilovani oching.\n"
-                    "2️⃣ Ilovaga kirib, **«Doimiy joylashuvga ruxsat berish»** (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                    "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
                     "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
                 ),
-                parse_mode="Markdown"
+                parse_mode=ParseMode.HTML
             )
             sent = True
+        else:
+            import httpx
+            from aiogram.types import BufferedInputFile
+            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+                resp = await client.get(direct_github_apk)
+                if resp.status_code == 200 and len(resp.content) > 1_000_000:
+                    os.makedirs(os.path.dirname(local_child_apk), exist_ok=True)
+                    with open(local_child_apk, "wb") as f_out:
+                        f_out.write(resp.content)
+                    doc = BufferedInputFile(resp.content, filename="ChildSecurity_Child.apk")
+                    await message.answer_document(
+                        document=doc,
+                        caption=(
+                            "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
+                            "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
+                            "1️⃣ Farzand telefonida ilovani oching.\n"
+                            "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                            "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
+                        ),
+                        parse_mode=ParseMode.HTML
+                    )
+                    sent = True
     except Exception as e:
         logger.warning(f"Could not send child APK document: {e}")
 
     if not sent:
         await message.answer(
-            f"📥 **Farzand ilovasini yuklab oling:**\n\n"
-            f"Faylni telefoningizga o'rnatish uchun quyidagi tugmani yoki havolani bosing:\n\n"
-            f"👉 [Farzand ilovasini yuklab olish (8.6 MB)]({direct_github_apk})\n\n"
+            f"📥 <b>Farzand ilovasini yuklab oling:</b>\n\n"
+            f"Faylni telefoningizga o'rnatish uchun quyidagi havolani bosing:\n\n"
+            f"👉 <a href=\"{direct_github_apk}\">Farzand ilovasini yuklab olish (8.7 MB)</a>\n\n"
             f"Yuklab olingach fayl ustiga bosing va o'rnating! 🛡️✨",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=False
         )
+
+
+@router.message(F.text.func(lambda t: t and any(w in t.lower() for w in ["iphone", "apple", "ios", "айфон", "ayfon"])))
+@router.message(Command("ios", "iphone", "apple"))
+@router.callback_query(F.data == "download_ios")
+async def on_download_ios(event, bot: Bot):
+    """Provide step-by-step Apple iOS (iPhone/iPad) installation guide."""
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("🍎 iPhone qo'llanmasi tayyorlanmoqda...")
+
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+
+    text = (
+        "🍎 <b>Child Security — Apple iPhone va iPad uchun o'rnatish qo'llanmasi</b>\n\n"
+        "Apple iOS tizimi xavfsizlik qoidalari tufayli .APK fayllarni o'rnatishga ruxsat bermaydi. "
+        "Biroq Child Security zamonaviy <b>PWA (Progressive Web App)</b> tizimida ishlaydi va "
+        "iPhone ish stoliga <b>3 soniyada to'laqonli mustaqil ilova</b> sifatida o'rnatiladi!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📲 <b>iPhone'ga o'rnatish tartibi (3 oddiy qadam):</b>\n\n"
+        "1️⃣ <b>Safari brauzerida saytni oching:</b>\n"
+        f"👉 <a href=\"{webapp_url}\">{webapp_url}</a>\n"
+        "<i>(Muhim: Aynan Safari brauzerida ochilishi lozim!)</i>\n\n"
+        "2️⃣ <b>«Ulashish» tugmasini bosing:</b>\n"
+        "Safari pastki panelidagi o'rtadagi <b>Ulashish (Поделиться ⬆️)</b> belgisini (kvadrat ichidagi strelka) bosing.\n\n"
+        "3️⃣ <b>«Asosiy ekranga qo'shish»ni tanlang:</b>\n"
+        "Ochilgan menyuni biroz pastga suring va <b>«На экран «Домой» / Add to Home Screen ➕»</b> tugmasini bosing, so'ng yuqoridagi <b>«Qo'shish» (Добавить)</b> ni tasdiqlang.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✨ <b>Natija:</b>\n"
+        "iPhone ish stolingizda xuddi App Store'dan yuklangandek rasmiy <b>Child Security</b> ilovasi paydo bo'ladi! "
+        "Ilova brauzersiz, to'liq ekranda va tezkor ishlaydi! 🛡️🚀"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🌐 Safari'da Web App'ni ochish",
+                    url=webapp_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📱 Telegram ichida Web App",
+                    web_app=WebAppInfo(url=webapp_url)
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🤖 Android ilovalar (APK)",
+                    callback_data="download_parent_apk"
+                ),
+                InlineKeyboardButton(
+                    text="💻 Noutbuk dasturi",
+                    callback_data="download_desktop"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
 @router.message(F.text.in_([
@@ -3254,15 +3375,15 @@ async def on_download_desktop(event, bot: Bot):
     webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
 
     text = (
-        "💻 **Child Security — Noutbuk va Kompyuterlar uchun (Windows & macOS)**\n\n"
+        "💻 <b>Child Security — Noutbuk va Kompyuterlar uchun (Windows & macOS)</b>\n\n"
         "Child Security'ni noutbukingizda alohida mustaqil desktop dastur sifatida ishlatishingiz mumkin!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 **O'rnatishning 2 xil qulay usuli:**\n\n"
-        "1️⃣ **Windows Tezkor O'rnatgich (.bat):**\n"
-        "Quyidagi `.bat` faylini yuklab olib ishga tushirsangiz, ish stolingizga (Desktop) "
-        "avtomatik tarzda **Child Security** yorlig'i o'rnatiladi va brauzer satrisiz toza oyna bo'lib ochiladi!\n\n"
-        "2️⃣ **1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Mac):**\n"
-        "Noutbuk brauzerida saytni oching va manzil satridagi **«O'rnatish / Install»** belgisini bosing!\n\n"
+        "🚀 <b>O'rnatishning 2 xil qulay usuli:</b>\n\n"
+        "1️⃣ <b>Windows Tezkor O'rnatgich (.bat):</b>\n"
+        "Quyidagi <code>.bat</code> faylini yuklab olib ishga tushirsangiz, ish stolingizga (Desktop) "
+        "avtomatik tarzda <b>Child Security</b> yorlig'i o'rnatiladi va brauzer satrisiz toza oyna bo'lib ochiladi!\n\n"
+        "2️⃣ <b>1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Mac):</b>\n"
+        "Noutbuk brauzerida saytni oching va manzil satridagi <b>«O'rnatish / Install»</b> belgisini bosing!\n\n"
         "🛡️ Katta ekranda farzandlaringiz joylashuvi, batareya holati va ekran vaqtini kuzatish yanada qulay!"
     )
 
@@ -3282,14 +3403,18 @@ async def on_download_desktop(event, bot: Bot):
             ],
             [
                 InlineKeyboardButton(
-                    text="📱 Android Ota-ona ilovasi (APK)",
+                    text="👨‍👩‍👧 Ota-ona ilovasi (APK)",
                     callback_data="download_parent_apk"
+                ),
+                InlineKeyboardButton(
+                    text="🍎 iPhone / iOS",
+                    callback_data="download_ios"
                 )
             ]
         ]
     )
 
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
     desktop_bat_content = (
         "@echo off\r\n"
@@ -3319,12 +3444,12 @@ async def on_download_desktop(event, bot: Bot):
         await message.answer_document(
             document=doc,
             caption=(
-                "💻 **Child Security — Noutbuk & PC O'rnatgichi**\n\n"
+                "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
                 "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
-                "2. Ish stolingizda (Desktop) **Child Security** paydo bo'ladi!\n"
+                "2. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi!\n"
                 "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
             ),
-            parse_mode="Markdown"
+            parse_mode=ParseMode.HTML
         )
     except Exception as e:
         logger.warning(f"Could not send desktop setup BAT document: {e}")
@@ -3361,35 +3486,40 @@ async def on_download_app_pressed(message: Message, bot: Bot):
     direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
 
     text = (
-        "📲 **Child Security Mobil Ilovasi (Android)**\n\n"
+        "📲 <b>Child Security Mobil Ilovalari</b>\n\n"
         "Farzandingiz xavfsizligini ta'minlash va telefon ekrani o'chiq bo'lsa ham joylashuvini "
-        "24/7 uzluksiz kuzatib borish uchun Android APK ilovasini o'rnating:\n\n"
+        "24/7 uzluksiz kuzatib borish uchun o'zingizga va farzandingizga mos versiyani tanlang:\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🤖 **Android APK imkoniyatlari:**\n"
-        "• **24/7 Doimiy Foniy GPS:** Ekran o'chiq, qulflangan yoki ilova berkitilgan holatda ham GPS to'xtovsiz yuboriladi.\n"
-        "• **Avtomatik qayta ishga tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
-        "• **Batareyani tejash:** Kam energiya sarflovchi aqlli sensorlar.\n"
-        "• **Batareya & ovoz rejimi:** Har doim real vaqtda yangilanadi.\n\n"
-        f"📥 [Android APK Yuklab Olish]({apk_download_url})\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 **O'rnatish tartibi:**\n"
-        "1️⃣ Quyidagi fayl yoki tugma orqali ilovani yuklab oling va telefonga o'rnating.\n"
-        "2️⃣ Ilovani ochib, unga **\"Joylashuvga doimiy ruxsat berish\" (Allow all the time)** ruxsatini bering.\n"
-        "3️⃣ Farzand kodi orqali kiring. Bo'ldi! Tizim 24/7 rejimda bolangizni himoya qiladi."
+        "🤖 <b>Android imkoniyatlari:</b>\n"
+        "• <b>24/7 Doimiy Foniy GPS:</b> Ekran o'chiq, qulflangan yoki ilova berkitilgan holatda ham GPS to'xtovsiz yuboriladi.\n"
+        "• <b>Avtomatik qayta ishga tushish:</b> Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
+        "• <b>Batareyani tejash:</b> Kam energiya sarflovchi aqlli sensorlar.\n\n"
+        "🛡️ <b>Android'da o'rnatish:</b>\n"
+        "1. «Sozlamalar» ➔ «Noma'lum manbalardan o'rnatishga ruxsat berish»ni yoqing.\n"
+        "2. Agar Play Protect ogohlantirsa: «Batafsil» ➔ «Baribir o'rnatish»ni bosing.\n\n"
+        "🍎 <b>Apple iPhone uchun:</b> Pastdagi «🍎 iPhone / iOS» tugmasini bosing."
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📥 Android APK Yuklab Olish (Doimiy GPS)",
-                    url=apk_download_url
+                    text="👨‍👩‍👧 Ota-ona ilovasi (APK)",
+                    callback_data="download_parent_apk"
+                ),
+                InlineKeyboardButton(
+                    text="👦 Farzand ilovasi (APK)",
+                    callback_data="download_child_apk"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⚡ To'g'ridan-to'g'ri yuklab olish (Zaxira)",
-                    url=direct_github_apk
+                    text="🍎 iPhone / iPad (iOS qo'llanma)",
+                    callback_data="download_ios"
+                ),
+                InlineKeyboardButton(
+                    text="💻 Noutbuk dasturi",
+                    callback_data="download_desktop"
                 )
             ],
             [
@@ -3401,7 +3531,7 @@ async def on_download_app_pressed(message: Message, bot: Bot):
         ]
     )
 
-    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
     # Send the actual APK document directly into the Telegram chat!
     local_apk_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
@@ -3418,9 +3548,9 @@ async def on_download_app_pressed(message: Message, bot: Bot):
             doc = FSInputFile(target_apk, filename="ChildSecurity.apk")
             await message.answer_document(
                 document=doc,
-                caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
+                caption="📲 <b>Child Security Android APK (v1.0.0)</b>\n\n"
                         "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
-                parse_mode="Markdown"
+                parse_mode=ParseMode.HTML
             )
         else:
             import httpx
@@ -3435,27 +3565,29 @@ async def on_download_app_pressed(message: Message, bot: Bot):
                     await message.answer_document(
                         document=doc,
                         caption=(
-                            "📲 **Child Security Android APK (v1.0.0)**\n\n"
-                            "⚠️ **O'RNATGANDAN SO'NG JUDA MUHIM QADAM:**\n"
+                            "📲 <b>Child Security Android APK (v1.0.0)</b>\n\n"
+                            "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
                             "1️⃣ Ilovani oching.\n"
-                            "2️⃣ Ilovaga kirib, **«Doimiy joylashuvga ruxsat berish»** (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                            "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
                             "3️⃣ Shunda ota-onangiz xaritada qayerdaligingizni ko'ra oladi! 🛡️✨"
                         ),
-                        parse_mode="Markdown"
+                        parse_mode=ParseMode.HTML
                     )
                 else:
                     await message.answer(
-                        f"📲 **Child Security APK faylini yuklab olish manzili:**\n\n"
-                        f"📥 Havola: {apk_download_url}\n"
-                        f"⚡ Zaxira havola: {direct_github_apk}",
+                        f"📲 <b>Child Security APK faylini yuklab olish manzili:</b>\n\n"
+                        f"📥 Havola: <a href=\"{apk_download_url}\">{apk_download_url}</a>\n"
+                        f"⚡ Zaxira havola: <a href=\"{direct_github_apk}\">Yuklab olish</a>",
+                        parse_mode=ParseMode.HTML,
                         disable_web_page_preview=False
                     )
     except Exception as e:
         logger.warning(f"Could not send APK document directly: {e}")
         try:
             await message.answer(
-                f"📥 **APK faylini brauzer orqali yuklab olish:**\n\n"
-                f"Quyidagi havola orqali 1 bosishda yuklab oling:\n{apk_download_url}",
+                f"📥 <b>APK faylini brauzer orqali yuklab olish:</b>\n\n"
+                f"Quyidagi havola orqali 1 bosishda yuklab oling:\n<a href=\"{apk_download_url}\">{apk_download_url}</a>",
+                parse_mode=ParseMode.HTML,
                 disable_web_page_preview=False
             )
         except Exception:

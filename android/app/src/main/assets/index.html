@@ -1573,7 +1573,7 @@
           </span>
           <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded-md font-bold">Rasmiy</span>
         </div>
-        <div class="grid grid-cols-3 gap-1.5 mt-1">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1">
           <a href="/download/parent-apk" target="_blank" class="py-2 px-1 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-blue-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Ota-ona uchun Android ilovasi">
             <i data-lucide="download" class="w-3.5 h-3.5 shrink-0"></i>
             <span class="truncate">👨‍👩‍👧 Ota-ona</span>
@@ -1582,6 +1582,10 @@
             <i data-lucide="download" class="w-3.5 h-3.5 shrink-0"></i>
             <span class="truncate">👦 Farzand</span>
           </a>
+          <button type="button" onclick="openInstallAppModal('ios')" class="py-2 px-1 bg-slate-700/50 hover:bg-slate-700/80 border border-slate-500/40 text-slate-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Apple iPhone va iPad uchun qo'llanma">
+            <i data-lucide="apple" class="w-3.5 h-3.5 shrink-0 text-slate-200"></i>
+            <span class="truncate">🍎 iPhone</span>
+          </button>
           <a href="https://child-security-site.onrender.com/download/desktop-windows" download="ChildSecurity_Desktop_Setup.bat" class="py-2 px-1 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Windows noutbuk uchun desktop o'rnatgich">
             <i data-lucide="laptop" class="w-3.5 h-3.5 shrink-0 text-cyan-300"></i>
             <span class="truncate">💻 Noutbuk</span>
@@ -2777,19 +2781,32 @@
           </p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
           <a href="/download/parent-apk" target="_blank" class="py-2.5 px-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
             <i data-lucide="download" class="w-4 h-4 shrink-0"></i>
-            <span class="truncate">👨‍👩‍👧 Ota-ona (.apk)</span>
+            <span class="truncate">👨‍👩‍👧 Ota-ona</span>
           </a>
           <a href="/download/child-apk" target="_blank" class="py-2.5 px-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
             <i data-lucide="download" class="w-4 h-4 shrink-0"></i>
-            <span class="truncate">👦 Farzand (.apk)</span>
+            <span class="truncate">👦 Farzand</span>
           </a>
+          <button type="button" onclick="switchInstallTab('ios')" class="py-2.5 px-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-xs rounded-xl border border-slate-600 shadow-lg flex items-center justify-center gap-1.5 transition">
+            <i data-lucide="apple" class="w-4 h-4 shrink-0"></i>
+            <span class="truncate">🍎 iPhone</span>
+          </button>
           <a href="https://child-security-site.onrender.com/download/desktop-windows" download="ChildSecurity_Desktop_Setup.bat" class="py-2.5 px-2 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition">
             <i data-lucide="laptop" class="w-4 h-4 shrink-0 text-cyan-300"></i>
-            <span class="truncate">💻 Noutbuk (.bat)</span>
+            <span class="truncate">💻 Noutbuk</span>
           </a>
+        </div>
+
+        <!-- Android Play Protect & Unknown Sources Guide -->
+        <div class="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed space-y-1.5">
+          <p class="font-bold flex items-center gap-1.5 text-amber-300">
+            <span>🛡️</span> <span>Android'da o'rnatishda qiyinchilik bo'lsa:</span>
+          </p>
+          <p>1. <b>Noma'lum manbalar:</b> Agar telefon ogohlantirsa, <b>«Sozlamalar»</b> ➔ <b>«Ruxsat berish»</b> (Разрешить установку) ni yoqing.</p>
+          <p>2. <b>Play Protect:</b> Agar <i>«Xavfli bo'lishi mumkin»</i> desa, <b>«Batafsil» (Подробнее)</b> ➔ <b>«Baribir o'rnatish» (Все равно установить)</b> ni bosing.</p>
         </div>
 
         <div class="p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/60 text-[10px] text-slate-400 leading-normal">

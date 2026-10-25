@@ -32,6 +32,12 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
                     text="👦 Farzand ilovasi (.apk)",
                     callback_data="download_child_apk"
                 ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🍎 iPhone / iPad (iOS)",
+                    callback_data="download_ios"
+                ),
                 InlineKeyboardButton(
                     text="💻 Noutbuk dasturi",
                     callback_data="download_desktop"
@@ -56,7 +62,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
             KeyboardButton(text="👦 Farzand ilovasi (APK)"),
-            KeyboardButton(text="💻 Noutbuk uchun dastur")
+        ],
+        [
+            KeyboardButton(text="🍎 iPhone / iOS (O'rnatish)"),
+            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
@@ -108,7 +117,10 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
         [
             KeyboardButton(text="👨‍👩‍👧 Ota-ona ilovasi (APK)"),
             KeyboardButton(text="👦 Farzand ilovasi (APK)"),
-            KeyboardButton(text="💻 Noutbuk uchun dastur")
+        ],
+        [
+            KeyboardButton(text="🍎 iPhone / iOS (O'rnatish)"),
+            KeyboardButton(text="💻 Noutbuk uchun dastur"),
         ],
         [
             KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True),
