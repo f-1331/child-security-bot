@@ -22,6 +22,8 @@ else:
     engine_kwargs["pool_recycle"] = 300
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
+    if "postgres" in settings.RESOLVED_DATABASE_URL:
+        engine_kwargs["connect_args"] = {"ssl": "require"}
 
 engine = create_async_engine(
     settings.RESOLVED_DATABASE_URL,
@@ -57,37 +59,53 @@ async def init_db() -> None:
             ("promised_time", "VARCHAR(100)"),
             ("proof_photo_url", "VARCHAR(500)")
         ]
-        for col_name, col_type in new_task_columns:
-            try:
-                await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
-            except Exception:
-                pass
 
         # Safe automatic migration for new User columns
+        bool_default = "0" if is_sqlite else "FALSE"
         new_user_columns = [
             ("coin_rate_coins", "INTEGER DEFAULT 1000"),
             ("coin_rate_som", "INTEGER DEFAULT 10000"),
             ("web_access_code", "VARCHAR(20)"),
             ("wishlist_title", "VARCHAR(200)"),
             ("wishlist_target_som", "INTEGER DEFAULT 0"),
-            ("walk_safe_active", "BOOLEAN DEFAULT 0"),
+            ("walk_safe_active", f"BOOLEAN DEFAULT {bool_default}"),
             ("walk_safe_deadline", "TIMESTAMP"),
             ("walk_safe_duration", "INTEGER DEFAULT 0"),
             ("walk_safe_destination", "VARCHAR(100)"),
             ("walk_safe_started_at", "TIMESTAMP"),
             ("walk_safe_last_checkin", "TIMESTAMP")
         ]
-        for col_name, col_type in new_user_columns:
+
+        if is_sqlite:
+            for col_name, col_type in new_task_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+                except Exception:
+                    pass
+            for col_name, col_type in new_user_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                except Exception:
+                    pass
             try:
-                await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"))
+                await conn.execute(text("ALTER TABLE location_logs ADD COLUMN speed FLOAT DEFAULT 0.0"))
             except Exception:
                 pass
-
-        # Safe automatic migration for LocationLog columns
-        try:
-            await conn.execute(text("ALTER TABLE location_logs ADD COLUMN speed FLOAT DEFAULT 0.0"))
-        except Exception:
-            pass
+        else:
+            for col_name, col_type in new_task_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE tasks ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                except Exception as e:
+                    logger.debug(f"Task column migration notice ({col_name}): {e}")
+            for col_name, col_type in new_user_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                except Exception as e:
+                    logger.debug(f"User column migration notice ({col_name}): {e}")
+            try:
+                await conn.execute(text("ALTER TABLE location_logs ADD COLUMN IF NOT EXISTS speed FLOAT DEFAULT 0.0"))
+            except Exception:
+                pass
 
     # If running on PostgreSQL, check if auto-seed from SQLite is needed
     if "postgres" in settings.RESOLVED_DATABASE_URL:

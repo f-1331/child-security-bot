@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     PORT: Optional[int] = None
     DATABASE_URL: str = "sqlite+aiosqlite:///parental_tracker.db"
+    DATABASE_URL_UNPOOLED: Optional[str] = None
+    NEON_BRANCH: Optional[str] = None
+    NEON_AUTH_BASE_URL: Optional[str] = None
+    NEON_AUTH_JWKS_URL: Optional[str] = None
+    NEON_REALTIME_URL: Optional[str] = None
+    NEON_REALTIME_SECRET: Optional[str] = None
+    NEON_FUNCTION_HELLO_BASE_URL: Optional[str] = None
     TIMEZONE: str = "Asia/Tashkent"
     DEBUG: bool = True
     SENTRY_DSN: Optional[str] = None
@@ -81,12 +88,24 @@ class Settings(BaseSettings):
         """Resolve database URL for SQLAlchemy async engine.
         Render and cloud providers provide postgres:// or postgresql://,
         which needs to be postgresql+asyncpg:// for async SQLAlchemy.
+        Also sanitizes libpq query params (channel_binding, sslmode) incompatible with asyncpg.
         """
+        import urllib.parse
         url = self.DATABASE_URL
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+        if "postgresql+asyncpg://" in url:
+            parsed = urllib.parse.urlsplit(url)
+            if parsed.query:
+                params = urllib.parse.parse_qs(parsed.query)
+                # Remove query params unsupported by asyncpg
+                params.pop("channel_binding", None)
+                params.pop("sslmode", None)
+                new_query = urllib.parse.urlencode({k: v[0] for k, v in params.items()})
+                url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path, new_query, parsed.fragment))
         return url
 
     @property

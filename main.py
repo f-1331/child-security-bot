@@ -184,6 +184,72 @@ async def trigger_sentry_debug_error():
     division_by_zero = 1 / 0
     return {"result": division_by_zero}
 
+
+@app.get("/api/neon/status", tags=["Neon"])
+async def neon_status_endpoint():
+    """Verify and return the operational status of wired Neon services."""
+    from db.database import AsyncSessionLocal
+    from sqlalchemy import text
+    import httpx
+
+    status_data = {
+        "status": "healthy",
+        "branch": settings.NEON_BRANCH or "production",
+        "services": {}
+    }
+
+    # 1. Neon Postgres
+    try:
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(text("SELECT current_database(), current_user, version()"))
+            db, user, ver = res.fetchone()
+            status_data["services"]["postgres"] = {
+                "status": "connected",
+                "database": db,
+                "user": user,
+                "version": ver.split()[0] + " " + ver.split()[1]
+            }
+    except Exception as e:
+        status_data["services"]["postgres"] = {"status": "error", "error": str(e)}
+
+    # 2. Neon Auth
+    if settings.NEON_AUTH_JWKS_URL:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                jwks_res = await client.get(settings.NEON_AUTH_JWKS_URL)
+                status_data["services"]["auth"] = {
+                    "status": "active" if jwks_res.status_code == 200 else "degraded",
+                    "base_url": settings.NEON_AUTH_BASE_URL,
+                    "jwks_status": jwks_res.status_code
+                }
+        except Exception as e:
+            status_data["services"]["auth"] = {"status": "unreachable", "error": str(e)}
+
+    # 3. Neon Functions
+    if settings.NEON_FUNCTION_HELLO_BASE_URL:
+        try:
+            func_url = settings.NEON_FUNCTION_HELLO_BASE_URL
+            if not func_url.endswith("/"):
+                func_url += "/"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                f_res = await client.get(func_url)
+                status_data["services"]["functions"] = {
+                    "status": "active" if f_res.status_code == 200 else "degraded",
+                    "function_url": func_url,
+                    "response": f_res.text.strip()
+                }
+        except Exception as e:
+            status_data["services"]["functions"] = {"status": "unreachable", "error": str(e)}
+
+    # 4. Neon Realtime
+    if settings.NEON_REALTIME_URL:
+        status_data["services"]["realtime"] = {
+            "status": "configured",
+            "url": settings.NEON_REALTIME_URL
+        }
+
+    return status_data
+
 # Mount WebApp Static Directory under both /child_security_site and /webapp
 webapp_path = Path(__file__).resolve().parent / "webapp"
 app.mount("/child_security_site", StaticFiles(directory=str(webapp_path), html=True), name="child_security_site")
