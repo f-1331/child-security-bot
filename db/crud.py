@@ -1278,7 +1278,8 @@ async def update_device_policy(
     lockdown_reason: Optional[str] = None,
     blocked_packages: Optional[List[str]] = None,
     anti_uninstall_enabled: Optional[bool] = None,
-    new_pin: Optional[str] = None
+    new_pin: Optional[str] = None,
+    parent_pin: Optional[str] = None
 ) -> ChildDevicePolicy:
     """Update child device policy (lock all apps, selective blocks, anti-uninstall shield, or PIN)."""
     policy = await get_or_create_device_policy(session, child_id, parent_id)
@@ -1290,8 +1291,10 @@ async def update_device_policy(
         policy.blocked_packages = json.dumps(blocked_packages)
     if anti_uninstall_enabled is not None:
         policy.anti_uninstall_enabled = anti_uninstall_enabled
-    if new_pin and len(str(new_pin).strip()) >= 4:
-        policy.parent_pin_hash = hash_parent_pin(str(new_pin).strip())
+
+    effective_pin = new_pin or parent_pin
+    if effective_pin and len(str(effective_pin).strip()) >= 4:
+        policy.parent_pin_hash = hash_parent_pin(str(effective_pin).strip())
     policy.updated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(policy)
@@ -1322,10 +1325,12 @@ async def save_app_usage_report(
     child_id: int,
     total_screen_time_seconds: int,
     unlock_count: int,
-    app_stats: list,
+    app_stats: Optional[list] = None,
+    apps: Optional[list] = None,
     report_date: Optional[str] = None
 ) -> AppUsageReport:
     """Save daily app usage telemetry from child's device."""
+    stats = app_stats if app_stats is not None else (apps or [])
     if not report_date:
         report_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     stmt = select(AppUsageReport).where(
@@ -1340,17 +1345,19 @@ async def save_app_usage_report(
             report_date=report_date,
             total_screen_time_seconds=total_screen_time_seconds,
             unlock_count=unlock_count,
-            app_stats_json=json.dumps(app_stats)
+            app_stats_json=json.dumps(stats)
         )
         session.add(report)
     else:
         report.total_screen_time_seconds = total_screen_time_seconds
         report.unlock_count = unlock_count
-        report.app_stats_json = json.dumps(app_stats)
+        report.app_stats_json = json.dumps(stats)
         report.updated_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(report)
     return report
+
+upsert_app_usage_report = save_app_usage_report
 
 
 async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> dict:

@@ -129,12 +129,12 @@ public class ParentPinVerifyActivity extends AppCompatActivity {
     }
 
     private void handleKey(String key) {
-        if ("✕".equals(key)) {
+        if ("\u2715".equals(key) || "✕".equals(key) || "C".equalsIgnoreCase(key)) {
             if (currentPin.length() > 0) {
                 currentPin.deleteCharAt(currentPin.length() - 1);
                 updatePinDisplay();
             }
-        } else if ("✓".equals(key)) {
+        } else if ("\u2713".equals(key) || "✓".equals(key) || "OK".equalsIgnoreCase(key)) {
             verifyPin();
         } else {
             if (currentPin.length() < 6) {
