@@ -184,6 +184,9 @@ let isSatellite = false;
 let childMarker = null;
 let geofenceLayers = [];
 let routePolyline = null;
+let routeLayerGroup = null;
+let routePointsCache = [];
+let lastRouteFetchTime = 0;
 let previewCircle = null;
 let zonePickerMarker = null;
 let isZonePickerActive = false;
@@ -279,12 +282,15 @@ document.addEventListener("DOMContentLoaded", () => {
   initMap();
   checkAuthenticationState();
 
-  // Polling every 8 seconds for live telemetry
+  // Polling every 2 seconds for high-frequency live telemetry and route tracking
   pollInterval = setInterval(() => {
     if (currentChildId && !isDemoMode) {
       updateLiveTelemetry(currentChildId);
+      if (isRouteVisible && (Date.now() - lastRouteFetchTime > 3000)) {
+        loadRouteHistory(currentChildId, true);
+      }
     }
-  }, 8000);
+  }, 2000);
 
   // Responsive map size adjustment on screen resize & device orientation change
   window.addEventListener("resize", () => {
@@ -2240,14 +2246,43 @@ async function updateLiveTelemetry(childId) {
       updateSoundUI(loc.sound_mode);
       updateSpeedUI(loc.speed);
 
+      // Accurate Online/Offline computation (> 3 minutes without telemetry = offline)
+      const lastSeenEl = document.getElementById("lastSeenText");
+      const onlineDot = document.getElementById("onlineDot");
+      let isOnline = false;
+      let offlineText = "";
+
       if (loc.recorded_at) {
-        document.getElementById("lastSeenText").innerHTML = `
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>${formatTimeAgo(loc.recorded_at)}</span>
-        `;
+        let s = String(loc.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        const recordedDate = new Date(s);
+        const diffMinutes = Math.floor((Date.now() - recordedDate.getTime()) / 60000);
+        isOnline = diffMinutes <= 3;
+        const timeFormatted = recordedDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+
+        if (isOnline) {
+          if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full shadow-sm";
+          if (lastSeenEl) {
+            lastSeenEl.innerHTML = `
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+              <span class="text-emerald-400 font-extrabold text-xs">Online</span>
+              <span class="text-slate-400 text-[10px]">(${formatTimeAgo(loc.recorded_at)})</span>
+            `;
+          }
+        } else {
+          offlineText = `${timeFormatted} da uzilgan`;
+          if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-slate-950 rounded-full shadow-sm";
+          if (lastSeenEl) {
+            lastSeenEl.innerHTML = `
+              <span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+              <span class="text-rose-400 font-extrabold text-xs">Oflayn</span>
+              <span class="text-slate-300 text-[10px]">(${timeFormatted} da uzilgan — ${formatTimeAgo(loc.recorded_at)})</span>
+            `;
+          }
+        }
       }
 
-      renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level);
+      renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level, isOnline, offlineText);
       resolveAddress(lat, lon);
     } else {
       if (noLocCard) {
@@ -2312,17 +2347,53 @@ async function resolveAddress(lat, lon) {
     // Fallback to coordinates
   }
 
-  document.getElementById("addressText").textContent = `Koordinata: ${numLat.toFixed(5)}, ${numLon.toFixed(5)}`;
+  document.getElementById("addressText").textContent = `Koordinata: ${numLat.toFixed(6)}, ${numLon.toFixed(6)}`;
+}
+
+// Ultra-smooth marker interpolation (0.01s / 10ms frame animation)
+function smoothMoveMarker(marker, targetLat, targetLon, durationMs = 600) {
+  if (!marker) return;
+  const fromLatLng = marker.getLatLng();
+  const startLat = fromLatLng.lat;
+  const startLng = fromLatLng.lng;
+  const deltaLat = targetLat - startLat;
+  const deltaLng = targetLon - startLng;
+  if (Math.abs(deltaLat) < 0.0000001 && Math.abs(deltaLng) < 0.0000001) {
+    marker.setLatLng([targetLat, targetLon]);
+    return;
+  }
+
+  if (marker._animFrame) {
+    cancelAnimationFrame(marker._animFrame);
+    marker._animFrame = null;
+  }
+
+  const startTime = performance.now();
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / durationMs, 1.0);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const curLat = startLat + deltaLat * ease;
+    const curLng = startLng + deltaLng * ease;
+    marker.setLatLng([curLat, curLng]);
+    if (progress < 1.0) {
+      marker._animFrame = requestAnimationFrame(step);
+    } else {
+      marker.setLatLng([targetLat, targetLon]);
+      marker._animFrame = null;
+    }
+  }
+  marker._animFrame = requestAnimationFrame(step);
 }
 
 // Render or move pulsing radar child marker
-function renderChildMarker(lat, lon, name, isSos, battery) {
+function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offlineText = "") {
   if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
     return;
   }
   const initial = (name || "B").charAt(0).toUpperCase();
   const pulseClass = isSos ? "sos-pulse-ring" : "child-pulse-ring";
-  const pinBg = isSos ? "bg-red-600" : "bg-gradient-to-tr from-blue-700 to-indigo-500";
+  const pinBg = isSos ? "bg-red-600" : (isOnline ? "bg-gradient-to-tr from-blue-700 to-indigo-500" : "bg-gradient-to-tr from-slate-600 to-slate-800");
 
   const customHtml = `
     <div class="child-radar-marker">
@@ -2339,7 +2410,7 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
   });
 
   if (childMarker) {
-    childMarker.setLatLng([lat, lon]);
+    smoothMoveMarker(childMarker, lat, lon, 600);
     childMarker.setIcon(icon);
   } else {
     childMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
@@ -2360,11 +2431,16 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
     }
   }
 
+  const statusBadge = isOnline
+    ? `<div class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 mt-1">🟢 <span>Online (Jonli nazorat faol)</span></div>`
+    : `<div class="text-[11px] font-bold text-rose-600 flex items-center gap-1 mt-1">🔴 <span>Oflayn ${offlineText ? '(' + offlineText + ')' : ''}</span></div>`;
+
   childMarker.bindPopup(`
-    <div class="p-1 text-slate-900 text-xs font-semibold">
+    <div class="p-1 text-slate-900 text-xs font-semibold font-sans">
       <div class="font-bold text-sm mb-1 text-blue-700">${name || "Farzand"}</div>
-      <div>🔋 Batareya: <b>${battery !== null ? battery + "%" : "Noma'lum"}</b></div>
-      <div class="text-[10px] text-slate-500 mt-1">Jonli xavfsizlik nazorati faol</div>
+      <div>🔋 Batareya: <b>${battery !== null && battery !== undefined ? battery + "%" : "Noma'lum"}</b></div>
+      ${statusBadge}
+      <div class="text-[9px] text-slate-500 font-mono mt-1">📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
     </div>
   `);
 }
@@ -2542,88 +2618,312 @@ function renderDemoGeofences() {
   renderFencesToMapAndList(demoFences);
 }
 
-// Load route history
-async function loadRouteHistory(childId) {
+// Focus a specific route checkpoint on map in Fullscreen mode
+function focusRoutePoint(lat, lon) {
+  haptic("light");
+  closeModal("history");
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
+  }
+  toggleMapUiVisibility(true);
+  if (map) {
+    map.flyTo([lat, lon], 17, { animate: true, duration: 0.8 });
+  }
+}
+
+// Load route history with high precision
+async function loadRouteHistory(childId, isSilent = false) {
   if (isDemoMode) {
     renderDemoHistory();
     return;
   }
+  const targetId = childId || currentChildId;
+  if (!targetId) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/history`);
+    lastRouteFetchTime = Date.now();
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/history?limit=500`);
     const data = await res.json();
     if (data.status !== "success") return;
 
-    if (routePolyline) {
-      map.removeLayer(routePolyline);
-      routePolyline = null;
-    }
-
-    const points = data.points;
-    const container = document.getElementById("historyListContainer");
-
-    if (points.length === 0) {
-      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
-      return;
-    }
-
+    const points = data.points || [];
     renderHistoryToMapAndList(points);
   } catch (err) {
-    console.error("Failed to load route history:", err);
+    if (!isSilent) console.error("Failed to load route history:", err);
   }
 }
 
 function renderHistoryToMapAndList(points) {
+  routePointsCache = points || [];
+
+  if (routeLayerGroup && map) {
+    try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    routeLayerGroup = null;
+  }
   if (routePolyline && map) {
     try { map.removeLayer(routePolyline); } catch (e) {}
     routePolyline = null;
   }
+
   const container = document.getElementById("historyListContainer");
+  if (!points || points.length === 0) {
+    if (container) {
+      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
+    }
+    return;
+  }
+
+  routeLayerGroup = L.featureGroup();
   const latlngs = points.map((p) => [p.latitude, p.longitude]);
+
+  // 1. Layered high-contrast glowing polyline
+  const glowPolyline = L.polyline(latlngs, {
+    color: "#38bdf8",
+    weight: 7,
+    opacity: 0.35,
+    lineCap: "round",
+    lineJoin: "round"
+  });
+  glowPolyline.addTo(routeLayerGroup);
 
   routePolyline = L.polyline(latlngs, {
     color: "#f59e0b",
     weight: 4,
-    opacity: 0.85,
-    dashArray: "6, 8",
+    opacity: 0.95,
+    dashArray: "8, 6"
+  });
+  routePolyline.addTo(routeLayerGroup);
+
+  // 2. Identify repeated visits (Bitta yo'ldan qayta-qayta yurgan joylarni aniqlash)
+  // Cluster points within 25 meters
+  const clusters = [];
+  const pointVisitInfo = new Map();
+
+  points.forEach((p, idx) => {
+    let pTimeStr = "--:--:--";
+    let rawDate = null;
+    if (p.recorded_at) {
+      let s = String(p.recorded_at).trim();
+      if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+      rawDate = new Date(s);
+      pTimeStr = rawDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+    const speedVal = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/soat` : "Piyoda";
+    const batVal = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
+
+    let matchedCluster = null;
+    for (const c of clusters) {
+      const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
+      if (dist <= 25) { // 25 meters proximity = same street or junction
+        matchedCluster = c;
+        break;
+      }
+    }
+
+    const visitItem = {
+      pointIndex: idx,
+      stepNum: idx + 1,
+      time: pTimeStr,
+      rawDate: rawDate,
+      battery: batVal,
+      speed: speedVal,
+      isCharging: p.is_charging,
+      lat: p.latitude,
+      lng: p.longitude
+    };
+
+    if (matchedCluster) {
+      matchedCluster.visits.push(visitItem);
+    } else {
+      clusters.push({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        visits: [visitItem]
+      });
+    }
   });
 
-  if (isRouteVisible) {
-    routePolyline.addTo(map);
+  // Annotate each point with its pass index and total passes
+  clusters.forEach((c) => {
+    c.visits.forEach((v, passIdx) => {
+      pointVisitInfo.set(v.pointIndex, {
+        passNumber: passIdx + 1,
+        totalPasses: c.visits.length
+      });
+    });
+  });
+
+  // 3. Render Checkpoints on Map
+  // A. Start point
+  const firstP = points[0];
+  let firstTime = firstP.recorded_at ? new Date(firstP.recorded_at.endsWith("Z") ? firstP.recorded_at : firstP.recorded_at + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "";
+  const startIcon = L.divIcon({
+    className: "route-pin-start",
+    html: `
+      <div class="flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-2xl border-2 border-white whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2">
+        <span>🟢 Boshlanish</span> <span class="opacity-95 font-mono">${firstTime}</span>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
+  });
+  L.marker([firstP.latitude, firstP.longitude], { icon: startIcon }).addTo(routeLayerGroup);
+
+  // B. Finish / Latest point
+  if (points.length > 1) {
+    const lastP = points[points.length - 1];
+    let lastTime = lastP.recorded_at ? new Date(lastP.recorded_at.endsWith("Z") ? lastP.recorded_at : lastP.recorded_at + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "";
+    const endIcon = L.divIcon({
+      className: "route-pin-end",
+      html: `
+        <div class="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-2xl border-2 border-white whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2">
+          <span>🏁 Oxirgi joy</span> <span class="opacity-95 font-mono">${lastTime}</span>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+    L.marker([lastP.latitude, lastP.longitude], { icon: endIcon }).addTo(routeLayerGroup);
   }
 
-  container.innerHTML = points
-    .slice()
-    .reverse()
-    .map((p, idx) => {
-      const time = p.recorded_at ? new Date(p.recorded_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-      const batteryStr = p.battery_level ? `${p.battery_level}%` : "--";
-      const chargingIcon = p.is_charging ? "⚡" : "";
+  // C. Render repeated visit spots & intermediate step checkpoints
+  clusters.forEach((c) => {
+    if (c.visits.length > 1) {
+      // REPEATED LOCATION: Child walked here 2+ times!
+      const passCount = c.visits.length;
+      const repeatIcon = L.divIcon({
+        className: "route-repeat-badge",
+        html: `
+          <div class="relative group cursor-pointer transform -translate-x-1/2 -translate-y-1/2">
+            <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-600 via-pink-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xl border-2 border-white animate-bounce">
+              ${passCount}x
+            </div>
+            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full border border-white animate-ping"></span>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      });
 
-      return `
-      <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between text-xs">
-        <div class="flex items-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-          <span class="font-mono text-slate-200">${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span>
+      const repeatMarker = L.marker([c.latitude, c.longitude], { icon: repeatIcon });
+      const passesHtml = c.visits.map((v, i) => `
+        <div class="flex items-center justify-between p-2 bg-slate-800/90 rounded-xl border border-slate-700/70 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-rose-500/25 text-rose-300 font-black text-[10px] flex items-center justify-center border border-rose-500/40">${i + 1}</span>
+            <div>
+              <p class="font-bold text-white text-xs">${i + 1}-o'tish vaqti:</p>
+              <p class="font-mono text-amber-300 font-extrabold text-[11px]">${v.time}</p>
+            </div>
+          </div>
+          <div class="text-[10px] text-slate-300 text-right">
+            <div>🔋 ${v.battery}</div>
+            <div class="text-cyan-300 font-bold">⚡ ${v.speed}</div>
+          </div>
         </div>
-        <div class="flex items-center gap-2.5 text-slate-400 text-[11px]">
-          <span>🔋 ${batteryStr} ${chargingIcon}</span>
-          <span class="font-bold text-slate-200">🕒 ${time}</span>
+      `).join("");
+
+      repeatMarker.bindPopup(`
+        <div class="p-2 min-w-[260px] max-w-[320px] text-slate-100 font-sans">
+          <div class="flex items-center gap-1.5 font-black text-xs text-rose-400 mb-2 border-b border-white/10 pb-1.5">
+            <span class="text-base">🔁</span>
+            <span>Ushbu joydan bola ${passCount} marta o'tgan:</span>
+          </div>
+          <div class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll">
+            ${passesHtml}
+          </div>
+          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} (santimetr aniqlik)</p>
         </div>
-      </div>
-    `;
-    })
-    .join("");
+      `);
+      repeatMarker.addTo(routeLayerGroup);
+    } else {
+      // Single pass intermediate point
+      const v = c.visits[0];
+      if (v.stepNum !== 1 && v.stepNum !== points.length) {
+        const stepIcon = L.divIcon({
+          className: "route-step-pin",
+          html: `
+            <div class="w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-slate-950 shadow-md hover:scale-150 transition cursor-pointer transform -translate-x-1/2 -translate-y-1/2" title="Qadam #${v.stepNum}"></div>
+          `,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0]
+        });
+        const stepMarker = L.marker([c.latitude, c.longitude], { icon: stepIcon });
+        stepMarker.bindPopup(`
+          <div class="p-1.5 text-xs text-slate-900 font-semibold font-sans">
+            <div class="font-black text-blue-700">Qadam #${v.stepNum}</div>
+            <div class="mt-0.5">🕒 Vaqti: <b>${v.time}</b></div>
+            <div>🔋 Batareya: <b>${v.battery}</b></div>
+            <div>⚡ Tezlik: <b>${v.speed}</b></div>
+            <div class="text-[9px] text-slate-500 font-mono mt-1">${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}</div>
+          </div>
+        `);
+        stepMarker.addTo(routeLayerGroup);
+      }
+    }
+  });
+
+  if (isRouteVisible && map) {
+    routeLayerGroup.addTo(map);
+  }
+
+  // 4. Populate Detailed History List with Repeat Badges & Zoom triggers
+  if (container) {
+    container.innerHTML = points
+      .slice()
+      .reverse()
+      .map((p, idx) => {
+        const origIdx = points.length - 1 - idx;
+        const visitMeta = pointVisitInfo.get(origIdx) || { passNumber: 1, totalPasses: 1 };
+        let timeWithSec = "--:--:--";
+        if (p.recorded_at) {
+          let s = String(p.recorded_at).trim();
+          if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+          timeWithSec = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        }
+        const batteryStr = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
+        const chargingIcon = p.is_charging ? "⚡" : "";
+        const speedStr = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/s` : "Piyoda";
+
+        const repeatBadge = visitMeta.totalPasses > 1
+          ? `<span class="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full text-[10px] font-black">🔁 ${visitMeta.passNumber}-o'tish (jami ${visitMeta.totalPasses})</span>`
+          : "";
+
+        return `
+          <div onclick="focusRoutePoint(${p.latitude}, ${p.longitude})" class="bg-slate-800/80 hover:bg-slate-800 active:scale-[0.99] border border-slate-700/60 hover:border-amber-500/50 p-2.5 rounded-2xl flex flex-col gap-1.5 text-xs transition cursor-pointer shadow-sm">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-amber-400/20 text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40">#${origIdx + 1}</span>
+                <span class="font-mono text-slate-200 text-xs font-bold">${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}</span>
+              </div>
+              <span class="font-mono font-black text-amber-400 text-xs">🕒 ${timeWithSec}</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-700/40">
+              <div class="flex items-center gap-2">
+                <span>🔋 ${batteryStr} ${chargingIcon}</span>
+                <span>⚡ ${speedStr}</span>
+              </div>
+              <div>${repeatBadge}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
 }
 
 // Render Demo History
 function renderDemoHistory() {
   const demoPoints = [
-    { latitude: 41.2858, longitude: 69.2035, battery_level: 85, is_charging: false, recorded_at: "2026-10-16T08:00:00" },
-    { latitude: 41.2870, longitude: 69.2060, battery_level: 84, is_charging: false, recorded_at: "2026-10-16T08:10:00" },
-    { latitude: 41.2890, longitude: 69.2090, battery_level: 83, is_charging: false, recorded_at: "2026-10-16T08:20:00" },
-    { latitude: 41.2915, longitude: 69.2120, battery_level: 82, is_charging: false, recorded_at: "2026-10-16T08:30:00" },
-    { latitude: 41.2916, longitude: 69.2121, battery_level: 80, is_charging: false, recorded_at: "2026-10-16T08:45:00" },
+    { latitude: 41.285800, longitude: 69.203500, battery_level: 85, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:00:00" },
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 84, is_charging: false, speed: 5, recorded_at: "2026-10-25T08:10:00" },
+    { latitude: 41.289000, longitude: 69.209000, battery_level: 83, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:20:00" },
+    { latitude: 41.291500, longitude: 69.212000, battery_level: 82, is_charging: false, speed: 3, recorded_at: "2026-10-25T08:30:00" },
+    // Return trip through same coordinate (Repeated pass demonstration!)
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 75, is_charging: false, speed: 4, recorded_at: "2026-10-25T13:40:00" },
+    { latitude: 41.285800, longitude: 69.203500, battery_level: 70, is_charging: false, speed: 3, recorded_at: "2026-10-25T14:00:00" },
+    // 3rd pass in evening!
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 60, is_charging: false, speed: 5, recorded_at: "2026-10-25T17:15:00" },
+    { latitude: 41.300000, longitude: 69.225000, battery_level: 55, is_charging: false, speed: 6, recorded_at: "2026-10-25T17:45:00" },
   ];
   renderHistoryToMapAndList(demoPoints);
 }
@@ -2631,73 +2931,106 @@ function renderDemoHistory() {
 // Smooth Route Playback Animation
 function startRoutePlayback() {
   haptic("medium");
-  if (!routePolyline) {
-    showToast("Harakat marshruti mavjud emas");
-    return;
-  }
-
-  const latlngs = routePolyline.getLatLngs();
-  if (latlngs.length < 2) {
+  if (!routePointsCache || routePointsCache.length < 2) {
     showToast("Harakat nuqtalari yetarli emas");
     return;
   }
 
   closeModal("history");
-  showToast("▶ Marshrut harakati ko'rsatilmoqda...");
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
+  }
+  toggleMapUiVisibility(true); // Automatically switch to fullscreen mode!
+  showToast("▶ Marshrut harakati animatsiyada ko'rsatilmoqda...");
 
-  if (replayMarker) {
-    map.removeLayer(replayMarker);
+  if (replayMarker && map) {
+    try { map.removeLayer(replayMarker); } catch (e) {}
+    replayMarker = null;
   }
 
   const replayIcon = L.divIcon({
-    html: `<div class="replay-marker-dot"></div>`,
+    html: `
+      <div class="relative transform -translate-x-1/2 -translate-y-1/2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-600 flex items-center justify-center text-white shadow-2xl border-2 border-white animate-pulse">
+          🚶‍♂️
+        </div>
+        <span class="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full border border-white animate-ping"></span>
+      </div>
+    `,
     className: "custom-replay-icon",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
   });
 
-  replayMarker = L.marker(latlngs[0], { icon: replayIcon }).addTo(map);
-  map.panTo(latlngs[0]);
+  const firstPt = routePointsCache[0];
+  replayMarker = L.marker([firstPt.latitude, firstPt.longitude], { icon: replayIcon }).addTo(map);
+  map.panTo([firstPt.latitude, firstPt.longitude], { animate: true, duration: 0.5 });
 
   let step = 0;
   clearInterval(replayTimer);
 
   replayTimer = setInterval(() => {
     step++;
-    if (step >= latlngs.length) {
+    if (step >= routePointsCache.length) {
       clearInterval(replayTimer);
       showToast("🏁 Harakat yakunlandi");
       setTimeout(() => {
-        if (replayMarker) map.removeLayer(replayMarker);
-      }, 2000);
+        if (replayMarker && map) {
+          try { map.removeLayer(replayMarker); } catch (e) {}
+          replayMarker = null;
+        }
+      }, 3000);
       return;
     }
 
-    replayMarker.setLatLng(latlngs[step]);
-    map.panTo(latlngs[step], { animate: true, duration: 0.5 });
-  }, 900);
+    const currentPt = routePointsCache[step];
+    smoothMoveMarker(replayMarker, currentPt.latitude, currentPt.longitude, 400);
+    map.panTo([currentPt.latitude, currentPt.longitude], { animate: true, duration: 0.4 });
+  }, 500);
 }
 
 // Toggle route history polyline on map
-function toggleRouteHistory() {
+async function toggleRouteHistory(forceState) {
   haptic("light");
-  if (!routePolyline) {
-    showToast("Harakat tarixi mavjud emas");
-    return;
+  const newState = typeof forceState === "boolean" ? forceState : !isRouteVisible;
+  isRouteVisible = newState;
+
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
   }
 
-  isRouteVisible = !isRouteVisible;
+  // Automatically switch to FULLSCREEN mode!
+  toggleMapUiVisibility(true);
+
   const btn = document.getElementById("btnToggleRoute");
 
   if (isRouteVisible) {
-    routePolyline.addTo(map);
-    btn.classList.add("text-amber-400");
-    btn.classList.remove("text-slate-500");
-    showToast("Marshrut ko'rsatildi");
+    if (btn) {
+      btn.classList.add("text-amber-400");
+      btn.classList.remove("text-slate-500");
+    }
+    showToast("🗺️ Marshrut xaritada ochilmoqda...");
+    await loadRouteHistory(currentChildId);
+    if (routeLayerGroup && map) {
+      if (!map.hasLayer(routeLayerGroup)) {
+        routeLayerGroup.addTo(map);
+      }
+      try {
+        const bounds = routeLayerGroup.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.15));
+        }
+      } catch (e) {}
+    }
+    showToast("🗺️ Marshrut to'liq xaritada ochildi");
   } else {
-    map.removeLayer(routePolyline);
-    btn.classList.remove("text-amber-400");
-    btn.classList.add("text-slate-500");
+    if (routeLayerGroup && map) {
+      try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    }
+    if (btn) {
+      btn.classList.remove("text-amber-400");
+      btn.classList.add("text-slate-500");
+    }
     showToast("Marshrut yashirildi");
   }
 }
@@ -3051,6 +3384,12 @@ function switchTab(tabName) {
         if (modalTitle) modalTitle.textContent = "Kerakli Joylar (Geozonalar)";
       }
     }
+    if (tabName === "history") {
+      const activeChild = currentChildId || (authenticatedSession?.user?.id);
+      if (activeChild) {
+        loadRouteHistory(activeChild);
+      }
+    }
     if (tabName === "settings") {
       setGlobalTheme(currentTheme, false);
       setGlobalLanguage(currentLanguage, false);
@@ -3262,8 +3601,9 @@ function openAddZoneModal() {
   const listModal = document.getElementById("modal-zones");
   if (listModal) listModal.classList.add("hidden");
 
-  // 2. Ensure map tab is active and visible
+  // 2. Ensure map tab is active and visible in Fullscreen Mode
   switchTab("map");
+  toggleMapUiVisibility(true);
   isZonePickerActive = true;
 
   // 3. Hide standard HUD controls so map is clean and clear
@@ -5366,8 +5706,8 @@ function startChildLiveTracking(childId) {
 
   const options = {
     enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 5000
+    timeout: 10000,
+    maximumAge: 0 // Fresh GPS fix always with centimeter resolution, no cached data!
   };
 
   childWatchId = navigator.geolocation.watchPosition(
@@ -5399,8 +5739,8 @@ function startChildLiveTracking(childId) {
         }
       }
 
-      // Throttle: send if moved > 5 meters or at least once every 10 seconds
-      if (dist >= 5 || (now - lastSentTime) > 10000) {
+      // Ultra-sensitive centimeter tracking: send if moved >= 0.5 meter or every 2 seconds
+      if (dist >= 0.5 || (now - lastSentTime) > 2000) {
         lastSentTime = now;
         lastSentLat = latitude;
         lastSentLng = longitude;

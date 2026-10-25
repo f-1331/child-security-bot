@@ -1598,3 +1598,28 @@ button {
   border-radius: 4px;
 }
 
+/* --------------------------------------------------------------------------
+   8. CENTIMETER PRECISION ROUTE CHECKPOINTS & MULTI-PASS VISITS
+   -------------------------------------------------------------------------- */
+.route-pin-start,
+.route-pin-end,
+.route-repeat-badge,
+.route-step-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.route-repeat-badge {
+  z-index: 1000 !important;
+}
+
+.route-repeat-badge div {
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.route-step-pin div:hover {
+  transform: translate(-50%, -50%) scale(1.6);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+}
+
+

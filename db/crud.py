@@ -401,9 +401,9 @@ async def get_latest_location(session: AsyncSession, child_id: int) -> Optional[
 async def get_location_history_today(
     session: AsyncSession,
     child_id: int,
-    limit: int = 150
+    limit: int = 500
 ) -> List[LocationLog]:
-    """Fetch location history for today (last 24 hours)."""
+    """Fetch location history for today (last 24 hours), returning most recent points chronologically."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     result = await session.execute(
         select(LocationLog)
@@ -411,10 +411,12 @@ async def get_location_history_today(
             LocationLog.child_id == child_id,
             LocationLog.recorded_at >= cutoff
         )
-        .order_by(LocationLog.recorded_at.asc())
+        .order_by(LocationLog.recorded_at.desc(), LocationLog.id.desc())
         .limit(limit)
     )
-    return list(result.scalars().all())
+    logs = list(result.scalars().all())
+    logs.reverse()
+    return logs
 
 
 async def create_geofence(

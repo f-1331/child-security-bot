@@ -644,7 +644,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
 @router.get("/child/{child_id}/history")
 async def get_child_history(
     child_id: int,
-    limit: int = Query(150, ge=10, le=500),
+    limit: int = Query(500, ge=10, le=2000),
     session: AsyncSession = Depends(get_db)
 ):
     """Fetch recent location history points for movement polyline visualization."""
@@ -654,6 +654,8 @@ async def get_child_history(
             "id": h.id,
             "latitude": h.latitude,
             "longitude": h.longitude,
+            "accuracy": h.accuracy,
+            "speed": h.speed,
             "battery_level": h.battery_level,
             "is_charging": h.is_charging,
             "recorded_at": format_utc_iso(h.recorded_at)
