@@ -14,6 +14,29 @@ android {
         versionName "1.0.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders = [appName: "Child Security"]
+    }
+
+    flavorDimensions "role"
+    productFlavors {
+        parent {
+            dimension "role"
+            applicationIdSuffix ".parent"
+            versionNameSuffix "-parent"
+            manifestPlaceholders = [appName: "Child Security - Ota-ona"]
+            buildConfigField "String", "APP_ROLE", "\"parent\""
+        }
+        child {
+            dimension "role"
+            applicationIdSuffix ".child"
+            versionNameSuffix "-child"
+            manifestPlaceholders = [appName: "Child Security - Farzand"]
+            buildConfigField "String", "APP_ROLE", "\"child\""
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     signingConfigs {

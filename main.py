@@ -257,7 +257,7 @@ async def download_parent_apk():
             media_type="application/vnd.android.package-archive"
         )
     return RedirectResponse(
-        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk",
         status_code=302
     )
 
@@ -285,7 +285,7 @@ async def download_child_apk():
             media_type="application/vnd.android.package-archive"
         )
     return RedirectResponse(
-        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+        url="https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
         status_code=302
     )
 

@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=68" />
+  <link rel="stylesheet" href="style.css?v=69" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -2266,7 +2266,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=70"></script>
+  <script src="app.js?v=71"></script>
 
   <!-- MODAL: SCREEN TIME & APP BLOCKING / DEVICE CONTROL -->
   <div id="modalScreenTimeControl" class="hidden fixed inset-0 z-[2400] bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -2288,6 +2288,9 @@
       </div>
 
       <div class="py-3 space-y-4">
+        <!-- CHILD SELECTOR BAR (For parents with multiple children) -->
+        <div id="stChildSelectorBar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1"></div>
+
         <!-- 1. SCREEN TIME TODAY HUD CARD -->
         <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-900/90 border border-white/10 shadow-lg">
           <div class="flex items-start justify-between">

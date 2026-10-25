@@ -37,11 +37,55 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 2001;
-    public static final String PRODUCTION_URL = "https://child-security-bot.vercel.app?source=apk";
     public static final String BACKEND_API_URL = "https://child-security-site.onrender.com";
-    public static final String OFFLINE_URL = "file:///android_asset/index.html?source=native_apk";
+    private String appRole = "parent";
+    private String currentProductionUrl = "https://child-security-bot.vercel.app?role=parent&source=parent_apk";
+    private String currentOfflineUrl = "file:///android_asset/index.html?role=parent&source=parent_apk";
 
     private WebView webView;
+
+    private void detectRole() {
+        // 1. Try BuildConfig APP_ROLE reflection
+        try {
+            Class<?> clazz = Class.forName(getPackageName() + ".BuildConfig");
+            java.lang.reflect.Field field = clazz.getField("APP_ROLE");
+            String r = (String) field.get(null);
+            if (r != null && !r.isEmpty()) {
+                appRole = r;
+            }
+        } catch (Exception ignored) {}
+
+        // 2. Try assets/app_role.json
+        try {
+            java.io.InputStream is = getAssets().open("app_role.json");
+            int size = is.available();
+            byte[] buf = new byte[size];
+            is.read(buf);
+            is.close();
+            org.json.JSONObject obj = new org.json.JSONObject(new String(buf, "UTF-8"));
+            if (obj.has("role")) {
+                appRole = obj.getString("role");
+            }
+        } catch (Exception ignored) {}
+
+        // 3. Fallback package name check
+        if (getPackageName().endsWith(".child")) {
+            appRole = "child";
+        } else if (getPackageName().endsWith(".parent")) {
+            appRole = "parent";
+        }
+
+        boolean isChild = "child".equalsIgnoreCase(appRole);
+        currentProductionUrl = isChild
+                ? "https://child-security-bot.vercel.app?role=child&source=child_apk"
+                : "https://child-security-bot.vercel.app?role=parent&source=parent_apk";
+
+        currentOfflineUrl = isChild
+                ? "file:///android_asset/index.html?role=child&source=child_apk"
+                : "file:///android_asset/index.html?role=parent&source=parent_apk";
+
+        Log.i(TAG, "Detected App Role: " + appRole + " | Target URL: " + currentProductionUrl);
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -85,6 +129,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Detect whether this APK is for Parent or Child
+        detectRole();
+        final boolean isChild = "child".equalsIgnoreCase(appRole);
+
         // WebView navigation handling with offline fallback
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -104,10 +152,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                // If main production page failed to load, load local bundled assets
                 if (request.isForMainFrame() && !request.getUrl().toString().startsWith("file:")) {
                     Log.w(TAG, "Network failed, loading local bundled offline assets");
-                    view.loadUrl(OFFLINE_URL);
+                    view.loadUrl(currentOfflineUrl);
                 }
             }
 
@@ -115,25 +162,35 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 view.evaluateJavascript("if (typeof syncWithNativeAndroidBridge === 'function') { syncWithNativeAndroidBridge(); }", null);
+                view.evaluateJavascript("if (typeof setAppNativeRole === 'function') { setAppNativeRole('" + appRole + "'); }", null);
             }
         });
 
         // Inject Native Android Bridge
         webView.addJavascriptInterface(new AndroidBridge(this), "AndroidBridge");
 
-        // Request runtime permissions and battery optimization
-        checkAndRequestPermissions();
-        requestBatteryOptimization();
+        if (isChild) {
+            // Farzand telefoni: 24/7 foniy GPS, Accessibility, Device Admin va Batareya optimallashtirish
+            checkAndRequestPermissions();
+            requestBatteryOptimization();
 
-        // Check if child ID is already known: auto-start tracking service
-        SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
-        String savedChildId = prefs.getString(ChildTrackingService.KEY_CHILD_ID, null);
-        if (savedChildId != null && !savedChildId.isEmpty()) {
-            startChildTrackingService(savedChildId, BACKEND_API_URL);
+            SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+            String savedChildId = prefs.getString(ChildTrackingService.KEY_CHILD_ID, null);
+            if (savedChildId != null && !savedChildId.isEmpty()) {
+                startChildTrackingService(savedChildId, BACKEND_API_URL);
+            }
+        } else {
+            // Ota-ona telefoni: Faqatgina favqulodda SOS bildirishnomalarini qabul qilish ruxsati (Android 13+)
+            // Ota-ona telefoni kuzatilmaydi, u boshqaruv pulti hisoblanadi!
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
+                }
+            }
         }
 
-        // Load production WebApp
-        webView.loadUrl(PRODUCTION_URL);
+        // Load role-specific production WebApp
+        webView.loadUrl(currentProductionUrl);
     }
 
     private void checkAndRequestPermissions() {
@@ -235,6 +292,21 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public boolean isNativeApp() {
             return true;
+        }
+
+        @JavascriptInterface
+        public String getAppRole() {
+            return appRole;
+        }
+
+        @JavascriptInterface
+        public boolean isParentApp() {
+            return "parent".equalsIgnoreCase(appRole);
+        }
+
+        @JavascriptInterface
+        public boolean isChildApp() {
+            return "child".equalsIgnoreCase(appRole);
         }
 
         @JavascriptInterface

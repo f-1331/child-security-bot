@@ -54,11 +54,12 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="👦 Farzand ilovasi (APK)")
         ],
         [
-            KeyboardButton(text="💻 Noutbuk uchun dastur"),
+            KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
             KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
         ],
         [
-            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
+            KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
+            KeyboardButton(text="💻 Noutbuk uchun dastur")
         ],
         [
             KeyboardButton(text="📍 Kerakli joylar"),
@@ -73,7 +74,6 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔑 Saytga kirish kodi")
         ],
         [
-            KeyboardButton(text="📱 Ekran vaqti va Bloklash"),
             KeyboardButton(text="📊 Bugungi hisobot")
         ],
         [

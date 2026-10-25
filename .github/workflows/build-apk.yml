@@ -37,19 +37,23 @@ jobs:
         run: |
           cd android
           gradle assembleDebug bundleRelease --no-daemon --stacktrace
+          mkdir -p build_dist
+          cp app/build/outputs/apk/parent/debug/app-parent-debug.apk build_dist/ChildSecurity_Parent.apk || cp app/build/outputs/apk/debug/app-debug.apk build_dist/ChildSecurity_Parent.apk
+          cp app/build/outputs/apk/child/debug/app-child-debug.apk build_dist/ChildSecurity_Child.apk || cp app/build/outputs/apk/debug/app-debug.apk build_dist/ChildSecurity_Child.apk
+          cp build_dist/ChildSecurity_Child.apk build_dist/app-debug.apk
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ChildSecurity-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ChildSecurity-APKs
+          path: android/build_dist/*.apk
           if-no-files-found: warn
 
       - name: Upload Play Store AAB Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ChildSecurity-PlayStore-AAB
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          path: android/app/build/outputs/bundle/**/*.aab
           if-no-files-found: warn
 
       - name: Create or Update GitHub Release
@@ -57,21 +61,22 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main')
         with:
           tag_name: v1.0.0-apk
-          name: Child Security Android APK & Play Store AAB v1.0.0
+          name: Child Security Android APK (Ota-ona & Farzand) v1.0.0
           make_latest: true
           body: |
-            ## 📱 Child Security Android (APK & Google Play AAB Bundle)
+            ## 📱 Child Security Android (Alohida Ota-ona va Farzand ilovalari)
             
-            Ushbu relizda 2 ta format tayyorlandi:
-            1. **`app-debug.apk`** — Telegram bot va veb-sayt orqali to'g'ridan-to'g'ri o'rnatish uchun (.apk).
-            2. **`app-release.aab`** — Google Play Store (Play Market) Console ga yuklash uchun rasmiy Android App Bundle (.aab).
+            Ushbu relizda 2 ta alohida rasmiy APK taqdim etildi:
+            1. **`ChildSecurity_Parent.apk`** — Ota-ona telefoni uchun monitoring boshqaruv pulti (xarita, ekran vaqti, ilovalarni bloklash, topshiriqlar).
+            2. **`ChildSecurity_Child.apk`** — Farzand telefoni uchun (24/7 foniy GPS, SOS xavf tugmasi, ilovalar hisoboti va bloklash himoyasi).
+            3. **`app-debug.apk`** — Universal muvofiqlik paketi.
             
-            ### 🛡️ Xususiyatlari:
-            * **24/7 Foniy GPS:** Ekran o'chiq va bloklangan holatda ham doimiy nazorat.
-            * **Avto-ishga tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.
-            * **Google Play Policy Compliant:** Background location disclosure va Maxfiylik siyosatiga 100% mos.
+            ### 🛡️ Imkoniyatlar:
+            * **Ota-ona ilovasi:** Telefon kuzatilmaydi, faqat bolalarni nazorat qilish vositasi.
+            * **Farzand ilovasi:** 24/7 foniy GPS, ruxsatlarni sozlamalardan o'chirishga qarshi PIN himoyasi.
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/bundle/release/app-release.aab
+            android/build_dist/ChildSecurity_Parent.apk
+            android/build_dist/ChildSecurity_Child.apk
+            android/build_dist/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

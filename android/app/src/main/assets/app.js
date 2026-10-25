@@ -435,6 +435,15 @@ function incrementAuthPromptCount() {
 // Check session in localStorage, URL, or persistent role
 async function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
+  const qRole = urlParams.get("role");
+  if (qRole === "child") {
+    localStorage.setItem("smart_tracker_role", "child");
+    currentRole = "child";
+  } else if (qRole === "parent") {
+    localStorage.setItem("smart_tracker_role", "parent");
+    currentRole = "parent";
+  }
+
   const qCode = urlParams.get("code");
 
   // 1. Direct code in query param: ?code=123456
@@ -6963,12 +6972,67 @@ function updateDevicePolicyUI(policy) {
   }
 }
 
+function setAppNativeRole(role) {
+  if (role === "child") {
+    localStorage.setItem("smart_tracker_role", "child");
+    currentRole = "child";
+    if (!authenticatedSession) {
+      enableChildDemoMode();
+    }
+  } else if (role === "parent") {
+    localStorage.setItem("smart_tracker_role", "parent");
+    currentRole = "parent";
+    if (!authenticatedSession) {
+      enableDemoMode();
+    }
+  }
+}
+
+function selectChildForScreenTime(childId) {
+  haptic("light");
+  currentChildId = childId;
+  renderScreenTimeChildSelector();
+  loadScreenTimeAndPolicy();
+}
+
+function renderScreenTimeChildSelector() {
+  const bar = document.getElementById("stChildSelectorBar");
+  if (!bar) return;
+
+  const list = (childrenList && childrenList.length > 0) ? childrenList : (
+    authenticatedSession?.children || [
+      { id: "child_demo_1", name: "Ali", full_name: "Ali (Farzand)" }
+    ]
+  );
+
+  if (list.length <= 1) {
+    bar.innerHTML = "";
+    bar.classList.add("hidden");
+    return;
+  }
+
+  bar.classList.remove("hidden");
+  bar.innerHTML = list.map(c => {
+    const isSel = (String(c.id) === String(currentChildId)) || (!currentChildId && c === list[0]);
+    if (isSel && !currentChildId) currentChildId = c.id;
+    const name = c.name || c.full_name || "Farzand";
+    const activeClass = isSel
+      ? "bg-rose-600 text-white shadow-md border-rose-400 font-black"
+      : "bg-slate-800 text-slate-300 hover:text-white border-white/10 font-bold";
+    return `<button onclick="selectChildForScreenTime('${c.id}')" class="px-3 py-1.5 rounded-xl text-xs border transition active:scale-95 flex items-center gap-1.5 shrink-0 ${activeClass}">
+      <span>👦</span>
+      <span>${name}</span>
+    </button>`;
+  }).join("");
+}
+
 function openScreenTimeControlModal() {
   haptic("medium");
   setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("modalScreenTimeControl");
   if (!modal) return;
   modal.classList.remove("hidden");
+  renderScreenTimeChildSelector();
   if (window.lucide) lucide.createIcons();
 
   loadScreenTimeAndPolicy();

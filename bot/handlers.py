@@ -2910,20 +2910,23 @@ async def on_download_parent_apk(event, bot: Bot):
     if isinstance(event, CallbackQuery):
         await event.answer("👨‍👩‍👧 Ota-ona ilovasi tayyorlanmoqda...")
 
-    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+    direct_github_parent_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
+    direct_fallback_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/parent-apk"
 
     text = (
         "👨‍👩‍👧 **Child Security — Ota-ona Ilovasi (Android)**\n\n"
         "Ushbu ilovani **o'zingizning telefoningizga** o'rnating:\n\n"
+        "💡 _Eslatma: Ushbu ilova sizning telefoningizni kuzatmaydi! Bu ota-onaning shaxsiy boshqaruv pulti bo'lib, barcha farzandlaringizni xaritada kuzatish va nazorat qilish uchun mo'ljallangan._\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🌟 **Ota-ona ilovasi imkoniyatlari:**\n"
         "• **Jonli Xarita:** Farzandlaringiz qayerda va qanday tezlikda yurganini real-vaqtda ko'rish.\n"
-        "• **Masofaviy Sirena:** Farzand telefonida ovoz chiqarish (yo'qolganda topish uchun).\n"
+        "• **📱 Ilovalar & Ekran tahlili:** Farzandingiz bugun qaysi ilovalarda qancha o'tirganini ko'rish.\n"
+        "• **🛑 1-Bosishda Bloklash:** Kerak bo'lganda bolaning barcha ilovalarini masofadan qulflash (faqat qo'ng'iroq va SOS ochiq qoladi).\n"
+        "• **Masofaviy Sirena:** Farzand telefonida bezovta qilmaslik rejimida ham baland ovoz chiqarish.\n"
         "• **Xavfsiz Makonlar (Geozonalar):** Maktab, uy, bog'chaga kirib-chiqqanini avtomatik bilish.\n"
-        "• **Kunlik Hisobot:** Farzandning bugungi harakatlari, batareyasi va vaqti tahlili.\n"
         "• **Topshiriqlar & Tangalar:** Farzandga foydali vazifalar berish va rag'batlantirish.\n\n"
-        f"📥 [To'g'ridan-to'g'ri yuklab olish]({direct_github_apk})"
+        f"📥 [To'g'ridan-to'g'ri yuklab olish]({apk_download_url})"
     )
 
     kb = InlineKeyboardMarkup(
@@ -3000,19 +3003,24 @@ async def on_download_child_apk(event, bot: Bot):
     if isinstance(event, CallbackQuery):
         await event.answer("👦 Farzand ilovasi tayyorlanmoqda...")
 
-    direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
+    direct_github_child_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
+    direct_fallback_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
     apk_download_url = f"{settings.RESOLVED_WEBAPP_URL}/download/child-apk"
 
     text = (
         "👦 **Child Security — Farzand Ilovasi (Android)**\n\n"
         "Ushbu ilovani **farzandingizning telefoniga** o'rnating:\n\n"
+        "💡 _Eslatma: Ushbu ilova farzand telefonida 24/7 doimiy xavfsizlik himoyachisi bo'lib xizmat qiladi._\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🚀 **Farzand ilovasi imkoniyatlari:**\n"
-        "• **24/7 Doimiy Foniy GPS:** Telefon ekrani o'chiq bo'lsa ham joylashuv to'xtovsiz ota-onaga boradi.\n"
+        "• **24/7 Doimiy Foniy GPS:** Telefon ekrani o'chiq va qulflangan bo'lsa ham joylashuv to'xtovsiz ota-onaga boradi.\n"
         "• **🚨 SOS Favqulodda Tugma:** 1 bosishda ota-onaga xavf signali va tezkor qo'ng'iroq.\n"
+        "• **📱 Ekran vaqti telemetriyasi:** Bolaning ilovalardan foydalanish vaqtini hisoblaydi.\n"
+        "• **🛑 Nojo'ya ilovalarni bloklash:** Ota-ona bloklagan ilovalarni (TikTok, o'yinlar) darhol berkitadi.\n"
+        "• **🔒 Sozlamalardan himoya:** Bola ilovani yoki GPS ruxsatini o'chira olmasligi uchun ota-ona PIN-kodi talab etiladi.\n"
         "• **Avtomatik Ishga Tushish:** Telefon o'chib-yonsa ham orqa fonda o'zi ishlayveradi.\n"
         "• **Missiyalar & Tangalar:** Ota-onaning topshiriqlarini bajarib, virtual tangalar yig'ish.\n\n"
-        f"📥 [To'g'ridan-to'g'ri yuklab olish]({direct_github_apk})"
+        f"📥 [To'g'ridan-to'g'ri yuklab olish]({apk_download_url})"
     )
 
     kb = InlineKeyboardMarkup(
@@ -3993,12 +4001,166 @@ async def handle_clean_chat_command(message: Message, bot: Bot):
 
 
 # ------------------------------------------------------------------------------
-# SCREEN TIME, APP USAGE & MASTER APP LOCKDOWN HANDLERS
+# SCREEN TIME, APP USAGE & MASTER APP LOCKDOWN HANDLERS (OTA-ONA UCHUN)
 # ------------------------------------------------------------------------------
 
-@router.message(Command("screentime", "ekran", "vaqt", "bloklash"))
-@router.message(F.text.in_({"📱 Ekran vaqti", "📱 Ekran vaqti va Bloklash", "📱 Ilovalar nazorati"}))
+def generate_screen_time_card(child, report, policy, all_children=None):
+    """Format rich screen time, top apps breakdown and master lock controls for parent."""
+    def progress_bar(pct, width=8):
+        filled = int(round((pct / 100.0) * width))
+        filled = max(0, min(width, filled))
+        return "█" * filled + "░" * (width - filled)
+
+    child_name = child.full_name or child.username or f"Farzand #{child.id}"
+    total_time = report.get('total_screen_time_formatted', '0 daqiqa')
+    total_sec = report.get('total_screen_time_seconds', 0)
+    unlock_count = report.get('unlock_count', 0)
+
+    if total_sec > 14400:
+        time_badge = "⚠️ **Me'yordan ko'p (4s+)**"
+    elif total_sec > 7200:
+        time_badge = "🟡 **O'rtacha me'yorda**"
+    else:
+        time_badge = "🟢 **Me'yorda**"
+
+    lock_status_text = "🛑 **BARCHA ILOVALAR BLOKLANGAN!**" if policy.is_all_apps_blocked else "🟢 **Ochiq (Cheklovsiz)**"
+    anti_un_status = "🔒 **Faol** _(Bola sozlamalardan ruxsatlarni o'chira olmaydi)_" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
+
+    apps_list = report.get("apps", [])
+    grand_sec = max(1, sum(a.get("usage_seconds", 0) for a in apps_list))
+
+    apps_lines = []
+    if apps_list:
+        for i, a in enumerate(apps_list[:6], 1):
+            name = a.get("app_name", "Ilova")
+            sec = a.get("usage_seconds", 0)
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            dur_str = f"{h}s {m}d" if h > 0 else f"{m}d"
+            pct = int(round((sec / grand_sec) * 100))
+            bar = progress_bar(pct, width=8)
+
+            cat = a.get("category", "")
+            icon = "🟥" if "youtube" in name.lower() else ("🎵" if "tiktok" in name.lower() else ("🎮" if cat == "game" or "pubg" in name.lower() or "roblox" in name.lower() else ("✈️" if "telegram" in name.lower() else "📱")))
+            bl = " 🛑 _Bloklangan_" if a.get("is_blocked") else ""
+            apps_lines.append(f"{i}. {icon} **{name}** — `{dur_str}` ({pct}%)\\n   `[{bar}]`{bl}")
+    else:
+        apps_lines.append("_Bugun hali telefon ishlatilmagan yoki ilovalar ochilmagan._")
+
+    apps_text = "\n".join(apps_lines)
+
+    text = (
+        f"📱 **FARZANDINGIZNING TELEFON ISHLATISH TAHLILI (BUGUN)**\n\n"
+        f"👤 Farzand: **{child_name}**\n"
+        f"⏱ Jami ekran vaqti: **{total_time}** ({time_badge})\n"
+        f"🔓 Telefon ochilgan: **{unlock_count} marta**\n\n"
+        f"📊 **Eng ko'p ishlatilgan ilovalar:**\n"
+        f"{apps_text}\n\n"
+        f"🛑 **Qurilma holati:** {lock_status_text}\n"
+        f"🛡 **Sozlamalar himoyasi:** {anti_un_status}\n\n"
+        f"ℹ️ _Quyidagi tugmalar orqali barcha ilovalarni darhol bloklashingiz yoki har bir ilovani alohida sozlashingiz mumkin:_"
+    )
+
+    buttons = []
+    if all_children and len(all_children) > 1:
+        child_row = []
+        for c in all_children[:4]:
+            is_cur = (c.id == child.id)
+            c_name = c.full_name or f"Farzand #{c.id}"
+            btn_txt = f"👉 {c_name}" if is_cur else f"👦 {c_name}"
+            child_row.append(InlineKeyboardButton(text=btn_txt, callback_data=f"st_child:{c.id}"))
+        buttons.append(child_row)
+
+    if policy.is_all_apps_blocked:
+        buttons.append([InlineKeyboardButton(text="✅ Barcha ilovalarni ochish (Ruxsat berish)", callback_data=f"unlock_all:{child.id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")])
+
+    buttons.append([InlineKeyboardButton(text="⚙️ Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))])
+    buttons.append([InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"st_refresh:{child.id}")])
+
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+@router.message(Command("screentime", "ekran", "vaqt", "bloklash", "apps", "ilovalar"))
+@router.message(F.text.in_({
+    "📱 Ilovalar & Ekran tahlili",
+    "Ilovalar & Ekran tahlili",
+    "📱 Ekran vaqti va Bloklash",
+    "Ekran vaqti va Bloklash",
+    "📱 Ekran vaqti",
+    "Ekran vaqti",
+    "📱 Ilovalar nazorati",
+    "Ilovalar nazorati",
+    "Ilovalar",
+    "ilovalar",
+    "bloklash"
+}))
 async def parent_screen_time_handler(message: Message):
+    """View child screen time, daily app usage stats, and master lock toggle."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role != "parent":
+            await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
+            return
+
+        children = await crud.get_children_for_parent(session, user_id)
+        if not children:
+            await message.answer(
+                "👶 Sizga hali farzand ulanmagan.\n"
+                "Iltimos, avval farzandingiz telefonida botga ulanish kodini kiriting.",
+                reply_markup=get_parent_main_keyboard(user_id)
+            )
+            return
+
+        child = children[0]
+        report = await crud.get_app_usage_report_today(session, child.id)
+        policy = await crud.get_or_create_device_policy(session, child.id)
+        text, kb = generate_screen_time_card(child, report, policy, children)
+        await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("st_child:"))
+async def st_child_callback_handler(callback: CallbackQuery):
+    """Switch child when parent clicks a child pill in screen time."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, callback.from_user.id)
+        children = await crud.get_children_for_parent(session, callback.from_user.id)
+        target_child = next((c for c in children if c.id == child_id), None)
+        if not target_child:
+            target_child = await crud.get_user(session, child_id)
+        if not target_child:
+            await callback.answer("Farzand topilmadi.", show_alert=True)
+            return
+
+        report = await crud.get_app_usage_report_today(session, target_child.id)
+        policy = await crud.get_or_create_device_policy(session, target_child.id)
+        text, kb = generate_screen_time_card(target_child, report, policy, children)
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        await callback.answer(f"👦 {target_child.full_name or 'Farzand'} statistikasi")
+
+
+@router.callback_query(F.data.startswith("st_refresh:"))
+async def st_refresh_callback_handler(callback: CallbackQuery):
+    """Refresh child screen time data."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        target_child = await crud.get_user(session, child_id)
+        children = await crud.get_children_for_parent(session, callback.from_user.id)
+        if not target_child:
+            await callback.answer("Ma'lumot topilmadi.")
+            return
+
+        report = await crud.get_app_usage_report_today(session, target_child.id)
+        policy = await crud.get_or_create_device_policy(session, target_child.id)
+        text, kb = generate_screen_time_card(target_child, report, policy, children)
+        try:
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.answer("🔄 Yangilandi!")
+        except Exception:
+            await callback.answer("O'zgarish yo'q.")
     """View child screen time, daily app usage stats, and master lock toggle."""
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
@@ -4074,24 +4236,12 @@ async def lock_all_callback_handler(callback: CallbackQuery):
         )
         await callback.answer("🛑 Farzand telefonida barcha ilovalar bloklandi!", show_alert=True)
 
-        # Refresh message view
         child = await crud.get_user(session, child_id)
+        children = await crud.get_children_for_parent(session, callback.from_user.id)
         report = await crud.get_app_usage_report_today(session, child_id)
         policy = await crud.get_or_create_device_policy(session, child_id)
-
-        msg_text = (
-            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
-            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
-            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
-            f"🛑 **Qurilma holati:** 🛑 **BARCHA ILOVALAR BLOKLANDI!**\n"
-            f"📝 Sabab: _{policy.lockdown_reason}_\n\n"
-            f"ℹ️ Bolaning telefonida faqat ota-onaga qo'ng'iroq qilish va SOS ruxsat etiladi."
-        )
-        buttons = [
-            [InlineKeyboardButton(text="✅ Barcha ilovalarni ochish (Ruxsat berish)", callback_data=f"unlock_all:{child.id}")],
-            [InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
-        ]
-        await callback.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="Markdown")
+        text, kb = generate_screen_time_card(child, report, policy, children)
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("unlock_all:"))
@@ -4107,20 +4257,11 @@ async def unlock_all_callback_handler(callback: CallbackQuery):
         await callback.answer("✅ Barcha ilovalardan cheklov olib tashlandi!", show_alert=True)
 
         child = await crud.get_user(session, child_id)
+        children = await crud.get_children_for_parent(session, callback.from_user.id)
         report = await crud.get_app_usage_report_today(session, child_id)
-
-        msg_text = (
-            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
-            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
-            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
-            f"🛑 **Qurilma holati:** 🟢 **Ochiq (Cheklovsiz)**\n\n"
-            f"ℹ️ Barcha ilovalardan foydalanish yana ruxsat etildi."
-        )
-        buttons = [
-            [InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")],
-            [InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
-        ]
-        await callback.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="Markdown")
+        policy = await crud.get_or_create_device_policy(session, child_id)
+        text, kb = generate_screen_time_card(child, report, policy, children)
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
 

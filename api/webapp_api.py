@@ -2104,15 +2104,42 @@ async def verify_child_parent_pin_endpoint(
 
 # APK Download Endpoints (Fail-safe direct redirects)
 # ---------------------------------------------------------
+GITHUB_RELEASE_PARENT_APK = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
+GITHUB_RELEASE_CHILD_APK = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
 GITHUB_RELEASE_APK = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"
 
-@router.get("/download/apk", tags=["App"])
 @router.get("/download/parent-apk", tags=["App"])
+async def router_download_parent_apk():
+    """Download or redirect to dedicated Parent Monitoring App."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Parent.apk")
+    if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
+        return FileResponse(local_apk, filename="ChildSecurity_Parent.apk", media_type="application/vnd.android.package-archive")
+    return RedirectResponse(url=GITHUB_RELEASE_PARENT_APK, status_code=302)
+
 @router.get("/download/child-apk", tags=["App"])
+async def router_download_child_apk():
+    """Download or redirect to dedicated Child Safety 24/7 GPS & Screen Time App."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Child.apk")
+    if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
+        return FileResponse(local_apk, filename="ChildSecurity_Child.apk", media_type="application/vnd.android.package-archive")
+    return RedirectResponse(url=GITHUB_RELEASE_CHILD_APK, status_code=302)
+
+@router.get("/download/apk", tags=["App"])
 async def router_download_apk():
-    """Always redirect to high-speed GitHub Release APK CDN."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=GITHUB_RELEASE_APK, status_code=302)
+    """Download or redirect to general app."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
+    if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
+        return FileResponse(local_apk, filename="ChildSecurity.apk", media_type="application/vnd.android.package-archive")
+    return RedirectResponse(url=GITHUB_RELEASE_PARENT_APK, status_code=302)
 
 
 @router.get("/download/desktop", tags=["App"])
