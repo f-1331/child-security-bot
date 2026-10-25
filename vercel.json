@@ -8,13 +8,23 @@
   ],
   "routes": [
     {
+      "src": "/download/desktop-windows",
+      "dest": "https://child-security-site.onrender.com/download/desktop-windows",
+      "status": 302
+    },
+    {
+      "src": "/download/desktop",
+      "dest": "https://child-security-site.onrender.com/download/desktop-windows",
+      "status": 302
+    },
+    {
       "src": "/download/parent-apk",
-      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk",
       "status": 302
     },
     {
       "src": "/download/child-apk",
-      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
       "status": 302
     },
     {

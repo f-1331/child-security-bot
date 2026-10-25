@@ -3106,7 +3106,7 @@ async def on_download_desktop(event, bot: Bot):
     if isinstance(event, CallbackQuery):
         await event.answer("💻 Noutbuk versiyasi tayyorlanmoqda...")
 
-    desktop_bat_url = f"{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows"
+    desktop_bat_url = "https://child-security-site.onrender.com/download/desktop-windows"
     webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
 
     text = (
@@ -3147,20 +3147,41 @@ async def on_download_desktop(event, bot: Bot):
 
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
-    desktop_bat_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Desktop_Setup.bat")
+    desktop_bat_content = (
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        "title Child Security - Noutbuk uchun dastur\r\n"
+        "echo ============================================================\r\n"
+        "echo          Child Security - Oila va Farzand Nazorati\r\n"
+        "echo           Noutbuk va Windows uchun Desktop Dasturi\r\n"
+        "echo ============================================================\r\n"
+        "echo.\r\n"
+        "echo Ish stoliga (Desktop) Child Security yorlig'i o'rnatilmoqda...\r\n"
+        "set URL=https://child-security-bot.vercel.app\r\n"
+        "set DESKTOP=%USERPROFILE%\\Desktop\\Child Security.url\r\n"
+        "echo [InternetShortcut] > \"%DESKTOP%\"\r\n"
+        "echo URL=%URL% >> \"%DESKTOP%\"\r\n"
+        "echo IconIndex=0 >> \"%DESKTOP%\"\r\n"
+        "echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESKTOP%\"\r\n"
+        "echo.\r\n"
+        "echo [OK] Child Security ish stolingizga muvaffaqiyatli o'rnatildi!\r\n"
+        "echo Dastur ishga tushirilmoqda...\r\n"
+        "start msedge.exe --app=\"%URL%\" 2>nul || start chrome.exe --app=\"%URL%\" 2>nul || start \"\" \"%URL%\"\r\n"
+        "exit\r\n"
+    )
     try:
-        if os.path.exists(desktop_bat_path):
-            doc = FSInputFile(desktop_bat_path, filename="ChildSecurity_Desktop_Setup.bat")
-            await message.answer_document(
-                document=doc,
-                caption=(
-                    "💻 **Child Security — Noutbuk & PC O'rnatgichi**\n\n"
-                    "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
-                    "2. Ish stolingizda (Desktop) **Child Security** paydo bo'ladi!\n"
-                    "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
-                ),
-                parse_mode="Markdown"
-            )
+        from aiogram.types import BufferedInputFile
+        doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
+        await message.answer_document(
+            document=doc,
+            caption=(
+                "💻 **Child Security — Noutbuk & PC O'rnatgichi**\n\n"
+                "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
+                "2. Ish stolingizda (Desktop) **Child Security** paydo bo'ladi!\n"
+                "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
+            ),
+            parse_mode="Markdown"
+        )
     except Exception as e:
         logger.warning(f"Could not send desktop setup BAT document: {e}")
 

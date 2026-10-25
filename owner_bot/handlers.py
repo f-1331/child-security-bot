@@ -932,12 +932,12 @@ async def handle_owner_desktop_info(message: Message, auth_info: Dict[str, Any])
     import os
     from config import settings
 
-    desktop_bat_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Desktop_Setup.bat")
+    desktop_download_url = "https://child-security-site.onrender.com/download/desktop-windows"
     text = (
         "💻 <b>Child Security — Noutbuk va PC Desktop versiyasi</b>\n\n"
         "🔗 <b>To'g'ridan-to'g'ri havolalar:</b>\n"
         f"• Web App: <code>{settings.RESOLVED_WEBAPP_URL}</code>\n"
-        f"• Windows O'rnatgich (.bat): <code>{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows</code>\n\n"
+        f"• Windows O'rnatgich (.bat): <code>{desktop_download_url}</code>\n\n"
         "Foydalanuvchilar noutbuk orqali kirganda alohida desktop ilova (Edge/Chrome app) "
         "yoki 1-bosishda brauzer PWA sifatida o'rnatishlari mumkin."
     )
@@ -945,8 +945,8 @@ async def handle_owner_desktop_info(message: Message, auth_info: Dict[str, Any])
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📥 Windows O'rnatgichni yuklab olish",
-                    url=f"{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows"
+                    text="📥 Windows O'rnatgichni yuklab olish (.bat)",
+                    url=desktop_download_url
                 )
             ],
             [
@@ -958,16 +958,39 @@ async def handle_owner_desktop_info(message: Message, auth_info: Dict[str, Any])
         ]
     )
     await message.answer(text, reply_markup=kb, parse_mode="HTML")
-    if os.path.exists(desktop_bat_path):
-        try:
-            doc = FSInputFile(desktop_bat_path, filename="ChildSecurity_Desktop_Setup.bat")
-            await message.answer_document(
-                document=doc,
-                caption="💻 <b>Child Security — Windows Desktop Setup</b>\nIsh stoliga yorliq yaratish skripti.",
-                parse_mode="HTML"
-            )
-        except Exception:
-            pass
+
+    desktop_bat_content = (
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        "title Child Security - Noutbuk uchun dastur\r\n"
+        "echo ============================================================\r\n"
+        "echo          Child Security - Oila va Farzand Nazorati\r\n"
+        "echo           Noutbuk va Windows uchun Desktop Dasturi\r\n"
+        "echo ============================================================\r\n"
+        "echo.\r\n"
+        "echo Ish stoliga (Desktop) Child Security yorlig'i o'rnatilmoqda...\r\n"
+        "set URL=https://child-security-bot.vercel.app\r\n"
+        "set DESKTOP=%USERPROFILE%\\Desktop\\Child Security.url\r\n"
+        "echo [InternetShortcut] > \"%DESKTOP%\"\r\n"
+        "echo URL=%URL% >> \"%DESKTOP%\"\r\n"
+        "echo IconIndex=0 >> \"%DESKTOP%\"\r\n"
+        "echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESKTOP%\"\r\n"
+        "echo.\r\n"
+        "echo [OK] Child Security ish stolingizga muvaffaqiyatli o'rnatildi!\r\n"
+        "echo Dastur ishga tushirilmoqda...\r\n"
+        "start msedge.exe --app=\"%URL%\" 2>nul || start chrome.exe --app=\"%URL%\" 2>nul || start \"\" \"%URL%\"\r\n"
+        "exit\r\n"
+    )
+    try:
+        from aiogram.types import BufferedInputFile
+        doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
+        await message.answer_document(
+            document=doc,
+            caption="💻 <b>Child Security — Windows Desktop Setup</b>\nIsh stoliga yorliq yaratish skripti.",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
 
 
 # ==============================================================================

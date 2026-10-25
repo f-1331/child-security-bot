@@ -96,5 +96,6 @@ jobs:
             android/build_dist/ChildSecurity_Parent.apk
             android/build_dist/ChildSecurity_Child.apk
             android/build_dist/app-debug.apk
+            downloads/ChildSecurity_Desktop_Setup.bat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
