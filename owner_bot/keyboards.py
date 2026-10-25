@@ -14,27 +14,26 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔍 ID bo'yicha tekshirish"),
         ],
         [
-            KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
             KeyboardButton(text="🚨 Faol SOS signallari"),
-        ],
-        [
             KeyboardButton(text="🔋 Batareya & Qurilmalar radari"),
+        ],
+        [
             KeyboardButton(text="🛡️ Xavfsizlik & Anti-Spam"),
-        ],
-        [
             KeyboardButton(text="👥 Adminlarni boshqarish"),
+        ],
+        [
             KeyboardButton(text="📢 Hammaga xabar (Broadcast)"),
-        ],
-        [
             KeyboardButton(text="🎁 Bolalarga bonus (Airdrop)"),
+        ],
+        [
             KeyboardButton(text="🌐 Server & Diagnostika"),
-        ],
-        [
             KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
-            KeyboardButton(text="📑 Server loglari"),
         ],
         [
+            KeyboardButton(text="📑 Server loglari"),
             KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
+        ],
+        [
             KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]

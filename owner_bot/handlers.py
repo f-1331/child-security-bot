@@ -904,7 +904,7 @@ async def handle_owner_clean_chat(message: Message, bot: Bot):
 # ==============================================================================
 # /HELP QO'LLANMA
 # ==============================================================================
-@owner_bot_router.message(F.text == "ℹ️ Yordam")
+@owner_bot_router.message(F.text.in_({"ℹ️ Yordam", "ℹ️ Yordam & Buyruqlar"}))
 @owner_bot_router.message(Command("help"))
 async def handle_help(message: Message, auth_info: Dict[str, Any]):
     help_text = (
