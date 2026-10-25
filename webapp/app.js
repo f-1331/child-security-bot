@@ -1930,16 +1930,22 @@ async function selectChild(childId) {
 
   // If child location is known, immediately center & render marker
   const loc = child.latest_location || child.location;
+  const noLocCard = document.getElementById("noLocationCard");
   if (loc && loc.latitude && loc.longitude) {
+    if (noLocCard) noLocCard.classList.add("hidden");
     renderChildMarker(loc.latitude, loc.longitude, child.full_name, child.is_sos_active, loc.battery_level);
     if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
   } else {
+    if (noLocCard) {
+      noLocCard.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
     if (childMarker && map) {
       try { map.removeLayer(childMarker); } catch (e) {}
       childMarker = null;
     }
     const addrEl = document.getElementById("addressText");
-    if (addrEl) addrEl.textContent = "Joylashuv kutilmoqda (Bot orqali yuboring)";
+    if (addrEl) addrEl.textContent = "Joylashuv kutilmoqda (Ilovaga kirib ruxsat bering)";
     const lastSeenEl = document.getElementById("lastSeenText");
     if (lastSeenEl) lastSeenEl.textContent = "Kutilmoqda...";
     updateBatteryUI(null, false);
@@ -1975,7 +1981,9 @@ async function updateLiveTelemetry(childId) {
     }
 
     const loc = child.location;
+    const noLocCard = document.getElementById("noLocationCard");
     if (loc && loc.latitude && loc.longitude) {
+      if (noLocCard) noLocCard.classList.add("hidden");
       const lat = loc.latitude;
       const lon = loc.longitude;
 
@@ -1993,7 +2001,11 @@ async function updateLiveTelemetry(childId) {
       renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level);
       resolveAddress(lat, lon);
     } else {
-      document.getElementById("addressText").textContent = "Joylashuv kutilmoqda (Bot orqali yuboring)";
+      if (noLocCard) {
+        noLocCard.classList.remove("hidden");
+        if (window.lucide) lucide.createIcons();
+      }
+      document.getElementById("addressText").textContent = "Joylashuv kutilmoqda (Ilovaga kirib ruxsat bering)";
       document.getElementById("lastSeenText").textContent = "Kutilmoqda...";
       if (childMarker && map) {
         try { map.removeLayer(childMarker); } catch (e) {}
@@ -2536,7 +2548,7 @@ async function resolveCurrentSos() {
 
 // Toggle Fullscreen Map Mode (Hide/Show Top Nav & Bottom HUD)
 
-// Toggle & Re-close Mobile Extra Map Tools Dock (Two-way collapse & outside-click dismiss)
+// Toggle & Re-close Mobile Extra Map Tools Dock (Two-way collapse, middle 3-dots touch fixed)
 function closeExtraMapTools() {
   const tools = document.getElementById("extraMapTools");
   const btn = document.getElementById("btnToggleExtraTools");
@@ -2544,7 +2556,7 @@ function closeExtraMapTools() {
 
   tools.classList.add("hidden");
   if (btn) {
-    btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4"></i>';
+    btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4 pointer-events-none"></i>';
     btn.setAttribute("title", "Boshqa asboblarni ochish");
     btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
     btn.classList.add("text-slate-300");
@@ -2560,19 +2572,22 @@ function closeExtraMapToolsOnMobile() {
   }
 }
 
-function toggleExtraMapTools(forceState) {
+function toggleExtraMapTools(event) {
+  if (event) {
+    if (typeof event.stopPropagation === "function") event.stopPropagation();
+    if (typeof event.preventDefault === "function") event.preventDefault();
+  }
   haptic("light");
   const tools = document.getElementById("extraMapTools");
   const btn = document.getElementById("btnToggleExtraTools");
   if (!tools) return;
 
   const isCurrentlyHidden = tools.classList.contains("hidden");
-  const shouldOpen = typeof forceState === "boolean" ? forceState : isCurrentlyHidden;
 
-  if (shouldOpen) {
+  if (isCurrentlyHidden) {
     tools.classList.remove("hidden");
     if (btn) {
-      btn.innerHTML = '<i data-lucide="x" class="w-4 h-4"></i>';
+      btn.innerHTML = '<i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>';
       btn.setAttribute("title", "Yopish (Asboblarni yashirish)");
       btn.classList.remove("text-slate-300");
       btn.classList.add("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
@@ -2580,7 +2595,7 @@ function toggleExtraMapTools(forceState) {
   } else {
     tools.classList.add("hidden");
     if (btn) {
-      btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4"></i>';
+      btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4 pointer-events-none"></i>';
       btn.setAttribute("title", "Boshqa asboblarni ochish");
       btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
       btn.classList.add("text-slate-300");
@@ -2592,13 +2607,42 @@ function toggleExtraMapTools(forceState) {
   }
 }
 
-// Global outside-click dismiss for Extra Map Tools
+// Global outside-click dismiss for Extra Map Tools (Ignores clicks inside dock and its children)
 document.addEventListener("click", function(event) {
   const dock = document.getElementById("floatingMapControls");
-  if (dock && !dock.contains(event.target)) {
-    closeExtraMapTools();
+  if (!dock) return;
+  if (dock.contains(event.target) || (event.target.closest && event.target.closest("#floatingMapControls")) || (event.composedPath && event.composedPath().includes(dock))) {
+    return;
   }
+  closeExtraMapTools();
 });
+
+
+// Parent requests live location from child with immediate push/alert
+async function requestChildLocationPing() {
+  haptic("medium");
+  if (isDemoMode) {
+    showToast("📍 Demo rejimida farzand Toshkent markazida ko'rsatilmoqda.");
+    return;
+  }
+  if (!currentChildId) {
+    showToast("Farzand tanlanmagan");
+    return;
+  }
+  try {
+    showToast("Farzand telefoniga joylashuv so'rovi yuborilmoqda...");
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/active-check`, {
+      method: "POST"
+    });
+    if (res.ok) {
+      showToast("🔔 Farzandingizga joylashuvni yuborish haqida eslatma yuborildi!");
+    } else {
+      showToast("Eslatma yuborildi. Farzandingiz ilovaga kirib ruxsat berishi kerak.");
+    }
+  } catch (e) {
+    showToast("Eslatma yuborildi. Farzandingiz ilovaga kirib ruxsat berishi kerak.");
+  }
+}
 
 function toggleMapUiVisibility(forceState) {
   haptic("light");
@@ -4874,7 +4918,18 @@ async function requestChildAllPermissions() {
     btn.innerHTML = `<span class="animate-pulse">Faollashtirilmoqda...</span>`;
   }
 
-  // 1. Try Telegram native LocationManager (remembers permission forever in Telegram!)
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+
+  // 0. Native Android APK background tracking integration
+  if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function" && targetId) {
+    try {
+      window.AndroidBridge.startBackgroundTracking(String(targetId), window.location.origin);
+    } catch (e) {
+      console.warn("AndroidBridge start:", e);
+    }
+  }
+
+  // 1. Try Telegram native LocationManager
   const tg = window.Telegram?.WebApp;
   if (tg && tg.LocationManager) {
     try {
@@ -4888,6 +4943,16 @@ async function requestChildAllPermissions() {
                 accuracy: loc.accuracy || 10
               };
               lastLocationFetchTime = Date.now();
+              if (targetId) {
+                sendChildLiveTelemetry(targetId, {
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                  accuracy: loc.accuracy || null,
+                  speed: 0,
+                  battery_level: 100,
+                  sound_mode: "normal"
+                });
+              }
             }
           });
         }
@@ -4897,8 +4962,30 @@ async function requestChildAllPermissions() {
     }
   }
 
-  // 2. Start continuous GPS telemetry
-  const targetId = currentChildId || authenticatedSession?.user?.id;
+  // 2. Immediate GPS fix using navigator.geolocation
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        cachedDeviceLocation = { latitude, longitude, accuracy };
+        lastLocationFetchTime = Date.now();
+        if (targetId) {
+          sendChildLiveTelemetry(targetId, {
+            latitude,
+            longitude,
+            accuracy: accuracy || null,
+            speed: 0,
+            battery_level: 100,
+            sound_mode: "normal"
+          });
+        }
+      },
+      (err) => console.warn("Initial GPS query:", err),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  }
+
+  // 3. Start continuous background GPS telemetry
   if (targetId) {
     startChildLiveTracking(targetId);
   }
@@ -4908,7 +4995,7 @@ async function requestChildAllPermissions() {
   localStorage.setItem("smart_tracker_location_permitted", "true");
 
   if (modal) modal.classList.add("hidden");
-  showToast("✅ Ruxsat berildi! Jonli GPS xavfsizlik monitoringi faollashtirildi 🛡️");
+  showToast("✅ Ruxsat berildi! Joylashuvingiz ota-onangizga yuborilmoqda 🛡️");
 }
 
 function skipChildPermissions() {

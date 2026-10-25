@@ -1277,7 +1277,7 @@ body.theme-daylight textarea {
   padding: clamp(3px, 1vw, 5px) !important;
   gap: clamp(3px, 1vw, 5px) !important;
   border-radius: clamp(14px, 3.5vw, 18px) !important;
-  max-height: calc(100% - clamp(150px, 28vh, 210px)) !important;
+  max-height: calc(100% - clamp(90px, 14vh, 130px)) !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
   scrollbar-width: none !important;

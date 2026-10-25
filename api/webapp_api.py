@@ -1424,6 +1424,23 @@ async def active_check_endpoint(
     # 2. Add to pending notifications queue (for HTTP polling fallback)
     pending_child_notifications[child_id].append(alert_msg)
 
+    # 3. Direct push alert to child's Telegram chat if bot is available
+    if telemetry.telegram_bot:
+        try:
+            from bot.keyboards import get_child_main_keyboard
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text=(
+                    "🔔 **Ota-onangiz joylashuvingizni so'radi!**\n\n"
+                    "Ota-onangiz xaritada qayerdaligingizni bilish uchun joylashuvingizni so'ramoqda.\n"
+                    "Iltimos, ilovani oching yoki pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasini bosing! 🛡️"
+                ),
+                reply_markup=get_child_main_keyboard(),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.warning(f"Could not send active check to child telegram: {e}")
+
     return {
         "status": "success",
         "mode": "active",

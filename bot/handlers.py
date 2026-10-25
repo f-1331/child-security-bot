@@ -3023,7 +3023,13 @@ async def on_download_child_apk(event, bot: Bot):
             doc = FSInputFile(target, filename="ChildSecurity_Child.apk")
             await message.answer_document(
                 document=doc,
-                caption="👦 **Child Security — Farzand Ilovasi (v1.0.0)**\n\nFarzandingiz telefoniga o'rnating. Ekran o'chiq bo'lsa ham 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
+                caption=(
+                    "👦 **Child Security — Farzand Ilovasi (v1.0.0)**\n\n"
+                    "⚠️ **O'RNATGANDAN SO'NG JUDA MUHIM QADAM:**\n"
+                    "1️⃣ Farzand telefonida ilovani oching.\n"
+                    "2️⃣ Ilovaga kirib, **«Doimiy joylashuvga ruxsat berish»** (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                    "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
+                ),
                 parse_mode="Markdown"
             )
             sent = True
@@ -3145,8 +3151,13 @@ async def on_download_app_pressed(message: Message, bot: Bot):
                     doc = BufferedInputFile(resp.content, filename="ChildSecurity.apk")
                     await message.answer_document(
                         document=doc,
-                        caption="📲 **Child Security Android APK (v1.0.0)**\n\n"
-                                "O'rnatish uchun ushbu fayl ustiga bosing. Farzandingiz telefonida 24/7 foniy GPS to'xtovsiz ishlaydi! 🛡️✨",
+                        caption=(
+                            "📲 **Child Security Android APK (v1.0.0)**\n\n"
+                            "⚠️ **O'RNATGANDAN SO'NG JUDA MUHIM QADAM:**\n"
+                            "1️⃣ Ilovani oching.\n"
+                            "2️⃣ Ilovaga kirib, **«Doimiy joylashuvga ruxsat berish»** (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                            "3️⃣ Shunda ota-onangiz xaritada qayerdaligingizni ko'ra oladi! 🛡️✨"
+                        ),
                         parse_mode="Markdown"
                     )
                 else:
