@@ -1,6 +1,14 @@
 # Environment & Secrets
 .env
 
+# SQLite Database files (Never overwrite server runtime database)
+parental_tracker.db
+parental_tracker.db*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 # Python Bytecode & Cache
 __pycache__/
 *.py[cod]

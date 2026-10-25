@@ -861,8 +861,20 @@ async def handle_server_logs(message: Message):
 
 
 # ==============================================================================
+# BAZA ZAXIRASI (BACKUP & EXPORT)
+# ==============================================================================
+@owner_bot_router.message(F.text == "💾 Baza zaxirasi (Backup)")
+@owner_bot_router.message(Command("backup"))
+async def handle_backup_command(message: Message):
+    from db.backup_service import send_db_backup_to_chat
+    await message.answer("⏳ <i>Ma'lumotlar bazasi zaxiralanmoqda va tayyorlanmoqda...</i>", parse_mode="HTML")
+    await send_db_backup_to_chat(message.bot, message.chat.id)
+
+
+# ==============================================================================
 # /HELP QO'LLANMA
 # ==============================================================================
+@owner_bot_router.message(F.text == "ℹ️ Yordam")
 @owner_bot_router.message(Command("help"))
 async def handle_help(message: Message, auth_info: Dict[str, Any]):
     help_text = (
@@ -876,7 +888,8 @@ async def handle_help(message: Message, auth_info: Dict[str, Any]):
         "• /broadcast — Ommaviy xabar yuborish\n"
         "• /server — Server, xotira, DB va xavfsizlik diagnostikasi\n"
         "• /recent — So'nggi ro'yxatdan o'tgan foydalanuvchilar\n"
-        "• /logs — Real vaqt rejimida server loglari\n\n"
+        "• /logs — Real vaqt rejimida server loglari\n"
+        "• /backup — Ma'lumotlar bazasi zaxirasini Telegramga yuklab olish\n\n"
         "👑 <b>Bosh ega:</b> @fayzbek1331"
     )
     await message.answer(

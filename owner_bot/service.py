@@ -169,7 +169,7 @@ async def get_system_diagnostic_html(session: AsyncSession) -> str:
     except Exception:
         pass
 
-    # DB Latency Ping
+    # DB Latency Ping & Engine Info
     db_latency = "N/A"
     try:
         t0 = time.time()
@@ -179,6 +179,9 @@ async def get_system_diagnostic_html(session: AsyncSession) -> str:
     except Exception as e:
         db_latency = f"Xato: {e}"
 
+    is_pg = "postgresql" in settings.RESOLVED_DATABASE_URL.lower()
+    db_type_badge = "🐘 PostgreSQL (Doimiy bulut)" if is_pg else "📁 SQLite (Fayl asosida)"
+
     html = (
         f"🌐 <b>SERVER & TIZIM HOLATI DIAGNOSTIKASI</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -186,7 +189,8 @@ async def get_system_diagnostic_html(session: AsyncSession) -> str:
         f"💻 <b>OS & Platform:</b> {platform.system()} {platform.release()} ({platform.machine()})\n"
         f"🐍 <b>Python:</b> {platform.python_version()}\n"
         f"🧠 <b>RAM (Xotira iste'moli):</b> <code>{mem_mb}</code>\n"
-        f"⚡️ <b>Ma'lumotlar bazasi (DB Ping):</b> <code>{db_latency}</code>\n"
+        f"💾 <b>Baza turi:</b> <code>{db_type_badge}</code>\n"
+        f"⚡️ <b>Baza tezligi (DB Ping):</b> <code>{db_latency}</code>\n"
         f"🔌 <b>Jonli WebSocket ulanishlar:</b> <code>{ws_count} ta faol qurilma</code>\n\n"
         f"🛡 <b>Xavfsizlik & Himoya:</b>\n"
         f"  • SSL / HTTPS: <b>Grade A+ (Faol & Sertifikatlangan)</b>\n"

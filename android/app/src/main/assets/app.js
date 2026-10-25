@@ -445,50 +445,7 @@ async function checkAuthenticationState() {
     return;
   }
 
-  // 2. Check localStorage session (User previously authenticated with code)
-  const stored = localStorage.getItem("smart_tracker_session");
-  const storedCode = localStorage.getItem("smart_tracker_auth_code");
-  if (stored) {
-    try {
-      const data = JSON.parse(stored);
-      if (data && data.user && data.role) {
-        hideAuthGateModal();
-        applyAuthenticatedUser(data);
-
-        // Silent background refresh to keep children and balance up to date
-        if (storedCode) {
-          fetch("/api/v1/webapp/auth/code", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: storedCode })
-          })
-            .then(async (r) => {
-              if (r.status === 404 || r.status === 401) {
-                // User role changed or access code was revoked on server
-                localStorage.removeItem("smart_tracker_session");
-                localStorage.removeItem("smart_tracker_auth_code");
-                localStorage.removeItem("smart_tracker_role");
-                showAuthGateModal();
-                return null;
-              }
-              return r.json();
-            })
-            .then((fresh) => {
-              if (fresh && fresh.status === "success") {
-                localStorage.setItem("smart_tracker_session", JSON.stringify(fresh));
-                applyAuthenticatedUser(fresh);
-              }
-            })
-            .catch(() => {});
-        }
-        return;
-      }
-    } catch (e) {
-      localStorage.removeItem("smart_tracker_session");
-    }
-  }
-
-  // 3. Telegram WebApp cryptographic auto-authentication if inside Telegram Mini App
+  // 2. Telegram WebApp cryptographic auto-authentication (Primary & foolproof inside Telegram)
   const initData = window.Telegram?.WebApp?.initData;
   if (initData && initData.length > 10) {
     try {
@@ -501,6 +458,9 @@ async function checkAuthenticationState() {
         const tgData = await tgRes.json();
         if (tgData && tgData.status === "success") {
           localStorage.setItem("smart_tracker_session", JSON.stringify(tgData));
+          if (tgData.children && tgData.children.length > 0) {
+            localStorage.setItem("smart_tracker_cached_children", JSON.stringify(tgData.children));
+          }
           localStorage.setItem("smart_tracker_auth_code", tgData.user?.web_access_code || "");
           localStorage.setItem("smart_tracker_role", tgData.role);
           localStorage.setItem(AUTH_PROMPT_KEY, "2");
@@ -510,7 +470,66 @@ async function checkAuthenticationState() {
         }
       }
     } catch (e) {
-      console.warn("Telegram cryptographic auth verification error:", e);
+      console.warn("Telegram cryptographic auth note (server deploying or offline):", e);
+    }
+  }
+
+  // 3. Check localStorage session (User previously authenticated or offline fallback)
+  const stored = localStorage.getItem("smart_tracker_session");
+  const storedCode = localStorage.getItem("smart_tracker_auth_code");
+  if (stored) {
+    try {
+      const data = JSON.parse(stored);
+      if (data && data.user && data.role) {
+        // Restore cached children if session children list was somehow empty
+        if (!data.children || data.children.length === 0) {
+          const cachedChildrenRaw = localStorage.getItem("smart_tracker_cached_children");
+          if (cachedChildrenRaw) {
+            try {
+              const cachedCh = JSON.parse(cachedChildrenRaw);
+              if (Array.isArray(cachedCh) && cachedCh.length > 0) {
+                data.children = cachedCh;
+              }
+            } catch (e) {}
+          }
+        }
+
+        hideAuthGateModal();
+        applyAuthenticatedUser(data);
+
+        // Silent background refresh to keep children and balance up to date
+        // NEVER wipe localStorage on temporary 404/502/redeploy errors!
+        if (storedCode && storedCode.trim().length > 0) {
+          fetch("/api/v1/webapp/auth/code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: storedCode.trim() })
+          })
+            .then(async (r) => {
+              if (r.ok) {
+                return r.json();
+              }
+              // If server is deploying or returning 404/502, retain session!
+              console.warn("Background auth refresh status:", r.status, "- retaining local session.");
+              return null;
+            })
+            .then((fresh) => {
+              if (fresh && fresh.status === "success") {
+                localStorage.setItem("smart_tracker_session", JSON.stringify(fresh));
+                if (fresh.children && fresh.children.length > 0) {
+                  localStorage.setItem("smart_tracker_cached_children", JSON.stringify(fresh.children));
+                }
+                applyAuthenticatedUser(fresh);
+              }
+            })
+            .catch((e) => {
+              console.warn("Background auth refresh network error, keeping session:", e);
+            });
+        }
+        return;
+      }
+    } catch (e) {
+      console.warn("Session parse note:", e);
     }
   }
 
@@ -1753,7 +1772,7 @@ function toggleMapLayer() {
   }
 }
 
-// Load real data or show interactive demo
+// Load real data with persistent caching across server redeployments
 async function loadData() {
   try {
     const res = await fetch(`/api/v1/webapp/parent/${parentId}/children`);
@@ -1762,6 +1781,7 @@ async function loadData() {
 
     if (data.status === "success" && data.children && data.children.length > 0) {
       childrenList = data.children;
+      localStorage.setItem("smart_tracker_cached_children", JSON.stringify(childrenList));
       isDemoMode = false;
       document.getElementById("demoBadge")?.classList.add("hidden");
       document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
@@ -1775,7 +1795,20 @@ async function loadData() {
 
       document.getElementById("childSelect").value = currentChildId;
       await selectChild(currentChildId);
-    } else {
+    } else if (data.status === "success" && (!data.children || data.children.length === 0)) {
+      // Check cached children before declaring empty state
+      const cached = localStorage.getItem("smart_tracker_cached_children");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            childrenList = parsed;
+            renderChildSelector();
+            return;
+          }
+        } catch (e) {}
+      }
+
       if (authenticatedSession) {
         childrenList = [];
         renderChildSelector();
@@ -1785,7 +1818,24 @@ async function loadData() {
       }
     }
   } catch (err) {
-    console.warn("Backend API not reachable or static Netlify host, loading interactive demo mode:", err);
+    console.warn("Backend API not reachable (server deploying or network drop):", err);
+    // DO NOT clear childrenList or show empty state if we already have children!
+    if (childrenList && childrenList.length > 0) {
+      renderChildSelector();
+      return;
+    }
+    const cached = localStorage.getItem("smart_tracker_cached_children");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          childrenList = parsed;
+          renderChildSelector();
+          return;
+        }
+      } catch (e) {}
+    }
+
     if (authenticatedSession) {
       showEmptyState();
     } else {

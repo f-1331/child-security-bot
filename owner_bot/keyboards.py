@@ -25,6 +25,10 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="📜 So'nggi foydalanuvchilar"),
             KeyboardButton(text="📑 Server loglari"),
         ],
+        [
+            KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
+            KeyboardButton(text="ℹ️ Yordam"),
+        ],
     ]
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
