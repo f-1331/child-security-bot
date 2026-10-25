@@ -14,20 +14,28 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔍 ID bo'yicha tekshirish"),
         ],
         [
+            KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
             KeyboardButton(text="🚨 Faol SOS signallari"),
+        ],
+        [
+            KeyboardButton(text="🔋 Batareya & Qurilmalar radari"),
+            KeyboardButton(text="🛡️ Xavfsizlik & Anti-Spam"),
+        ],
+        [
             KeyboardButton(text="👥 Adminlarni boshqarish"),
-        ],
-        [
             KeyboardButton(text="📢 Hammaga xabar (Broadcast)"),
-            KeyboardButton(text="🌐 Server & Xavfsizlik"),
         ],
         [
-            KeyboardButton(text="📜 So'nggi foydalanuvchilar"),
-            KeyboardButton(text="📑 Server loglari"),
+            KeyboardButton(text="🎁 Bolalarga bonus (Airdrop)"),
+            KeyboardButton(text="🌐 Server & Diagnostika"),
         ],
         [
             KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
-            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="📑 Server loglari"),
+        ],
+        [
+            KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
+            KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]
     return ReplyKeyboardMarkup(
@@ -88,8 +96,16 @@ def get_user_dossier_inline_keyboard(
         )
     buttons.append(row2)
 
-    # Row 3: Coins bonus (for children)
+    # Row 3: Device Control (for children)
     if role == "child":
+        buttons.append([
+            InlineKeyboardButton(text="🛑 Ilovalarni bloklash", callback_data=f"adm_lock:{user_id}"),
+            InlineKeyboardButton(text="✅ Ilovalarni ochish", callback_data=f"adm_unlock:{user_id}"),
+        ])
+        buttons.append([
+            InlineKeyboardButton(text="⏱ Ekran vaqtini ko'rish", callback_data=f"adm_screen:{user_id}"),
+            InlineKeyboardButton(text="🔑 PIN-kodni tiklash", callback_data=f"adm_reset_pin:{user_id}"),
+        ])
         buttons.append([
             InlineKeyboardButton(text="💰 +100 tanga", callback_data=f"adm_coin:{user_id}:100"),
             InlineKeyboardButton(text="💰 +500 tanga", callback_data=f"adm_coin:{user_id}:500"),
@@ -212,3 +228,39 @@ def get_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def get_airdrop_preset_keyboard() -> InlineKeyboardMarkup:
+    """Airdrop coin amount selection keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎁 +100 tanga (≈1,000 so'm)", callback_data="ad_amt:100"),
+                InlineKeyboardButton(text="🎁 +500 tanga (≈5,000 so'm)", callback_data="ad_amt:500"),
+            ],
+            [
+                InlineKeyboardButton(text="🎉 +1,000 tanga (≈10,000 so'm)", callback_data="ad_amt:1000"),
+                InlineKeyboardButton(text="👑 +5,000 tanga (≈50,000 so'm)", callback_data="ad_amt:5000"),
+            ],
+            [
+                InlineKeyboardButton(text="✍️ Boshqa miqdor kiritish", callback_data="ad_amt_custom"),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="adm_back_main"),
+            ],
+        ]
+    )
+
+
+def get_shield_management_keyboard() -> InlineKeyboardMarkup:
+    """Anti-Spam & Firewall Shield management keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🧹 Eski reklamalarni tozalash (/clean)", callback_data="adm_clean_spam_history"),
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Holatni yangilash", callback_data="adm_refresh_shield"),
+                InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main"),
+            ],
+        ]
+    )
+

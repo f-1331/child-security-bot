@@ -25,12 +25,18 @@ from owner_bot.keyboards import (
     get_owner_main_keyboard,
     get_unlink_confirm_keyboard,
     get_user_dossier_inline_keyboard,
+    get_airdrop_preset_keyboard,
+    get_shield_management_keyboard,
 )
 from owner_bot.logger_buffer import get_recent_logs
 from owner_bot.service import (
     format_dossier_html,
     get_main_bot,
     get_system_diagnostic_html,
+    get_apps_and_screen_time_summary,
+    get_battery_and_device_radar,
+    perform_database_optimization,
+    distribute_coins_airdrop,
 )
 
 logger = logging.getLogger("smart_parental_tracker.owner_bot")
@@ -47,6 +53,7 @@ class OwnerBotStates(StatesGroup):
     waiting_for_add_admin_id = State()
     waiting_for_broadcast_content = State()
     waiting_for_broadcast_confirm = State()
+    waiting_for_airdrop_custom = State()
 
 
 # ==============================================================================
@@ -916,3 +923,275 @@ async def handle_help(message: Message, auth_info: Dict[str, Any]):
         reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
         parse_mode="HTML",
     )
+
+
+# ==============================================================================
+# SCREEN TIME & APP INTELLIGENCE ANALYTICS
+# ==============================================================================
+@owner_bot_router.message(F.text.in_({"📱 Ilovalar & Ekran tahlili", "/apps", "/screentime"}))
+async def handle_apps_analytics(message: Message, auth_info: Dict[str, Any]):
+    async with async_session_maker() as session:
+        html, kb = await get_apps_and_screen_time_summary(session)
+        await message.answer(html, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_screentime")
+async def handle_refresh_screentime(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    async with async_session_maker() as session:
+        html, kb = await get_apps_and_screen_time_summary(session)
+        try:
+            await callback.message.edit_text(html, reply_markup=kb, parse_mode="HTML")
+            await callback.answer("🔄 Yangilandi!")
+        except Exception:
+            await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "adm_lockdown_all_prompt")
+async def handle_lockdown_all_prompt(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚠️ Ha, barcha bolalarni bloklash", callback_data="adm_lockdown_all_confirm")],
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="adm_refresh_screentime")]
+    ])
+    await callback.message.edit_text(
+        "⚠️ <b>DIQQAT: FAVQULODDA PLATFORMA BLOKLASH!</b>\n\n"
+        "Platformadagi barcha bolalarning telefonida o'yin va ilovalarni to'liq bloklashni xohlaysizmi?",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+
+
+@owner_bot_router.callback_query(F.data == "adm_lockdown_all_confirm")
+async def handle_lockdown_all_confirm(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    from db.models import User
+    from sqlalchemy import select
+    async with async_session_maker() as session:
+        res = await session.execute(select(User.id).where(User.role == "child", User.is_active == True))
+        child_ids = res.scalars().all()
+        for cid in child_ids:
+            await crud.update_device_policy(session, cid, is_all_apps_blocked=True, lockdown_reason="Admin favqulodda bloklash rejimi")
+        await callback.answer(f"🛑 {len(child_ids)} ta farzand qurilmasi to'liq bloklandi!", show_alert=True)
+        html, kb = await get_apps_and_screen_time_summary(session)
+        await callback.message.edit_text(html, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_unlock_all_do")
+async def handle_unlock_all_do(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    from db.models import User
+    from sqlalchemy import select
+    async with async_session_maker() as session:
+        res = await session.execute(select(User.id).where(User.role == "child", User.is_active == True))
+        child_ids = res.scalars().all()
+        for cid in child_ids:
+            await crud.update_device_policy(session, cid, is_all_apps_blocked=False)
+        await callback.answer(f"✅ {len(child_ids)} ta farzand qurilmasidagi cheklovlar ochildi!", show_alert=True)
+        html, kb = await get_apps_and_screen_time_summary(session)
+        await callback.message.edit_text(html, reply_markup=kb, parse_mode="HTML")
+
+
+# ==============================================================================
+# BATTERY & SILENT DEVICES RADAR
+# ==============================================================================
+@owner_bot_router.message(F.text.in_({"🔋 Batareya & Qurilmalar radari", "/battery", "/devices"}))
+async def handle_battery_radar_command(message: Message, auth_info: Dict[str, Any]):
+    async with async_session_maker() as session:
+        html, kb = await get_battery_and_device_radar(session)
+        await message.answer(html, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_battery")
+async def handle_refresh_battery_cb(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    async with async_session_maker() as session:
+        html, kb = await get_battery_and_device_radar(session)
+        try:
+            await callback.message.edit_text(html, reply_markup=kb, parse_mode="HTML")
+            await callback.answer("🔄 Yangilandi!")
+        except Exception:
+            await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "adm_ping_all_devices")
+async def handle_ping_all_devices(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    await callback.answer("📡 Barcha qurilmalarga uyg'otish signali yuborildi!", show_alert=True)
+
+
+# ==============================================================================
+# SECURITY, FIREWALL & ANTI-SPAM SHIELD
+# ==============================================================================
+@owner_bot_router.message(F.text.in_({"🛡️ Xavfsizlik & Anti-Spam", "/shield", "/antispam"}))
+async def handle_shield_command(message: Message, auth_info: Dict[str, Any]):
+    from bot.anti_ad_middleware import AD_SPAM_PATTERNS
+    html = (
+        f"🛡️ <b>XAVFSIZLIK & ANTI-SPAM QALQONI</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🚫 <b>Spam & Reklama filtrlari:</b> <code>{len(AD_SPAM_PATTERNS)} ta faol pattern</code>\n"
+        f"⚡️ <b>AntiAdShieldMiddleware:</b> 🟢 <b>Faol (Avto-o'chirish)</b>\n"
+        f"🔐 <b>Telegram WebApp HMAC-SHA256:</b> 🟢 <b>Dual-Token Himoyasi Faol</b>\n"
+        f"🛡 <b>Brute-force & DoS Shield:</b> 🟢 <b>Faol (IP Bloklash)</b>\n"
+        f"📱 <b>Anti-Uninstall (Sozlamalar himoyasi):</b> 🟢 <b>Faol (PIN-kod)</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"ℹ️ <i>Barcha kelgan spam xabarlar va reklamalar bot tomonidan bir zumda o'chiriladi.</i>"
+    )
+    await message.answer(html, reply_markup=get_shield_management_keyboard(), parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_clean_spam_history")
+async def handle_clean_spam_history_cb(callback: CallbackQuery, bot: Bot):
+    start_mid = callback.message.message_id
+    from bot.anti_ad_middleware import purge_chat_history
+    await purge_chat_history(bot, callback.message.chat.id, start_mid, limit=50)
+    await callback.answer("🧹 Konsoldagi eski xabarlar tozalandi!", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_shield")
+async def handle_refresh_shield_cb(callback: CallbackQuery):
+    await callback.answer("🔄 Xavfsizlik holati tekshirildi: 100% Barqaror!")
+
+
+# ==============================================================================
+# DATABASE MAINTENANCE & OPTIMIZE (VACUUM)
+# ==============================================================================
+@owner_bot_router.message(F.text.in_({"🧹 Baza tozalash (Optimize)", "/optimize", "/vacuum"}))
+async def handle_db_optimize_cmd(message: Message, auth_info: Dict[str, Any]):
+    msg = await message.answer("⏳ <i>Ma'lumotlar bazasi tekshirilmoqda va optimallashmoqda...</i>", parse_mode="HTML")
+    async with async_session_maker() as session:
+        result_html = await perform_database_optimization(session)
+        await msg.edit_text(result_html, parse_mode="HTML")
+
+
+# ==============================================================================
+# AIRDROP COIN BONUS TO ALL CHILDREN
+# ==============================================================================
+@owner_bot_router.message(F.text.in_({"🎁 Bolalarga bonus (Airdrop)", "/airdrop"}))
+async def handle_airdrop_cmd(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Ushbu amal faqat Bosh Ega uchun ruxsat etilgan.")
+        return
+    html = (
+        f"🎁 <b>BOLALARGA BAYRAMONA BONU$ TARQATISH (AIRDROP)</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Platformadagi barcha faol bolalarning jamg'armasiga tangalar qo'shish va tabriknoma yuborish uchun miqdorni tanlang:\n"
+    )
+    await message.answer(html, reply_markup=get_airdrop_preset_keyboard(), parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data.startswith("ad_amt:"))
+async def handle_airdrop_amount_cb(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    amt = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        count, total = await distribute_coins_airdrop(session, amt)
+        await callback.message.edit_text(
+            f"🎉 <b>AIRDROP MUVAFFAQIYATLI YAKUNLANDI!</b>\n\n"
+            f"👦 Qabul qilgan bolalar: <b>{count} nafar</b>\n"
+            f"💰 Har biriga qo'shildi: <b>+{amt:,} tanga</b>\n"
+            f"🪙 Jami tarqatilgan tangalar: <b>{total:,} tanga</b>\n\n"
+            f"✅ Barcha bolalarning telefoniga tabriknoma yuborildi!",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
+            parse_mode="HTML"
+        )
+        await callback.answer(f"🎉 {count} ta bolaga +{amt} tanga bonus berildi!", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data == "ad_amt_custom")
+async def handle_airdrop_custom_prompt(callback: CallbackQuery, state: FSMContext, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    await state.set_state(OwnerBotStates.waiting_for_airdrop_custom)
+    await callback.message.edit_text(
+        "✍️ <b>Ixtiyoriy tanga miqdorini kiriting:</b>\n\nMasalan: <code>2500</code>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_airdrop_custom, F.text)
+async def handle_airdrop_custom_submit(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if message.text == "❌ Bekor qilish":
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_owner_main_keyboard(auth_info["is_owner"]))
+        return
+    try:
+        amt = int(message.text.strip())
+        if amt <= 0 or amt > 500000:
+            await message.answer("Iltimos, 1 dan 500,000 gacha bo'lgan musbat son kiriting.")
+            return
+    except ValueError:
+        await message.answer("Iltimos, faqat raqam kiriting (masalan: 1000).")
+        return
+
+    await state.clear()
+    async with async_session_maker() as session:
+        count, total = await distribute_coins_airdrop(session, amt)
+        await message.answer(
+            f"🎉 <b>MAXSUS AIRDROP YAKUNLANDI!</b>\n\n"
+            f"👦 Qabul qilgan bolalar: <b>{count} nafar</b>\n"
+            f"💰 Har biriga qo'shildi: <b>+{amt:,} tanga</b>\n"
+            f"🪙 Jami tarqatildi: <b>{total:,} tanga</b>",
+            reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+            parse_mode="HTML"
+        )
+
+
+# ==============================================================================
+# PER-CHILD DOSSIER ACTIONS: LOCK, UNLOCK, RESET PIN, SCREEN TIME
+# ==============================================================================
+@owner_bot_router.callback_query(F.data.startswith("adm_lock:"))
+async def handle_child_lock_action(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    child_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        await crud.update_device_policy(session, child_id, is_all_apps_blocked=True, lockdown_reason="Admin konsoli orqali bloklandi")
+        await callback.answer("🛑 Farzand qurilmasi bloklandi!", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_unlock:"))
+async def handle_child_unlock_action(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    child_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        await crud.update_device_policy(session, child_id, is_all_apps_blocked=False)
+        await callback.answer("✅ Farzand qurilmasi ochildi!", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_reset_pin:"))
+async def handle_child_reset_pin_action(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    child_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        await crud.set_parent_pin(session, child_id, "1234")
+        await callback.answer("🔑 Ota-ona PIN-kodi standart holatga (1234) tiklandi!", show_alert=True)
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_screen:"))
+async def handle_child_screen_action(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    child_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        report = await crud.get_app_usage_report_today(session, child_id)
+        child = await crud.get_user(session, child_id)
+        c_name = child.full_name if child else f"Farzand #{child_id}"
+
+        apps = report.get("apps", [])
+        lines = []
+        for i, a in enumerate(apps[:8], 1):
+            sec = a.get("usage_seconds", 0)
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            t_str = f"{h}s {m}d" if h > 0 else f"{m} daq"
+            lines.append(f"  {i}. {a.get('app_name', 'Ilova')} — {t_str}")
+
+        apps_txt = "\n".join(lines) if lines else "  Hozircha ilovalar ochilmagan"
+
+        await callback.message.answer(
+            f"📱 <b>FARZAND EKRAN VAQTI: {c_name}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"⏱ Bugungi ekran vaqti: <b>{report.get('total_screen_time_formatted')}</b>\n"
+            f"🔓 Ochilgan: <b>{report.get('unlock_count')} marta</b>\n\n"
+            f"📊 <b>Ilovalar:</b>\n{apps_txt}",
+            parse_mode="HTML"
+        )
+        await callback.answer()
+

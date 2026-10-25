@@ -1133,6 +1133,7 @@ async def get_user_full_dossier(session: AsyncSession, user_id: int) -> Optional
 
     rate_coins, rate_som = await get_coin_rate_for_user(session, user_id)
     balance_som = calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
+    policy = await get_or_create_device_policy(session, user_id) if user.role == "child" else None
 
     return {
         "user": user,
@@ -1143,7 +1144,8 @@ async def get_user_full_dossier(session: AsyncSession, user_id: int) -> Optional
         "geofences": geofences,
         "balance_som": balance_som,
         "rate_coins": rate_coins,
-        "rate_som": rate_som
+        "rate_som": rate_som,
+        "policy": policy
     }
 
 
