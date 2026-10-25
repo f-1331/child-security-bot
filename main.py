@@ -289,6 +289,49 @@ async def download_child_apk():
         status_code=302
     )
 
+
+@app.get("/download/desktop", tags=["App"])
+@app.get("/download/desktop-windows", tags=["App"])
+async def download_desktop_windows():
+    """Download Windows Desktop standalone launcher setup package."""
+    import os
+    from fastapi.responses import FileResponse, Response
+    desktop_file = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Desktop_Setup.bat")
+    if os.path.exists(desktop_file):
+        return FileResponse(
+            desktop_file,
+            filename="ChildSecurity_Desktop_Setup.bat",
+            media_type="application/x-bat"
+        )
+    script_content = (
+        "@echo off\r\n"
+        "chcp 65001 >nul\r\n"
+        "title Child Security - Noutbuk uchun dastur\r\n"
+        "echo ============================================================\r\n"
+        "echo          Child Security - Oila va Farzand Nazorati\r\n"
+        "echo           Noutbuk va Windows uchun Desktop Dasturi\r\n"
+        "echo ============================================================\r\n"
+        "echo.\r\n"
+        "echo Ish stoliga (Desktop) Child Security yorlig'i o'rnatilmoqda...\r\n"
+        "set URL=https://child-security-bot.vercel.app\r\n"
+        "set DESKTOP=%USERPROFILE%\\Desktop\\Child Security.url\r\n"
+        "echo [InternetShortcut] > \"%DESKTOP%\"\r\n"
+        "echo URL=%URL% >> \"%DESKTOP%\"\r\n"
+        "echo IconIndex=0 >> \"%DESKTOP%\"\r\n"
+        "echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESKTOP%\"\r\n"
+        "echo.\r\n"
+        "echo [OK] Child Security ish stolingizga muvaffaqiyatli o'rnatildi!\r\n"
+        "echo Dastur ishga tushirilmoqda...\r\n"
+        "start msedge.exe --app=\"%URL%\" 2>nul || start chrome.exe --app=\"%URL%\" 2>nul || start \"\" \"%URL%\"\r\n"
+        "exit\r\n"
+    )
+    return Response(
+        content=script_content.encode("utf-8"),
+        media_type="application/x-bat",
+        headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Desktop_Setup.bat"'}
+    )
+
+
 @app.get("/privacy", tags=["Legal"])
 @app.get("/privacy.html", tags=["Legal"])
 async def privacy_policy_view():

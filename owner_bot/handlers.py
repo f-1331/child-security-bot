@@ -915,7 +915,8 @@ async def handle_help(message: Message, auth_info: Dict[str, Any]):
         "• /server — Server, xotira, DB va xavfsizlik diagnostikasi\n"
         "• /recent — So'nggi ro'yxatdan o'tgan foydalanuvchilar\n"
         "• /logs — Real vaqt rejimida server loglari\n"
-        "• /backup — Ma'lumotlar bazasi zaxirasini Telegramga yuklab olish\n\n"
+        "• /backup — Ma'lumotlar bazasi zaxirasini Telegramga yuklab olish\n"
+        "• /desktop — Noutbuk & PC versiyasini yuklab olish fayli\n\n"
         "👑 <b>Bosh ega:</b> @fayzbek1331"
     )
     await message.answer(
@@ -923,6 +924,50 @@ async def handle_help(message: Message, auth_info: Dict[str, Any]):
         reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
         parse_mode="HTML",
     )
+
+
+@owner_bot_router.message(F.text.in_({"💻 Noutbuk dasturi", "/desktop", "/laptop", "/pc"}))
+async def handle_owner_desktop_info(message: Message, auth_info: Dict[str, Any]):
+    from aiogram.types import FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+    import os
+    from config import settings
+
+    desktop_bat_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Desktop_Setup.bat")
+    text = (
+        "💻 <b>Child Security — Noutbuk va PC Desktop versiyasi</b>\n\n"
+        "🔗 <b>To'g'ridan-to'g'ri havolalar:</b>\n"
+        f"• Web App: <code>{settings.RESOLVED_WEBAPP_URL}</code>\n"
+        f"• Windows O'rnatgich (.bat): <code>{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows</code>\n\n"
+        "Foydalanuvchilar noutbuk orqali kirganda alohida desktop ilova (Edge/Chrome app) "
+        "yoki 1-bosishda brauzer PWA sifatida o'rnatishlari mumkin."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📥 Windows O'rnatgichni yuklab olish",
+                    url=f"{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Web App Saytiga o'tish",
+                    url=settings.RESOLVED_WEBAPP_URL
+                )
+            ]
+        ]
+    )
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+    if os.path.exists(desktop_bat_path):
+        try:
+            doc = FSInputFile(desktop_bat_path, filename="ChildSecurity_Desktop_Setup.bat")
+            await message.answer_document(
+                document=doc,
+                caption="💻 <b>Child Security — Windows Desktop Setup</b>\nIsh stoliga yorliq yaratish skripti.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
 
 
 # ==============================================================================

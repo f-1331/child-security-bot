@@ -33,6 +33,12 @@ def get_role_selection_keyboard() -> InlineKeyboardMarkup:
                     callback_data="download_child_apk"
                 ),
             ],
+            [
+                InlineKeyboardButton(
+                    text="💻 Noutbuk / Kompyuter uchun dastur",
+                    callback_data="download_desktop"
+                ),
+            ],
         ]
     )
 
@@ -48,7 +54,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="👦 Farzand ilovasi (APK)")
         ],
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
+            KeyboardButton(text="💻 Noutbuk uchun dastur"),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+        ],
+        [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi")
         ],
         [

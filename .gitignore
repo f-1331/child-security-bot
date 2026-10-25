@@ -33,6 +33,7 @@ Desktop.ini
 # Temporary scratch scripts
 scratch/
 
-# Local binary downloads (APKs tracked for guaranteed bot delivery on Render)
+# Local binary downloads (APKs and setup scripts tracked for guaranteed bot delivery on Render)
 downloads/*
 !downloads/*.apk
+!downloads/*.bat

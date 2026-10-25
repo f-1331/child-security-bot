@@ -6753,6 +6753,11 @@ function openInstallAppModal() {
   const modal = document.getElementById("modalInstallApp");
   if (modal) {
     modal.classList.remove("hidden");
+    // If opened on laptop/desktop, auto-switch to desktop tab
+    const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isDesktop && window.innerWidth >= 768) {
+      switchInstallTab("desktop");
+    }
     if (window.lucide) lucide.createIcons();
   }
 }
@@ -6765,7 +6770,7 @@ function closeInstallAppModal() {
 
 function switchInstallTab(tab) {
   haptic("light");
-  ["android", "ios", "pwa"].forEach((t) => {
+  ["android", "ios", "desktop", "pwa"].forEach((t) => {
     const pane = document.getElementById(`installTabPane-${t}`);
     const btn = document.getElementById(`installTabBtn-${t}`);
     if (pane) {
@@ -6774,12 +6779,13 @@ function switchInstallTab(tab) {
     }
     if (btn) {
       if (t === tab) {
-        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md transition";
+        btn.className = "flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-black bg-blue-600 text-white shadow-md transition flex items-center justify-center gap-1";
       } else {
-        btn.className = "flex-1 py-2 px-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition";
+        btn.className = "flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1";
       }
     }
   });
+  if (window.lucide) lucide.createIcons();
 }
 
 async function triggerPwaInstall() {
@@ -6790,8 +6796,14 @@ async function triggerPwaInstall() {
     console.log("Install prompt outcome:", outcome);
     deferredInstallPrompt = null;
     closeInstallAppModal();
+    showToast("🎉 Ilova muvaffaqiyatli o'rnatildi!");
   } else {
-    showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
+    const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isDesktop) {
+      showToast("ℹ️ Noutbuk brauzeringiz manzil satridagi (URL o'ng tomoni) 💻 O'rnatish belgisini bosing!");
+    } else {
+      showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
+    }
   }
 }
 

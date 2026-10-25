@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=67" />
+  <link rel="stylesheet" href="style.css?v=68" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -2266,7 +2266,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=69"></script>
+  <script src="app.js?v=70"></script>
 
   <!-- MODAL: SCREEN TIME & APP BLOCKING / DEVICE CONTROL -->
   <div id="modalScreenTimeControl" class="hidden fixed inset-0 z-[2400] bg-slate-950/85 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
@@ -2601,7 +2601,7 @@
         </div>
         <div>
           <h3 class="text-base font-black text-white">Child Security Ilovasi 📲</h3>
-          <p class="text-[11px] text-blue-300 font-medium">Android APK & iPhone (iOS) uchun rasmiy o'rnatish</p>
+          <p class="text-[11px] text-blue-300 font-medium">Android APK, iPhone, Noutbuk & PC uchun rasmiy o'rnatish</p>
         </div>
       </div>
 
@@ -2619,18 +2619,22 @@
       </div>
 
       <!-- Segmented Tab Selector (Evenly spaced, responsive on all devices) -->
-      <div class="flex items-center gap-1.5 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/80 mb-4">
-        <button id="installTabBtn-android" onclick="switchInstallTab('android')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-black bg-blue-600 text-white shadow-md transition flex items-center justify-center gap-1">
+      <div class="flex items-center gap-1 p-1 bg-slate-800/80 rounded-2xl border border-slate-700/80 mb-4">
+        <button id="installTabBtn-android" onclick="switchInstallTab('android')" class="flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-black bg-blue-600 text-white shadow-md transition flex items-center justify-center gap-1">
           <i data-lucide="smartphone" class="w-3.5 h-3.5 shrink-0"></i>
           <span>Android</span>
         </button>
-        <button id="installTabBtn-ios" onclick="switchInstallTab('ios')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
+        <button id="installTabBtn-ios" onclick="switchInstallTab('ios')" class="flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
           <i data-lucide="apple" class="w-3.5 h-3.5 shrink-0"></i>
           <span>iPhone</span>
         </button>
-        <button id="installTabBtn-pwa" onclick="switchInstallTab('pwa')" class="flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
+        <button id="installTabBtn-desktop" onclick="switchInstallTab('desktop')" class="flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
+          <i data-lucide="laptop" class="w-3.5 h-3.5 shrink-0"></i>
+          <span>Noutbuk</span>
+        </button>
+        <button id="installTabBtn-pwa" onclick="switchInstallTab('pwa')" class="flex-1 py-2 px-1 rounded-xl text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white bg-slate-800/60 transition flex items-center justify-center gap-1">
           <i data-lucide="globe" class="w-3.5 h-3.5 shrink-0"></i>
-          <span>PWA</span>
+          <span>Brauzer</span>
         </button>
       </div>
 
@@ -2724,6 +2728,58 @@
         <p class="text-[10px] text-slate-400 text-center italic mt-1">
           Ilova iPhone ekranda alohida logotipi bilan paydo bo'ladi va brauzersiz to'liq ekranda ishlaydi.
         </p>
+      </div>
+
+      <!-- PANE 4: LAPTOP & PC (WINDOWS DESKTOP & MAC PWA) -->
+      <div id="installTabPane-desktop" class="hidden flex flex-col gap-3">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-slate-800 to-indigo-950/70 border border-blue-400/40">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-base">💻</span>
+            <h4 class="text-xs sm:text-sm font-black text-white">Noutbuk va Kompyuterlar uchun (Windows & macOS)</h4>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Child Security noutbukingizda mustaqil desktop ilova bo'lib ishlaydi. Brauzer yorliqlari va manzil satrisiz to'liq ekranda qulay foydalaning!
+          </p>
+        </div>
+
+        <!-- Option 1: 1-Click Standalone Desktop Install (Chrome / Edge / Windows / Mac) -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
+          <div class="flex items-center justify-between">
+            <h5 class="text-xs font-black text-white flex items-center gap-1.5">
+              <span>🚀</span> <span>1-Bosishda Ish Stoliga O'rnatish</span>
+            </h5>
+            <span class="text-2xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">Tavsiya etiladi</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Chrome yoki Edge brauzerida 1 ta bosish orqali noutbukingiz ish stoli va vazifalar paneliga (Taskbar) o'rnatiladi.
+          </p>
+          <button onclick="triggerPwaInstall()" class="w-full py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 transition">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Noutbukka Ilovani O'rnatish</span>
+          </button>
+        </div>
+
+        <!-- Option 2: Windows Standalone Desktop Launcher (.bat / Setup) -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
+          <h5 class="text-xs font-black text-white flex items-center gap-1.5">
+            <span>🪟</span> <span>Windows uchun Tezkor O'rnatgich</span>
+          </h5>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Windows 10 va 11 foydalanuvchilari uchun ish stoliga avtomatik yorliq yaratuvchi mustaqil dastur:
+          </p>
+          <a href="/download/desktop-windows" download="ChildSecurity_Desktop_Setup.bat" class="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-2 transition">
+            <i data-lucide="hard-drive-download" class="w-4 h-4 text-cyan-400"></i>
+            <span>Windows O'rnatgichini Yuklab Olish (.bat)</span>
+          </a>
+        </div>
+
+        <!-- 3 Step Quick Laptop Guide -->
+        <div class="p-3 rounded-2xl bg-slate-800/50 border border-slate-700/60 text-[10px] text-slate-300 space-y-1">
+          <p class="font-bold text-amber-300">💡 Qanday o'rnatiladi?</p>
+          <p>1. Yuqoridagi <b>«Noutbukka Ilovani O'rnatish»</b> tugmasini bosing.</p>
+          <p>2. Yoki brauzer tepasidagi manzil satrida <b>«O'rnatish / Install»</b> belgisini tasdiqlang.</p>
+          <p>3. Noutbuk ish stolida <b>Child Security</b> mustaqil dasturi paydo bo'ladi!</p>
+        </div>
       </div>
 
       <!-- PANE 3: BROWSER / PWA 1-TAP INSTALL -->

@@ -2945,6 +2945,12 @@ async def on_download_parent_apk(event, bot: Bot):
                     text="🌐 Web App Saytini ochish",
                     web_app=WebAppInfo(url=settings.MINI_APP_URL)
                 )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💻 Noutbuk / Kompyuter uchun dastur",
+                    callback_data="download_desktop"
+                )
             ]
         ]
     )
@@ -3066,6 +3072,89 @@ async def on_download_child_apk(event, bot: Bot):
             parse_mode="Markdown",
             disable_web_page_preview=False
         )
+
+
+@router.message(F.text.in_([
+    "💻 Noutbuk uchun dastur",
+    "💻 Noutbuk uchun versiya",
+    "Noutbuk uchun dastur",
+    "noutbuk uchun dastur",
+    "Noutbuk versiya",
+    "noutbuk versiya",
+    "Kompyuter versiya",
+    "kompyuter versiya",
+    "💻 Kompyuter / Noutbuk",
+    "💻 Noutbuk",
+    "noutbuk",
+    "kompyuter",
+    "desktop",
+    "laptop"
+]))
+@router.message(Command("desktop", "laptop", "noutbuk", "kompyuter", "pc"))
+@router.callback_query(F.data == "download_desktop")
+async def on_download_desktop(event, bot: Bot):
+    """Send dedicated Laptop / Desktop PC setup file and Web App client instructions."""
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("💻 Noutbuk versiyasi tayyorlanmoqda...")
+
+    desktop_bat_url = f"{settings.RESOLVED_WEBAPP_URL}/download/desktop-windows"
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+
+    text = (
+        "💻 **Child Security — Noutbuk va Kompyuterlar uchun (Windows & macOS)**\n\n"
+        "Child Security'ni noutbukingizda alohida mustaqil desktop dastur sifatida ishlatishingiz mumkin!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🚀 **O'rnatishning 2 xil qulay usuli:**\n\n"
+        "1️⃣ **Windows Tezkor O'rnatgich (.bat):**\n"
+        "Quyidagi `.bat` faylini yuklab olib ishga tushirsangiz, ish stolingizga (Desktop) "
+        "avtomatik tarzda **Child Security** yorlig'i o'rnatiladi va brauzer satrisiz toza oyna bo'lib ochiladi!\n\n"
+        "2️⃣ **1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Mac):**\n"
+        "Noutbuk brauzerida saytni oching va manzil satridagi **«O'rnatish / Install»** belgisini bosing!\n\n"
+        "🛡️ Katta ekranda farzandlaringiz joylashuvi, batareya holati va ekran vaqtini kuzatish yanada qulay!"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💻 Windows uchun o'rnatgich (.bat)",
+                    url=desktop_bat_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Noutbuk Web App'ni ochish",
+                    url=webapp_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📱 Android Ota-ona ilovasi (APK)",
+                    callback_data="download_parent_apk"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+
+    desktop_bat_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Desktop_Setup.bat")
+    try:
+        if os.path.exists(desktop_bat_path):
+            doc = FSInputFile(desktop_bat_path, filename="ChildSecurity_Desktop_Setup.bat")
+            await message.answer_document(
+                document=doc,
+                caption=(
+                    "💻 **Child Security — Noutbuk & PC O'rnatgichi**\n\n"
+                    "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
+                    "2. Ish stolingizda (Desktop) **Child Security** paydo bo'ladi!\n"
+                    "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
+                ),
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.warning(f"Could not send desktop setup BAT document: {e}")
 
 
 @router.message(F.text.in_([
