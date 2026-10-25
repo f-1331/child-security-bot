@@ -35,11 +35,11 @@ class TelemetryPayload(BaseModel):
     child_id: int = Field(..., description="Telegram ID of the child")
     lat: float = Field(..., description="Latitude coordinate", ge=-90.0, le=90.0)
     lon: float = Field(..., description="Longitude coordinate", ge=-180.0, le=180.0)
-    speed: Optional[float] = Field(None, description="Current movement speed in km/h")
+    speed: Optional[float] = Field(None, description="Current movement speed in km/h", ge=0.0, le=500.0)
     battery_level: Optional[int] = Field(None, description="Battery percentage (0-100)", ge=0, le=100)
     is_charging: bool = Field(False, description="Whether phone is plugged into charger")
     sound_mode: str = Field("normal", description="Phone sound mode: normal, vibrate, silent")
-    accuracy: Optional[float] = Field(None, description="GPS horizontal accuracy in meters")
+    accuracy: Optional[float] = Field(None, description="GPS horizontal accuracy in meters", ge=0.0, le=50000.0)
     timestamp: Optional[str] = Field(None, description="ISO timestamp or client timestamp")
 
 

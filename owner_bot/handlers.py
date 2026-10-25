@@ -223,6 +223,9 @@ async def prompt_user_query(message: Message, state: FSMContext):
 
 @owner_bot_router.message(OwnerBotStates.waiting_for_user_query)
 async def process_user_query(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if not message.text:
+        await message.answer("⚠️ Iltimos, Telegram ID raqamini yoki @username'ni matn ko'rinishida yuboring:")
+        return
     query = message.text.strip()
     await state.clear()
 
@@ -593,6 +596,9 @@ async def callback_prompt_add_admin(callback: CallbackQuery, state: FSMContext, 
 
 @owner_bot_router.message(OwnerBotStates.waiting_for_add_admin_id)
 async def process_add_admin_id(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if not message.text:
+        await message.answer("⚠️ Iltimos, Telegram ID raqamini raqamlar bilan kiriting:")
+        return
     text = message.text.strip()
     if not text.isdigit():
         await message.answer("❌ Telegram ID faqat raqamlardan iborat bo'lishi kerak. Qaytadan kiriting:")

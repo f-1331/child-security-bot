@@ -176,10 +176,10 @@ def verify_telegram_init_data(init_data: str, bot_token: str, max_age_seconds: i
 class ChildLocationUpdate(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
-    accuracy: Optional[float] = None
-    speed: Optional[float] = None
-    speed_kmh: Optional[float] = None
-    battery_level: Optional[int] = None
+    accuracy: Optional[float] = Field(None, ge=0.0, le=50000.0)
+    speed: Optional[float] = Field(None, ge=0.0, le=500.0)
+    speed_kmh: Optional[float] = Field(None, ge=0.0, le=500.0)
+    battery_level: Optional[int] = Field(None, ge=0, le=100)
     is_charging: Optional[bool] = False
     sound_mode: Optional[str] = "normal"
 
@@ -957,8 +957,18 @@ async def complete_task_endpoint(
 
 
 @router.post("/task/{task_id}/approve")
-async def approve_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
-    """Approve a task directly from WebApp and notify child."""
+async def approve_task_endpoint(
+    task_id: int,
+    parent_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """Approve a task directly from WebApp and notify child with IDOR parent validation."""
+    existing_task = await crud.get_task_by_id(session, task_id)
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if parent_id and existing_task.parent_id != parent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
+
     task = await crud.approve_task(session, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -998,8 +1008,18 @@ async def approve_task_endpoint(task_id: int, session: AsyncSession = Depends(ge
 
 
 @router.post("/task/{task_id}/reject")
-async def reject_task_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
-    """Reject a task directly from WebApp and notify child."""
+async def reject_task_endpoint(
+    task_id: int,
+    parent_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """Reject a task directly from WebApp and notify child with IDOR parent validation."""
+    existing_task = await crud.get_task_by_id(session, task_id)
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if parent_id and existing_task.parent_id != parent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
+
     task = await crud.reject_task(session, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1218,8 +1238,20 @@ async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(
 
 
 @router.post("/child/{child_id}/siren")
-async def parent_siren_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
+async def parent_siren_endpoint(
+    child_id: int,
+    parent_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
     """Parent triggers remote siren / sound ping to child's phone across Telegram Bot and Mobile App with 5s debounce."""
+    if parent_id:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
     now_utc = datetime.now(timezone.utc)
     last_siren = last_siren_alert_map.get(child_id)
     if last_siren and (now_utc - last_siren) < timedelta(seconds=5):
@@ -1443,12 +1475,21 @@ async def update_child_live_location_endpoint(
 @router.post("/child/{child_id}/silent-check")
 async def silent_check_endpoint(
     child_id: int,
+    parent_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
     """Silent Check ('Passiv monitoring'):
     Fetch latest live coordinates and telemetry for parent.
     Strictly NO UI alert/notification is sent to child!
     """
+    if parent_id:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
     latest = await crud.get_latest_location(session, child_id)
     child = await crud.get_user(session, child_id)
     if not child:
@@ -1475,11 +1516,20 @@ async def silent_check_endpoint(
 @router.post("/child/{child_id}/active-check")
 async def active_check_endpoint(
     child_id: int,
+    parent_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
     """Active Check ('Faol so'rov'):
     Fetch latest coordinates and send 'Ota-onangiz joylashuvingizni tekshirdi' alert to child screen.
     """
+    if parent_id:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
     latest = await crud.get_latest_location(session, child_id)
     child = await crud.get_user(session, child_id)
     if not child:
@@ -2033,10 +2083,10 @@ async def update_child_device_policy_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
-    if payload.parent_id:
-        parents = await crud.get_parents_for_child(session, child_id)
-        parent_ids = [p.id for p in parents]
-        if parent_ids and payload.parent_id not in parent_ids:
+    parents = await crud.get_parents_for_child(session, child_id)
+    parent_ids = [p.id for p in parents]
+    if parent_ids:
+        if not payload.parent_id or payload.parent_id not in parent_ids:
             logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {payload.parent_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

@@ -328,9 +328,10 @@ async def delete_child_profile(session: AsyncSession, parent_id: int, child_id: 
         )
     )
     link = result.scalar_one_or_none()
-    if link:
-        await session.delete(link)
-        await session.flush()
+    if not link:
+        return False
+    await session.delete(link)
+    await session.flush()
 
     # 2. Check if child is linked to any other parent
     other_links = await session.execute(
