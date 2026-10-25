@@ -3581,6 +3581,11 @@ function toggleMapUiVisibility(forceState) {
   }
 }
 
+function openModal(tabName) {
+  switchTab(tabName);
+}
+window.openModal = openModal;
+
 function switchTab(tabName) {
   if (tabName !== "map" && document.body.classList.contains("fullscreen-map-mode")) {
     toggleMapUiVisibility(false);

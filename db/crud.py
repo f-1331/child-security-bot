@@ -597,6 +597,9 @@ async def set_child_sos(session: AsyncSession, child_id: int, is_active: bool = 
     return child
 
 
+set_sos_status = set_child_sos
+
+
 async def check_and_update_battery_alert(
     session: AsyncSession,
     child_id: int,
