@@ -495,6 +495,8 @@ async def main():
         set_main_bot(bot)
 
         dp = Dispatcher(storage=MemoryStorage())
+        from bot.anti_ad_middleware import AntiAdShieldMiddleware
+        dp.message.outer_middleware(AntiAdShieldMiddleware())
         dp.include_router(bot_router)
 
         from bot.scheduler import run_nightly_and_walksafe_worker
@@ -524,6 +526,8 @@ async def main():
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         owner_dp = Dispatcher(storage=MemoryStorage())
+        from bot.anti_ad_middleware import AntiAdShieldMiddleware
+        owner_dp.message.outer_middleware(AntiAdShieldMiddleware())
         owner_dp.include_router(owner_bot_router)
         tasks.append(asyncio.create_task(start_owner_bot(owner_bot, owner_dp)))
         logger.info("Dedicated Owner Bot task scheduled.")
