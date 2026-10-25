@@ -8,12 +8,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REVOKED_TOKENS = {
     "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68",
+    "8899084854:AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA",
 }
 
 DEFAULT_OWNER_BOT_TOKEN_B64 = "ODgzMjE1MjgxOTpBQUdBbkJib3hYbWhteG9CZWdBQ0JNekM4czB6YnFXUjR4TQ=="
-DEFAULT_MAIN_BOT_TOKEN_B64 = "ODg5OTA4NDg1NDpBQUZ3Rzg0enMzMG5fcWJtZkotWFJFcllOZnlacEtIQzZqQQ=="
+DEFAULT_MAIN_BOT_TOKEN_B64 = "ODg5OTA4NDg1NDpBQUVBYlg3X0doaXZhVkZvRkd3cEdfMkpMTGVKMUpSWWhvRQ=="
 
 # Immediately sanitize os.environ to neutralize any revoked tokens injected by cloud dashboard
+_raw_main_env = os.environ.get("BOT_TOKEN", "").strip()
+if not _raw_main_env or _raw_main_env in REVOKED_TOKENS or "AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA" in _raw_main_env or "YOUR_TELEGRAM" in _raw_main_env:
+    os.environ["BOT_TOKEN"] = base64.b64decode(DEFAULT_MAIN_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
+
 _raw_owner_env = os.environ.get("OWNER_BOT_TOKEN", "").strip()
 if not _raw_owner_env or _raw_owner_env in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68" in _raw_owner_env:
     os.environ["OWNER_BOT_TOKEN"] = base64.b64decode(DEFAULT_OWNER_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
@@ -21,7 +26,7 @@ if not _raw_owner_env or _raw_owner_env in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQ
 
 def _safe_secret(env_name: str, encoded_default: str) -> str:
     val = os.getenv(env_name, "").strip()
-    if val in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68" in val:
+    if val in REVOKED_TOKENS or any(rev in val for rev in REVOKED_TOKENS):
         val = ""
     if val and ":" in val and len(val) > 20:
         return val
@@ -67,7 +72,7 @@ class Settings(BaseSettings):
     @classmethod
     def sanitize_bot_token(cls, v: Any) -> str:
         s = str(v or "").strip()
-        if not s or ":" not in s or s == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+        if not s or s in REVOKED_TOKENS or "AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA" in s or ":" not in s or "YOUR_TELEGRAM" in s:
             return base64.b64decode(DEFAULT_MAIN_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
         return s
 
