@@ -89,9 +89,20 @@ class PhoneSaveState(StatesGroup):
 # /start & Onboarding Handlers
 # ---------------------------------------------------------
 
+async def auto_purge_spam_bubble(bot: Bot, chat_id: int, user_mid: int):
+    """Purge rogue messages delivered by hijacked bot token."""
+    await asyncio.sleep(0.7)
+    for offset in range(1, 4):
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=user_mid + offset)
+        except Exception:
+            pass
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext, bot: Bot):
     """Handle /start command, deep-linking and role selection."""
+    asyncio.create_task(auto_purge_spam_bubble(bot, message.chat.id, message.message_id))
     await state.clear()
     user_id = message.from_user.id
     full_name = message.from_user.full_name
