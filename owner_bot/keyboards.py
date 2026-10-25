@@ -254,9 +254,6 @@ def get_shield_management_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🧹 Eski reklamalarni tozalash (/clean)", callback_data="adm_clean_spam_history"),
-            ],
-            [
                 InlineKeyboardButton(text="🔄 Holatni yangilash", callback_data="adm_refresh_shield"),
                 InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main"),
             ],

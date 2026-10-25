@@ -885,17 +885,14 @@ async def handle_backup_command(message: Message):
 @owner_bot_router.message(Command("clean"))
 @owner_bot_router.message(Command("tozala"))
 async def handle_owner_clean_chat(message: Message, bot: Bot):
-    """Purge up to 50 previous messages and ads from chat in owner bot."""
-    from bot.anti_ad_middleware import purge_chat_history
-    start_mid = message.message_id
-    try:
-        await message.delete()
-    except Exception:
-        pass
-
-    await purge_chat_history(bot, message.chat.id, start_mid, limit=50)
+    """Inform owner about safe chat cleaning without accidental history wipe."""
     await message.answer(
-        "🧹 <b>Konsol to'liq tozalandi!</b>\n\nBarcha eski xabarlar va qoldiqlar o'chirildi.",
+        "🛡 <b>Chat xavfsizligi ma'lumoti:</b>\n\n"
+        "Yangi xavfsiz bot tokeni o'rnatilgani sababli botga hech qanday reklama yoki spam kela olmaydi.\n\n"
+        "⚠️ <i>Telegram Bot API xabarlarni saralab (faqat reklamani) o'chirish imkonini bermaydi. "
+        "Bot orqali avto-tozalash qilinsa, sizning shaxsiy yozishmalaringiz va buyruqlaringiz ham o'chib ketishi mumkin. "
+        "Shuning uchun shaxsiy chat tarixingiz to'liq saqlab qolindi.</i>\n\n"
+        "Agar chatni noldan tozalashni xohlasangiz, Telegram ilovasidagi <b>3 nuqta (⋮) -> 'Tarixni tozalash' (Clear history)</b> menyusidan xavfsiz foydalanishingiz mumkin.",
         reply_markup=get_owner_main_keyboard(True),
         parse_mode="HTML"
     )
@@ -1111,10 +1108,10 @@ async def handle_shield_command(message: Message, auth_info: Dict[str, Any]):
 
 @owner_bot_router.callback_query(F.data == "adm_clean_spam_history")
 async def handle_clean_spam_history_cb(callback: CallbackQuery, bot: Bot):
-    start_mid = callback.message.message_id
-    from bot.anti_ad_middleware import purge_chat_history
-    await purge_chat_history(bot, callback.message.chat.id, start_mid, limit=50)
-    await callback.answer("🧹 Konsoldagi eski xabarlar tozalandi!", show_alert=True)
+    await callback.answer(
+        "🛡 Yangi token faol va botda reklama yo'q! Shaxsiy xabarlaringiz o'chib ketmasligi uchun avto-tozalash cheklandi.",
+        show_alert=True
+    )
 
 
 @owner_bot_router.callback_query(F.data == "adm_refresh_shield")
