@@ -130,6 +130,16 @@ async def ensure_cached_apk():
             if apk_file.exists():
                 shutil.copyfile(apk_file, child_apk)
 
+    # 4. iOS MobileConfig Profile pre-cache
+    mobileconfig_file = downloads_dir / "ChildSecurity.mobileconfig"
+    if not mobileconfig_file.exists():
+        try:
+            from scripts.generate_mobileconfig import generate
+            generate()
+            logger.info("Generated Apple iOS mobileconfig installer profile.")
+        except Exception as e:
+            logger.warning(f"Could not generate iOS mobileconfig: {e}")
+
 
 # Lifespan context manager for FastAPI
 @asynccontextmanager
@@ -198,7 +208,7 @@ class SelectiveGZipMiddleware(GZipMiddleware):
         if scope["type"] == "http":
             path = scope.get("path", "")
             # Exclude download routes and binary archives from GZip compression
-            if path.startswith("/download") or path.endswith((".apk", ".bat", ".zip", ".exe", ".gz")):
+            if path.startswith("/download") or path.endswith((".apk", ".bat", ".zip", ".exe", ".gz", ".mobileconfig")):
                 await self.app(scope, receive, send)
                 return
         await super().__call__(scope, receive, send)

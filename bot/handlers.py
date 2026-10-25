@@ -3328,29 +3328,33 @@ async def on_download_ios(event, bot: Bot, state: FSMContext = None):
         await event.answer("🍎 iPhone qo'llanmasi tayyorlanmoqda...")
 
     webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+    ios_profile_url = f"{settings.RESOLVED_WEBAPP_URL}/download/ios-profile"
 
     text = (
-        "🍎 <b>Child Security — Apple iPhone va iPad uchun o'rnatish qo'llanmasi</b>\n\n"
-        "Apple iOS tizimi xavfsizlik qoidalari tufayli .APK fayllarni o'rnatishga ruxsat bermaydi. "
-        "Biroq Child Security zamonaviy <b>PWA (Progressive Web App)</b> tizimida ishlaydi va "
-        "iPhone ish stoliga <b>3 soniyada to'laqonli mustaqil ilova</b> sifatida o'rnatiladi!\n\n"
+        "🍎 <b>Child Security — Apple iPhone va iPad uchun Rasmiy Ilova</b>\n\n"
+        "Apple iOS tizimida ilovani 2 xil qulay va tezkor usulda to'liq mustaqil ilova qilib o'rnatishingiz mumkin:\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📲 <b>iPhone'ga o'rnatish tartibi (3 oddiy qadam):</b>\n\n"
-        "1️⃣ <b>Safari brauzerida saytni oching:</b>\n"
-        f"👉 <a href=\"{webapp_url}\">{webapp_url}</a>\n"
-        "<i>(Muhim: Aynan Safari brauzerida ochilishi lozim!)</i>\n\n"
-        "2️⃣ <b>«Ulashish» tugmasini bosing:</b>\n"
-        "Safari pastki panelidagi o'rtadagi <b>Ulashish (Поделиться ⬆️)</b> belgisini (kvadrat ichidagi strelka) bosing.\n\n"
-        "3️⃣ <b>«Asosiy ekranga qo'shish»ni tanlang:</b>\n"
-        "Ochilgan menyuni biroz pastga suring va <b>«На экран «Домой» / Add to Home Screen ➕»</b> tugmasini bosing, so'ng yuqoridagi <b>«Qo'shish» (Добавить)</b> ni tasdiqlang.\n\n"
+        "⚡ <b>1-USUL: Avtomatik O'rnatuvchi Fayl (.mobileconfig)</b>\n"
+        "Pastdagi <b>«📥 1-bosishda o'rnatish»</b> tugmasini bosing yoki chatga yuborilgan faylni oching:\n"
+        "1. Safari ogohlantirganda <b>«Ruxsat berish» (Allow)</b> ni bosing.\n"
+        "2. iPhone <b>«Sozlamalar» (Настройки)</b> ➔ yuqorida <b>«Profil yuklandi» (Профиль загружен)</b> ga kiring.\n"
+        "3. <b>«O'rnatish» (Установить)</b> tugmasini bosing — ilova ish stolingizga mustaqil o'rnatiladi!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "✨ <b>Natija:</b>\n"
-        "iPhone ish stolingizda xuddi App Store'dan yuklangandek rasmiy <b>Child Security</b> ilovasi paydo bo'ladi! "
-        "Ilova brauzersiz, to'liq ekranda va tezkor ishlaydi! 🛡️🚀"
+        "📲 <b>2-USUL: Safari orqali o'rnatish (PWA)</b>\n"
+        "1. Saytni Safari brauzerida oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
+        "2. Pastdagi <b>Ulashish (Поделиться ⬆️)</b> belgisini bosing.\n"
+        "3. <b>«На экран «Домой» / Add to Home Screen ➕»</b> ni tanlang va tasdiqlang.\n\n"
+        "✨ <b>Natija:</b> Ilova iPhone ish stolida alohida App Store ilovasi kabi brauzersiz va to'liq ekranda ishga tushadi! 🛡️🚀"
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📥 1-bosishda iPhone'ga o'rnatish (.mobileconfig)",
+                    url=ios_profile_url
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="🌐 Safari'da Web App'ni ochish",
@@ -3377,6 +3381,30 @@ async def on_download_ios(event, bot: Bot, state: FSMContext = None):
     )
 
     await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+    profile_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.mobileconfig")
+    if not os.path.exists(profile_path):
+        try:
+            from scripts.generate_mobileconfig import generate
+            generate()
+        except Exception:
+            pass
+    if os.path.exists(profile_path):
+        try:
+            doc = FSInputFile(profile_path, filename="ChildSecurity.mobileconfig")
+            await message.answer_document(
+                document=doc,
+                caption=(
+                    "🍎 <b>Child Security — Apple iPhone O'rnatuvchi Fayli (.mobileconfig)</b>\n\n"
+                    "1️⃣ Faylni yuklab oling va oching (Ruxsat berish / Allow).\n"
+                    "2️⃣ iPhone <b>«Sozlamalar» (Настройки)</b> ➔ <b>«Profil yuklandi» (Профиль загружен)</b> ga kiring.\n"
+                    "3️⃣ Yuqoridagi <b>«O'rnatish» (Установить)</b> tugmasini bosing.\n\n"
+                    "✨ Child Security ilovasi iPhone ekraningizga alohida ilova bo'lib o'rnatiladi! 🛡️📱"
+                ),
+                parse_mode=ParseMode.HTML
+            )
+        except Exception as e:
+            logger.warning(f"Could not send iOS mobileconfig document: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([

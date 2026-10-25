@@ -2378,6 +2378,35 @@ async def router_download_ios():
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="https://child-security-bot.vercel.app/#install-ios", status_code=302)
 
+@router.get("/download/ios-profile", tags=["App"])
+@router.get("/download/ios-app", tags=["App"])
+async def router_download_ios_profile():
+    """Download official Apple iOS MobileConfig Configuration Profile to install Child Security directly on iPhone."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    profile_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.mobileconfig")
+    if not os.path.exists(profile_path):
+        try:
+            from scripts.generate_mobileconfig import generate
+            generate()
+        except Exception:
+            pass
+    if os.path.exists(profile_path):
+        file_size = os.path.getsize(profile_path)
+        return FileResponse(
+            profile_path,
+            filename="ChildSecurity.mobileconfig",
+            media_type="application/x-apple-aspen-config",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity.mobileconfig"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-ios", status_code=302)
+
 
 @router.get("/download/desktop", tags=["App"])
 @router.get("/download/desktop-windows", tags=["App"])
