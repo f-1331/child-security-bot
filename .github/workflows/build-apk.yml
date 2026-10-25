@@ -50,7 +50,10 @@ jobs:
         if: failure()
         run: |
           mkdir -p ci_logs
-          tail -n 120 android/build.log > ci_logs/build_error.log || echo "No log" > ci_logs/build_error.log
+          echo "=== WHAT WENT WRONG ===" > ci_logs/build_error.log
+          grep -C 15 "FAILURE: Build failed" android/build.log >> ci_logs/build_error.log || true
+          grep -C 15 "error:" android/build.log >> ci_logs/build_error.log || true
+          grep -C 15 "What went wrong" android/build.log >> ci_logs/build_error.log || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add ci_logs/build_error.log
