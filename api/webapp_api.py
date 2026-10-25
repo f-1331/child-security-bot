@@ -2017,7 +2017,7 @@ async def update_child_wishlist_endpoint(
     data = await crud.get_child_wishlist(session, child_id)
 
     # If achieved, alert parents with celebration notification
-    if data.get("is_achieved") and telemetry.telegram_bot:
+    if data and data.get("is_achieved") and telemetry.telegram_bot:
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else f"Farzand #{child_id}"
         parents = await crud.get_parents_for_child(session, child_id)

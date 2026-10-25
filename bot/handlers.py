@@ -1248,12 +1248,17 @@ async def on_daily_summary_pressed(message: Message):
                     zones_str = "Hali qayd etilmagan"
                     time_str = "0 daqiqa"
 
-                wishlist = rep.get("wishlist") or {}
-                w_title = html.escape(wishlist.get("title") or "Orzu")
-                w_prog = wishlist.get("progress_percent", 0)
-                w_cur = wishlist.get("current_som", 0)
-                w_tgt = wishlist.get("target_som", 0)
+                wishlist = rep.get("wishlist")
+                if wishlist and wishlist.get("title") and wishlist.get("target_som", 0) > 0:
+                    w_title = html.escape(wishlist.get("title"))
+                    w_prog = wishlist.get("progress_percent", 0)
+                    w_cur = wishlist.get("current_som", 0)
+                    w_tgt = wishlist.get("target_som", 0)
+                    wishlist_line = f"\n🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)"
+                else:
+                    wishlist_line = ""
 
+                dist_str = rep.get("distance_formatted") or f"{rep.get('total_distance_km', 0)} km"
                 batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
                 spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
 
@@ -1264,11 +1269,11 @@ async def on_daily_summary_pressed(message: Message):
                     f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
                     f"   └ {zones_str}\n\n"
                     f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
-                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {rep['total_distance_km']} km ({rep['points_count']} ta signal)\n"
+                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {dist_str} ({rep['points_count']} ta signal)\n"
                     f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
                     f"🔋 <b>Hozirgi batareya:</b> {batt_str}\n\n"
-                    f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
-                    f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                    f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)"
+                    f"{wishlist_line}\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
                 )
@@ -1306,12 +1311,17 @@ async def on_refresh_report_callback(callback: CallbackQuery):
                 zones_str = "Hali qayd etilmagan"
                 time_str = "0 daqiqa"
 
-            wishlist = rep.get("wishlist") or {}
-            w_title = html.escape(wishlist.get("title") or "Orzu")
-            w_prog = wishlist.get("progress_percent", 0)
-            w_cur = wishlist.get("current_som", 0)
-            w_tgt = wishlist.get("target_som", 0)
+            wishlist = rep.get("wishlist")
+            if wishlist and wishlist.get("title") and wishlist.get("target_som", 0) > 0:
+                w_title = html.escape(wishlist.get("title"))
+                w_prog = wishlist.get("progress_percent", 0)
+                w_cur = wishlist.get("current_som", 0)
+                w_tgt = wishlist.get("target_som", 0)
+                wishlist_line = f"\n🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)"
+            else:
+                wishlist_line = ""
 
+            dist_str = rep.get("distance_formatted") or f"{rep.get('total_distance_km', 0)} km"
             batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
             spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
 
@@ -1322,11 +1332,11 @@ async def on_refresh_report_callback(callback: CallbackQuery):
                 f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
                 f"   └ {zones_str}\n\n"
                 f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
-                f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {rep['total_distance_km']} km ({rep['points_count']} ta signal)\n"
+                f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {dist_str} ({rep['points_count']} ta signal)\n"
                 f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
                 f"🔋 <b>Hozirgi batareya:</b> {batt_str}\n\n"
-                f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
-                f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)"
+                f"{wishlist_line}\n"
                 f"━━━━━━━━━━━━━━━━━━━\n"
                 f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
             )

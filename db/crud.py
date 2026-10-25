@@ -831,21 +831,15 @@ async def update_child_wishlist(
     return child
 
 
-async def get_child_wishlist(session: AsyncSession, child_id: int) -> dict:
+async def get_child_wishlist(session: AsyncSession, child_id: int) -> Optional[dict]:
     """Retrieve child's savings target and calculate current progress percentage."""
     child = await get_user(session, child_id)
-    if not child:
-        return {
-            "title": "Yangi Velosiped 🚲",
-            "target_som": 600000,
-            "current_som": 0,
-            "progress_percent": 0,
-            "is_achieved": False
-        }
+    if not child or not child.wishlist_title or not child.wishlist_target_som or child.wishlist_target_som <= 0:
+        return None
     rate_coins, rate_som = await get_coin_rate_for_user(session, child_id)
     current_som = calculate_som_from_coins(child.virtual_balance or 0, rate_coins, rate_som)
-    title = child.wishlist_title or "Yangi Velosiped 🚲"
-    target_som = child.wishlist_target_som if child.wishlist_target_som and child.wishlist_target_som > 0 else 600000
+    title = child.wishlist_title
+    target_som = child.wishlist_target_som
     progress = min(100, int((current_som / target_som) * 100)) if target_som > 0 else 0
     return {
         "title": title,
@@ -949,15 +943,26 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
     total_km = 0.0
     max_speed = 0.0
     speeds = []
-    for i in range(len(logs) - 1):
-        p1, p2 = logs[i], logs[i + 1]
-        dist = haversine_km(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
-        if dist < 50.0:  # filter GPS glitch jumps
+    last_anchor = None
+
+    for l in logs:
+        if last_anchor is None:
+            last_anchor = l
+            continue
+
+        dist = haversine_km(last_anchor.latitude, last_anchor.longitude, l.latitude, l.longitude)
+        if dist > 50.0:  # Glitch jump
+            continue
+
+        # GPS deadband filter: ignore stationary sensor drift (< 15 meters / 0.015 km)
+        if dist >= 0.015:
             total_km += dist
-        if p2.speed is not None and p2.speed > 0:
-            speeds.append(p2.speed)
-            if p2.speed > max_speed:
-                max_speed = p2.speed
+            last_anchor = l
+
+        if l.speed is not None and l.speed > 0:
+            speeds.append(l.speed)
+            if l.speed > max_speed:
+                max_speed = l.speed
 
     tashkent_tz = timezone(timedelta(hours=5))
     first_signal = None
@@ -970,6 +975,13 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
             dt1 = logs[-1].recorded_at if logs[-1].recorded_at.tzinfo else logs[-1].recorded_at.replace(tzinfo=timezone.utc)
             last_signal = dt1.astimezone(tashkent_tz).strftime('%H:%M')
     battery_level = logs[-1].battery_level if logs and logs[-1].battery_level is not None else None
+
+    # Format distance nicely (metres when < 1 km)
+    if total_km < 1.0:
+        meters = int(round(total_km * 1000))
+        distance_formatted = f"{meters} metr ({total_km:.2f} km)" if meters > 0 else "0 metr"
+    else:
+        distance_formatted = f"{total_km:.2f} km"
 
     # 2. Geofences visited today
     geofences = await get_geofences_for_child(session, child_id)
@@ -1000,7 +1012,7 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
     earned_coins = sum(t.reward_coins for t in completed_tasks)
     earned_som = calculate_som_from_coins(earned_coins, rate_coins, rate_som)
 
-    # 4. Wishlist progress
+    # 4. Wishlist progress (None if not configured)
     wishlist = await get_child_wishlist(session, child_id)
 
     return {
@@ -1008,6 +1020,7 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
         "child_name": child_name,
         "points_count": len(logs),
         "total_distance_km": round(total_km, 2),
+        "distance_formatted": distance_formatted,
         "max_speed_kmh": round(max_speed, 1),
         "first_signal": first_signal,
         "last_signal": last_signal,
