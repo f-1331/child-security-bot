@@ -401,12 +401,16 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="👨‍👩‍👧 Ota-ona ilovasi (.apk)",
+                            text="👨‍👩‍👧 Ota-ona (.apk)",
                             callback_data="download_parent_apk"
                         ),
                         InlineKeyboardButton(
-                            text="👦 Farzand ilovasi (.apk)",
+                            text="👦 Farzand (.apk)",
                             callback_data="download_child_apk"
+                        ),
+                        InlineKeyboardButton(
+                            text="💻 Noutbuk",
+                            callback_data="download_desktop"
                         )
                     ],
                     [
@@ -444,6 +448,10 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                         InlineKeyboardButton(
                             text="👦 Farzand ilovasi (.apk)",
                             callback_data="download_child_apk"
+                        ),
+                        InlineKeyboardButton(
+                            text="💻 Noutbuk dasturi",
+                            callback_data="download_desktop"
                         )
                     ],
                     [
