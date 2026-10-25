@@ -6,14 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    BOT_TOKEN: str = "8899084854:AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA"
+    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
     BOT_USERNAME: str = "child_security_bot"
-    OWNER_BOT_TOKEN: str = "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68"
+    OWNER_BOT_TOKEN: str = os.getenv("OWNER_BOT_TOKEN", "")
     OWNER_USERNAME: str = "fayzbek1331"
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
     BACKEND_URL: str = "https://child-security-site.onrender.com"
-    TGCLOUD_APP_TOKEN: Optional[str] = "app8899084854:fQx23Fw3jvg07CZMwsRlO6T24EjFAvzoS4d4O24Uu9A"
-    OWNER_TGCLOUD_APP_TOKEN: Optional[str] = "app8832152819:GBXPNDMrWyAo1-NmelZJbwnkrGcl_8C1PaPqL_s6Yqw"
+    TGCLOUD_APP_TOKEN: Optional[str] = os.getenv("TGCLOUD_APP_TOKEN", None)
+    OWNER_TGCLOUD_APP_TOKEN: Optional[str] = os.getenv("OWNER_TGCLOUD_APP_TOKEN", None)
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     PORT: Optional[int] = None

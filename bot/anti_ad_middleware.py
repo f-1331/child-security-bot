@@ -21,6 +21,8 @@ AD_SPAM_PATTERNS = [
     r"(подпишись\s+на|kanalga\s+obuna\s+bo'ling|kanalga\s+a'zo\s+bo'l)",
     r"(reklama\s+uchun|reklama\s+tarqatish|reklama\s+xizmati)",
     r"(daromad\s+olishni\s+xohlaysizmi|investitsiya\s+loyihasi)",
+    r"(tucosprofit|tucos|must\s+join\s+our\s+channel|to\s+use\s+this\s+bot)",
+    r"(obuna\s+bo'ling|kanalimizga\s+qo'shiling|join\s+our\s+channel)",
 ]
 
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in AD_SPAM_PATTERNS]
@@ -52,11 +54,8 @@ def is_ad_or_spam(text: str) -> bool:
     # Check external t.me bot/channel links if they are not our bots
     if "t.me/" in text.lower():
         is_safe = any(domain in text.lower() for domain in ALLOWED_DOMAINS)
-        # If it contains t.me/ but none of our allowed domains, check if it's an ad
-        if not is_safe and ("bot?start=" in text.lower() or "channel" in text.lower()):
-            for kw in ["podpiska", "obuna", "kanal", "qidiruv", "bot"]:
-                if kw in text.lower():
-                    return True
+        if not is_safe:
+            return True
 
     return False
 

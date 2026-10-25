@@ -11,13 +11,13 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: OWNER_BOT_TOKEN
-        value: "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68"
+        sync: false
       - key: OWNER_USERNAME
         value: fayzbek1331
       - key: TGCLOUD_APP_TOKEN
-        value: "app8899084854:fQx23Fw3jvg07CZMwsRlO6T24EjFAvzoS4d4O24Uu9A"
+        sync: false
       - key: OWNER_TGCLOUD_APP_TOKEN
-        value: "app8832152819:GBXPNDMrWyAo1-NmelZJbwnkrGcl_8C1PaPqL_s6Yqw"
+        sync: false
       - key: TIMEZONE
         value: Asia/Tashkent
       - key: DEBUG
