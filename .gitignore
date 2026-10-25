@@ -37,5 +37,6 @@ scratch/
 downloads/*
 !downloads/*.apk
 !downloads/*.bat
+!downloads/*.mobileconfig
 .neon
 node_modules/

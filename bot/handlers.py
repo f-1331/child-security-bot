@@ -3054,7 +3054,9 @@ async def on_webapp_requested(message: Message):
 
 @router.message(StateFilter("*"), F.text.in_([
     "👨‍👩‍👧 Ota-ona ilovasi (APK)",
+    "👨👩👧 Ota-ona ilovasi (APK)",
     "👨‍👩‍👧 Ota-ona ilovasi",
+    "👨👩👧 Ota-ona ilovasi",
     "Ota-ona ilovasi (APK)",
     "Ota-ona ilovasi",
     "Ota ona ilovasi",
