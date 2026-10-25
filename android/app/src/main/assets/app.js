@@ -5417,6 +5417,7 @@ function dismissChildActiveBanner() {
 
 let childCurrentInviteLink = "";
 let parentCurrentInviteLink = "";
+const REAL_BOT_USERNAME = "child_security_bot";
 
 async function openChildInviteParentModal() {
   setTimeout(updateTelegramBackButton, 50);
@@ -5424,37 +5425,53 @@ async function openChildInviteParentModal() {
   const modal = document.getElementById("childInviteParentModal");
   const linkInput = document.getElementById("childInviteLinkInput");
   const codeText = document.getElementById("childOwnCodeText");
-  const targetId = currentChildId || authenticatedSession?.user?.id;
+  const demoWarning = document.getElementById("childInviteDemoWarning");
+
+  let realChildId = null;
+  if (authenticatedSession?.user?.id && authenticatedSession.user.id !== 2002) {
+    realChildId = authenticatedSession.user.id;
+  } else if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+    realChildId = window.Telegram.WebApp.initDataUnsafe.user.id;
+  } else if (currentChildId && currentChildId !== 2002) {
+    realChildId = currentChildId;
+  }
 
   if (modal) {
     modal.classList.remove("hidden");
     if (window.lucide) lucide.createIcons();
   }
 
-  // Pre-fill or fetch from backend
   const fallbackCode = authenticatedSession?.user?.web_access_code || "------";
   if (codeText) codeText.textContent = fallbackCode;
 
-  try {
-    if (isDemoMode) {
-      childCurrentInviteLink = `https://t.me/ChildSecurityBot?start=link_child_2002`;
-      if (linkInput) linkInput.value = childCurrentInviteLink;
-      if (codeText) codeText.textContent = "202401";
-      return;
-    }
+  // Handle Demo mode or unauthenticated user
+  if (!realChildId || isDemoMode) {
+    if (demoWarning) demoWarning.classList.remove("hidden");
+    childCurrentInviteLink = "";
+    if (linkInput) linkInput.value = "⚠️ Avval shaxsiy 6 xonali kodingizni kiriting";
+    return;
+  }
 
-    const res = await fetch(`/api/v1/webapp/child/${targetId}/invite-info`);
+  if (demoWarning) demoWarning.classList.add("hidden");
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${realChildId}/invite-info`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success") {
         childCurrentInviteLink = data.invite_link;
         if (linkInput) linkInput.value = data.invite_link;
         if (codeText) codeText.textContent = data.web_access_code || fallbackCode;
+        return;
       }
     }
   } catch (e) {
     console.warn("Child invite info load error:", e);
   }
+
+  // Guaranteed fallback using real child ID and actual bot username
+  childCurrentInviteLink = `https://t.me/${REAL_BOT_USERNAME}?start=link_child_${realChildId}`;
+  if (linkInput) linkInput.value = childCurrentInviteLink;
 }
 
 function closeChildInviteParentModal() {
@@ -5464,7 +5481,12 @@ function closeChildInviteParentModal() {
 }
 
 function copyChildInviteLink() {
-  if (!childCurrentInviteLink) return;
+  if (!childCurrentInviteLink) {
+    haptic("warning");
+    showToast("⚠️ Haqiqiy havolani olish uchun avval kodingizni kiriting!");
+    promptRoleSwitch("child");
+    return;
+  }
   navigator.clipboard.writeText(childCurrentInviteLink).then(() => {
     haptic("light");
     showToast("📋 Ulanish havolasi nusxalandi!");
@@ -5474,7 +5496,27 @@ function copyChildInviteLink() {
 }
 
 function shareChildInviteToTelegram() {
-  if (!childCurrentInviteLink) return;
+  let realChildId = null;
+  if (authenticatedSession?.user?.id && authenticatedSession.user.id !== 2002) {
+    realChildId = authenticatedSession.user.id;
+  } else if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+    realChildId = window.Telegram.WebApp.initDataUnsafe.user.id;
+  } else if (currentChildId && currentChildId !== 2002) {
+    realChildId = currentChildId;
+  }
+
+  if (!realChildId || isDemoMode) {
+    haptic("warning");
+    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval shaxsiy 6 xonali kodingizni kiriting.");
+    closeChildInviteParentModal();
+    promptRoleSwitch("child");
+    return;
+  }
+
+  if (!childCurrentInviteLink) {
+    childCurrentInviteLink = `https://t.me/${REAL_BOT_USERNAME}?start=link_child_${realChildId}`;
+  }
+
   const shareText = encodeURIComponent("Dada/Oyi, men Child Security botiga ulanyapman. Xavfsizligimni kuzatib turishingiz uchun ushbu havolani bosing!");
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(childCurrentInviteLink)}&text=${shareText}`;
   if (window.Telegram?.WebApp?.openTelegramLink) {
@@ -5489,31 +5531,47 @@ async function openParentInviteSpouseModal() {
   haptic("light");
   const modal = document.getElementById("parentInviteSpouseModal");
   const linkInput = document.getElementById("parentInviteLinkInput");
-  const targetId = parentId || authenticatedSession?.user?.id;
+  const demoWarning = document.getElementById("parentInviteDemoWarning");
+
+  let realParentId = null;
+  if (authenticatedSession?.user?.id && authenticatedSession.user.id !== 1001) {
+    realParentId = authenticatedSession.user.id;
+  } else if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+    realParentId = window.Telegram.WebApp.initDataUnsafe.user.id;
+  } else if (parentId && parentId !== 1001) {
+    realParentId = parentId;
+  }
 
   if (modal) {
     modal.classList.remove("hidden");
     if (window.lucide) lucide.createIcons();
   }
 
-  try {
-    if (isDemoMode) {
-      parentCurrentInviteLink = `https://t.me/ChildSecurityBot?start=coparent_1001`;
-      if (linkInput) linkInput.value = parentCurrentInviteLink;
-      return;
-    }
+  if (!realParentId || isDemoMode) {
+    if (demoWarning) demoWarning.classList.remove("hidden");
+    parentCurrentInviteLink = "";
+    if (linkInput) linkInput.value = "⚠️ Avval oilaviy 6 xonali kodingizni kiriting";
+    return;
+  }
 
-    const res = await fetch(`/api/v1/webapp/parent/${targetId}/coparent-invite-info`);
+  if (demoWarning) demoWarning.classList.add("hidden");
+
+  try {
+    const res = await fetch(`/api/v1/webapp/parent/${realParentId}/coparent-invite-info`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success") {
         parentCurrentInviteLink = data.invite_link;
         if (linkInput) linkInput.value = data.invite_link;
+        return;
       }
     }
   } catch (e) {
     console.warn("Parent coparent invite info load error:", e);
   }
+
+  parentCurrentInviteLink = `https://t.me/${REAL_BOT_USERNAME}?start=coparent_${realParentId}`;
+  if (linkInput) linkInput.value = parentCurrentInviteLink;
 }
 
 function closeParentInviteSpouseModal() {
@@ -5523,7 +5581,12 @@ function closeParentInviteSpouseModal() {
 }
 
 function copyParentInviteLink() {
-  if (!parentCurrentInviteLink) return;
+  if (!parentCurrentInviteLink) {
+    haptic("warning");
+    showToast("⚠️ Haqiqiy havolani olish uchun avval kodingizni kiriting!");
+    promptRoleSwitch("parent");
+    return;
+  }
   navigator.clipboard.writeText(parentCurrentInviteLink).then(() => {
     haptic("light");
     showToast("📋 Hamkor havolasi nusxalandi!");
@@ -5533,7 +5596,27 @@ function copyParentInviteLink() {
 }
 
 function shareParentInviteToTelegram() {
-  if (!parentCurrentInviteLink) return;
+  let realParentId = null;
+  if (authenticatedSession?.user?.id && authenticatedSession.user.id !== 1001) {
+    realParentId = authenticatedSession.user.id;
+  } else if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+    realParentId = window.Telegram.WebApp.initDataUnsafe.user.id;
+  } else if (parentId && parentId !== 1001) {
+    realParentId = parentId;
+  }
+
+  if (!realParentId || isDemoMode) {
+    haptic("warning");
+    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval oilaviy 6 xonali kodingizni kiriting.");
+    closeParentInviteSpouseModal();
+    promptRoleSwitch("parent");
+    return;
+  }
+
+  if (!parentCurrentInviteLink) {
+    parentCurrentInviteLink = `https://t.me/${REAL_BOT_USERNAME}?start=coparent_${realParentId}`;
+  }
+
   const shareText = encodeURIComponent("Assalomu alaykum! Farzandlarimizni birgalikda kuzatishimiz uchun ushbu oilaviy havolani bosing.");
   const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(parentCurrentInviteLink)}&text=${shareText}`;
   if (window.Telegram?.WebApp?.openTelegramLink) {

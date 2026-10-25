@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=63" />
+  <link rel="stylesheet" href="style.css?v=64" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -2004,6 +2004,19 @@
         Xavfsizligingizni kuzatib turishi va sizga topshiriqlar berishi uchun ushbu taklif havolasini ota-onangizga yuboring:
       </p>
 
+      <!-- Demo mode alert warning -->
+      <div id="childInviteDemoWarning" class="hidden my-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl p-3 text-left animate-fade-in">
+        <p class="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+          <span>⚠️</span> <span>Siz hozir Sinov (Demo) rejimidasiz!</span>
+        </p>
+        <p class="text-2xs text-slate-300 mt-1 leading-relaxed">
+          Haqiqiy ota-onangiz hisobingizga ulanishi uchun avval shaxsiy 6 xonali kodingiz orqali profilingizga kiring yoki Telegram botimiz (<a href="https://t.me/child_security_bot" target="_blank" class="text-sky-300 underline font-bold">@child_security_bot</a>) orqali kiring.
+        </p>
+        <button onclick="promptRoleSwitch('child')" class="mt-2 w-full py-1.5 bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-400/40 rounded-xl text-xs font-bold transition">
+          🔑 Haqiqiy 6 xonali kodimni kiritish
+        </button>
+      </div>
+
       <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
         <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
           🔗 Tezkor Telegram ulanish havolasi:
@@ -2045,6 +2058,19 @@
       <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
         Turmush o'rtog'ingiz (dada yoki oyi) ham bolalarni birgalikda kuzatishi uchun ushbu taklif havolasini yuboring. Ular botga kirishi bilan barcha farzandlar unga ham ulanadi:
       </p>
+
+      <!-- Demo mode alert warning -->
+      <div id="parentInviteDemoWarning" class="hidden my-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl p-3 text-left animate-fade-in">
+        <p class="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+          <span>⚠️</span> <span>Siz hozir Sinov (Demo) rejimidasiz!</span>
+        </p>
+        <p class="text-2xs text-slate-300 mt-1 leading-relaxed">
+          Turmush o'rtog'ingiz bilan birga kuzatish uchun avval oilaviy 6 xonali kodingiz orqali profilingizga kiring yoki Telegram botimiz (<a href="https://t.me/child_security_bot" target="_blank" class="text-sky-300 underline font-bold">@child_security_bot</a>) orqali kiring.
+        </p>
+        <button onclick="promptRoleSwitch('parent')" class="mt-2 w-full py-1.5 bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-400/40 rounded-xl text-xs font-bold transition">
+          🔑 Haqiqiy oilaviy kodimni kiritish
+        </button>
+      </div>
 
       <div class="my-3.5 bg-slate-950/60 border border-slate-800 rounded-2xl p-3 text-left">
         <label class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">
@@ -2218,7 +2244,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=63"></script>
+  <script src="app.js?v=64"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">

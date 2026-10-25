@@ -1480,7 +1480,7 @@ async def get_child_invite_info(child_id: int, session: AsyncSession = Depends(g
     web_code = await crud.generate_web_access_code(session, child_id)
     await session.commit()
 
-    bot_username = "ChildSecurityBot"
+    bot_username = getattr(settings, "BOT_USERNAME", "child_security_bot") or "child_security_bot"
     if telemetry.telegram_bot:
         try:
             bot_me = await telemetry.telegram_bot.get_me()
@@ -1508,7 +1508,7 @@ async def get_coparent_invite_info(parent_id: int, session: AsyncSession = Depen
 
     children = await crud.get_children_for_parent(session, parent_id)
 
-    bot_username = "ChildSecurityBot"
+    bot_username = getattr(settings, "BOT_USERNAME", "child_security_bot") or "child_security_bot"
     if telemetry.telegram_bot:
         try:
             bot_me = await telemetry.telegram_bot.get_me()

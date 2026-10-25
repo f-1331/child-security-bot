@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     BOT_TOKEN: str = "8899084854:AAFwG84zs30n_qbmfJ-XRErYNfyZpKHC6jA"
+    BOT_USERNAME: str = "child_security_bot"
     OWNER_BOT_TOKEN: str = "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68"
     OWNER_USERNAME: str = "fayzbek1331"
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"

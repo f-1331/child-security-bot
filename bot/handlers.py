@@ -111,7 +111,18 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             # 1. Child invited Parent: /start link_child_12345 or /start child_12345
             if args.startswith("link_child_") or args.startswith("child_"):
                 try:
-                    target_child_id = int(args.replace("link_child_", "").replace("child_", "").strip())
+                    clean_arg = args.replace("link_child_", "").replace("child_", "").strip()
+                    if clean_arg == "demo" or clean_arg == "2002":
+                        await message.answer(
+                            f"⚠️ **Diqqat:** Siz sinov (demo) havolasi orqali kirdingiz!\n\n"
+                            f"Haqiqiy farzandingiz hisobini ulash uchun, farzandingiz botimizga (@{settings.BOT_USERNAME}) "
+                            f"kirib, o'zining haqiqiy havolasini sizga yuborishi yoki 6 xonali kodini aytishi kerak.",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
+                        return
+
+                    target_child_id = int(clean_arg)
                     child_user = await crud.get_user(session, target_child_id)
                     if child_user:
                         await crud.update_user_role(session, user_id, "parent")
@@ -148,6 +159,14 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             )
                         except Exception as e:
                             logger.error(f"Failed to notify child about parent link: {e}")
+                        return
+                    else:
+                        await message.answer(
+                            "❌ **Ulanishda xatolik:** Taklif qilingan farzand hisobi topilmadi.\n\n"
+                            "Iltimos, farzandingizdan yangi havolani so'rang yoki uning 6 xonali ulanish kodini kiriting.",
+                            reply_markup=get_parent_main_keyboard(user_id),
+                            parse_mode="Markdown"
+                        )
                         return
                 except Exception as e:
                     logger.error(f"Failed to process child invite deep link: {e}")
