@@ -621,40 +621,42 @@
       </div>
 
       <!-- 1. Hero Adventure Banner (Gamified Character Card) -->
-      <div class="child-hero-banner p-3.5 sm:p-4 flex flex-col gap-3 rounded-2xl shadow-xl border border-purple-500/35 bg-gradient-to-r from-slate-900/95 via-purple-950/90 to-slate-900/95">
+      <div class="child-hero-banner p-3 sm:p-3.5 flex flex-col gap-2.5 sm:gap-3 rounded-2xl shadow-xl border border-purple-500/35 bg-gradient-to-r from-slate-900/95 via-purple-950/90 to-slate-900/95">
         <!-- Top row: Avatar + Name & Level + Streak Badge -->
         <div class="flex items-center justify-between gap-2.5 min-w-0">
-          <div class="flex items-center gap-3 min-w-0 flex-1">
-            <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center shadow-lg border-2 border-white/80 active:scale-95 transition shrink-0 overflow-hidden">
+          <div class="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center shadow-md border-2 border-white/80 active:scale-95 transition shrink-0 overflow-hidden">
               <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Hero Mascot" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <h2 id="childDashboardHeroName" class="text-sm sm:text-base font-black text-white leading-tight break-words">Yosh Qahramon</h2>
-                <span id="childDashboardLevelBadge" class="text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+              <div class="flex items-center gap-1.5 min-w-0">
+                <h2 id="childDashboardHeroName" class="text-xs sm:text-sm font-black text-white leading-tight truncate">Yosh Qahramon</h2>
+                <span id="childDashboardLevelBadge" class="text-[9px] sm:text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
               </div>
-              <p id="childDashboardHeroTitle" class="text-xs sm:text-[13px] text-amber-300 font-extrabold mt-0.5 flex items-center gap-1">
+              <p id="childDashboardHeroTitle" class="text-[11px] sm:text-xs text-amber-300 font-extrabold mt-0.5 flex items-center gap-1 truncate">
                 <span>🌱</span> <span>Yangi Sayohatchi</span>
               </p>
             </div>
           </div>
 
           <!-- Streak Badge -->
-          <div class="text-center shrink-0 bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/20 backdrop-blur-md shadow-sm">
-            <span class="text-lg sm:text-xl block leading-none">🔥</span>
-            <p id="childStreakDaysText" class="text-xs font-black text-amber-400 leading-tight mt-0.5">1 kun</p>
-            <p class="text-[9px] text-slate-200 uppercase tracking-wider font-extrabold">Seriya</p>
+          <div class="flex items-center gap-1.5 shrink-0 bg-white/10 hover:bg-white/15 px-2.5 py-1.5 rounded-xl border border-white/20 backdrop-blur-md shadow-sm transition">
+            <span class="text-base sm:text-lg leading-none">🔥</span>
+            <div class="text-left leading-none">
+              <p id="childStreakDaysText" class="text-xs font-black text-amber-400 leading-none">1 kun</p>
+              <span class="text-[8px] sm:text-[9px] text-slate-200 uppercase tracking-wider font-extrabold mt-0.5 block">Seriya</span>
+            </div>
           </div>
         </div>
 
         <!-- Bottom row: Full-width XP Progress Bar & High-Contrast Status -->
-        <div class="w-full pt-1.5 border-t border-white/10">
-          <div class="w-full xp-progress-bar h-2.5 bg-black/50 rounded-full overflow-hidden border border-white/15 p-0.5">
+        <div class="w-full pt-2 border-t border-white/10">
+          <div class="w-full xp-progress-bar h-2 bg-black/50 rounded-full overflow-hidden border border-white/15">
             <div id="childDashboardXpFill" class="xp-progress-fill h-full bg-gradient-to-r from-purple-500 via-indigo-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 0%;"></div>
           </div>
           <div class="flex items-center justify-between gap-2 mt-1.5">
-            <p id="childDashboardXpText" class="text-[11px] sm:text-xs font-bold text-slate-100 truncate">Keyingi darajagacha 500 XP qoldi</p>
-            <span class="text-[10px] font-black text-cyan-300 shrink-0 uppercase tracking-wide">XP</span>
+            <p id="childDashboardXpText" class="text-[10.5px] sm:text-xs font-semibold text-slate-200 truncate">Keyingi darajagacha 500 XP qoldi</p>
+            <span class="text-[9.5px] sm:text-[10px] font-black text-cyan-300 shrink-0 uppercase tracking-wider bg-cyan-400/10 border border-cyan-400/20 px-1.5 py-0.5 rounded-md">XP</span>
           </div>
         </div>
       </div>

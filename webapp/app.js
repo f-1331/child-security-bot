@@ -1133,7 +1133,7 @@ function updateChildLevelAndXP(coins = 0, completedTasksCount = 0) {
   const dashXpText = document.getElementById("childDashboardXpText");
   if (dashXpText) {
     dashXpText.textContent = lvl.level >= 5
-      ? "Maksimal daraja zabt etildi! (Cheksiz XP)"
+      ? "Maksimal daraja (Cheksiz XP)"
       : `Keyingi darajagacha ${lvl.remainingXp.toLocaleString()} XP qoldi`;
   }
 
