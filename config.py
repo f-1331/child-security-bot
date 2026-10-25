@@ -1,26 +1,42 @@
+import base64
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REVOKED_TOKENS = {
+    "8832152819:AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68",
+}
+
+DEFAULT_OWNER_BOT_TOKEN_B64 = "ODgzMjE1MjgxOTpBQUdBbkJib3hYbWhteG9CZWdBQ0JNekM4czB6YnFXUjR4TQ=="
+DEFAULT_MAIN_BOT_TOKEN_B64 = "ODg5OTA4NDg1NDpBQUZ3Rzg0enMzMG5fcWJtZkotWFJFcllOZnlacEtIQzZqQQ=="
+
+# Immediately sanitize os.environ to neutralize any revoked tokens injected by cloud dashboard
+_raw_owner_env = os.environ.get("OWNER_BOT_TOKEN", "").strip()
+if not _raw_owner_env or _raw_owner_env in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68" in _raw_owner_env:
+    os.environ["OWNER_BOT_TOKEN"] = base64.b64decode(DEFAULT_OWNER_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
 
 
 def _safe_secret(env_name: str, encoded_default: str) -> str:
-    val = os.getenv(env_name)
-    if val and ":" in val:
+    val = os.getenv(env_name, "").strip()
+    if val in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68" in val:
+        val = ""
+    if val and ":" in val and len(val) > 20:
         return val
     try:
-        import base64
         return base64.b64decode(encoded_default.encode("utf-8")).decode("utf-8").strip()
     except Exception:
         return val or ""
 
 
 class Settings(BaseSettings):
-    BOT_TOKEN: str = _safe_secret("BOT_TOKEN", "ODg5OTA4NDg1NDpBQUZ3Rzg0enMzMG5fcWJtZkotWFJFcllOZnlacEtIQzZqQQ==")
+    BOT_TOKEN: str = _safe_secret("BOT_TOKEN", DEFAULT_MAIN_BOT_TOKEN_B64)
     BOT_USERNAME: str = os.getenv("BOT_USERNAME", "child_security_bot")
-    OWNER_BOT_TOKEN: str = _safe_secret("OWNER_BOT_TOKEN", "ODgzMjE1MjgxOTpBQUdBbkJib3hYbWhteG9CZWdBQ0JNekM4czB6YnFXUjR4TQ==")
+    OWNER_BOT_TOKEN: str = _safe_secret("OWNER_BOT_TOKEN", DEFAULT_OWNER_BOT_TOKEN_B64)
     OWNER_USERNAME: str = "fayzbek1331"
+    OWNER_ID: int = 6707839718
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
     BACKEND_URL: str = "https://child-security-site.onrender.com"
     TGCLOUD_APP_TOKEN: Optional[str] = os.getenv("TGCLOUD_APP_TOKEN", None)
@@ -38,6 +54,22 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+
+    @field_validator("OWNER_BOT_TOKEN", mode="before")
+    @classmethod
+    def sanitize_owner_token(cls, v: Any) -> str:
+        s = str(v or "").strip()
+        if not s or s in REVOKED_TOKENS or "AAFTd12XKn1dpXl9mQRhbanEl87CYXTzF68" in s or ":" not in s:
+            return base64.b64decode(DEFAULT_OWNER_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
+        return s
+
+    @field_validator("BOT_TOKEN", mode="before")
+    @classmethod
+    def sanitize_bot_token(cls, v: Any) -> str:
+        s = str(v or "").strip()
+        if not s or ":" not in s or s == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+            return base64.b64decode(DEFAULT_MAIN_BOT_TOKEN_B64.encode("utf-8")).decode("utf-8").strip()
+        return s
 
     @property
     def RESOLVED_DATABASE_URL(self) -> str:

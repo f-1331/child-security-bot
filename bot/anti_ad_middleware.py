@@ -103,6 +103,15 @@ class AntiAdShieldMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         message: Message = event
+
+        # Never filter messages from the project owner
+        from_user = message.from_user
+        if from_user and (
+            from_user.id == 6707839718
+            or (from_user.username and from_user.username.lower().lstrip("@") == "fayzbek1331")
+        ):
+            return await handler(event, data)
+
         text_to_check = message.text or message.caption or ""
 
         # Also inspect forwarded messages from channels

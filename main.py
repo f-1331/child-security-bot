@@ -428,8 +428,8 @@ async def start_bot(bot: Bot, dp: Dispatcher):
         except Exception as e:
             logger.warning(f"Could not register bot descriptions: {e}")
 
-        # Drop pending updates to avoid processing stale backlog
-        await bot.delete_webhook(drop_pending_updates=True)
+        # Clear webhook and start polling
+        await bot.delete_webhook(drop_pending_updates=False)
         await dp.start_polling(bot)
     except Exception as e:
         logger.error(
@@ -477,11 +477,11 @@ async def start_owner_bot(bot: Bot, dp: Dispatcher):
         except Exception as e:
             logger.warning(f"Could not register Owner Bot description: {e}")
 
-        await bot.delete_webhook(drop_pending_updates=True)
-        logger.info("Owner Bot polling active.")
+        await bot.delete_webhook(drop_pending_updates=False)
+        logger.info(f"Owner Bot polling active for @{owner_info.username}.")
         await dp.start_polling(bot)
     except Exception as e:
-        logger.error(f"Owner Bot polling error: {e}")
+        logger.error(f"Owner Bot polling error: {e}", exc_info=True)
 
 
 async def render_keepalive():
