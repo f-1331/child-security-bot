@@ -107,6 +107,13 @@ public class ChildTrackingService extends Service implements LocationListener {
                 }
             } catch (Exception ignored) {}
         }, 15, 25, TimeUnit.SECONDS);
+
+        // 5. Periodic App Usage & Screen Time Reporter (every 120 seconds)
+        scheduler.scheduleWithFixedDelay(() -> {
+            try {
+                sendAppUsageTelemetry();
+            } catch (Exception ignored) {}
+        }, 30, 120, TimeUnit.SECONDS);
     }
 
     @Override
@@ -258,7 +265,36 @@ public class ChildTrackingService extends Service implements LocationListener {
             }
 
             int code = conn.getResponseCode();
-            return code >= 200 && code < 300;
+            if (code >= 200 && code < 300) {
+                try (java.io.InputStream is = conn.getInputStream();
+                     java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    JSONObject resObj = new JSONObject(sb.toString());
+                    if (resObj.has("policy")) {
+                        JSONObject pol = resObj.getJSONObject("policy");
+                        SharedPreferences.Editor ed = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+                        if (pol.has("is_all_apps_blocked")) {
+                            ed.putBoolean("is_all_apps_blocked", pol.getBoolean("is_all_apps_blocked"));
+                        }
+                        if (pol.has("lockdown_reason")) {
+                            ed.putString("lockdown_reason", pol.getString("lockdown_reason"));
+                        }
+                        if (pol.has("blocked_packages")) {
+                            ed.putString("blocked_packages", pol.getJSONArray("blocked_packages").toString());
+                        }
+                        if (pol.has("anti_uninstall_enabled")) {
+                            ed.putBoolean("anti_uninstall_enabled", pol.getBoolean("anti_uninstall_enabled"));
+                        }
+                        ed.apply();
+                    }
+                } catch (Exception ignored) {}
+                return true;
+            }
+            return false;
         } catch (Exception e) {
             Log.w(TAG, "Telemetry post error to " + baseUrl + ": " + e.getMessage());
             return false;
@@ -347,6 +383,42 @@ public class ChildTrackingService extends Service implements LocationListener {
                 manager.createNotificationChannel(serviceChannel);
             }
         }
+    }
+
+    private void sendAppUsageTelemetry() {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            String childId = prefs.getString(KEY_CHILD_ID, null);
+            String serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL);
+            if (childId == null || childId.trim().isEmpty()) return;
+
+            JSONObject usageObj = UsageStatsHelper.getDailyAppUsageStats(this);
+            if (!usageObj.optBoolean("has_permission", false)) return;
+
+            JSONObject payload = new JSONObject();
+            payload.put("total_screen_time_seconds", usageObj.optLong("total_seconds", 0));
+            payload.put("unlock_count", usageObj.optInt("unlock_count", 0));
+            payload.put("app_stats", usageObj.optJSONArray("apps"));
+
+            byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
+            String cleanBase = (serverUrl != null && !serverUrl.trim().isEmpty()) ? serverUrl.trim() : DEFAULT_SERVER_URL;
+            if (cleanBase.contains("?")) cleanBase = cleanBase.substring(0, cleanBase.indexOf("?"));
+            cleanBase = cleanBase.replaceAll("/+$", "");
+            String endpoint = cleanBase + "/api/v1/webapp/child/" + childId.trim() + "/app-usage";
+
+            HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setConnectTimeout(8000);
+            conn.setReadTimeout(8000);
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(postData);
+                os.flush();
+            }
+            conn.getResponseCode();
+            conn.disconnect();
+        } catch (Exception ignored) {}
     }
 
     @Override

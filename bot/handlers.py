@@ -3902,6 +3902,139 @@ async def handle_clean_chat_command(message: Message, bot: Bot):
         )
 
 
+
+# ------------------------------------------------------------------------------
+# SCREEN TIME, APP USAGE & MASTER APP LOCKDOWN HANDLERS
+# ------------------------------------------------------------------------------
+
+@router.message(Command("screentime", "ekran", "vaqt", "bloklash"))
+@router.message(F.text.in_({"📱 Ekran vaqti", "📱 Ekran vaqti va Bloklash", "📱 Ilovalar nazorati"}))
+async def parent_screen_time_handler(message: Message):
+    """View child screen time, daily app usage stats, and master lock toggle."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or user.role != "parent":
+            await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
+            return
+
+        children = await crud.get_children_for_parent(session, user_id)
+        if not children:
+            await message.answer(
+                "👶 Sizga hali farzand ulanmagan.\n"
+                "Iltimos, avval farzandingiz telefonida botga ulanish kodini kiriting.",
+                reply_markup=get_parent_main_keyboard(user_id)
+            )
+            return
+
+        child = children[0]
+        report = await crud.get_app_usage_report_today(session, child.id)
+        policy = await crud.get_or_create_device_policy(session, child.id)
+
+        apps_list = report.get("apps", [])
+        apps_text_lines = []
+        for i, app in enumerate(apps_list[:6], 1):
+            name = app.get("app_name", "Ilova")
+            sec = app.get("usage_seconds", 0)
+            h = sec // 3600
+            m = (sec % 3600) // 60
+            dur_str = f"{h}s {m}d" if h > 0 else f"{m} daqiqa"
+            is_bl = app.get("is_blocked", False)
+            bl_icon = "🛑 BLOKLANGAN" if is_bl else "🟢 Faol"
+            apps_text_lines.append(f"{i}. **{name}** — `{dur_str}` ({bl_icon})")
+
+        apps_section = "\n".join(apps_text_lines) if apps_text_lines else "Hozircha ilovalar ochilmagan"
+
+        lock_status_text = "🛑 **BARCHA ILOVALAR BLOKLANGAN (Dars / Uyqu)**" if policy.is_all_apps_blocked else "🟢 **Ochiq (Cheklovsiz)**"
+        anti_un_status = "🔒 **Faol** _(Bola sozlamalardan ruxsatlarni o'chira olmaydi)_" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
+
+        msg_text = (
+            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
+            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
+            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
+            f"🔓 Telefon ochilgan: **{report.get('unlock_count', 0)} marta**\n\n"
+            f"📊 **Eng ko'p ishlatilgan ilovalar:**\n"
+            f"{apps_section}\n\n"
+            f"🛑 **Qurilma holati:** {lock_status_text}\n"
+            f"🛡 **Sozlamalar himoyasi:** {anti_un_status}\n\n"
+            f"ℹ️ _Quyidagi tugmalar orqali barcha ilovalarni darhol bloklashingiz yoki har bir ilovani alohida sozlashingiz mumkin:_"
+        )
+
+        buttons = []
+        if policy.is_all_apps_blocked:
+            buttons.append([InlineKeyboardButton(text="✅ Barcha ilovalarni ochish (Ruxsat berish)", callback_data=f"unlock_all:{child.id}")])
+        else:
+            buttons.append([InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")])
+
+        buttons.append([InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))])
+
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await message.answer(msg_text, reply_markup=kb, parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("lock_all:"))
+async def lock_all_callback_handler(callback: CallbackQuery):
+    """Handle 1-tap master lock all apps from Telegram inline button."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        await crud.update_device_policy(
+            session=session,
+            child_id=child_id,
+            is_all_apps_blocked=True,
+            lockdown_reason="Ota-ona Telegram orqali barcha ilovalarni blokladi"
+        )
+        await callback.answer("🛑 Farzand telefonida barcha ilovalar bloklandi!", show_alert=True)
+
+        # Refresh message view
+        child = await crud.get_user(session, child_id)
+        report = await crud.get_app_usage_report_today(session, child_id)
+        policy = await crud.get_or_create_device_policy(session, child_id)
+
+        msg_text = (
+            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
+            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
+            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
+            f"🛑 **Qurilma holati:** 🛑 **BARCHA ILOVALAR BLOKLANDI!**\n"
+            f"📝 Sabab: _{policy.lockdown_reason}_\n\n"
+            f"ℹ️ Bolaning telefonida faqat ota-onaga qo'ng'iroq qilish va SOS ruxsat etiladi."
+        )
+        buttons = [
+            [InlineKeyboardButton(text="✅ Barcha ilovalarni ochish (Ruxsat berish)", callback_data=f"unlock_all:{child.id}")],
+            [InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
+        ]
+        await callback.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("unlock_all:"))
+async def unlock_all_callback_handler(callback: CallbackQuery):
+    """Handle 1-tap unblock all apps from Telegram inline button."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        await crud.update_device_policy(
+            session=session,
+            child_id=child_id,
+            is_all_apps_blocked=False
+        )
+        await callback.answer("✅ Barcha ilovalardan cheklov olib tashlandi!", show_alert=True)
+
+        child = await crud.get_user(session, child_id)
+        report = await crud.get_app_usage_report_today(session, child_id)
+
+        msg_text = (
+            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
+            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
+            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
+            f"🛑 **Qurilma holati:** 🟢 **Ochiq (Cheklovsiz)**\n\n"
+            f"ℹ️ Barcha ilovalardan foydalanish yana ruxsat etildi."
+        )
+        buttons = [
+            [InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")],
+            [InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))]
+        ]
+        await callback.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="Markdown")
+
+
+
 @router.message(F.text)
 async def fallback_text_handler(message: Message):
     """Fallback handler for unrecognized text messages: automatically restores and refreshes the main keyboard."""

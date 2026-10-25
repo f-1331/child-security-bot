@@ -188,6 +188,26 @@ class ChildSOSRequest(BaseModel):
     battery_level: Optional[int] = None
 
 
+class DevicePolicyUpdateRequest(BaseModel):
+    is_all_apps_blocked: Optional[bool] = None
+    lockdown_reason: Optional[str] = None
+    blocked_packages: Optional[List[str]] = None
+    anti_uninstall_enabled: Optional[bool] = None
+    new_pin: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class VerifyParentPinRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=16)
+
+
+class AppUsageUploadRequest(BaseModel):
+    total_screen_time_seconds: int = Field(..., ge=0)
+    unlock_count: int = Field(0, ge=0)
+    app_stats: List[dict] = Field(default_factory=list)
+    report_date: Optional[str] = None
+
+
 async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -> dict:
     """Standardized user auth payload builder for both code and Telegram initData authentications."""
     effective_code = user.web_access_code or user.pairing_code or code
@@ -456,6 +476,14 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
     parent_name = parents[0].full_name if parents and parents[0].full_name else None
     parent_username = parents[0].username if parents and parents[0].username else None
 
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    try:
+        blocked_packages = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked_packages = []
+
+    screen_time = await crud.get_app_usage_report_today(session, child_id)
+
     return {
         "status": "success",
         "child": {
@@ -488,6 +516,18 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "wishlist": {
                 "title": child.wishlist_title or "Yangi Velosiped 🚲",
                 "target_som": child.wishlist_target_som or 600000,
+            },
+            "device_policy": {
+                "is_all_apps_blocked": policy.is_all_apps_blocked,
+                "lockdown_reason": policy.lockdown_reason,
+                "blocked_packages": blocked_packages,
+                "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+                "has_parent_pin": bool(policy.parent_pin_hash),
+            },
+            "screen_time": {
+                "total_seconds": screen_time["total_screen_time_seconds"],
+                "total_formatted": screen_time["total_screen_time_formatted"],
+                "unlock_count": screen_time["unlock_count"],
             }
         }
     }
@@ -1359,10 +1399,23 @@ async def update_child_live_location_endpoint(
     for p in parents:
         await ws_manager.send_to_user(p.id, telemetry_data)
 
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    try:
+        blocked_packages = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked_packages = []
+
     return {
         "status": "success",
         "child_id": child_id,
-        "recorded_at": format_utc_iso(log.recorded_at)
+        "recorded_at": format_utc_iso(log.recorded_at),
+        "policy": {
+            "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "lockdown_reason": policy.lockdown_reason,
+            "blocked_packages": blocked_packages,
+            "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "has_parent_pin": bool(policy.parent_pin_hash),
+        }
     }
 
 
@@ -1879,6 +1932,176 @@ async def trigger_call_parent_endpoint(child_id: int, session: AsyncSession = De
     }
 
 # ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# SCREEN TIME & DEVICE POLICY / APP BLOCKING ENDPOINTS
+# ---------------------------------------------------------
+
+@router.get("/child/{child_id}/screen-time")
+async def get_child_screen_time_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Fetch today's screen time report, per-app breakdown, and device policy status."""
+    report = await crud.get_app_usage_report_today(session, child_id)
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "report": report
+    }
+
+
+@router.post("/child/{child_id}/app-usage")
+async def upload_child_app_usage_endpoint(
+    child_id: int,
+    payload: AppUsageUploadRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Receive daily app usage telemetry from child's native Android device."""
+    report = await crud.save_app_usage_report(
+        session=session,
+        child_id=child_id,
+        total_screen_time_seconds=payload.total_screen_time_seconds,
+        unlock_count=payload.unlock_count,
+        app_stats=payload.app_stats,
+        report_date=payload.report_date
+    )
+    parents = await crud.get_parents_for_child(session, child_id)
+    usage_data = {
+        "type": "screen_time_update",
+        "child_id": child_id,
+        "total_screen_time_seconds": report.total_screen_time_seconds,
+        "unlock_count": report.unlock_count,
+        "report_date": report.report_date
+    }
+    for p in parents:
+        await ws_manager.send_to_user(p.id, usage_data)
+
+    return {"status": "success", "child_id": child_id, "recorded_date": report.report_date}
+
+
+@router.get("/child/{child_id}/device-policy")
+async def get_child_device_policy_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Get current app blocking and protection policy for child."""
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    try:
+        blocked = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked = []
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "policy": {
+            "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "lockdown_reason": policy.lockdown_reason,
+            "blocked_packages": blocked,
+            "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "has_parent_pin": bool(policy.parent_pin_hash),
+            "updated_at": format_utc_iso(policy.updated_at)
+        }
+    }
+
+
+@router.post("/child/{child_id}/device-policy")
+async def update_child_device_policy_endpoint(
+    child_id: int,
+    payload: DevicePolicyUpdateRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN."""
+    policy = await crud.update_device_policy(
+        session=session,
+        child_id=child_id,
+        parent_id=payload.parent_id,
+        is_all_apps_blocked=payload.is_all_apps_blocked,
+        lockdown_reason=payload.lockdown_reason,
+        blocked_packages=payload.blocked_packages,
+        anti_uninstall_enabled=payload.anti_uninstall_enabled,
+        new_pin=payload.new_pin
+    )
+
+    try:
+        blocked = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked = []
+
+    policy_msg = {
+        "type": "device_policy_update",
+        "child_id": child_id,
+        "is_all_apps_blocked": policy.is_all_apps_blocked,
+        "lockdown_reason": policy.lockdown_reason,
+        "blocked_packages": blocked,
+        "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+        "has_parent_pin": bool(policy.parent_pin_hash),
+    }
+    parents = await crud.get_parents_for_child(session, child_id)
+    for p in parents:
+        await ws_manager.send_to_user(p.id, policy_msg)
+    await ws_manager.send_to_user(child_id, policy_msg)
+
+    if telemetry.telegram_bot and parents and payload.is_all_apps_blocked is not None:
+        try:
+            ch_user = await crud.get_user(session, child_id)
+            c_name = ch_user.full_name if ch_user else f"Farzand #{child_id}"
+            if payload.is_all_apps_blocked:
+                status_txt = "🛑 **BARCHA ILOVALAR BLOKLANDI!**"
+                msg_body = (
+                    f"{status_txt}\n\n"
+                    f"👤 Farzand: **{c_name}**\n"
+                    f"🔒 Holat: **To'liq cheklov yoqildi**\n"
+                    f"📝 Sabab: _{policy.lockdown_reason}_\n\n"
+                    f"ℹ️ Bolaning telefonida faqat qo'ng'iroq qilish va SOS signal ruxsat etiladi."
+                )
+            else:
+                status_txt = "✅ **BARCHA CHEKLOVLAR YECHILDI**"
+                msg_body = (
+                    f"{status_txt}\n\n"
+                    f"👤 Farzand: **{c_name}**\n"
+                    f"🔓 Barcha ilovalardan yana erkin foydalanish mumkin."
+                )
+            for p in parents:
+                try:
+                    await telemetry.telegram_bot.send_message(
+                        chat_id=p.id,
+                        text=msg_body,
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "policy": {
+            "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "lockdown_reason": policy.lockdown_reason,
+            "blocked_packages": blocked,
+            "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "has_parent_pin": bool(policy.parent_pin_hash),
+            "updated_at": format_utc_iso(policy.updated_at)
+        }
+    }
+
+
+@router.post("/child/{child_id}/verify-parent-pin")
+async def verify_child_parent_pin_endpoint(
+    child_id: int,
+    payload: VerifyParentPinRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Verify 4-digit parent PIN for accessing sensitive settings or unblocking."""
+    is_valid = await crud.verify_parent_pin(session, child_id, payload.pin)
+    return {
+        "status": "success" if is_valid else "error",
+        "valid": is_valid,
+        "message": "PIN-kod to'g'ri" if is_valid else "PIN-kod noto'g'ri kiritildi!"
+    }
+
 # APK Download Endpoints (Fail-safe direct redirects)
 # ---------------------------------------------------------
 GITHUB_RELEASE_APK = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"

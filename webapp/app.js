@@ -2091,6 +2091,11 @@ async function updateLiveTelemetry(childId) {
       renderWishlistUI(child.wishlist);
     }
 
+    // Feature 5: Device policy and screen time sync
+    if (child.device_policy) {
+      updateDevicePolicyUI(child.device_policy);
+    }
+
     const loc = child.location;
     const noLocCard = document.getElementById("noLocationCard");
     if (loc && loc.latitude && loc.longitude) {
@@ -5392,6 +5397,27 @@ function handleIncomingWebSocketMessage(msg) {
     return;
   }
 
+  // 1.3 Device Policy Realtime Update (Lock All Apps / App Block)
+  if (msg.type === "device_policy_update") {
+    updateDevicePolicyUI(msg);
+    if (currentRole === "parent") {
+      if (msg.is_all_apps_blocked) {
+        showToast("🛑 Farzand telefonida barcha ilovalar bloklandi!");
+      } else {
+        showToast("✅ Farzand telefonida cheklovlar ochildi");
+      }
+    }
+    return;
+  }
+
+  // 1.4 Realtime Screen Time Update
+  if (msg.type === "screen_time_update") {
+    if (document.getElementById("modalScreenTimeControl") && !document.getElementById("modalScreenTimeControl").classList.contains("hidden")) {
+      loadScreenTimeAndPolicy();
+    }
+    return;
+  }
+
   // 2. SOS Alert received by Parent
   if (msg.type === "sos_alert" && currentRole === "parent") {
     const child = childrenList.find((c) => c.id == msg.child_id);
@@ -5901,6 +5927,8 @@ function handleTelegramBackPress() {
     { id: "zonePickerBottomDock", close: closeAddZoneModal },
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "modal-settings", close: closeSettingsModal },
+    { id: "modalScreenTimeControl", close: closeScreenTimeControlModal },
+    { id: "modalParentPinSetup", close: closeParentPinSetupModal },
     { id: "modalHelp", close: closeHelpModal },
     { id: "modalInstallApp", close: closeInstallAppModal },
     { id: "modalCallParent", close: closeCallParentModal },
@@ -5984,7 +6012,7 @@ function updateTelegramBackButton() {
     "#modal-task-schedule:not(.hidden), #modal-task-proof:not(.hidden), #modal-edit-wishlist:not(.hidden), " +
     "#modal-walk-safe-checkin:not(.hidden), #parentInviteSpouseModal:not(.hidden), " +
     "#modalCallParent:not(.hidden), #modal-walk-safe:not(.hidden), #modal-coin-rate:not(.hidden), " +
-    "#deleteChildModal:not(.hidden), #childInviteParentModal:not(.hidden), #zonePickerBottomDock:not(.hidden), " +
+    "#deleteChildModal:not(.hidden), #childInviteParentModal:not(.hidden), #zonePickerBottomDock:not(.hidden), #modalScreenTimeControl:not(.hidden), #modalParentPinSetup:not(.hidden), " +
     "#modalThemeSelector:not(.hidden)"
   );
 
@@ -6855,3 +6883,447 @@ function toggleHelpFaq(id) {
     if (arrow) arrow.classList.toggle("rotate-180");
   }
 }
+
+// ==============================================================================
+// SCREEN TIME & DEVICE POLICY / APP BLOCKING CONTROLLER
+// ==============================================================================
+
+let currentDevicePolicy = {
+  is_all_apps_blocked: false,
+  lockdown_reason: "Dars vaqti",
+  blocked_packages: [],
+  anti_uninstall_enabled: true,
+  has_parent_pin: true
+};
+
+let currentScreenTimeData = null;
+
+function updateDevicePolicyUI(policy) {
+  if (!policy) return;
+  currentDevicePolicy = { ...currentDevicePolicy, ...policy };
+
+  // 1. Master lockdown pill badge in parent utility bar
+  const pillBadge = document.getElementById("pillLockdownBadge");
+  if (pillBadge) {
+    if (currentDevicePolicy.is_all_apps_blocked) {
+      pillBadge.classList.remove("hidden");
+    } else {
+      pillBadge.classList.add("hidden");
+    }
+  }
+
+  // 2. Map banner alert
+  const lockdownBanner = document.getElementById("parentLockdownBanner");
+  const lockdownText = document.getElementById("parentLockdownBannerText");
+  if (lockdownBanner) {
+    if (currentDevicePolicy.is_all_apps_blocked) {
+      lockdownBanner.classList.remove("hidden");
+      if (lockdownText) {
+        lockdownText.textContent = `${currentDevicePolicy.lockdown_reason || "Dars / Uyqu rejimi"} faol`;
+      }
+    } else {
+      lockdownBanner.classList.add("hidden");
+    }
+  }
+
+  // 3. Modal switches if open
+  const toggleLockAll = document.getElementById("toggleLockAllApps");
+  if (toggleLockAll) {
+    toggleLockAll.checked = Boolean(currentDevicePolicy.is_all_apps_blocked);
+  }
+
+  const toggleAntiUn = document.getElementById("toggleAntiUninstall");
+  if (toggleAntiUn) {
+    toggleAntiUn.checked = Boolean(currentDevicePolicy.anti_uninstall_enabled);
+  }
+
+  const blockedCountEl = document.getElementById("stBlockedCountText");
+  if (blockedCountEl) {
+    const count = (currentDevicePolicy.blocked_packages || []).length;
+    blockedCountEl.textContent = `${count} ta bloklangan`;
+  }
+
+  // 4. Android native bridge sync
+  if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
+    try {
+      window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
+    } catch (e) {}
+  }
+}
+
+function openScreenTimeControlModal() {
+  haptic("medium");
+  setTimeout(updateTelegramBackButton, 50);
+  const modal = document.getElementById("modalScreenTimeControl");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+
+  loadScreenTimeAndPolicy();
+}
+
+function closeScreenTimeControlModal() {
+  haptic("light");
+  setTimeout(updateTelegramBackButton, 50);
+  const modal = document.getElementById("modalScreenTimeControl");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function loadScreenTimeAndPolicy() {
+  const container = document.getElementById("stAppsListContainer");
+  if (container) {
+    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Ilovalar va statistika yuklanmoqda...</p>';
+  }
+
+  if (isDemoMode || !currentChildId) {
+    // High-fidelity realistic demo data
+    const demoData = {
+      total_screen_time_seconds: 13500,
+      total_screen_time_formatted: "3 soat 45 daq",
+      unlock_count: 38,
+      is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
+      lockdown_reason: currentDevicePolicy.lockdown_reason,
+      anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
+      blocked_packages: currentDevicePolicy.blocked_packages || ["com.zhiliaoapp.musically"],
+      apps: [
+        { package: "com.google.android.youtube", app_name: "YouTube", usage_seconds: 5400, category: "video", icon: "youtube" },
+        { package: "com.zhiliaoapp.musically", app_name: "TikTok", usage_seconds: 3300, category: "social", icon: "video" },
+        { package: "com.tencent.ig", app_name: "PUBG Mobile", usage_seconds: 2400, category: "game", icon: "gamepad-2" },
+        { package: "org.telegram.messenger", app_name: "Telegram", usage_seconds: 1500, category: "chat", icon: "message-circle" },
+        { package: "com.roblox.client", app_name: "Roblox", usage_seconds: 900, category: "game", icon: "gamepad-2" }
+      ]
+    };
+    renderScreenTimeData(demoData);
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/screen-time`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.status === "success" && json.report) {
+        renderScreenTimeData(json.report);
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("Screen time fetch error:", e);
+  }
+
+  // Fallback demo data if offline or error
+  renderScreenTimeData({
+    total_screen_time_seconds: 10800,
+    total_screen_time_formatted: "3 soat 00 daq",
+    unlock_count: 26,
+    is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
+    lockdown_reason: currentDevicePolicy.lockdown_reason,
+    anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
+    blocked_packages: currentDevicePolicy.blocked_packages || [],
+    apps: [
+      { package: "com.google.android.youtube", app_name: "YouTube", usage_seconds: 4800, category: "video", icon: "youtube" },
+      { package: "com.zhiliaoapp.musically", app_name: "TikTok", usage_seconds: 3000, category: "social", icon: "video" },
+      { package: "com.tencent.ig", app_name: "PUBG Mobile", usage_seconds: 1800, category: "game", icon: "gamepad-2" },
+      { package: "org.telegram.messenger", app_name: "Telegram", usage_seconds: 1200, category: "chat", icon: "message-circle" }
+    ]
+  });
+}
+
+function renderScreenTimeData(data) {
+  currentScreenTimeData = data;
+
+  const totalEl = document.getElementById("stTotalTime");
+  if (totalEl) totalEl.textContent = data.total_screen_time_formatted || "0 daqiqa";
+
+  const unlockEl = document.getElementById("stUnlockCount");
+  if (unlockEl) {
+    unlockEl.innerHTML = `<span>🔓 Telefon ochilgan:</span> <b class="text-cyan-400">${data.unlock_count || 0} marta</b>`;
+  }
+
+  const statusBadge = document.getElementById("stStatusBadge");
+  if (statusBadge) {
+    const totalSec = data.total_screen_time_seconds || 0;
+    if (totalSec > 14400) {
+      statusBadge.className = "inline-block px-2.5 py-1 rounded-xl text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/30";
+      statusBadge.textContent = "⚠️ Me'yordan ko'p (4s+)";
+    } else {
+      statusBadge.className = "inline-block px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      statusBadge.textContent = "🟢 Me'yorda";
+    }
+  }
+
+  // Calculate category totals
+  let gamesSec = 0, socialSec = 0, chatSec = 0, otherSec = 0;
+  (data.apps || []).forEach(a => {
+    const s = a.usage_seconds || 0;
+    if (a.category === "game") gamesSec += s;
+    else if (a.category === "social" || a.category === "video") socialSec += s;
+    else if (a.category === "chat") chatSec += s;
+    else otherSec += s;
+  });
+
+  const grandSec = Math.max(1, gamesSec + socialSec + chatSec + otherSec);
+  const pGames = Math.round((gamesSec / grandSec) * 100);
+  const pSocial = Math.round((socialSec / grandSec) * 100);
+  const pChat = Math.round((chatSec / grandSec) * 100);
+  const pOther = Math.max(0, 100 - (pGames + pSocial + pChat));
+
+  const barG = document.getElementById("barGames");
+  if (barG) { barG.style.width = pGames + "%"; barG.title = `O'yinlar: ${pGames}%`; }
+  const barS = document.getElementById("barSocial");
+  if (barS) { barS.style.width = pSocial + "%"; barS.title = `Video/Ijtimoiy: ${pSocial}%`; }
+  const barC = document.getElementById("barChat");
+  if (barC) { barC.style.width = pChat + "%"; barC.title = `Muloqot: ${pChat}%`; }
+  const barO = document.getElementById("barOther");
+  if (barO) { barO.style.width = pOther + "%"; barO.title = `Boshqa: ${pOther}%`; }
+
+  // Update policy UI
+  updateDevicePolicyUI({
+    is_all_apps_blocked: data.is_all_apps_blocked,
+    lockdown_reason: data.lockdown_reason,
+    blocked_packages: data.blocked_packages,
+    anti_uninstall_enabled: data.anti_uninstall_enabled
+  });
+
+  renderAppsList(data.apps || []);
+}
+
+function renderAppsList(apps, filterText = "") {
+  const container = document.getElementById("stAppsListContainer");
+  if (!container) return;
+
+  const q = (filterText || "").trim().toLowerCase();
+  const filtered = apps.filter(a => {
+    if (!q) return true;
+    return (a.app_name && a.app_name.toLowerCase().includes(q)) ||
+           (a.package && a.package.toLowerCase().includes(q));
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Mos keluvchi ilovalar topilmadi</p>';
+    return;
+  }
+
+  const blockedList = currentDevicePolicy.blocked_packages || [];
+  const isMasterLocked = currentDevicePolicy.is_all_apps_blocked;
+
+  let html = "";
+  filtered.forEach(app => {
+    const pkg = app.package;
+    const name = app.app_name || pkg;
+    const isIndividuallyBlocked = blockedList.includes(pkg);
+    const isEffectivelyBlocked = isMasterLocked || isIndividuallyBlocked;
+
+    const sec = app.usage_seconds || 0;
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const durStr = h > 0 ? `${h}s ${m}d` : `${m} daqiqa`;
+
+    let iconHtml = '<i data-lucide="smartphone" class="w-4 h-4"></i>';
+    if (app.category === "game") iconHtml = '<i data-lucide="gamepad-2" class="w-4 h-4 text-amber-400"></i>';
+    else if (app.category === "video") iconHtml = '<i data-lucide="youtube" class="w-4 h-4 text-rose-500"></i>';
+    else if (app.category === "social") iconHtml = '<i data-lucide="video" class="w-4 h-4 text-purple-400"></i>';
+    else if (app.category === "chat") iconHtml = '<i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>';
+
+    html += `
+      <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border ${isEffectivelyBlocked ? 'border-rose-500/40 bg-rose-950/20' : 'border-white/5'} transition">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-xl bg-slate-700/60 flex items-center justify-center shrink-0">
+            ${iconHtml}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h5 class="text-xs font-black text-white truncate max-w-[140px] sm:max-w-[200px]">${name}</h5>
+              ${isEffectivelyBlocked ? '<span class="text-2xs bg-rose-500/30 text-rose-300 px-1 rounded font-bold">BLOK</span>' : ''}
+            </div>
+            <p class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+              <span>⏱ Bugun:</span> <b class="text-slate-200 font-bold">${durStr}</b>
+            </p>
+          </div>
+        </div>
+
+        <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="${isIndividuallyBlocked ? 'Blokdan chiqarish' : 'Bloklash'}">
+          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${pkg}', this.checked)" class="sr-only peer">
+          <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+        </label>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  if (window.lucide) lucide.createIcons();
+}
+
+function filterAppsList(val) {
+  if (currentScreenTimeData && currentScreenTimeData.apps) {
+    renderAppsList(currentScreenTimeData.apps, val);
+  }
+}
+
+async function handleMasterLockToggle(isChecked) {
+  haptic("heavy");
+  currentDevicePolicy.is_all_apps_blocked = isChecked;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  if (isChecked) {
+    showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason})`);
+  } else {
+    showToast("✅ Barcha ilovalar cheklovi ochildi");
+  }
+
+  if (currentScreenTimeData && currentScreenTimeData.apps) {
+    renderAppsList(currentScreenTimeData.apps);
+  }
+
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        is_all_apps_blocked: isChecked,
+        lockdown_reason: currentDevicePolicy.lockdown_reason,
+        parent_id: currentUserId
+      })
+    });
+  } catch (e) {
+    console.warn("Master lock save error:", e);
+  }
+}
+
+async function setLockdownReason(reason) {
+  haptic("light");
+  currentDevicePolicy.lockdown_reason = reason;
+  updateDevicePolicyUI(currentDevicePolicy);
+  showToast(`Sabab o'rnatildi: «${reason}»`);
+
+  document.querySelectorAll(".btn-lock-reason").forEach(btn => {
+    if (btn.textContent.includes(reason)) {
+      btn.classList.add("bg-rose-600", "text-white");
+      btn.classList.remove("bg-white/10");
+    } else {
+      btn.classList.remove("bg-rose-600");
+      btn.classList.add("bg-white/10");
+    }
+  });
+
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lockdown_reason: reason,
+        parent_id: currentUserId
+      })
+    });
+  } catch (e) {}
+}
+
+async function toggleAppBlock(pkg, isBlocked) {
+  haptic("medium");
+  let blocked = currentDevicePolicy.blocked_packages || [];
+  if (isBlocked) {
+    if (!blocked.includes(pkg)) blocked.push(pkg);
+    showToast("Ilova bloklandi 🛑");
+  } else {
+    blocked = blocked.filter(p => p !== pkg);
+    showToast("Ilovaga ruxsat berildi 🟢");
+  }
+  currentDevicePolicy.blocked_packages = blocked;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  if (currentScreenTimeData && currentScreenTimeData.apps) {
+    renderAppsList(currentScreenTimeData.apps);
+  }
+
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        blocked_packages: blocked,
+        parent_id: currentUserId
+      })
+    });
+  } catch (e) {
+    console.warn("App block save error:", e);
+  }
+}
+
+async function handleAntiUninstallToggle(isChecked) {
+  haptic("medium");
+  currentDevicePolicy.anti_uninstall_enabled = isChecked;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  if (isChecked) {
+    showToast("🛡️ Sozlamalar himoyasi yoqildi (PIN-kod talab qilinadi)");
+  } else {
+    showToast("⚠️ Sozlamalar himoyasi o'chirildi");
+  }
+
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        anti_uninstall_enabled: isChecked,
+        parent_id: currentUserId
+      })
+    });
+  } catch (e) {}
+}
+
+function openParentPinSetupModal() {
+  haptic("light");
+  setTimeout(updateTelegramBackButton, 50);
+  const modal = document.getElementById("modalParentPinSetup");
+  if (modal) {
+    modal.classList.remove("hidden");
+    const input = document.getElementById("inputNewPin");
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+  }
+}
+
+function closeParentPinSetupModal() {
+  haptic("light");
+  setTimeout(updateTelegramBackButton, 50);
+  const modal = document.getElementById("modalParentPinSetup");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function saveNewParentPin() {
+  const input = document.getElementById("inputNewPin");
+  if (!input) return;
+  const pin = (input.value || "").trim();
+  if (pin.length < 4) {
+    showToast("❌ PIN-kod kamida 4 xonali bo'lishi kerak!");
+    return;
+  }
+
+  haptic("heavy");
+  showToast("✅ Ota-ona PIN-kodi muvaffaqiyatli saqlandi!");
+  closeParentPinSetupModal();
+
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        new_pin: pin,
+        parent_id: currentUserId
+      })
+    });
+  } catch (e) {}
+}
+

@@ -25,6 +25,13 @@
     <!-- Android 13+ Notification Permission -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Screen Time & App Usage Statistics Monitoring -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
+    <!-- System Alert Overlay & Task Reordering for Instant App Lock -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -48,12 +55,56 @@
             </intent-filter>
         </activity>
 
+        <!-- Lock Overlay Screen (Shown when child opens a blocked app or device is in lockdown) -->
+        <activity
+            android:name=".LockOverlayActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.ChildSecurity.NoActionBar" />
+
+        <!-- Parent PIN Verification Screen (Guards phone settings & permission revocation) -->
+        <activity
+            android:name=".ParentPinVerifyActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.ChildSecurity.NoActionBar" />
+
         <!-- 24/7 Background GPS Tracking Foreground Service -->
         <service
             android:name=".ChildTrackingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Accessibility Service: Real-time App Blocker & Anti-Uninstall Shield -->
+        <service
+            android:name=".ChildSecurityAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Device Administrator Receiver: Anti-Uninstall Protection -->
+        <receiver
+            android:name=".ChildDeviceAdminReceiver"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.DEVICE_ADMIN_DISABLE_REQUESTED" />
+                <action android:name="android.app.action.DEVICE_ADMIN_DISABLED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Auto-Start Receiver on Boot -->
         <receiver

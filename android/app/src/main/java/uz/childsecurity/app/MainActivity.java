@@ -294,5 +294,105 @@ public class MainActivity extends AppCompatActivity {
         public void requestBatteryOptimizationExemption() {
             runOnUiThread(() -> requestBatteryOptimization());
         }
+
+        @JavascriptInterface
+        public boolean isUsageAccessGranted() {
+            return UsageStatsHelper.hasUsageAccessPermission(context);
+        }
+
+        @JavascriptInterface
+        public void requestUsageAccess() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public boolean isAccessibilityGranted() {
+            try {
+                int accessibilityEnabled = 0;
+                final String service = context.getPackageName() + "/" + ChildSecurityAccessibilityService.class.getCanonicalName();
+                accessibilityEnabled = Settings.Secure.getInt(
+                        context.getContentResolver(),
+                        Settings.Secure.ACCESSIBILITY_ENABLED
+                );
+                if (accessibilityEnabled == 1) {
+                    String settingValue = Settings.Secure.getString(
+                            context.getContentResolver(),
+                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                    );
+                    if (settingValue != null) {
+                        return settingValue.contains(service) || settingValue.contains(ChildSecurityAccessibilityService.class.getSimpleName());
+                    }
+                }
+            } catch (Exception ignored) {}
+            return false;
+        }
+
+        @JavascriptInterface
+        public void requestAccessibility() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public boolean isDeviceAdminGranted() {
+            try {
+                android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                android.content.ComponentName comp = new android.content.ComponentName(context, ChildDeviceAdminReceiver.class);
+                return dpm != null && dpm.isAdminActive(comp);
+            } catch (Exception ignored) {}
+            return false;
+        }
+
+        @JavascriptInterface
+        public void requestDeviceAdmin() {
+            try {
+                android.content.ComponentName comp = new android.content.ComponentName(context, ChildDeviceAdminReceiver.class);
+                Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, comp);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Child Security o'chirishdan himoyalanishi va xavfsizlikni ta'minlash uchun administrator ruxsati zarur.");
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public String getTodayScreenTimeJson() {
+            try {
+                return UsageStatsHelper.getDailyAppUsageStats(context).toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public void setLocalDevicePolicy(String jsonPolicy) {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(jsonPolicy);
+                SharedPreferences.Editor ed = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE).edit();
+                if (obj.has("is_all_apps_blocked")) {
+                    ed.putBoolean("is_all_apps_blocked", obj.getBoolean("is_all_apps_blocked"));
+                }
+                if (obj.has("lockdown_reason")) {
+                    ed.putString("lockdown_reason", obj.getString("lockdown_reason"));
+                }
+                if (obj.has("blocked_packages")) {
+                    ed.putString("blocked_packages", obj.getJSONArray("blocked_packages").toString());
+                }
+                if (obj.has("anti_uninstall_enabled")) {
+                    ed.putBoolean("anti_uninstall_enabled", obj.getBoolean("anti_uninstall_enabled"));
+                }
+                if (obj.has("parent_pin_hash")) {
+                    ed.putString(ParentPinVerifyActivity.PREFS_PIN_HASH, obj.getString("parent_pin_hash"));
+                }
+                ed.apply();
+            } catch (Exception ignored) {}
+        }
     }
 }

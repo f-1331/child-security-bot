@@ -4,4 +4,5 @@
     <string name="channel_desc">Farzand xavfsizligi va jonli GPS monitoring xizmati</string>
     <string name="notification_title">Child Security 🛡️</string>
     <string name="notification_body">Xavfsizlik himoyasi faol. Joylashuv nazoratda.</string>
+    <string name="accessibility_service_desc">Farzand xavfsizligi, nojo\'ya ilovalarni bloklash va tizim sozlamalarini ruxsatsiz o\'chirishdan himoya qilish xizmati.</string>
 </resources>

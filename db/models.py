@@ -159,3 +159,36 @@ class AdminUser(Base):
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
     added_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ChildDevicePolicy(Base):
+    __tablename__ = "child_device_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_all_apps_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    lockdown_reason: Mapped[str] = mapped_column(String(100), default="Dars vaqti")
+    blocked_packages: Mapped[Optional[str]] = mapped_column(Text, default="[]")  # JSON string of blocked packages
+    parent_pin_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)  # SHA-256 hash
+    anti_uninstall_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AppUsageReport(Base):
+    __tablename__ = "app_usage_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    report_date: Mapped[str] = mapped_column(String(20), index=True)  # YYYY-MM-DD
+    total_screen_time_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    unlock_count: Mapped[int] = mapped_column(Integer, default=0)
+    app_stats_json: Mapped[Optional[str]] = mapped_column(Text, default="[]")  # JSON array
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("child_id", "report_date", name="uq_child_app_usage_date"),
+    )
+
