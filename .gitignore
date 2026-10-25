@@ -38,5 +38,7 @@ downloads/*
 !downloads/*.apk
 !downloads/*.bat
 !downloads/*.mobileconfig
+!downloads/*.command
+!downloads/*.zip
 .neon
 node_modules/

@@ -30,6 +30,7 @@ from bot.geofence import evaluate_geofences_and_notify, haversine_distance
 TG_FILE_ID_PARENT_APK = "BQACAgIAAxkDAAIC5mreMhe2YYW7kXQ3dRC_RDdx4BrAAAJYpAACkXzxSqCXbmUrcbZgPQQ"
 TG_FILE_ID_CHILD_APK = "BQACAgIAAxkDAAIDAmreN2MZxN9GawxtrRnCVUZUj6aeAAKnpAACkXzxSpPrP6AaP55sPQQ"
 TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIDA2reN2Qg5ftn-jj-yWZm5fWZ7W5kAAKppAACkXzxSgGocqOALSEcPQQ"
+TG_FILE_ID_MAC_ZIP = "BQACAgIAAxkDAAIDC2reOXk1h7rOlm8xYEMAAS2_hSePnQACu6QAApF88Uom9YDaX8Dnkz0E"
 TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIDBGreN2RP4HQZPqZFSP0xiRIiSYxhAAKqpAACkXzxSk1ziz3geGp_PQQ"
 from bot.keyboards import (
     get_role_selection_keyboard,
@@ -3453,18 +3454,20 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
     if isinstance(event, CallbackQuery):
         await event.answer("💻 Noutbuk versiyasi tayyorlanmoqda...")
 
-    desktop_bat_url = "https://child-security-site.onrender.com/download/desktop-windows"
-    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+    desktop_bat_url = f"{webapp_url}/download/desktop-windows"
+    desktop_mac_url = f"{webapp_url}/download/desktop-mac"
 
     text = (
         "💻 <b>Child Security — Noutbuk va Kompyuterlar uchun (Windows & macOS)</b>\n\n"
         "Child Security'ni noutbukingizda alohida mustaqil desktop dastur sifatida ishlatishingiz mumkin!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 <b>O'rnatishning 2 xil qulay usuli:</b>\n\n"
-        "1️⃣ <b>Windows Tezkor O'rnatgich (.bat):</b>\n"
+        "🚀 <b>O'rnatish yo'llari:</b>\n\n"
+        "🪟 <b>1️⃣ Windows Tezkor O'rnatgich (.bat):</b>\n"
         "Quyidagi <code>.bat</code> faylini yuklab olib ishga tushirsangiz, ish stolingizga (Desktop) "
-        "avtomatik tarzda <b>Child Security</b> yorlig'i o'rnatiladi va brauzer satrisiz toza oyna bo'lib ochiladi!\n\n"
-        "2️⃣ <b>1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Mac):</b>\n"
+        "avtomatik tarzda <b>Child Security</b> yorlig'i o'rnatiladi va toza dastur oynasida ochiladi!\n\n"
+        "🍏 <b>2️⃣ Apple Mac (macOS / MacBook) O'rnatgich (.zip):</b>\n"
+        "Quyidagi <code>.zip</code> faylini oching va ichidagi <code>ChildSecurity_Mac_Setup.command</code> ustiga 2 marta bosing!\n\n"
+        "🌐 <b>3️⃣ 1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Safari):</b>\n"
         "Noutbuk brauzerida saytni oching va manzil satridagi <b>«O'rnatish / Install»</b> belgisini bosing!\n\n"
         "🛡️ Katta ekranda farzandlaringiz joylashuvi, batareya holati va ekran vaqtini kuzatish yanada qulay!"
     )
@@ -3473,8 +3476,12 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💻 Windows uchun o'rnatgich (.bat)",
+                    text="🪟 Windows uchun (.bat)",
                     url=desktop_bat_url
+                ),
+                InlineKeyboardButton(
+                    text="🍏 Mac uchun (.zip)",
+                    url=desktop_mac_url
                 )
             ],
             [
@@ -3555,15 +3562,14 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
     )
 
     desktop_caption = (
-        "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
+        "💻 <b>Child Security — Windows Noutbuk & PC O'rnatgichi</b>\n\n"
         "1️⃣ Ushbu <code>ChildSecurity_Desktop_Setup.bat</code> faylini yuklab oling va ustiga bosing.\n"
         "2️⃣ <b>Eslatma:</b> Agar Windows himoyasi (SmartScreen) chiqsa:\n"
         "   👉 <i>«Подробнее» (Batafsil)</i> -> <i>«Выполнить в любом случае» (Baribir bajarish)</i> tugmasini bosing.\n"
-        "3️⃣ Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va alohida qulay dastur oynasida ishga tushadi! 🚀\n\n"
-        "💡 <i>MacBook (macOS) yoki Linux uchun: saytni brauzerda ochib, manzil satridagi ⬇️ «Dasturni o'rnatish» tugmasini bosing!</i>"
+        "3️⃣ Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va mustaqil dastur oynasida ishga tushadi! 🚀"
     )
 
-    # Priority 1: Instant delivery via Telegram CDN cached file_id
+    # 1. Send Windows BAT
     try:
         await message.answer_document(
             document=TG_FILE_ID_DESKTOP_BAT,
@@ -3582,6 +3588,128 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
             )
         except Exception as e:
             logger.warning(f"Could not send desktop setup BAT document: {e}")
+
+    # 2. Send Apple Mac ZIP
+    mac_caption = (
+        "🍏 <b>Child Security — Apple Mac (macOS / MacBook) O'rnatgichi</b>\n\n"
+        "1️⃣ Ushbu <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching (unzip).\n"
+        "2️⃣ Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
+        "3️⃣ Mac ish stolingizda <b>Child Security</b> paydo bo'ladi va to'liq ekranda ishga tushadi! 🚀\n\n"
+        "💡 <i>Yoki Safari / Chrome'da saytni ochib, «Fayl > Dock-ga qo'shish» (Add to Dock) yoki «O'rnatish» tugmasini bosing!</i>"
+    )
+    try:
+        await message.answer_document(
+            document=TG_FILE_ID_MAC_ZIP,
+            caption=mac_caption,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e_mac:
+        logger.warning(f"Could not send Mac setup zip by file_id: {e_mac}")
+        mac_zip_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Mac_Setup.zip")
+        if os.path.exists(mac_zip_path):
+            try:
+                from aiogram.types import FSInputFile
+                await message.answer_document(
+                    document=FSInputFile(mac_zip_path, filename="ChildSecurity_Mac_Setup.zip"),
+                    caption=mac_caption,
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.warning(f"Could not send Mac setup zip file: {e}")
+
+
+@router.message(StateFilter("*"), F.text.in_([
+    "🍏 Apple Mac",
+    "🍏 Mac",
+    "MacBook",
+    "macbook",
+    "macos",
+    "mac"
+]))
+@router.message(StateFilter("*"), Command("mac", "macbook", "macos"))
+@router.callback_query(F.data == "download_mac")
+async def on_download_mac(event, bot: Bot, state: FSMContext = None):
+    """Send dedicated Apple Mac (macOS / MacBook) setup file and Web App instructions."""
+    if state:
+        await state.clear()
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("🍏 Mac versiyasi tayyorlanmoqda...")
+
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+    desktop_mac_url = f"{webapp_url}/download/desktop-mac"
+
+    text = (
+        "🍏 <b>Child Security — Apple Mac (macOS / MacBook) Rasmiy Ilovasi</b>\n\n"
+        "Apple kompyuterlarida (MacBook Air/Pro, iMac, Mac mini) Child Security'ni to'laqonli desktop dastur sifatida ishlatishingiz mumkin:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ <b>1-USUL: Avtomatik O'rnatuvchi Paket (.zip)</b>\n"
+        "1. Quyidagi <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching.\n"
+        "2. Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
+        "3. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va alohida dastur oynasida ishga tushadi!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌐 <b>2-USUL: Safari / Chrome orqali to'g'ridan-to'g'ri o'rnatish</b>\n"
+        "1. Brauzerda oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
+        "2. <b>Safari'da:</b> Yuqori menyudan <i>«Fayl» (File)</i> ➔ <b>«Dock-ga qo'shish» (Add to Dock)</b> ni bosing.\n"
+        "3. <b>Chrome / Edge'da:</b> Manzil satrining o'ng tomonidagi ⬇️ <b>«O'rnatish» (Install)</b> belgisini bosing!\n\n"
+        "✨ <b>Natija:</b> Ilova Mac ilovalar ro'yxatiga (Launchpad) va Dock-ga alohida dastur bo'lib qo'shiladi! 🚀"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🍏 Mac o'rnatgichini yuklab olish (.zip)",
+                    url=desktop_mac_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Safari / Mac Web App'ni ochish",
+                    url=webapp_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💻 Windows versiya",
+                    callback_data="download_desktop"
+                ),
+                InlineKeyboardButton(
+                    text="🍎 iPhone / iOS",
+                    callback_data="download_ios"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
+    mac_caption = (
+        "🍏 <b>Child Security — Apple Mac (macOS / MacBook) O'rnatgichi</b>\n\n"
+        "1️⃣ Ushbu <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching (unzip).\n"
+        "2️⃣ Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
+        "3️⃣ Mac ish stolingizda <b>Child Security</b> paydo bo'ladi va to'liq ekranda ishga tushadi! 🚀"
+    )
+
+    try:
+        await message.answer_document(
+            document=TG_FILE_ID_MAC_ZIP,
+            caption=mac_caption,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e_mac:
+        logger.warning(f"Could not send Mac setup zip by file_id: {e_mac}")
+        mac_zip_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Mac_Setup.zip")
+        if os.path.exists(mac_zip_path):
+            try:
+                from aiogram.types import FSInputFile
+                await message.answer_document(
+                    document=FSInputFile(mac_zip_path, filename="ChildSecurity_Mac_Setup.zip"),
+                    caption=mac_caption,
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.warning(f"Could not send Mac setup zip file: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([

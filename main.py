@@ -549,6 +549,29 @@ async def download_desktop_windows():
     )
 
 
+@app.get("/download/desktop-mac", tags=["App"])
+@app.get("/download/mac", tags=["App"])
+async def download_desktop_mac():
+    """Download Apple macOS Desktop standalone setup package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    mac_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Mac_Setup.zip")
+    if not os.path.exists(mac_zip):
+        try:
+            from scripts.generate_mac_setup import generate
+            # generate() can be imported and executed
+        except Exception:
+            pass
+    if os.path.exists(mac_zip):
+        return FileResponse(
+            mac_zip,
+            filename="ChildSecurity_Mac_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Mac_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
 @app.get("/privacy", tags=["Legal"])
 @app.get("/privacy.html", tags=["Legal"])
 async def privacy_policy_view():

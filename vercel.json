@@ -8,14 +8,68 @@
   ],
   "routes": [
     {
+      "src": "/downloads/ChildSecurity.mobileconfig",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/ios-profile",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/ios-app",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/ios",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/desktop-mac",
+      "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Mac_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/mac",
+      "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Mac_Setup.zip\""
+      }
+    },
+    {
       "src": "/download/desktop-windows",
-      "dest": "https://child-security-site.onrender.com/download/desktop-windows",
-      "status": 302
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
     },
     {
       "src": "/download/desktop",
-      "dest": "https://child-security-site.onrender.com/download/desktop-windows",
-      "status": 302
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
     },
     {
       "src": "/download/parent-apk",
@@ -29,12 +83,7 @@
     },
     {
       "src": "/download/apk",
-      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
-      "status": 302
-    },
-    {
-      "src": "/download/(.*)",
-      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
       "status": 302
     },
     {

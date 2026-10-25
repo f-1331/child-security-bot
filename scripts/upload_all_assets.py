@@ -37,6 +37,4 @@ def upload(filename, caption):
     return fid
 
 if __name__ == '__main__':
-    upload('ChildSecurity_Child.apk', 'Child Security Farzand APK')
-    upload('ChildSecurity_Desktop_Setup.bat', 'Child Security Desktop Setup')
-    upload('ChildSecurity.mobileconfig', 'Child Security iOS Profile')
+    upload('ChildSecurity_Mac_Setup.zip', 'Child Security Apple Mac Desktop Setup')

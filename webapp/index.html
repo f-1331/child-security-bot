@@ -1586,10 +1586,10 @@
             <i data-lucide="apple" class="w-3.5 h-3.5 shrink-0 text-slate-200"></i>
             <span class="truncate">🍎 iPhone</span>
           </button>
-          <a href="/downloads/ChildSecurity_Desktop_Setup.bat" download="ChildSecurity_Desktop_Setup.bat" class="py-2 px-1 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Windows noutbuk uchun desktop o'rnatgich">
+          <button type="button" onclick="openInstallAppModal('desktop')" class="py-2 px-1 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-indigo-200 hover:text-white text-[10px] font-black rounded-xl text-center transition flex flex-col sm:flex-row items-center justify-center gap-1 shadow-sm" title="Windows va Mac noutbuklari uchun desktop o'rnatgichlar">
             <i data-lucide="laptop" class="w-3.5 h-3.5 shrink-0 text-cyan-300"></i>
             <span class="truncate">💻 Noutbuk</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -2901,7 +2901,7 @@
         <!-- Option 2: Windows Standalone Desktop Launcher (.bat / Setup) -->
         <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
           <h5 class="text-xs font-black text-white flex items-center gap-1.5">
-            <span>🪟</span> <span>Windows uchun Tezkor O'rnatgich</span>
+            <span>🪟</span> <span>Windows uchun Tezkor O'rnatgich (.bat)</span>
           </h5>
           <p class="text-[11px] text-slate-300 leading-relaxed">
             Windows 10 va 11 foydalanuvchilari uchun ish stoliga avtomatik yorliq yaratuvchi mustaqil dastur:
@@ -2912,6 +2912,23 @@
           </a>
           <p class="text-[10px] text-amber-200/80 leading-snug">
             ⚠️ <i>Agar Windows SmartScreen ko'k oynasi chiqsa: <b>«Подробнее» (Batafsil)</b> ➔ <b>«Выполнить в любом случае»</b> ni bosing.</i>
+          </p>
+        </div>
+
+        <!-- Option 3: Apple Mac Standalone Desktop Launcher (.zip / .command) -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
+          <h5 class="text-xs font-black text-white flex items-center gap-1.5">
+            <span>🍏</span> <span>Apple Mac (macOS / MacBook) O'rnatgichi (.zip)</span>
+          </h5>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            MacBook va iMac foydalanuvchilari uchun ish stoliga avtomatik yorliq va alohida dastur o'rnatuvchi paket:
+          </p>
+          <a href="/downloads/ChildSecurity_Mac_Setup.zip" download="ChildSecurity_Mac_Setup.zip" class="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-2 transition">
+            <i data-lucide="archive" class="w-4 h-4 text-emerald-400"></i>
+            <span>Mac O'rnatgichini Yuklab Olish (.zip)</span>
+          </a>
+          <p class="text-[10px] text-slate-400 leading-snug">
+            💡 <i>Yuklab oling, arxivni oching va <b>ChildSecurity_Mac_Setup.command</b> ustiga 2 marta bosing.</i>
           </p>
         </div>
 

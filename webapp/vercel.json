@@ -1,12 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/download/desktop-windows",
-      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
-    },
-    {
-      "source": "/download/desktop",
-      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+      "source": "/downloads/ChildSecurity.mobileconfig",
+      "destination": "/downloads/ChildSecurity.mobileconfig"
     },
     {
       "source": "/download/ios-profile",
@@ -15,6 +11,38 @@
     {
       "source": "/download/ios-app",
       "destination": "/downloads/ChildSecurity.mobileconfig"
+    },
+    {
+      "source": "/download/ios",
+      "destination": "/downloads/ChildSecurity.mobileconfig"
+    },
+    {
+      "source": "/download/desktop-mac",
+      "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
+    },
+    {
+      "source": "/download/mac",
+      "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
+    },
+    {
+      "source": "/download/desktop-windows",
+      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+    },
+    {
+      "source": "/download/desktop",
+      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+    },
+    {
+      "source": "/download/parent-apk",
+      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
+    },
+    {
+      "source": "/download/child-apk",
+      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
+    },
+    {
+      "source": "/download/apk",
+      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
     },
     {
       "source": "/api/(.*)",
@@ -26,6 +54,19 @@
     }
   ],
   "headers": [
+    {
+      "source": "/(.*)\\.mobileconfig",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/x-apple-aspen-config"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=\"ChildSecurity.mobileconfig\""
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
