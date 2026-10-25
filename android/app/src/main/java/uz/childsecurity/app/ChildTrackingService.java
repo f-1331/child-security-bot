@@ -109,10 +109,13 @@ public class ChildTrackingService extends Service implements LocationListener {
         }, 15, 25, TimeUnit.SECONDS);
 
         // 5. Periodic App Usage & Screen Time Reporter (every 120 seconds)
-        scheduler.scheduleWithFixedDelay(() -> {
-            try {
-                sendAppUsageTelemetry();
-            } catch (Exception ignored) {}
+        scheduler.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    sendAppUsageTelemetry();
+                } catch (Exception ignored) {}
+            }
         }, 30, 120, TimeUnit.SECONDS);
     }
 

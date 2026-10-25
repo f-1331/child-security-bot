@@ -84,7 +84,7 @@ public class ParentPinVerifyActivity extends AppCompatActivity {
         grid.setRowCount(4);
         grid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
 
-        String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "✕", "0", "✓"};
+        String[] keys = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "\u2715", "0", "\u2713"};
 
         for (final String key : keys) {
             Button btn = new Button(this);

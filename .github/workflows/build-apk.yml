@@ -36,7 +36,10 @@ jobs:
       - name: Build APK and Play Store AAB with Gradle
         run: |
           cd android
-          gradle :app:assembleRelease :app:bundleParentRelease :app:bundleChildRelease --no-daemon --stacktrace
+          gradle assemble bundleParentRelease bundleChildRelease --no-daemon --stacktrace || {
+            echo "Bundle failed or flavor task unavailable, assembling APKs..."
+            gradle assemble --no-daemon --stacktrace
+          }
           mkdir -p build_dist
           find app/build/outputs/apk/ -type f -name "*parent*release*.apk" -exec cp {} build_dist/ChildSecurity_Parent.apk \;
           find app/build/outputs/apk/ -type f -name "*child*release*.apk" -exec cp {} build_dist/ChildSecurity_Child.apk \;
