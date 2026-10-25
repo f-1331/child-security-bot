@@ -1700,6 +1700,7 @@ function initMap() {
       console.warn("Map cleanup error:", e);
     }
     map = null;
+    window.map = null;
   }
   const mapContainer = document.getElementById("map");
   if (!mapContainer) return;
@@ -1713,6 +1714,27 @@ function initMap() {
     tap: false,
     touchZoom: true,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
+
+  // Expose map to global window for external triggers and UI controls
+  window.map = map;
+
+  // Auto-resize observer to handle container height shifts (fullscreen toggle, orientation change, header collapse)
+  if (window.ResizeObserver && mapContainer) {
+    try {
+      let resizeTimer = null;
+      const ro = new ResizeObserver(() => {
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          try {
+            if (map) {
+              map.invalidateSize({ pan: false });
+            }
+          } catch (e) {}
+        }, 50);
+      });
+      ro.observe(mapContainer);
+    } catch (e) {}
+  }
 
   // Apply map tiles according to active theme
   applyMapThemeTiles(currentTheme);
@@ -2805,12 +2827,23 @@ function toggleMapUiVisibility(forceState) {
     window.lucide.createIcons();
   }
 
-  // Ensure Leaflet map recalculates its full viewport immediately and after CSS transition
-  if (window.map) {
-    window.map.invalidateSize();
+  // Ensure Leaflet map recalculates its full viewport immediately and through CSS transitions
+  const activeMap = map || window.map;
+  if (activeMap) {
+    window.map = activeMap;
+    activeMap.invalidateSize({ pan: false });
+    [50, 150, 300, 450].forEach((delay) => {
+      setTimeout(() => {
+        try {
+          activeMap.invalidateSize({ pan: false });
+        } catch (e) {}
+      }, delay);
+    });
     setTimeout(() => {
       try {
-        window.map.invalidateSize();
+        if (childMarker) {
+          activeMap.panTo(childMarker.getLatLng(), { animate: true, duration: 0.5 });
+        }
       } catch (e) {}
     }, 320);
   }
