@@ -127,20 +127,20 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                             ws_key = f"{ch.id}_{ch.walk_safe_started_at}"
                             if ws_key not in alerted_expired_walk_safes:
                                 parents = await crud.get_parents_for_child(session, ch.id)
-                                ch_name = ch.full_name or f"Farzand #{ch.id}"
-                                dest = ch.walk_safe_destination or "Uyga qaytish"
+                                ch_name_esc = html.escape(ch.full_name or f"Farzand #{ch.id}")
+                                dest_esc = html.escape(ch.walk_safe_destination or "Uyga qaytish")
                                 latest_loc = await crud.get_latest_location(session, ch.id)
                                 maps_url = f"https://www.google.com/maps/search/?api=1&query={latest_loc.latitude},{latest_loc.longitude}" if latest_loc else None
     
                                 warn_msg = (
-                                    f"🚨 **DIQQAT: XAVFSIZ YO'L VAQTI TUGADI!**\n\n"
-                                    f"Farzandingiz **{ch_name}** «Xavfsiz yo'l» ({dest}) rejimida belgilangan vaqt ichida yetib borganini tasdiqlamadi!\n\n"
-                                    + (f"📍 Oxirgi joylashuvi: [Google Maps orqali ko'rish]({maps_url})\n\n" if maps_url else "")
+                                    f"🚨 <b>DIQQAT: XAVFSIZ YO'L VAQTI TUGADI!</b>\n\n"
+                                    f"Farzandingiz <b>{ch_name_esc}</b> «Xavfsiz yo'l» (<b>{dest_esc}</b>) rejimida belgilangan vaqt ichida yetib borganini tasdiqlamadi!\n\n"
+                                    + (f"📍 Oxirgi joylashuvi: <a href=\"{maps_url}\">Google Maps orqali ko'rish</a>\n\n" if maps_url else "")
                                     + f"Iltimos, farzandingiz bilan zudlik bilan bog'laning!"
                                 )
                                 for p in parents:
                                     try:
-                                        await bot.send_message(chat_id=p.id, text=warn_msg, parse_mode="Markdown")
+                                        await bot.send_message(chat_id=p.id, text=warn_msg, parse_mode="HTML")
                                         if latest_loc:
                                             await bot.send_location(chat_id=p.id, latitude=latest_loc.latitude, longitude=latest_loc.longitude)
                                     except Exception as e:

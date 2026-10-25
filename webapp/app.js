@@ -1269,7 +1269,7 @@ function applyChildUI(user) {
 
   const sel = document.getElementById("childSelect");
   if (sel) {
-    sel.innerHTML = `<option value="${user.id}">${user.full_name || 'Mening hisobim'}</option>`;
+    sel.innerHTML = `<option value="${escapeHtml(String(user.id))}">${escapeHtml(user.full_name || 'Mening hisobim')}</option>`;
     sel.disabled = true;
   }
 
@@ -2083,7 +2083,7 @@ function renderChildSelector() {
 
   if (select) {
     select.innerHTML = childrenList
-      .map((c) => `<option value="${c.id}">${c.full_name || "Farzand #" + c.id}</option>`)
+      .map((c) => `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.full_name || "Farzand #" + c.id)}</option>`)
       .join("");
     if (currentChildId) {
       select.value = currentChildId;
@@ -2116,7 +2116,7 @@ function renderChildSelector() {
               class="px-2.5 py-1 rounded-xl text-xs flex items-center gap-1.5 border transition-all active:scale-95 shrink-0 ${activeClass}"
             >
               <span class="w-4 h-4 rounded-full bg-slate-950/60 text-[9px] flex items-center justify-center font-black">${initial}</span>
-              <span class="truncate max-w-[110px]">${c.full_name || 'Farzand'}</span>
+              <span class="truncate max-w-[110px]">${escapeHtml(c.full_name || 'Farzand')}</span>
               ${sosIndicator}
             </button>
           `;
@@ -3800,7 +3800,7 @@ function renderTasksList() {
       balanceBanner = `
         <div class="p-3 bg-gradient-to-r from-slate-900 to-slate-800/80 border border-slate-700/80 rounded-2xl mb-3 flex items-center justify-between">
           <div>
-            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${activeChild.full_name || 'Farzand'} balansi:</span>
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">${escapeHtml(activeChild.full_name || 'Farzand')} balansi:</span>
             <p class="text-xs font-bold text-white mt-0.5">${(activeChild.virtual_balance || 0).toLocaleString()} tanga <span class="text-emerald-400 font-semibold">(≈ ${cMoney.toLocaleString()} so'm)</span></p>
           </div>
           <button onclick="openCoinRateModal()" class="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition active:scale-95 shadow">

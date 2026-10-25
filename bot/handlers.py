@@ -104,6 +104,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             full_name=full_name,
             username=username
         )
+        await session.commit()
 
         # Check deep-link pairing code
         args = command.args
@@ -3051,11 +3052,22 @@ async def on_webapp_requested(message: Message):
         )
 
 
-@router.message(F.text.func(lambda t: t and ("ota-ona" in t.lower() or "ota ona" in t.lower() or "parent" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
-@router.message(Command("parent_app", "parentapp", "otaona"))
+@router.message(StateFilter("*"), F.text.in_([
+    "👨‍👩‍👧 Ota-ona ilovasi (APK)",
+    "👨‍👩‍👧 Ota-ona ilovasi",
+    "Ota-ona ilovasi (APK)",
+    "Ota-ona ilovasi",
+    "Ota ona ilovasi",
+    "Parent app",
+    "parent app"
+]))
+@router.message(StateFilter("*"), F.text.func(lambda t: t and ("ota-ona" in t.lower() or "ota ona" in t.lower() or "parent" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
+@router.message(StateFilter("*"), Command("parent_app", "parentapp", "otaona"))
 @router.callback_query(F.data == "download_parent_apk")
-async def on_download_parent_apk(event, bot: Bot):
+async def on_download_parent_apk(event, bot: Bot, state: FSMContext = None):
     """Send dedicated Parent Monitoring App directly into chat."""
+    if state:
+        await state.clear()
     message = event if isinstance(event, Message) else event.message
     if isinstance(event, CallbackQuery):
         await event.answer("👨‍👩‍👧 Ota-ona ilovasi tayyorlanmoqda...")
@@ -3162,11 +3174,21 @@ async def on_download_parent_apk(event, bot: Bot):
         )
 
 
-@router.message(F.text.func(lambda t: t and ("farzand" in t.lower() or "child" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
-@router.message(Command("child_app", "childapp", "farzand"))
+@router.message(StateFilter("*"), F.text.in_([
+    "👦 Farzand ilovasi (APK)",
+    "👦 Farzand ilovasi",
+    "Farzand ilovasi (APK)",
+    "Farzand ilovasi",
+    "Child app",
+    "child app"
+]))
+@router.message(StateFilter("*"), F.text.func(lambda t: t and ("farzand" in t.lower() or "child" in t.lower()) and ("ilova" in t.lower() or "apk" in t.lower() or "app" in t.lower())))
+@router.message(StateFilter("*"), Command("child_app", "childapp", "farzand"))
 @router.callback_query(F.data == "download_child_apk")
-async def on_download_child_apk(event, bot: Bot):
+async def on_download_child_apk(event, bot: Bot, state: FSMContext = None):
     """Send dedicated Child Safety & 24/7 Background GPS App directly into chat."""
+    if state:
+        await state.clear()
     message = event if isinstance(event, Message) else event.message
     if isinstance(event, CallbackQuery):
         await event.answer("👦 Farzand ilovasi tayyorlanmoqda...")
@@ -3286,11 +3308,21 @@ async def on_download_child_apk(event, bot: Bot):
         )
 
 
-@router.message(F.text.func(lambda t: t and any(w in t.lower() for w in ["iphone", "apple", "ios", "айфон", "ayfon"])))
-@router.message(Command("ios", "iphone", "apple"))
+@router.message(StateFilter("*"), F.text.in_([
+    "🍎 iPhone / iOS (O'rnatish)",
+    "🍎 iPhone / iOS",
+    "iPhone / iOS",
+    "iPhone ilovasi",
+    "Apple ilovasi",
+    "iOS ilovasi"
+]))
+@router.message(StateFilter("*"), F.text.func(lambda t: t and any(w in t.lower() for w in ["iphone", "apple", "ios", "айфон", "ayfon"])))
+@router.message(StateFilter("*"), Command("ios", "iphone", "apple"))
 @router.callback_query(F.data == "download_ios")
-async def on_download_ios(event, bot: Bot):
+async def on_download_ios(event, bot: Bot, state: FSMContext = None):
     """Provide step-by-step Apple iOS (iPhone/iPad) installation guide."""
+    if state:
+        await state.clear()
     message = event if isinstance(event, Message) else event.message
     if isinstance(event, CallbackQuery):
         await event.answer("🍎 iPhone qo'llanmasi tayyorlanmoqda...")
@@ -3347,9 +3379,10 @@ async def on_download_ios(event, bot: Bot):
     await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
-@router.message(F.text.in_([
+@router.message(StateFilter("*"), F.text.in_([
     "💻 Noutbuk uchun dastur",
     "💻 Noutbuk uchun versiya",
+    "💻 Noutbuk dasturi",
     "Noutbuk uchun dastur",
     "noutbuk uchun dastur",
     "Noutbuk versiya",
@@ -3363,10 +3396,12 @@ async def on_download_ios(event, bot: Bot):
     "desktop",
     "laptop"
 ]))
-@router.message(Command("desktop", "laptop", "noutbuk", "kompyuter", "pc"))
+@router.message(StateFilter("*"), Command("desktop", "laptop", "noutbuk", "kompyuter", "pc"))
 @router.callback_query(F.data == "download_desktop")
-async def on_download_desktop(event, bot: Bot):
+async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
     """Send dedicated Laptop / Desktop PC setup file and Web App client instructions."""
+    if state:
+        await state.clear()
     message = event if isinstance(event, Message) else event.message
     if isinstance(event, CallbackQuery):
         await event.answer("💻 Noutbuk versiyasi tayyorlanmoqda...")
@@ -3455,7 +3490,7 @@ async def on_download_desktop(event, bot: Bot):
         logger.warning(f"Could not send desktop setup BAT document: {e}")
 
 
-@router.message(F.text.in_([
+@router.message(StateFilter("*"), F.text.in_([
     "📥 Ilovani yuklab olish",
     "📥 Ilovani yuklab olish (APK)",
     "📲 Ilovani yuklab olish",
@@ -3477,10 +3512,12 @@ async def on_download_desktop(event, bot: Bot):
     "app",
     "prilojenie"
 ]))
-@router.message(Command("app", "download", "apk", "ilova", "mobil", "programma"))
-@router.message(F.text.regexp(r"(?i).*(yuklab\s*olish|ilovani|mobil\s*ilova|apk|android).*"))
-async def on_download_app_pressed(message: Message, bot: Bot):
+@router.message(StateFilter("*"), Command("app", "download", "apk", "ilova", "mobil", "programma"))
+@router.message(StateFilter("*"), F.text.regexp(r"(?i).*(yuklab\s*olish|ilovani|mobil\s*ilova|apk|android).*"))
+async def on_download_app_pressed(message: Message, bot: Bot, state: FSMContext = None):
     """Provide mobile application download links and send APK file directly into chat."""
+    if state:
+        await state.clear()
     webapp_url = settings.RESOLVED_WEBAPP_URL
     apk_download_url = f"{webapp_url}/download/apk"
     direct_github_apk = "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/app-debug.apk"

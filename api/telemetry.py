@@ -1,3 +1,4 @@
+import html
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -86,11 +87,11 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         )
         if should_alert and telegram_bot:
             parents = await crud.get_parents_for_child(session, payload.child_id)
-            child_name = child.full_name or f"Farzand ID:{child.id}"
+            child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
             alert_msg = (
-                f"🪫 **OGOHLANTIRISH: QUVVAT KAM QOLDI!**\n\n"
-                f"👤 Farzandingiz: **{child_name}**\n"
-                f"🔋 Batareya darajasi: **{payload.battery_level}%**\n"
+                f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
+                f"👤 Farzandingiz: <b>{child_name}</b>\n"
+                f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
                 f"⚡ Holat: Quvvatlanmayapti\n\n"
                 f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
             )
@@ -99,7 +100,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                     await telegram_bot.send_message(
                         chat_id=p.id,
                         text=alert_msg,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                     battery_alert_triggered = True
                 except Exception as e:
@@ -112,21 +113,21 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         last_alert_time = last_speed_alert_map.get(payload.child_id)
         if not last_alert_time or (now - last_alert_time) > timedelta(minutes=15):
             parents = await crud.get_parents_for_child(session, payload.child_id)
-            child_name = child.full_name or f"Farzand ID:{child.id}"
+            child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
             maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.lat},{payload.lon}"
             speed_msg = (
-                f"🚗 **TEZLIK OGOHLANTIRISHI!**\n\n"
-                f"👤 Farzandingiz: **{child_name}**\n"
-                f"🚀 Harakat tezligi: **{payload.speed:.0f} km/soat**\n"
-                f"📍 Holat: **Avtomobil yoki jamoat transportida harakatlanmoqda**\n\n"
-                f"🗺 [Xaritada ko'rish (Google Maps)]({maps_url})"
+                f"🚗 <b>TEZLIK OGOHLANTIRISHI!</b>\n\n"
+                f"👤 Farzandingiz: <b>{child_name}</b>\n"
+                f"🚀 Harakat tezligi: <b>{payload.speed:.0f} km/soat</b>\n"
+                f"📍 Holat: <b>Avtomobil yoki jamoat transportida harakatlanmoqda</b>\n\n"
+                f"🗺 <a href=\"{maps_url}\">Xaritada ko'rish (Google Maps)</a>"
             )
             for p in parents:
                 try:
                     await telegram_bot.send_message(
                         chat_id=p.id,
                         text=speed_msg,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                     speed_alert_triggered = True
                 except Exception as e:

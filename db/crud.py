@@ -51,7 +51,11 @@ async def get_or_create_user(
         username=username,
     )
     session.add(user)
-    await session.flush()
+    try:
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     return user, True
 
 
@@ -60,7 +64,7 @@ async def update_user_role(session: AsyncSession, user_id: int, role: str) -> Op
     user = await get_user(session, user_id)
     if user:
         user.role = role
-        await session.flush()
+        await session.commit()
     return user
 
 
@@ -74,13 +78,13 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
 
     if user.pairing_code:
         user.web_access_code = user.pairing_code
-        await session.flush()
+        await session.commit()
         return user.pairing_code
 
     if user.web_access_code:
         user.pairing_code = user.web_access_code
         user.pairing_code_created_at = datetime.now(timezone.utc)
-        await session.flush()
+        await session.commit()
         return user.web_access_code
 
     # Generate permanent 6-digit numeric code
@@ -88,7 +92,7 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
     user.pairing_code = code
     user.web_access_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
-    await session.flush()
+    await session.commit()
     return code
 
 
@@ -133,12 +137,12 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
         )
         if not existing.scalars().first():
             user.web_access_code = code
-            await session.flush()
+            await session.commit()
             return code
 
     code = str(int(datetime.now().timestamp()))[-6:]
     user.web_access_code = code
-    await session.flush()
+    await session.commit()
     return code
 
 
@@ -1082,7 +1086,7 @@ async def get_system_overview_stats(session: AsyncSession) -> dict:
     total_users = (await session.execute(select(func.count(User.id)))).scalar_one() or 0
     total_parents = (await session.execute(select(func.count(User.id)).where(User.role == "parent"))).scalar_one() or 0
     total_children = (await session.execute(select(func.count(User.id)).where(User.role == "child"))).scalar_one() or 0
-    active_sos = (await session.execute(select(func.count(User.id)).where(User.is_sos_active == True))).scalar_one() or 0
+    active_sos = (await session.execute(select(func.count(User.id)).where(User.is_sos_active.is_(True)))).scalar_one() or 0
     total_geofences = (await session.execute(select(func.count(Geofence.id)))).scalar_one() or 0
     total_tasks = (await session.execute(select(func.count(Task.id)))).scalar_one() or 0
     total_locs = (await session.execute(select(func.count(LocationLog.id)))).scalar_one() or 0
@@ -1156,7 +1160,7 @@ async def get_user_full_dossier(session: AsyncSession, user_id: int) -> Optional
 
 
 async def get_active_sos_list(session: AsyncSession) -> List[User]:
-    res = await session.execute(select(User).where(User.is_sos_active == True).order_by(User.updated_at.desc()))
+    res = await session.execute(select(User).where(User.is_sos_active.is_(True)).order_by(User.updated_at.desc()))
     return list(res.scalars().all())
 
 

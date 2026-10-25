@@ -1,3 +1,4 @@
+import html
 import math
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -74,11 +75,13 @@ async def evaluate_geofences_and_notify(
         if not state.is_inside and is_inside_now:
             # Child ENTERED kerakli joy
             event_type = "entered"
+            safe_child = html.escape(child_name)
+            safe_fence = html.escape(fence.name)
             message_text = (
-                f"✅ **KERAKLI JOYGA YETIB BORDI**\n\n"
-                f"👤 Farzandingiz: **{child_name}**\n"
-                f"📍 Joy: **{fence.name}**\n"
-                f"🕒 Vaqt: **{now_str}**\n"
+                f"✅ <b>KERAKLI JOYGA YETIB BORDI</b>\n\n"
+                f"👤 Farzandingiz: <b>{safe_child}</b>\n"
+                f"📍 Joy: <b>{safe_fence}</b>\n"
+                f"🕒 Vaqt: <b>{now_str}</b>\n"
                 f"📏 Masofa: markazdan {int(dist)} m"
             )
             events.append({
@@ -100,7 +103,7 @@ async def evaluate_geofences_and_notify(
                         await bot.send_message(
                             chat_id=pid,
                             text=message_text,
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                     except Exception as e:
                         print(f"[Geofence Alert Error] Failed to notify parent {pid}: {e}")
@@ -108,11 +111,13 @@ async def evaluate_geofences_and_notify(
         elif state.is_inside and not is_inside_now:
             # Child EXITED kerakli joy
             event_type = "exited"
+            safe_child = html.escape(child_name)
+            safe_fence = html.escape(fence.name)
             message_text = (
-                f"⚠️ **KERAKLI JOYDAN CHIQDI**\n\n"
-                f"👤 Farzandingiz: **{child_name}**\n"
-                f"📍 Joy: **{fence.name}**\n"
-                f"🕒 Vaqt: **{now_str}**\n"
+                f"⚠️ <b>KERAKLI JOYDAN CHIQDI</b>\n\n"
+                f"👤 Farzandingiz: <b>{safe_child}</b>\n"
+                f"📍 Joy: <b>{safe_fence}</b>\n"
+                f"🕒 Vaqt: <b>{now_str}</b>\n"
                 f"📏 Masofa: markazdan {int(dist)} m"
             )
             events.append({
@@ -134,7 +139,7 @@ async def evaluate_geofences_and_notify(
                         await bot.send_message(
                             chat_id=pid,
                             text=message_text,
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                     except Exception as e:
                         print(f"[Geofence Alert Error] Failed to notify parent {pid}: {e}")

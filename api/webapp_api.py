@@ -496,7 +496,7 @@ async def get_coin_rate_endpoint(user_id: int, session: AsyncSession = Depends(g
         "status": "success",
         "coins": rate_coins,
         "som": rate_som,
-        "som_per_coin": rate_som / rate_coins
+        "som_per_coin": (rate_som / rate_coins) if rate_coins > 0 else 10.0
     }
 
 
@@ -517,13 +517,13 @@ async def update_coin_rate_endpoint(payload: UpdateCoinRateRequest, session: Asy
                 await telemetry.telegram_bot.send_message(
                     chat_id=child.id,
                     text=(
-                        f"📢 **Tangalar kursi yangilandi!**\n\n"
+                        f"📢 <b>Tangalar kursi yangilandi!</b>\n\n"
                         f"📌 Ota-onangiz belgilagan yangi kurs:\n"
-                        f"💰 **{payload.coins:,} tanga = {payload.som:,} so'm**\n"
-                        f"(1 tanga = {payload.som / payload.coins:,.1f} so'm)\n\n"
-                        f"💵 Sizning hozirgi pulingiz: **{child_money:,} so'm** ({child.virtual_balance:,} tanga)"
+                        f"💰 <b>{payload.coins:,} tanga = {payload.som:,} so'm</b>\n"
+                        f"(1 tanga = {(payload.som / payload.coins) if payload.coins > 0 else 10.0:,.1f} so'm)\n\n"
+                        f"💵 Sizning hozirgi pulingiz: <b>{child_money:,} so'm</b> ({child.virtual_balance:,} tanga)"
                     ),
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
         except Exception as e:
             logger.error(f"Failed to notify children about coin rate update: {e}")
@@ -532,7 +532,7 @@ async def update_coin_rate_endpoint(payload: UpdateCoinRateRequest, session: Asy
         "status": "success",
         "coins": payload.coins,
         "som": payload.som,
-        "som_per_coin": payload.som / payload.coins
+        "som_per_coin": (payload.som / payload.coins) if payload.coins > 0 else 10.0
     }
 
 
@@ -904,11 +904,11 @@ async def mark_task_seen_endpoint(task_id: int, session: AsyncSession = Depends(
             await telemetry.telegram_bot.send_message(
                 chat_id=task.parent_id,
                 text=(
-                    f"👁 **Bolangiz bu habarni ko'rdi**\n\n"
-                    f"📌 Topshiriq: **{task.title}**\n"
-                    f"👤 Farzand: **{child_name}**"
+                    f"👁 <b>Bolangiz bu topshiriqni ko'rdi</b>\n\n"
+                    f"📌 Topshiriq: <b>{html.escape(task.title)}</b>\n"
+                    f"👤 Farzand: <b>{html.escape(child_name)}</b>"
                 ),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify parent about task seen: {e}")
@@ -942,11 +942,11 @@ async def schedule_task_endpoint(
             await telemetry.telegram_bot.send_message(
                 chat_id=task.parent_id,
                 text=(
-                    f"⏰ **Bolangiz {pt_clean}{suffix} bu topshiriqni bajarishga qaror qildi**\n\n"
-                    f"📌 Topshiriq: **{task.title}**\n"
-                    f"👤 Farzand: **{child_name}**"
+                    f"⏰ <b>Bolangiz {html.escape(pt_clean)}{suffix} bu topshiriqni bajarishga qaror qildi</b>\n\n"
+                    f"📌 Topshiriq: <b>{html.escape(task.title)}</b>\n"
+                    f"👤 Farzand: <b>{html.escape(child_name)}</b>"
                 ),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify parent about task schedule: {e}")
@@ -1204,14 +1204,15 @@ async def child_sos_endpoint(
             f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
             if (lat is not None and lon is not None) else None
         )
+        safe_cname = html.escape(child_name)
 
         parent_alert = (
-            f"🚨🚨🚨 **FAVQULODDA VAZIYAT (SOS)!** 🚨🚨🚨\n\n"
-            f"Farzandingiz **{child_name}** WebApp orqali xavf signalini yoqdi!\n\n"
-            f"🕒 Vaqt: **{now_str}**\n"
-            f"🔋 Batareya: **{battery_info}**\n"
-            + (f"📍 Koordinata: `{loc_coords}`\n🗺 Xaritada: [Google Maps orqali ochish]({maps_link})\n\n" if maps_link else "\n")
-            + f"⚠️ **DIQQAT:** Farzandingiz bilan zudlik bilan bog'laning yoki xaritada tekshiring!"
+            f"🚨🚨🚨 <b>FAVQULODDA VAZIYAT (SOS)!</b> 🚨🚨🚨\n\n"
+            f"Farzandingiz <b>{safe_cname}</b> WebApp orqali xavf signalini yoqdi!\n\n"
+            f"🕒 Vaqt: <b>{html.escape(now_str)}</b>\n"
+            f"🔋 Batareya: <b>{html.escape(battery_info)}</b>\n"
+            + (f"📍 Koordinata: <code>{loc_coords}</code>\n🗺 Xaritada: <a href=\"{maps_link}\">Google Maps orqali ochish</a>\n\n" if maps_link else "\n")
+            + f"⚠️ <b>DIQQAT:</b> Farzandingiz bilan zudlik bilan bog'laning yoki xaritada tekshiring!"
         )
 
         for p in parents:
@@ -1220,7 +1221,7 @@ async def child_sos_endpoint(
                     chat_id=p.id,
                     text=parent_alert,
                     reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
                 if lat is not None and lon is not None:
                     await telemetry.telegram_bot.send_location(
@@ -1259,10 +1260,11 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
         if parents:
             for p in parents:
                 try:
+                    safe_cname = html.escape(child_name)
                     await telemetry.telegram_bot.send_message(
                         chat_id=p.id,
-                        text=f"✅ **XAVF BARTARAF ETILDI!**\n\nFarzandingiz **{child_name}** SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.",
-                        parse_mode="Markdown"
+                        text=f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\nFarzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.",
+                        parse_mode="HTML"
                     )
                 except Exception as e:
                     logger.error(f"Failed to notify parent {p.id} of SOS cancellation: {e}")
@@ -1271,8 +1273,8 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
             try:
                 await telemetry.telegram_bot.send_message(
                     chat_id=child.id,
-                    text="✅ SOS xavf signali to'xtatildi. Hammasi joyida ekanligidan xursandmiz!",
-                    parse_mode="Markdown"
+                    text="✅ <b>SOS xavf signali to'xtatildi.</b> Hammasi joyida ekanligidan xursandmiz! 🛡️✨",
+                    parse_mode="HTML"
                 )
             except Exception:
                 pass
@@ -1301,10 +1303,11 @@ async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(
     if telemetry.telegram_bot and parents:
         for p in parents:
             try:
+                safe_cname = html.escape(child_name)
                 await telemetry.telegram_bot.send_message(
                     chat_id=p.id,
-                    text=f"✅ **Manzilga yetib borildi!**\n\nFarzandingiz **{child_name}**: *«Men manzilga yetib keldim»* deb xabar berdi.",
-                    parse_mode="Markdown"
+                    text=f"✅ <b>Manzilga yetib borildi!</b>\n\nFarzandingiz <b>{safe_cname}</b>: <i>«Men manzilga yetib keldim»</i> deb xabar berdi.",
+                    parse_mode="HTML"
                 )
             except Exception as e:
                 logger.error(f"Failed to notify parent {p.id} of checkin: {e}")
@@ -1353,8 +1356,8 @@ async def parent_siren_endpoint(
         try:
             await telemetry.telegram_bot.send_message(
                 chat_id=child_id,
-                text="🔔 **DIQQAT: Ota-onangiz telefoningizga qidiruv/ogohlantirish signali yubordi!**",
-                parse_mode="Markdown"
+                text="🔔 <b>DIQQAT: Ota-onangiz telefoningizga qidiruv/ogohlantirish signali yubordi!</b>",
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to send siren alert to child {child_id}: {e}")
@@ -1461,16 +1464,17 @@ async def update_child_live_location_endpoint(
             ch_name = ch_user.full_name if ch_user else f"Farzand #{child_id}"
             spd_parents = await crud.get_parents_for_child(session, child_id)
             maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+            safe_ch_name = html.escape(ch_name)
             spd_msg = (
-                f"🚗 **TEZLIK OGOHLANTIRISHI!**\n\n"
-                f"👤 Farzandingiz: **{ch_name}**\n"
-                f"🚀 Harakat tezligi: **{effective_speed:.0f} km/soat**\n"
-                f"📍 Holat: **Avtomobil yoki jamoat transportida harakatlanmoqda**\n\n"
-                f"🗺 [Xaritada ko'rish (Google Maps)]({maps_url})"
+                f"🚗 <b>TEZLIK OGOHLANTIRISHI!</b>\n\n"
+                f"👤 Farzandingiz: <b>{safe_ch_name}</b>\n"
+                f"🚀 Harakat tezligi: <b>{effective_speed:.0f} km/soat</b>\n"
+                f"📍 Holat: <b>Avtomobil yoki jamoat transportida harakatlanmoqda</b>\n\n"
+                f"🗺 <a href=\"{maps_url}\">Xaritada ko'rish (Google Maps)</a>"
             )
             for p in spd_parents:
                 try:
-                    await telemetry.telegram_bot.send_message(chat_id=p.id, text=spd_msg, parse_mode="Markdown")
+                    await telemetry.telegram_bot.send_message(chat_id=p.id, text=spd_msg, parse_mode="HTML")
                 except Exception:
                     pass
             telemetry.last_speed_alert_map[child_id] = now_utc
@@ -1500,10 +1504,11 @@ async def update_child_live_location_endpoint(
                 if should_alert:
                     parents = await crud.get_parents_for_child(session, child_id)
                     child_name = child.full_name or f"Farzand ID:{child.id}"
+                    safe_cname = html.escape(child_name)
                     alert_msg = (
-                        f"🪫 **OGOHLANTIRISH: QUVVAT KAM QOLDI!**\n\n"
-                        f"👤 Farzandingiz: **{child_name}**\n"
-                        f"🔋 Batareya darajasi: **{payload.battery_level}%**\n"
+                        f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
+                        f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+                        f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
                         f"⚡ Holat: Quvvatlanmayapti\n\n"
                         f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
                     )
@@ -1512,7 +1517,7 @@ async def update_child_live_location_endpoint(
                             await telemetry.telegram_bot.send_message(
                                 chat_id=p.id,
                                 text=alert_msg,
-                                parse_mode="Markdown"
+                                parse_mode="HTML"
                             )
                         except Exception:
                             pass
@@ -1644,12 +1649,12 @@ async def active_check_endpoint(
             await telemetry.telegram_bot.send_message(
                 chat_id=child_id,
                 text=(
-                    "🔔 **Ota-onangiz joylashuvingizni so'radi!**\n\n"
+                    "🔔 <b>Ota-onangiz joylashuvingizni so'radi!</b>\n\n"
                     "Ota-onangiz xaritada qayerdaligingizni bilish uchun joylashuvingizni so'ramoqda.\n"
-                    "Iltimos, ilovani oching yoki pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasini bosing! 🛡️"
+                    "Iltimos, ilovani oching yoki pastdagi <b>«📍 Jonli joylashuvimni yuborish»</b> tugmasini bosing! 🛡️"
                 ),
                 reply_markup=get_child_main_keyboard(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.warning(f"Could not send active check to child telegram: {e}")
@@ -1803,30 +1808,31 @@ async def upload_sos_snapshot_media(
     if telemetry.telegram_bot and parents:
         for p in parents:
             try:
+                safe_cname = html.escape(child_name)
                 if is_audio:
                     caption = (
-                        f"🎤 **FARZANDINGIZNING SOS OVOZ YOZUVI (5 soniya)**\n\n"
-                        f"👤 Farzandingiz: **{child_name}**\n"
-                        f"🕒 Vaqt: **{now_str}**\n\n"
+                        f"🎤 <b>FARZANDINGIZNING SOS OVOZ YOZUVI (5 soniya)</b>\n\n"
+                        f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+                        f"🕒 Vaqt: <b>{now_str}</b>\n\n"
                         f"Atrofdagi tovushlar va vaziyatni eshiting."
                     )
                     await telemetry.telegram_bot.send_voice(
                         chat_id=p.id,
                         voice=FSInputFile(str(file_path)),
                         caption=caption,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                 else:
                     caption = (
-                        f"📸 **FARZANDINGIZNING SOS KAMERA SURATI**\n\n"
-                        f"👤 Farzandingiz: **{child_name}**\n"
-                        f"🕒 Vaqt: **{now_str}**"
+                        f"📸 <b>FARZANDINGIZNING SOS KAMERA SURATI</b>\n\n"
+                        f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+                        f"🕒 Vaqt: <b>{now_str}</b>"
                     )
                     await telemetry.telegram_bot.send_photo(
                         chat_id=p.id,
                         photo=FSInputFile(str(file_path)),
                         caption=caption,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
             except Exception as e:
                 logger.error(f"Failed to dispatch SOS media to parent {p.id}: {e}")
@@ -1869,16 +1875,18 @@ async def start_walk_safe_endpoint(
     dest = payload.destination or "Uyga qaytish"
 
     if telemetry.telegram_bot and parents:
+        safe_cname = html.escape(child_name)
+        safe_dest = html.escape(dest)
         msg = (
-            f"🚶‍♂️ **XAVFSIZ YO'L (WALK SAFE) BOSHLANDI**\n\n"
-            f"👤 Farzandingiz: **{child_name}**\n"
-            f"🎯 Yo'nalish: **{dest}**\n"
-            f"⏱ Rejalashtirilgan vaqt: **{payload.duration_minutes} daqiqa**\n\n"
+            f"🚶‍♂️ <b>XAVFSIZ YO'L (WALK SAFE) BOSHLANDI</b>\n\n"
+            f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+            f"🎯 Yo'nalish: <b>{safe_dest}</b>\n"
+            f"⏱ Rejalashtirilgan vaqt: <b>{payload.duration_minutes} daqiqa</b>\n\n"
             f"Farzandingiz xaritada jonli kuzatilmoqda. Vaqti-vaqti bilan uning ahvoli tekshirilib turiladi."
         )
         for p in parents:
             try:
-                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="HTML")
             except Exception:
                 pass
 
@@ -1938,13 +1946,15 @@ async def complete_walk_safe_endpoint(
 
     parents = await crud.get_parents_for_child(session, child_id)
     if telemetry.telegram_bot and parents:
+        safe_cname = html.escape(child_name)
+        safe_dest = html.escape(dest)
         msg = (
-            f"🎉 **FARZANDINGIZ ESON-OMON YETIB KELDI!**\n\n"
-            f"👤 Farzandingiz **{child_name}** manzilga (**{dest}**) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi."
+            f"🎉 <b>FARZANDINGIZ ESON-OMON YETIB KELDI!</b>\n\n"
+            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi."
         )
         for p in parents:
             try:
-                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="HTML")
             except Exception:
                 pass
 
@@ -2007,14 +2017,16 @@ async def update_child_wishlist_endpoint(
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else f"Farzand #{child_id}"
         parents = await crud.get_parents_for_child(session, child_id)
+        safe_cname = html.escape(child_name)
+        safe_title = html.escape(payload.title)
         msg = (
-            f"🎉🎉 **TABRIKLAYMIZ! ORZU USHALDI!** 🎉🎉\n\n"
-            f"👤 Farzandingiz **{child_name}** bajargan foydali topshiriqlari orqali o'zi orzu qilgan **«{payload.title}»** ({payload.target_som:,} so'm) uchun kerakli mablag'ni to'liq jamg'ardi!\n\n"
+            f"🎉🎉 <b>TABRIKLAYMIZ! ORZU USHALDI!</b> 🎉🎉\n\n"
+            f"👤 Farzandingiz <b>{safe_cname}</b> bajargan foydali topshiriqlari orqali o'zi orzu qilgan <b>«{safe_title}»</b> ({payload.target_som:,} so'm) uchun kerakli mablag'ni to'liq jamg'ardi!\n\n"
             f"Endi ushbu orzuni birgalikda amalga oshirishingiz mumkin!"
         )
         for p in parents:
             try:
-                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="Markdown")
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=msg, parse_mode="HTML")
             except Exception:
                 pass
 
@@ -2062,16 +2074,17 @@ async def trigger_call_parent_endpoint(child_id: int, session: AsyncSession = De
             else:
                 # Notify parent to add phone
                 try:
+                    safe_cname = html.escape(child_name)
                     await telemetry.telegram_bot.send_message(
                         chat_id=p.id,
                         text=(
-                            f"📞 **DIQQAT!** Farzandingiz **{child_name}** sayt orqali sizga telefon qilmoqchi bo'ldi, "
+                            f"📞 <b>DIQQAT!</b> Farzandingiz <b>{safe_cname}</b> sayt orqali sizga telefon qilmoqchi bo'ldi, "
                             f"lekin profilingizda telefon raqamingiz kiritilmagan.\n\n"
                             f"Farzandingiz bir tugma bilan sizga qo'ng'iroq qila olishi uchun "
-                            f"pastdagi **«📱 Raqamimni ulash»** tugmasini bosing:"
+                            f"pastdagi <b>«📱 Raqamimni ulash»</b> tugmasini bosing:"
                         ),
                         reply_markup=get_contact_request_keyboard(),
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                 except Exception:
                     pass
@@ -2213,21 +2226,22 @@ async def update_child_device_policy_endpoint(
     if telemetry.telegram_bot and parents and payload.is_all_apps_blocked is not None:
         try:
             ch_user = await crud.get_user(session, child_id)
-            c_name = ch_user.full_name if ch_user else f"Farzand #{child_id}"
+            c_name = html.escape(ch_user.full_name) if ch_user and ch_user.full_name else f"Farzand #{child_id}"
             if payload.is_all_apps_blocked:
-                status_txt = "🛑 **BARCHA ILOVALAR BLOKLANDI!**"
+                safe_reason = html.escape(policy.lockdown_reason or "Ota-ona tomonidan cheklandi")
+                status_txt = "🛑 <b>BARCHA ILOVALAR BLOKLANDI!</b>"
                 msg_body = (
                     f"{status_txt}\n\n"
-                    f"👤 Farzand: **{c_name}**\n"
-                    f"🔒 Holat: **To'liq cheklov yoqildi**\n"
-                    f"📝 Sabab: _{policy.lockdown_reason}_\n\n"
+                    f"👤 Farzand: <b>{c_name}</b>\n"
+                    f"🔒 Holat: <b>To'liq cheklov yoqildi</b>\n"
+                    f"📝 Sabab: <i>{safe_reason}</i>\n\n"
                     f"ℹ️ Bolaning telefonida faqat qo'ng'iroq qilish va SOS signal ruxsat etiladi."
                 )
             else:
-                status_txt = "✅ **BARCHA CHEKLOVLAR YECHILDI**"
+                status_txt = "✅ <b>BARCHA CHEKLOVLAR YECHILDI</b>"
                 msg_body = (
                     f"{status_txt}\n\n"
-                    f"👤 Farzand: **{c_name}**\n"
+                    f"👤 Farzand: <b>{c_name}</b>\n"
                     f"🔓 Barcha ilovalardan yana erkin foydalanish mumkin."
                 )
             for p in parents:
@@ -2235,7 +2249,7 @@ async def update_child_device_policy_endpoint(
                     await telemetry.telegram_bot.send_message(
                         chat_id=p.id,
                         text=msg_body,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                 except Exception:
                     pass
@@ -2297,7 +2311,19 @@ async def router_download_parent_apk():
     from config import settings
     local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Parent.apk")
     if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
-        return FileResponse(local_apk, filename="ChildSecurity_Parent.apk", media_type="application/vnd.android.package-archive")
+        file_size = os.path.getsize(local_apk)
+        return FileResponse(
+            local_apk,
+            filename="ChildSecurity_Parent.apk",
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity_Parent.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
+                "Accept-Ranges": "bytes"
+            }
+        )
     return RedirectResponse(url=GITHUB_RELEASE_PARENT_APK, status_code=302)
 
 @router.get("/download/child-apk", tags=["App"])
@@ -2308,7 +2334,19 @@ async def router_download_child_apk():
     from config import settings
     local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Child.apk")
     if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
-        return FileResponse(local_apk, filename="ChildSecurity_Child.apk", media_type="application/vnd.android.package-archive")
+        file_size = os.path.getsize(local_apk)
+        return FileResponse(
+            local_apk,
+            filename="ChildSecurity_Child.apk",
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity_Child.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
+                "Accept-Ranges": "bytes"
+            }
+        )
     return RedirectResponse(url=GITHUB_RELEASE_CHILD_APK, status_code=302)
 
 @router.get("/download/apk", tags=["App"])
@@ -2319,8 +2357,26 @@ async def router_download_apk():
     from config import settings
     local_apk = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.apk")
     if os.path.exists(local_apk) and os.path.getsize(local_apk) > 1_000_000:
-        return FileResponse(local_apk, filename="ChildSecurity.apk", media_type="application/vnd.android.package-archive")
-    return RedirectResponse(url=GITHUB_RELEASE_PARENT_APK, status_code=302)
+        file_size = os.path.getsize(local_apk)
+        return FileResponse(
+            local_apk,
+            filename="ChildSecurity.apk",
+            media_type="application/vnd.android.package-archive",
+            headers={
+                "Content-Length": str(file_size),
+                "Content-Disposition": 'attachment; filename="ChildSecurity.apk"',
+                "Cache-Control": "no-transform, public, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
+                "Accept-Ranges": "bytes"
+            }
+        )
+    return RedirectResponse(url=GITHUB_RELEASE_APK, status_code=302)
+
+@router.get("/download/ios", tags=["App"])
+async def router_download_ios():
+    """Guide or redirect iOS Apple users to PWA home screen installation."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-ios", status_code=302)
 
 
 @router.get("/download/desktop", tags=["App"])
