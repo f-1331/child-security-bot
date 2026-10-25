@@ -8,6 +8,8 @@ services:
     startCommand: python main.py
     healthCheckPath: /health
     envVars:
+      - key: DATABASE_URL
+        sync: false
       - key: BOT_TOKEN
         sync: false
       - key: OWNER_BOT_TOKEN

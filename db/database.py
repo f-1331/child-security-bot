@@ -1,3 +1,4 @@
+import logging
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
 
+logger = logging.getLogger("smart_parental_tracker.database")
 
 engine = create_async_engine(
     settings.RESOLVED_DATABASE_URL,
@@ -30,7 +32,7 @@ class Base(DeclarativeBase):
 
 
 async def init_db() -> None:
-    """Initialize database tables schema."""
+    """Initialize database tables schema and auto-seed if migrating."""
     async with engine.begin() as conn:
         # Import models so Base metadata has all tables registered
         import db.models  # noqa: F401
@@ -76,6 +78,17 @@ async def init_db() -> None:
             await conn.execute(text("ALTER TABLE location_logs ADD COLUMN speed FLOAT DEFAULT 0.0"))
         except Exception:
             pass
+
+    # If running on PostgreSQL, check if auto-seed from SQLite is needed
+    if "postgres" in settings.RESOLVED_DATABASE_URL:
+        try:
+            from db.migration import auto_seed_postgres_from_sqlite
+            async with AsyncSessionLocal() as session:
+                migrated = await auto_seed_postgres_from_sqlite(session)
+                if migrated:
+                    logger.info("Successfully migrated existing SQLite records to PostgreSQL!")
+        except Exception as e:
+            logger.debug(f"Auto-migration check notice: {e}")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
