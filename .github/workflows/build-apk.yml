@@ -37,14 +37,25 @@ jobs:
         run: |
           cd android
           echo "=== RUNNING GRADLE ASSEMBLE ==="
-          gradle assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
           mkdir -p build_dist
-          find app/build/outputs/apk/ -type f
+          find app/build/outputs/apk/ -type f || true
           find app/build/outputs/apk/ -name "*parent*.apk" -exec cp {} build_dist/ChildSecurity_Parent.apk \;
           find app/build/outputs/apk/ -name "*child*.apk" -exec cp {} build_dist/ChildSecurity_Child.apk \;
           cp build_dist/ChildSecurity_Child.apk build_dist/app-debug.apk || cp build_dist/ChildSecurity_Parent.apk build_dist/app-debug.apk || true
           echo "=== Built distribution artifacts ==="
           ls -la build_dist/
+
+      - name: Auto-Commit Failure Log on Error
+        if: failure()
+        run: |
+          mkdir -p ci_logs
+          tail -n 120 android/build.log > ci_logs/build_error.log || echo "No log" > ci_logs/build_error.log
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ci_logs/build_error.log
+          git commit -m "ci: capture build error log [skip ci]" || true
+          git push origin main || true
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
