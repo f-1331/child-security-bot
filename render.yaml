@@ -1,3 +1,10 @@
+databases:
+  - name: child-security-db
+    databaseName: child_security
+    user: child_admin
+    plan: free
+    region: frankfurt
+
 services:
   - type: web
     name: child-security-site
@@ -9,7 +16,9 @@ services:
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: child-security-db
+          property: connectionString
       - key: BOT_TOKEN
         sync: false
       - key: OWNER_BOT_TOKEN

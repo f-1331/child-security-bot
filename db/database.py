@@ -10,12 +10,22 @@ from config import settings
 
 logger = logging.getLogger("smart_parental_tracker.database")
 
+is_sqlite = "sqlite" in settings.RESOLVED_DATABASE_URL
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+}
+if is_sqlite:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
+
 engine = create_async_engine(
     settings.RESOLVED_DATABASE_URL,
-    echo=False,
-    future=True,
-    # if sqlite, need check_same_thread=False
-    connect_args={"check_same_thread": False} if "sqlite" in settings.RESOLVED_DATABASE_URL else {}
+    **engine_kwargs
 )
 
 AsyncSessionLocal = async_sessionmaker(

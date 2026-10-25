@@ -197,7 +197,15 @@ async def get_system_diagnostic_html(session: AsyncSession) -> str:
         db_latency = f"Xato: {e}"
 
     is_pg = "postgresql" in settings.RESOLVED_DATABASE_URL.lower()
-    db_type_badge = "🐘 PostgreSQL (Doimiy bulut)" if is_pg else "📁 SQLite (Fayl asosida)"
+    db_type_badge = "🐘 PostgreSQL (Doimiy bulut)" if is_pg else "📁 SQLite (Vaqtinchalik fayl)"
+
+    db_alert = ""
+    if not is_pg:
+        db_alert = (
+            f"\n\n⚠️ <b>DIQQAT: Baza vaqtinchalik SQLite rejimida ishlayapti!</b>\n"
+            f"Render Free serverida har safar yangi deploy bo'lganda diskdagi SQLite fayli o'chadi. "
+            f"Ma'lumotlar o'chib ketmasligi uchun Renderda <b>PostgreSQL DATABASE_URL</b> ni ulab qo'ying."
+        )
 
     html = (
         f"🌐 <b>SERVER & TIZIM HOLATI DIAGNOSTIKASI</b>\n"
@@ -221,7 +229,7 @@ async def get_system_diagnostic_html(session: AsyncSession) -> str:
         f"  • Jonli GPS nuqtalari: <b>{stats['total_location_logs']} ta</b>\n"
         f"  • Faol SOS holatlari: <b>{stats['active_sos']} ta</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"✅ <i>Barcha tizimlar barqaror va 100% ishlab turibdi.</i>"
+        f"✅ <i>Barcha tizimlar barqaror va 100% ishlab turibdi.</i>{db_alert}"
     )
     return html
 

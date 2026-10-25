@@ -347,9 +347,12 @@ async def privacy_policy_view():
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Service health status endpoint."""
+    is_postgres = "postgres" in settings.RESOLVED_DATABASE_URL.lower()
     return {
         "status": "healthy",
         "service": "Smart Parental Tracker",
+        "database_engine": "postgresql" if is_postgres else "sqlite",
+        "database_persisted": is_postgres,
         "timezone": settings.TIMEZONE
     }
 
