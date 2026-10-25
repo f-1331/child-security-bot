@@ -444,7 +444,7 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
     """Fetch single child latest telemetry, balance, and real money equivalent."""
     child = await crud.get_user(session, child_id)
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found")
+        child, _ = await crud.get_or_create_user(session, child_id, role="child")
 
     rate_coins, rate_som = await crud.get_coin_rate_for_user(session, child_id)
     money_som = crud.calculate_som_from_coins(child.virtual_balance, rate_coins, rate_som)
@@ -1251,7 +1251,7 @@ async def update_child_live_location_endpoint(
     """Receive live telemetry from child's watchPosition and save to database with resource throttling."""
     child = await crud.get_user(session, child_id)
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found")
+        child, _ = await crud.get_or_create_user(session, child_id, role="child")
 
     if not rate_limiter.check_location_throttle(child_id, min_interval_seconds=1.0):
         return {"status": "throttled", "message": "Location ping throttled to conserve resources"}

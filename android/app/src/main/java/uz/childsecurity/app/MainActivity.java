@@ -38,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 2001;
     public static final String PRODUCTION_URL = "https://child-security-bot.vercel.app?source=apk";
+    public static final String BACKEND_API_URL = "https://child-security-site.onrender.com";
     public static final String OFFLINE_URL = "file:///android_asset/index.html?source=native_apk";
 
     private WebView webView;
@@ -128,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
         String savedChildId = prefs.getString(ChildTrackingService.KEY_CHILD_ID, null);
         if (savedChildId != null && !savedChildId.isEmpty()) {
-            startChildTrackingService(savedChildId, PRODUCTION_URL);
+            startChildTrackingService(savedChildId, BACKEND_API_URL);
         }
 
         // Load production WebApp
@@ -238,7 +239,22 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void startBackgroundTracking(String childId, String serverUrl) {
-            startChildTrackingService(childId, serverUrl != null ? serverUrl : PRODUCTION_URL);
+            String cleanServer = (serverUrl != null && !serverUrl.contains("?")) ? serverUrl : BACKEND_API_URL;
+            startChildTrackingService(childId, cleanServer);
+        }
+
+        @JavascriptInterface
+        public boolean isCharging() {
+            try {
+                android.content.IntentFilter ifilter = new android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED);
+                android.content.Intent batteryStatus = context.registerReceiver(null, ifilter);
+                if (batteryStatus != null) {
+                    int status = batteryStatus.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+                    return status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                           status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+                }
+            } catch (Exception ignored) {}
+            return false;
         }
 
         @JavascriptInterface

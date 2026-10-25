@@ -131,17 +131,47 @@ async function getDeviceLocation() {
   });
 }
 
-// Device battery status acquisition
+// Device battery status acquisition (Bridge-aware + Web Battery API fallback)
 async function getDeviceBattery() {
   try {
-    if (navigator.getBattery) {
-      const b = await navigator.getBattery();
-      return Math.round(b.level * 100);
+    if (window.AndroidBridge && typeof window.AndroidBridge.getBatteryLevel === "function") {
+      const lvl = window.AndroidBridge.getBatteryLevel();
+      if (typeof lvl === "number" && lvl >= 0) {
+        return Math.round(lvl);
+      }
     }
-  } catch (e) {
-    // Battery API not supported or restricted
-  }
+  } catch (e) {}
+
+  try {
+    if (typeof navigator !== "undefined" && navigator.getBattery) {
+      const b = await navigator.getBattery();
+      if (b && typeof b.level === "number") {
+        return Math.round(b.level * 100);
+      }
+    }
+  } catch (e) {}
+
   return null;
+}
+
+// Device charging status acquisition
+async function getDeviceChargingStatus() {
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.isCharging === "function") {
+      return Boolean(window.AndroidBridge.isCharging());
+    }
+  } catch (e) {}
+
+  try {
+    if (typeof navigator !== "undefined" && navigator.getBattery) {
+      const b = await navigator.getBattery();
+      if (b && typeof b.charging === "boolean") {
+        return b.charging;
+      }
+    }
+  } catch (e) {}
+
+  return false;
 }
 
 // Map & Layers
@@ -2049,12 +2079,23 @@ async function resolveAddress(lat, lon) {
     });
     const data = await res.json();
     if (data && data.display_name) {
-      // Extract street and district
+      // Extract street and district and real city/region (e.g. Navoiy, Samarqand, etc.)
       const addr = data.address || {};
-      const shortAddr = addr.road || addr.suburb || addr.neighbourhood || addr.city_district || data.display_name.split(",").slice(0, 2).join(",");
-      const fullText = shortAddr ? `${shortAddr}, Tashkent` : data.display_name.split(",").slice(0, 2).join(",");
+      const cityName = addr.city || addr.town || addr.village || addr.county || addr.state || "";
+      const shortAddr = addr.road || addr.suburb || addr.neighbourhood || addr.city_district;
+      let fullText = "";
+      if (shortAddr && cityName) {
+        fullText = `${shortAddr}, ${cityName}`;
+      } else if (shortAddr) {
+        fullText = shortAddr;
+      } else if (cityName) {
+        fullText = cityName;
+      } else {
+        fullText = data.display_name.split(",").slice(0, 2).join(",");
+      }
       addressCache.set(key, fullText);
-      document.getElementById("addressText").textContent = fullText;
+      const el = document.getElementById("addressText");
+      if (el) el.textContent = fullText;
       return;
     }
   } catch (e) {
@@ -2092,7 +2133,21 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
     childMarker.setIcon(icon);
   } else {
     childMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
-    map.setView([lat, lon], 15);
+  }
+
+  // Auto-fly to child if far away (> 3km e.g. Navoiy vs Tashkent is 400km) or not yet centered
+  if (map) {
+    try {
+      const center = map.getCenter();
+      const dist = map.distance(center, [lat, lon]);
+      if (dist > 3000 || !map._hasAutoCenteredChild) {
+        map.flyTo([lat, lon], 15, { animate: true, duration: 1.2 });
+        map._hasAutoCenteredChild = true;
+      }
+    } catch (e) {
+      map.setView([lat, lon], 15);
+      map._hasAutoCenteredChild = true;
+    }
   }
 
   childMarker.bindPopup(`
@@ -2107,8 +2162,10 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
 // Center view on child
 function centerOnChild() {
   haptic("light");
-  if (childMarker) {
+  if (childMarker && map) {
     map.flyTo(childMarker.getLatLng(), 16, { animate: true, duration: 1 });
+  } else if (cachedDeviceLocation && map) {
+    map.flyTo([cachedDeviceLocation.latitude, cachedDeviceLocation.longitude], 16, { animate: true, duration: 1 });
   } else {
     showToast("Farzand joylashuvi hali mavjud emas");
   }
@@ -4826,13 +4883,47 @@ let wsReconnectTimer = null;
 let childNotificationPollTimer = null;
 let activeBannerTimer = null;
 
+const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
+
+async function fetchInstantChildLocation(childId) {
+  if (!childId || isDemoMode) return;
+  if (navigator.geolocation) {
+    try {
+      const battery = await getDeviceBattery();
+      const isCharging = await getDeviceChargingStatus();
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, accuracy, speed } = pos.coords;
+          cachedDeviceLocation = { latitude, longitude, accuracy };
+          lastLocationFetchTime = Date.now();
+          renderChildMarker(latitude, longitude, "Men", false, battery);
+          sendChildLiveTelemetry(childId, {
+            latitude,
+            longitude,
+            accuracy: accuracy || null,
+            speed: (typeof speed === "number" && speed > 0) ? Math.round(speed * 3.6) : 0,
+            battery_level: battery,
+            is_charging: isCharging,
+            sound_mode: "normal",
+            is_sos_active: false
+          });
+        },
+        (err) => {
+          console.warn("fetchInstantChildLocation note:", err);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    } catch (e) {}
+  }
+}
+
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
   // 0. If running inside Native Android APK, trigger 24/7 background GPS tracking service immediately!
   if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function") {
     try {
-      window.AndroidBridge.startBackgroundTracking(String(childId), window.location.origin);
+      window.AndroidBridge.startBackgroundTracking(String(childId), PRODUCTION_BACKEND_URL);
       console.log("Native Android 24/7 background GPS tracking active for child:", childId);
     } catch (e) {
       console.warn("AndroidBridge startBackgroundTracking note:", e);
@@ -4862,7 +4953,17 @@ function initChildPermissionsAndTracking(childId) {
 function trySilentBackgroundLocationTracking(childId) {
   if (!childId || isDemoMode) return;
 
-  // 1. Try Telegram native LocationManager (remembers permanently in Telegram with 0 browser prompts!)
+  // 0. Ensure AndroidBridge background tracking is active with the clean backend URL
+  if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function") {
+    try {
+      window.AndroidBridge.startBackgroundTracking(String(childId), PRODUCTION_BACKEND_URL);
+    } catch (e) {}
+  }
+
+  // 1. Send immediate one-shot GPS telemetry ping (0 wait!)
+  fetchInstantChildLocation(childId);
+
+  // 2. Try Telegram native LocationManager (remembers permanently in Telegram with 0 browser prompts!)
   const tg = window.Telegram?.WebApp;
   if (tg && tg.LocationManager) {
     try {
@@ -4884,18 +4985,17 @@ function trySilentBackgroundLocationTracking(childId) {
     }
   }
 
-  // 2. In browser: Check if origin permission is already granted permanently by the browser
+  // 3. In browser/WebView: Start live tracking if permissions already granted
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: "geolocation" }).then((status) => {
       if (status.state === "granted") {
-        // Permission was already granted by browser origin; safe to watchPosition with NO popup!
         startChildLiveTracking(childId);
-      } else {
-        // State is 'prompt' or 'denied':
-        // DO NOT call watchPosition on page load! Calling it triggers the repeated permission prompt!
-        console.log("Geolocation permission state is:", status.state, "- skipping automatic watchPosition on startup to prevent popups.");
       }
-    }).catch(() => {});
+    }).catch(() => {
+      startChildLiveTracking(childId);
+    });
+  } else {
+    startChildLiveTracking(childId);
   }
 }
 
@@ -4911,14 +5011,15 @@ function fetchTelegramLocationSilently(childId) {
             accuracy: loc.accuracy || 15
           };
           lastLocationFetchTime = Date.now();
-          renderChildMarker(loc.latitude, loc.longitude, "Men", false, null);
           const battery = await getDeviceBattery();
+          const isCharging = await getDeviceChargingStatus();
+          renderChildMarker(loc.latitude, loc.longitude, "Men", false, battery);
           sendChildLiveTelemetry(childId, {
             latitude: loc.latitude,
             longitude: loc.longitude,
             accuracy: loc.accuracy || 15,
             battery_level: battery,
-            is_charging: false,
+            is_charging: isCharging,
             speed_kmh: 0,
             sound_mode: "normal",
             is_sos_active: false
@@ -4943,11 +5044,14 @@ async function requestChildAllPermissions() {
   // 0. Native Android APK background tracking integration
   if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function" && targetId) {
     try {
-      window.AndroidBridge.startBackgroundTracking(String(targetId), window.location.origin);
+      window.AndroidBridge.startBackgroundTracking(String(targetId), PRODUCTION_BACKEND_URL);
     } catch (e) {
       console.warn("AndroidBridge start:", e);
     }
   }
+
+  const battery = await getDeviceBattery();
+  const isCharging = await getDeviceChargingStatus();
 
   // 1. Try Telegram native LocationManager
   const tg = window.Telegram?.WebApp;
@@ -4969,7 +5073,8 @@ async function requestChildAllPermissions() {
                   longitude: loc.longitude,
                   accuracy: loc.accuracy || null,
                   speed: 0,
-                  battery_level: 100,
+                  battery_level: battery,
+                  is_charging: isCharging,
                   sound_mode: "normal"
                 });
               }
@@ -4995,7 +5100,8 @@ async function requestChildAllPermissions() {
             longitude,
             accuracy: accuracy || null,
             speed: 0,
-            battery_level: 100,
+            battery_level: battery,
+            is_charging: isCharging,
             sound_mode: "normal"
           });
         }
@@ -5079,12 +5185,14 @@ function startChildLiveTracking(childId) {
         lastSentLng = longitude;
 
         const battery = await getDeviceBattery();
+        const isCharging = await getDeviceChargingStatus();
         sendChildLiveTelemetry(childId, {
           latitude,
           longitude,
           accuracy: accuracy || null,
           speed: speedKmh,
           battery_level: battery,
+          is_charging: isCharging,
           sound_mode: "normal"
         });
       }
@@ -5256,12 +5364,21 @@ function handleIncomingWebSocketMessage(msg) {
   // 4. Real-time location update received by Parent
   if (msg.type === "child_location_update" && currentRole === "parent") {
     if (msg.child_id == currentChildId) {
+      const noLocCard = document.getElementById("noLocationCard");
+      if (noLocCard) noLocCard.classList.add("hidden");
       const child = childrenList.find((c) => c.id == currentChildId);
       const name = child ? child.full_name : "Farzand";
       renderChildMarker(msg.latitude, msg.longitude, name, child?.is_sos_active, msg.battery_level);
       updateBatteryUI(msg.battery_level, msg.is_charging);
       updateSpeedUI(msg.speed);
       resolveAddress(msg.latitude, msg.longitude);
+      const lastSeen = document.getElementById("lastSeenText");
+      if (lastSeen) {
+        lastSeen.innerHTML = `
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>Hozirgina</span>
+        `;
+      }
     }
     return;
   }

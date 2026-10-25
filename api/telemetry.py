@@ -49,10 +49,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
     """
     child = await crud.get_user(session, payload.child_id)
     if not child:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Child with ID {payload.child_id} not registered in system"
-        )
+        child, _ = await crud.get_or_create_user(session, payload.child_id, role="child")
 
     # 1. Log Location
     loc_entry = await crud.log_location(

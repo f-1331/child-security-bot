@@ -124,6 +124,8 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
 
                     target_child_id = int(clean_arg)
                     child_user = await crud.get_user(session, target_child_id)
+                    if not child_user:
+                        child_user, _ = await crud.get_or_create_user(session, target_child_id, role="child")
                     if child_user:
                         await crud.update_user_role(session, user_id, "parent")
                         await crud.link_parent_child(session, user_id, target_child_id, nickname=child_user.full_name)

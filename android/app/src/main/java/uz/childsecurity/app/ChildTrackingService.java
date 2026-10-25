@@ -47,7 +47,7 @@ public class ChildTrackingService extends Service implements LocationListener {
     public static final String PREFS_NAME = "ChildSecurityPrefs";
     public static final String KEY_CHILD_ID = "child_id";
     public static final String KEY_SERVER_URL = "server_url";
-    public static final String DEFAULT_SERVER_URL = "https://child-security-bot.vercel.app";
+    public static final String DEFAULT_SERVER_URL = "https://child-security-site.onrender.com";
 
     private LocationManager locationManager;
     private PowerManager.WakeLock wakeLock;
@@ -237,7 +237,12 @@ public class ChildTrackingService extends Service implements LocationListener {
     private boolean postTelemetry(String baseUrl, String childId, byte[] postData) {
         HttpURLConnection conn = null;
         try {
-            String endpoint = baseUrl.replaceAll("/+$", "") + "/api/v1/webapp/child/" + childId.trim() + "/location";
+            String cleanBase = (baseUrl != null && !baseUrl.trim().isEmpty()) ? baseUrl.trim() : DEFAULT_SERVER_URL;
+            if (cleanBase.contains("?")) {
+                cleanBase = cleanBase.substring(0, cleanBase.indexOf("?"));
+            }
+            cleanBase = cleanBase.replaceAll("/+$", "");
+            String endpoint = cleanBase + "/api/v1/webapp/child/" + childId.trim() + "/location";
             URL url = new URL(endpoint);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
