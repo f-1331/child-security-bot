@@ -35,6 +35,40 @@ TG_FILE_ID_WINDOWS_ZIP = "BQACAgIAAxkDAAIDEGreO4kfHj7Rz_wPD38RUdD_3oolAALbpAACkX
 TG_FILE_ID_MAC_ZIP = "BQACAgIAAxkDAAIDEmreO4p4Hu6hwtcAAVviC3MTGQ9ZMQAC3aQAApF88Up6toUOMmeOVj0E"
 TG_FILE_ID_LINUX_ZIP = "BQACAgIAAxkDAAIDEWreO4n4CJalT9Nbfchlk2quzCIdAALcpAACkXzxSnpUS1UaDiU9PQQ"
 TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIDBGreN2RP4HQZPqZFSP0xiRIiSYxhAAKqpAACkXzxSk1ziz3geGp_PQQ"
+
+# Local Tashkent timezone (UTC+5) for accurate timestamps and freshness badges
+TASHKENT_TZ = timezone(timedelta(hours=5))
+
+
+def format_tashkent_time(dt: Optional[datetime], include_date: bool = False, include_freshness: bool = True) -> str:
+    """Formats a UTC timestamp from DB to Tashkent local time (UTC+5) with relative freshness badge."""
+    if not dt:
+        return "Hali yangilanmagan"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    local_dt = dt.astimezone(TASHKENT_TZ)
+    now_local = datetime.now(TASHKENT_TZ)
+
+    fmt = "%d.%m.%Y, %H:%M:%S" if include_date else "%H:%M:%S"
+    time_str = local_dt.strftime(fmt)
+
+    if not include_freshness:
+        return time_str
+
+    diff_sec = max(0, int((now_local - local_dt).total_seconds()))
+    if diff_sec < 45:
+        badge = "🟢 Hozirgina (Jonli)"
+    elif diff_sec < 120:
+        badge = f"🟢 {diff_sec} soniya oldin"
+    elif diff_sec < 3600:
+        badge = f"🟡 {diff_sec // 60} daqiqa oldin"
+    elif diff_sec < 86400:
+        badge = f"⚪ {diff_sec // 3600} soat oldin"
+    else:
+        badge = f"🔴 {diff_sec // 86400} kun oldin"
+
+    return f"{time_str} ({badge})"
+
 from bot.keyboards import (
     get_role_selection_keyboard,
     get_parent_main_keyboard,
@@ -754,7 +788,7 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
         from api.webapp_api import ws_manager
         await ws_manager.send_to_user(child.id, {
             "type": "active_check",
-            "time": datetime.now().strftime("%H:%M")
+            "time": datetime.now(TASHKENT_TZ).strftime("%H:%M")
         })
     except Exception:
         pass
@@ -802,7 +836,7 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
 
     battery_str = f"{latest_loc.battery_level}%" if latest_loc.battery_level is not None else "Noma'lum"
     charging_icon = "⚡ (Quvvatlanmoqda)" if latest_loc.is_charging else ""
-    time_str = latest_loc.recorded_at.strftime("%H:%M:%S") if latest_loc.recorded_at else "Hozirgina"
+    time_str = format_tashkent_time(latest_loc.recorded_at) if latest_loc and latest_loc.recorded_at else "Hozirgina"
 
     # 1. Send native Telegram Map Location Pin!
     try:
@@ -1068,6 +1102,17 @@ async def on_battery_status_pressed(message: Message):
             await message.answer("Sizga hali farzand ulanmagan.")
             return
 
+        # Ping online children devices over WebSocket to push freshest telemetry immediately
+        try:
+            from api.webapp_api import ws_manager
+            for ch in children:
+                await ws_manager.send_to_user(ch.id, {
+                    "type": "active_check",
+                    "time": datetime.now(TASHKENT_TZ).strftime("%H:%M")
+                })
+        except Exception:
+            pass
+
         text = "🔋 **Farzandlar telefonining holati:**\n\n"
 
         for ch in children:
@@ -1089,7 +1134,7 @@ async def on_battery_status_pressed(message: Message):
                 elif latest.sound_mode == "silent":
                     sound_mode = "Ovozsiz"
 
-                time_str = latest.recorded_at.strftime("%H:%M:%S")
+                time_str = format_tashkent_time(latest.recorded_at)
 
                 text += (
                     f"👤 **{ch.full_name}**\n"
@@ -1101,7 +1146,74 @@ async def on_battery_status_pressed(message: Message):
             else:
                 text += f"👤 **{ch.full_name}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
 
-        await message.answer(text, parse_mode="Markdown")
+        refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
+        ])
+        await message.answer(text, reply_markup=refresh_kb, parse_mode="Markdown")
+
+
+@router.callback_query(F.data == "refresh_battery_status")
+async def on_refresh_battery_callback(callback: CallbackQuery):
+    """Parent clicks refresh to ping child and update telemetry card in-place."""
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, parent_id)
+        if not children:
+            await callback.answer("Sizga hali farzand ulanmagan.", show_alert=True)
+            return
+
+        # Ping connected children over WebSocket
+        try:
+            from api.webapp_api import ws_manager
+            for ch in children:
+                await ws_manager.send_to_user(ch.id, {
+                    "type": "active_check",
+                    "time": datetime.now(TASHKENT_TZ).strftime("%H:%M")
+                })
+        except Exception:
+            pass
+
+        text = "🔋 **Farzandlar telefonining holati (Yangilandi):**\n\n"
+
+        for ch in children:
+            latest = await crud.get_latest_location(session, ch.id)
+            if latest and latest.battery_level is not None:
+                lvl = latest.battery_level
+                charging_icon = "⚡ Quvvatlanmoqda" if latest.is_charging else "Quvvatlanmayapti"
+                
+                if lvl <= 20:
+                    status_emoji = "🪫 XAVFLI (Kam)"
+                elif lvl <= 50:
+                    status_emoji = "🟡 O'rtacha"
+                else:
+                    status_emoji = "🟢 Yetarli"
+
+                sound_mode = "Oddiy"
+                if latest.sound_mode == "vibrate":
+                    sound_mode = "Vibratsiya"
+                elif latest.sound_mode == "silent":
+                    sound_mode = "Ovozsiz"
+
+                time_str = format_tashkent_time(latest.recorded_at)
+
+                text += (
+                    f"👤 **{ch.full_name}**\n"
+                    f"• Batareya: **{lvl}%** ({status_emoji})\n"
+                    f"• Holat: {charging_icon}\n"
+                    f"• Ovoz rejimi: **{sound_mode}**\n"
+                    f"• Oxirgi signal: **{time_str}**\n\n"
+                )
+            else:
+                text += f"👤 **{ch.full_name}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
+
+        refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
+        ])
+        try:
+            await callback.message.edit_text(text, reply_markup=refresh_kb, parse_mode="Markdown")
+        except Exception:
+            pass
+    await callback.answer("✅ Signal yuborildi va ma'lumot yangilandi!")
 
 
 # ---------------------------------------------------------
@@ -1170,7 +1282,7 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
     """Child activates SOS emergency."""
     child_id = message.from_user.id
     child_name = message.from_user.full_name
-    now_str = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y %H:%M:%S")
 
     async with AsyncSessionLocal() as session:
         child = await crud.get_user(session, child_id)
@@ -1683,7 +1795,7 @@ async def on_checkin_pressed(message: Message, bot: Bot):
     """Child checks in."""
     child_id = message.from_user.id
     child_name = message.from_user.full_name
-    now_str = datetime.now().strftime("%H:%M")
+    now_str = datetime.now(TASHKENT_TZ).strftime("%H:%M")
 
     async with AsyncSessionLocal() as session:
         parents = await crud.get_parents_for_child(session, child_id)
@@ -2482,7 +2594,7 @@ async def on_child_view_details(callback: CallbackQuery):
             return
 
         battery = f"{latest_loc.battery_level}%" if latest_loc and latest_loc.battery_level is not None else "Noma'lum"
-        time_str = latest_loc.recorded_at.strftime("%H:%M:%S") if latest_loc and latest_loc.recorded_at else "Hali yangilanmagan"
+        time_str = format_tashkent_time(latest_loc.recorded_at if latest_loc else None)
         charging = "🔌 (Quvvatlanmoqda)" if latest_loc and latest_loc.is_charging else ""
         sound_mode = latest_loc.sound_mode if latest_loc and latest_loc.sound_mode else "normal"
         sound_text = "🔊 Ovozli" if sound_mode == "normal" else ("📳 Vibratsiya" if sound_mode == "vibrate" else "🔇 Ovoz o'chiq")
@@ -2531,7 +2643,7 @@ async def on_child_battery_callback(callback: CallbackQuery):
             batt = f"{latest_loc.battery_level}%" if latest_loc.battery_level is not None else "Noma'lum"
             chg = "Ha 🔌" if latest_loc.is_charging else "Yo'q 🔋"
             snd = "Oddiy (Ovozli)" if latest_loc.sound_mode == "normal" else ("Vibratsiya" if latest_loc.sound_mode == "vibrate" else "Ovozsiz")
-            time_str = latest_loc.recorded_at.strftime("%d.%m.%Y, %H:%M:%S") if latest_loc.recorded_at else "Noma'lum"
+            time_str = format_tashkent_time(latest_loc.recorded_at if latest_loc else None, include_date=True)
             text = (
                 f"🔋 <b>{safe_name} — Telefon holati:</b>\n\n"
                 f"• Quvvat (Batareya): <b>{batt}</b>\n"

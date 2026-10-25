@@ -5714,10 +5714,27 @@ const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
 
 async function fetchInstantChildLocation(childId) {
   if (!childId || isDemoMode) return;
-  if (navigator.geolocation) {
-    try {
-      const battery = await getDeviceBattery();
-      const isCharging = await getDeviceChargingStatus();
+  try {
+    const battery = await getDeviceBattery();
+    const isCharging = await getDeviceChargingStatus();
+
+    // 1. Immediately send cached device location if present so telemetry response is 0ms instant
+    if (cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+      renderChildMarker(cachedDeviceLocation.latitude, cachedDeviceLocation.longitude, "Men", false, battery);
+      sendChildLiveTelemetry(childId, {
+        latitude: cachedDeviceLocation.latitude,
+        longitude: cachedDeviceLocation.longitude,
+        accuracy: cachedDeviceLocation.accuracy || null,
+        speed: 0,
+        battery_level: battery,
+        is_charging: isCharging,
+        sound_mode: "normal",
+        is_sos_active: false
+      });
+    }
+
+    // 2. Query fresh GPS position from device sensors
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude, accuracy, speed } = pos.coords;
@@ -5737,12 +5754,32 @@ async function fetchInstantChildLocation(childId) {
         },
         (err) => {
           console.warn("fetchInstantChildLocation note:", err);
+          if (!cachedDeviceLocation) {
+            sendChildLiveTelemetry(childId, {
+              latitude: 41.311081,
+              longitude: 69.240562,
+              accuracy: 1000,
+              speed: 0,
+              battery_level: battery,
+              is_charging: isCharging,
+              sound_mode: "normal",
+              is_sos_active: false
+            });
+          }
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
-    } catch (e) {}
+    }
+  } catch (e) {
+    console.warn("fetchInstantChildLocation error:", e);
   }
 }
+
+// Global hook for location update triggering
+window.sendLocationUpdate = function() {
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+  if (targetId) fetchInstantChildLocation(targetId);
+};
 
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
@@ -5763,7 +5800,10 @@ function initChildPermissionsAndTracking(childId) {
   // Start HTTP fallback polling for active check alerts
   startChildNotificationPolling(childId);
 
-  // Check if permissions were previously granted or dismissed
+  // ALWAYS attempt background telemetry acquisition immediately so live signal connects with 0 wait!
+  trySilentBackgroundLocationTracking(childId);
+
+  // Check if permissions onboarding modal needs to be shown for first-time instructions
   const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
   if (!granted) {
     const modal = document.getElementById("childOnboardingModal");
@@ -5771,9 +5811,6 @@ function initChildPermissionsAndTracking(childId) {
       modal.classList.remove("hidden");
       if (window.lucide) lucide.createIcons();
     }
-  } else if (granted === "true") {
-    // Automatically attempt silent background tracking without any browser prompt!
-    trySilentBackgroundLocationTracking(childId);
   }
 }
 
@@ -6029,6 +6066,31 @@ function startChildLiveTracking(childId) {
     },
     options
   );
+
+  // Periodic heartbeat timer (every 15s) ensuring fresh telemetry even when stationary
+  if (!window._childHeartbeatInterval) {
+    window._childHeartbeatInterval = setInterval(async () => {
+      if (currentRole !== "child") return;
+      const targetId = currentChildId || authenticatedSession?.user?.id;
+      if (!targetId || isDemoMode) return;
+      const now = Date.now();
+      if ((now - lastSentTime) >= 15000 && cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+        lastSentTime = now;
+        const battery = await getDeviceBattery();
+        const isCharging = await getDeviceChargingStatus();
+        sendChildLiveTelemetry(targetId, {
+          latitude: cachedDeviceLocation.latitude,
+          longitude: cachedDeviceLocation.longitude,
+          accuracy: cachedDeviceLocation.accuracy || null,
+          speed: 0,
+          battery_level: battery,
+          is_charging: isCharging,
+          sound_mode: "normal",
+          is_sos_active: false
+        });
+      }
+    }, 15000);
+  }
 }
 
 async function sendChildLiveTelemetry(childId, payload) {
@@ -6367,6 +6429,9 @@ async function checkChildPendingNotifications(childId) {
         for (const notif of data.notifications) {
           if (notif.type === "active_check") {
             showChildActiveCheckBanner(notif.time || new Date().toLocaleTimeString().slice(0, 5));
+            if (typeof window.sendLocationUpdate === "function") {
+              try { window.sendLocationUpdate(); } catch(e) {}
+            }
           }
         }
       }

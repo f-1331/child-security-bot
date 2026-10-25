@@ -1,11 +1,13 @@
 import html
 import math
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from aiogram import Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import User
 import db.crud as crud
+
+TASHKENT_TZ = timezone(timedelta(hours=5))
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -55,7 +57,7 @@ async def evaluate_geofences_and_notify(
 
     parents = await crud.get_parents_for_child(session, child.id)
     child_name = child.full_name or child.username or f"Farzand ID:{child.id}"
-    now_str = datetime.now().strftime("%H:%M")
+    now_str = datetime.now(TASHKENT_TZ).strftime("%H:%M")
 
     for fence in active_fences:
         if fence.latitude is None or fence.longitude is None:

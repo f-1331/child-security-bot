@@ -30,6 +30,8 @@ from bot.keyboards import (
 
 logger = logging.getLogger(__name__)
 
+TASHKENT_TZ = timezone(timedelta(hours=5))
+
 router = APIRouter(prefix="/api/v1/webapp", tags=["WebApp"])
 
 
@@ -1199,7 +1201,7 @@ async def child_sos_endpoint(
 
     if telemetry.telegram_bot and parents and not is_duplicate_sos:
         telemetry.last_sos_alert_map[child_id] = now_utc
-        now_str = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
+        now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y, %H:%M:%S")
         battery_info = f"{battery_lvl}%" if battery_lvl is not None else "Noma'lum"
         loc_coords = f"{lat}, {lon}" if (lat is not None and lon is not None) else "Mavjud emas"
         maps_link = (
@@ -1629,7 +1631,7 @@ async def active_check_endpoint(
     if not child:
         raise HTTPException(status_code=404, detail="Farzand topilmadi")
 
-    now_time = datetime.now().strftime("%H:%M")
+    now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
     alert_msg = {
         "type": "active_check",
         "title": "Joylashuv tekshiruvi 📍",
@@ -1803,7 +1805,7 @@ async def upload_sos_snapshot_media(
     file_url = f"/uploads/sos_snapshots/{safe_filename}"
     parents = await crud.get_parents_for_child(session, child_id)
     child_name = child.full_name or f"Farzand #{child_id}"
-    now_str = datetime.now().strftime("%d.%m.%Y, %H:%M:%S")
+    now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y, %H:%M:%S")
 
     is_audio = "audio" in (file.content_type or "") or ext in [".webm", ".ogg", ".wav", ".mp3", ".m4a"]
 
