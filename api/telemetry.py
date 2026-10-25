@@ -22,6 +22,9 @@ last_speed_alert_map: dict[int, datetime] = {}
 # SOS alert rate-limiting map: child_id -> datetime of last SOS alert (prevents duplicate triggers)
 last_sos_alert_map: dict[int, datetime] = {}
 
+# Telemetry ping throttle map: child_id -> timestamp (prevents GPS flooding)
+last_telemetry_ping_map: dict[int, float] = {}
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot
@@ -47,6 +50,14 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
     GPS coordinates, speed, battery level, charging status, sound profile.
     Automatically verifies battery threshold, speed limits, and geofence boundary events.
     """
+    # 0. Anti-Flood & GPS Telemetry Rate Limiting (Throttle < 1.0s)
+    import time
+    now_ts = time.time()
+    last_ping = last_telemetry_ping_map.get(payload.child_id, 0.0)
+    if (now_ts - last_ping) < 1.0:
+        return {"status": "throttled", "message": "Pings too frequent, min interval is 1s."}
+    last_telemetry_ping_map[payload.child_id] = now_ts
+
     child = await crud.get_user(session, payload.child_id)
     if not child:
         child, _ = await crud.get_or_create_user(session, payload.child_id, role="child")

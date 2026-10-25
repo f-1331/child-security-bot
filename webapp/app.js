@@ -7015,13 +7015,14 @@ function renderScreenTimeChildSelector() {
   bar.innerHTML = list.map(c => {
     const isSel = (String(c.id) === String(currentChildId)) || (!currentChildId && c === list[0]);
     if (isSel && !currentChildId) currentChildId = c.id;
-    const name = c.name || c.full_name || "Farzand";
+    const safeName = escapeHtml(c.name || c.full_name || "Farzand");
+    const safeId = encodeURIComponent(String(c.id));
     const activeClass = isSel
       ? "bg-rose-600 text-white shadow-md border-rose-400 font-black"
       : "bg-slate-800 text-slate-300 hover:text-white border-white/10 font-bold";
-    return `<button onclick="selectChildForScreenTime('${c.id}')" class="px-3 py-1.5 rounded-xl text-xs border transition active:scale-95 flex items-center gap-1.5 shrink-0 ${activeClass}">
+    return `<button onclick="selectChildForScreenTime('${safeId}')" class="px-3 py-1.5 rounded-xl text-xs border transition active:scale-95 flex items-center gap-1.5 shrink-0 ${activeClass}">
       <span>👦</span>
-      <span>${name}</span>
+      <span>${safeName}</span>
     </button>`;
   }).join("");
 }

@@ -111,6 +111,27 @@ class RateLimiter:
         self.last_location_update[child_id] = now
         return True
 
+    def check_pin_rate_limit(self, child_id: int, max_attempts: int = 5, window_seconds: int = 600) -> tuple[bool, int]:
+        """Prevent brute-force guessing of 4-digit parent PINs."""
+        now = time.time()
+        if not hasattr(self, "failed_pin"):
+            self.failed_pin = defaultdict(list)
+        self.failed_pin[child_id] = [t for t in self.failed_pin[child_id] if now - t < window_seconds]
+        if len(self.failed_pin[child_id]) >= max_attempts:
+            oldest = self.failed_pin[child_id][0]
+            retry_after = max(1, int(window_seconds - (now - oldest)))
+            return False, retry_after
+        return True, 0
+
+    def record_pin_failure(self, child_id: int):
+        if not hasattr(self, "failed_pin"):
+            self.failed_pin = defaultdict(list)
+        self.failed_pin[child_id].append(time.time())
+
+    def reset_pin_failures(self, child_id: int):
+        if hasattr(self, "failed_pin") and child_id in self.failed_pin:
+            del self.failed_pin[child_id]
+
 
 rate_limiter = RateLimiter()
 last_siren_alert_map: dict[int, datetime] = {}
@@ -2011,7 +2032,17 @@ async def update_child_device_policy_endpoint(
     payload: DevicePolicyUpdateRequest,
     session: AsyncSession = Depends(get_db)
 ):
-    """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN."""
+    """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
+    if payload.parent_id:
+        parents = await crud.get_parents_for_child(session, child_id)
+        parent_ids = [p.id for p in parents]
+        if parent_ids and payload.parent_id not in parent_ids:
+            logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {payload.parent_id}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
     policy = await crud.update_device_policy(
         session=session,
         child_id=child_id,
@@ -2094,8 +2125,21 @@ async def verify_child_parent_pin_endpoint(
     payload: VerifyParentPinRequest,
     session: AsyncSession = Depends(get_db)
 ):
-    """Verify 4-digit parent PIN for accessing sensitive settings or unblocking."""
+    """Verify 4-digit parent PIN for accessing sensitive settings or unblocking with brute-force defense."""
+    allowed, retry_after = rate_limiter.check_pin_rate_limit(child_id)
+    if not allowed:
+        return {
+            "status": "error",
+            "valid": False,
+            "message": f"Xavfsizlik tizimi: Ko'p noto'g'ri PIN kiritildi. Iltimos, {retry_after} soniya kuting."
+        }
+
     is_valid = await crud.verify_parent_pin(session, child_id, payload.pin)
+    if is_valid:
+        rate_limiter.reset_pin_failures(child_id)
+    else:
+        rate_limiter.record_pin_failure(child_id)
+
     return {
         "status": "success" if is_valid else "error",
         "valid": is_valid,
