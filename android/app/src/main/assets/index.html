@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=64" />
+  <link rel="stylesheet" href="style.css?v=65" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -484,8 +484,13 @@
         </div>
 
         <!-- Mobile More/Less Tools Toggle Button (Clicking opens, clicking again closes!) -->
-        <button id="btnToggleExtraTools" onclick="toggleExtraMapTools(event)" class="md:hidden text-slate-300 hover:text-white active:scale-95 transition" title="Boshqa asboblarni ochish / yopish">
-          <i data-lucide="more-horizontal" id="iconMoreTools" class="w-4 h-4 pointer-events-none"></i>
+        <button id="btnToggleExtraTools" type="button" onclick="toggleExtraMapTools(event)" class="md:hidden text-slate-300 hover:text-white active:scale-95 transition cursor-pointer select-none touch-manipulation" title="Boshqa asboblarni ochish / yopish">
+          <span id="iconWrapMoreDots" class="pointer-events-none flex items-center justify-center">
+            <i data-lucide="more-horizontal" id="iconMoreTools" class="w-4 h-4 pointer-events-none"></i>
+          </span>
+          <span id="iconWrapMoreClose" class="pointer-events-none hidden items-center justify-center text-rose-400">
+            <i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>
+          </span>
         </button>
       </div>
 
@@ -2244,7 +2249,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=64"></script>
+  <script src="app.js?v=65"></script>
 
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">

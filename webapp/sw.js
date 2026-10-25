@@ -1,5 +1,5 @@
 // Child Security Service Worker (PWA Offline & Background Resilience)
-const CACHE_NAME = "child-security-v8";
+const CACHE_NAME = "child-security-v9";
 const STATIC_ASSETS = [
   "/",
   "/index.html",

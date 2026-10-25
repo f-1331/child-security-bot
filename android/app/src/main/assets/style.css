@@ -1540,3 +1540,24 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.3) !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 1.2px 1px rgba(255, 255, 255, 0.6) !important;
 }
+
+
+/* Ensure extraMapTools expands cleanly as a vertical flex column on mobile when unhidden */
+#extraMapTools:not(.hidden) {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+}
+
+/* Ensure 3-dots button has zero-lag touch response across all mobile devices */
+#btnToggleExtraTools {
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: transparent !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+#btnToggleExtraTools * {
+  pointer-events: none !important;
+}

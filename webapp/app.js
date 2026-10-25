@@ -1685,6 +1685,15 @@ function initMap() {
       setZonePickerLocation(e.latlng.lat, e.latlng.lng);
     }
   });
+
+  // Prevent Leaflet map from absorbing or hijacking touch/click events on floating dock
+  const dock = document.getElementById("floatingMapControls");
+  if (dock && window.L && L.DomEvent) {
+    try {
+      L.DomEvent.disableClickPropagation(dock);
+      L.DomEvent.disableScrollPropagation(dock);
+    } catch (e) {}
+  }
 }
 
 // Toggle between Street and Satellite Hybrid Map
@@ -2548,21 +2557,23 @@ async function resolveCurrentSos() {
 
 // Toggle Fullscreen Map Mode (Hide/Show Top Nav & Bottom HUD)
 
-// Toggle & Re-close Mobile Extra Map Tools Dock (Two-way collapse, middle 3-dots touch fixed)
+// Toggle & Re-close Mobile Extra Map Tools Dock (Instant 1-tap response, zero DOM recreation)
+let lastExtraToolsToggleTimestamp = 0;
+
 function closeExtraMapTools() {
   const tools = document.getElementById("extraMapTools");
   const btn = document.getElementById("btnToggleExtraTools");
+  const wrapDots = document.getElementById("iconWrapMoreDots");
+  const wrapClose = document.getElementById("iconWrapMoreClose");
   if (!tools || tools.classList.contains("hidden")) return;
 
   tools.classList.add("hidden");
+  if (wrapDots) wrapDots.classList.remove("hidden");
+  if (wrapClose) wrapClose.classList.add("hidden");
   if (btn) {
-    btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4 pointer-events-none"></i>';
     btn.setAttribute("title", "Boshqa asboblarni ochish");
     btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
     btn.classList.add("text-slate-300");
-  }
-  if (window.lucide) {
-    lucide.createIcons();
   }
 }
 
@@ -2575,43 +2586,52 @@ function closeExtraMapToolsOnMobile() {
 function toggleExtraMapTools(event) {
   if (event) {
     if (typeof event.stopPropagation === "function") event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
     if (typeof event.preventDefault === "function") event.preventDefault();
   }
+  lastExtraToolsToggleTimestamp = Date.now();
   haptic("light");
+
   const tools = document.getElementById("extraMapTools");
   const btn = document.getElementById("btnToggleExtraTools");
+  const wrapDots = document.getElementById("iconWrapMoreDots");
+  const wrapClose = document.getElementById("iconWrapMoreClose");
   if (!tools) return;
 
   const isCurrentlyHidden = tools.classList.contains("hidden");
 
   if (isCurrentlyHidden) {
+    // OPEN INSTANTLY on first click
     tools.classList.remove("hidden");
+    if (wrapDots) wrapDots.classList.add("hidden");
+    if (wrapClose) wrapClose.classList.remove("hidden");
     if (btn) {
-      btn.innerHTML = '<i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>';
       btn.setAttribute("title", "Yopish (Asboblarni yashirish)");
       btn.classList.remove("text-slate-300");
       btn.classList.add("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
     }
   } else {
+    // CLOSE
     tools.classList.add("hidden");
+    if (wrapDots) wrapDots.classList.remove("hidden");
+    if (wrapClose) wrapClose.classList.add("hidden");
     if (btn) {
-      btn.innerHTML = '<i data-lucide="more-horizontal" class="w-4 h-4 pointer-events-none"></i>';
       btn.setAttribute("title", "Boshqa asboblarni ochish");
       btn.classList.remove("text-rose-400", "bg-rose-500/20", "border-rose-400/40");
       btn.classList.add("text-slate-300");
     }
   }
-
-  if (window.lucide) {
-    lucide.createIcons();
-  }
 }
 
-// Global outside-click dismiss for Extra Map Tools (Ignores clicks inside dock and its children)
+// Global outside-click dismiss for Extra Map Tools (Ignores clicks inside dock and recent toggles)
 document.addEventListener("click", function(event) {
+  // If toggled less than 400ms ago, ignore outside click completely (prevents instant auto-dismiss)
+  if (Date.now() - lastExtraToolsToggleTimestamp < 400) {
+    return;
+  }
   const dock = document.getElementById("floatingMapControls");
   if (!dock) return;
-  if (dock.contains(event.target) || (event.target.closest && event.target.closest("#floatingMapControls")) || (event.composedPath && event.composedPath().includes(dock))) {
+  if (dock.contains(event.target) || (event.target && event.target.closest && event.target.closest("#floatingMapControls")) || (event.composedPath && event.composedPath().includes(dock))) {
     return;
   }
   closeExtraMapTools();
