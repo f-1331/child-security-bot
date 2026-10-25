@@ -572,6 +572,40 @@ async def download_desktop_mac():
     return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
 
 
+@app.get("/download/desktop-linux", tags=["App"])
+@app.get("/download/linux", tags=["App"])
+async def download_desktop_linux():
+    """Download Linux Desktop standalone setup package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    lin_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Linux_Setup.zip")
+    if os.path.exists(lin_zip):
+        return FileResponse(
+            lin_zip,
+            filename="ChildSecurity_Linux_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Linux_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
+@app.get("/download/desktop-windows-zip", tags=["App"])
+@app.get("/download/windows-zip", tags=["App"])
+async def download_desktop_windows_zip():
+    """Download Windows Desktop ZIP package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    win_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Windows_Setup.zip")
+    if os.path.exists(win_zip):
+        return FileResponse(
+            win_zip,
+            filename="ChildSecurity_Windows_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Windows_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
 @app.get("/privacy", tags=["Legal"])
 @app.get("/privacy.html", tags=["Legal"])
 async def privacy_policy_view():

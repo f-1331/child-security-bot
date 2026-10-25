@@ -29,8 +29,10 @@ from bot.geofence import evaluate_geofences_and_notify, haversine_distance
 # Permanent Telegram CDN cached file_ids for zero-delay instant document delivery
 TG_FILE_ID_PARENT_APK = "BQACAgIAAxkDAAIC5mreMhe2YYW7kXQ3dRC_RDdx4BrAAAJYpAACkXzxSqCXbmUrcbZgPQQ"
 TG_FILE_ID_CHILD_APK = "BQACAgIAAxkDAAIDAmreN2MZxN9GawxtrRnCVUZUj6aeAAKnpAACkXzxSpPrP6AaP55sPQQ"
-TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIDA2reN2Qg5ftn-jj-yWZm5fWZ7W5kAAKppAACkXzxSgGocqOALSEcPQQ"
-TG_FILE_ID_MAC_ZIP = "BQACAgIAAxkDAAIDC2reOXk1h7rOlm8xYEMAAS2_hSePnQACu6QAApF88Uom9YDaX8Dnkz0E"
+TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIDD2reO4j6pMRtUikOHywnoJBAqI_tAALapAACkXzxSg5fFfSpQJnhPQQ"
+TG_FILE_ID_WINDOWS_ZIP = "BQACAgIAAxkDAAIDEGreO4kfHj7Rz_wPD38RUdD_3oolAALbpAACkXzxSjkBVlQWAAEfFz0E"
+TG_FILE_ID_MAC_ZIP = "BQACAgIAAxkDAAIDEmreO4p4Hu6hwtcAAVviC3MTGQ9ZMQAC3aQAApF88Up6toUOMmeOVj0E"
+TG_FILE_ID_LINUX_ZIP = "BQACAgIAAxkDAAIDEWreO4n4CJalT9Nbfchlk2quzCIdAALcpAACkXzxSnpUS1UaDiU9PQQ"
 TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIDBGreN2RP4HQZPqZFSP0xiRIiSYxhAAKqpAACkXzxSk1ziz3geGp_PQQ"
 from bot.keyboards import (
     get_role_selection_keyboard,
@@ -3447,52 +3449,53 @@ async def on_download_ios(event, bot: Bot, state: FSMContext = None):
 @router.message(StateFilter("*"), Command("desktop", "laptop", "noutbuk", "kompyuter", "pc"))
 @router.callback_query(F.data == "download_desktop")
 async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
-    """Send dedicated Laptop / Desktop PC setup file and Web App client instructions."""
+    """Show interactive 3-OS selection menu for Windows, Mac, and Linux."""
     if state:
         await state.clear()
     message = event if isinstance(event, Message) else event.message
     if isinstance(event, CallbackQuery):
-        await event.answer("💻 Noutbuk versiyasi tayyorlanmoqda...")
+        await event.answer("💻 Noutbuk menyusi...")
 
-    desktop_bat_url = f"{webapp_url}/download/desktop-windows"
-    desktop_mac_url = f"{webapp_url}/download/desktop-mac"
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
 
     text = (
-        "💻 <b>Child Security — Noutbuk va Kompyuterlar uchun (Windows & macOS)</b>\n\n"
-        "Child Security'ni noutbukingizda alohida mustaqil desktop dastur sifatida ishlatishingiz mumkin!\n\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "🚀 <b>O'rnatish yo'llari:</b>\n\n"
-        "🪟 <b>1️⃣ Windows Tezkor O'rnatgich (.bat):</b>\n"
-        "Quyidagi <code>.bat</code> faylini yuklab olib ishga tushirsangiz, ish stolingizga (Desktop) "
-        "avtomatik tarzda <b>Child Security</b> yorlig'i o'rnatiladi va toza dastur oynasida ochiladi!\n\n"
-        "🍏 <b>2️⃣ Apple Mac (macOS / MacBook) O'rnatgich (.zip):</b>\n"
-        "Quyidagi <code>.zip</code> faylini oching va ichidagi <code>ChildSecurity_Mac_Setup.command</code> ustiga 2 marta bosing!\n\n"
-        "🌐 <b>3️⃣ 1-Bosishda Ish Stoliga O'rnatish (Chrome / Edge / Safari):</b>\n"
-        "Noutbuk brauzerida saytni oching va manzil satridagi <b>«O'rnatish / Install»</b> belgisini bosing!\n\n"
-        "🛡️ Katta ekranda farzandlaringiz joylashuvi, batareya holati va ekran vaqtini kuzatish yanada qulay!"
+        "💻 <b>Child Security — Noutbuk va Kompyuterlar uchun</b>\n\n"
+        "Qaysi operatsion tizimdan foydalanasiz? Noutbukingiz turini tanlang:\n\n"
+        "🪟 <b>Windows</b> — Windows 11, 10, 8, 7 uchun (.bat & .zip)\n"
+        "🍏 <b>Apple Mac</b> — MacBook, iMac, Mac mini uchun (.zip)\n"
+        "🐧 <b>Linux</b> — Ubuntu, Debian, Fedora, Mint uchun (.zip & .sh)\n\n"
+        "👇 <i>Kerakli tizim tugmasini bosing:</i>"
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🪟 Windows uchun (.bat)",
-                    url=desktop_bat_url
-                ),
-                InlineKeyboardButton(
-                    text="🍏 Mac uchun (.zip)",
-                    url=desktop_mac_url
+                    text="🪟 Windows (11 / 10 / 8 / 7)",
+                    callback_data="desktop_os_windows"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🌐 Noutbuk Web App'ni ochish",
+                    text="🍏 Apple Mac (macOS / MacBook)",
+                    callback_data="desktop_os_mac"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🐧 Linux (Ubuntu / Mint / Fedora)",
+                    callback_data="desktop_os_linux"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Brauzerda ochish (PWA)",
                     url=webapp_url
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="👨‍👩‍👧 Ota-ona ilovasi (APK)",
+                    text="👨‍👩‍👧 Ota-ona APK",
                     callback_data="download_parent_apk"
                 ),
                 InlineKeyboardButton(
@@ -3505,71 +3508,110 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
 
     await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
-    desktop_bat_content = (
-        "@echo off\r\n"
-        "chcp 65001 >nul\r\n"
-        "title Child Security - Noutbuk uchun dastur\r\n"
-        "cls\r\n"
-        "echo ============================================================\r\n"
-        "echo          Child Security - Oila va Farzand Nazorati\r\n"
-        "echo           Noutbuk va Windows uchun Desktop Dasturi\r\n"
-        "echo ============================================================\r\n"
-        "echo.\r\n"
-        "echo Ish stoliga (Desktop) dastur yorlig'i o'rnatilmoqda...\r\n"
-        "set URL=https://child-security-bot.vercel.app\r\n"
-        "set \"DESK_PATH=%USERPROFILE%\\Desktop\"\r\n"
-        "for /f \"usebackq delims=\" %%d in (`powershell -NoProfile -Command \"[Environment]::GetFolderPath('Desktop')\"`) do (\r\n"
-        "    set \"DESK_PATH=%%d\"\r\n"
-        ")\r\n"
-        "if exist \"%DESK_PATH%\" (\r\n"
-        "    echo [InternetShortcut] > \"%DESK_PATH%\\Child Security.url\"\r\n"
-        "    echo URL=%URL% >> \"%DESK_PATH%\\Child Security.url\"\r\n"
-        "    echo IconIndex=0 >> \"%DESK_PATH%\\Child Security.url\"\r\n"
-        "    echo IconFile=%SystemRoot%\\System32\\imageres.dll >> \"%DESK_PATH%\\Child Security.url\"\r\n"
-        ")\r\n"
-        "if exist \"%USERPROFILE%\\Desktop\" (\r\n"
-        "    copy /y \"%DESK_PATH%\\Child Security.url\" \"%USERPROFILE%\\Desktop\\Child Security.url\" >nul 2>&1\r\n"
-        ")\r\n"
-        "if exist \"%USERPROFILE%\\OneDrive\\Desktop\" (\r\n"
-        "    copy /y \"%DESK_PATH%\\Child Security.url\" \"%USERPROFILE%\\OneDrive\\Desktop\\Child Security.url\" >nul 2>&1\r\n"
-        ")\r\n"
-        "echo.\r\n"
-        "echo [OK] Child Security ish stolingizga muvaffaqiyatli o'rnatildi!\r\n"
-        "echo Dastur ishga tushirilmoqda...\r\n"
-        "echo.\r\n"
-        "set \"EDGE_X86=%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe\"\r\n"
-        "set \"EDGE_64=%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe\"\r\n"
-        "set \"CHROME_64=%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe\"\r\n"
-        "set \"CHROME_X86=%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe\"\r\n"
-        "if exist \"%EDGE_X86%\" (\r\n"
-        "    start \"\" \"%EDGE_X86%\" --app=\"%URL%\"\r\n"
-        "    exit /b 0\r\n"
-        ")\r\n"
-        "if exist \"%EDGE_64%\" (\r\n"
-        "    start \"\" \"%EDGE_64%\" --app=\"%URL%\"\r\n"
-        "    exit /b 0\r\n"
-        ")\r\n"
-        "if exist \"%CHROME_64%\" (\r\n"
-        "    start \"\" \"%CHROME_64%\" --app=\"%URL%\"\r\n"
-        "    exit /b 0\r\n"
-        ")\r\n"
-        "if exist \"%CHROME_X86%\" (\r\n"
-        "    start \"\" \"%CHROME_X86%\" --app=\"%URL%\"\r\n"
-        "    exit /b 0\r\n"
-        ")\r\n"
-        "start \"\" \"%URL%\"\r\n"
-        "exit /b 0\r\n"
+
+@router.message(StateFilter("*"), F.text.in_([
+    "🪟 Windows",
+    "Windows",
+    "windows",
+    "windovs",
+    "vindovs"
+]))
+@router.message(StateFilter("*"), Command("windows", "windovs"))
+@router.callback_query(F.data == "desktop_os_windows")
+async def on_download_windows(event, bot: Bot, state: FSMContext = None):
+    """Deliver Windows desktop installer (.bat) and ZIP package (.url)."""
+    if state:
+        await state.clear()
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("🪟 Windows fayllari tayyorlanmoqda...")
+
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+    desktop_bat_url = f"{webapp_url}/download/desktop-windows"
+    desktop_zip_url = f"{webapp_url}/download/desktop-windows-zip"
+
+    text = (
+        "🪟 <b>Child Security — Windows uchun Desktop Dasturi (Windows 11 / 10 / 8 / 7)</b>\n\n"
+        "Windows tizimida dasturni 100% xatosiz ishga tushirishning qulay yo'llari:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ <b>1-USUL: To'g'ridan-to'g'ri Saytni Ochish (100% Kafolatli)</b>\n"
+        "Quyidagi <b>«Child Security.url»</b> fayli yoki sayt havolasi orqali dastur bir zumda ochiladi:\n"
+        "👉 <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📦 <b>2-USUL: Windows O'rnatgich Arxiv (.zip)</b>\n"
+        "Quyidagi <code>ChildSecurity_Windows_Setup.zip</code> faylini yuklab oling va oching. "
+        "Ichidagi <b>«Child Security.url»</b> yorlig'ini bosing — dastur darhol ishga tushadi!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚙️ <b>3-USUL: Avtomatik Ish Stoli O'rnatgichi (.bat)</b>\n"
+        "<code>ChildSecurity_Desktop_Setup.bat</code> faylini ishga tushirsangiz, ish stolingizga avtomatik doimiy yorliq yaratiladi.\n"
+        "⚠️ <i>Agar SmartScreen (ko'k oyna) chiqsa: «Подробнее» ➔ «Выполнить в любом случае» bosing!</i>"
     )
 
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📦 Windows O'rnatgich (.zip)",
+                    url=desktop_zip_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⚙️ Windows O'rnatgich (.bat)",
+                    url=desktop_bat_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Dasturni brauzerda ochish",
+                    url=webapp_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Boshqa tizimni tanlash (Mac / Linux)",
+                    callback_data="download_desktop"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
+    # 1. Send Windows ZIP (Most reliable, no antivirus block)
+    win_zip_caption = (
+        "📦 <b>Child Security — Windows To'liq Paketi (.zip)</b>\n\n"
+        "1️⃣ Arxivni yuklab oling va oching (Extract all).\n"
+        "2️⃣ Ichidagi <b>Child Security.url</b> ni bosing — sayt bir zumda ochiladi!\n"
+        "3️⃣ Yoki <b>ChildSecurity_Desktop_Setup.bat</b> orqali doimiy yorliq yarating. 🚀"
+    )
+    try:
+        await message.answer_document(
+            document=TG_FILE_ID_WINDOWS_ZIP,
+            caption=win_zip_caption,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e_wz:
+        logger.warning(f"Could not send Windows zip by file_id: {e_wz}")
+        wz_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Windows_Setup.zip")
+        if os.path.exists(wz_path):
+            try:
+                from aiogram.types import FSInputFile
+                await message.answer_document(
+                    document=FSInputFile(wz_path, filename="ChildSecurity_Windows_Setup.zip"),
+                    caption=win_zip_caption,
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.warning(f"Could not send Windows zip file: {e}")
+
+    # 2. Send Windows BAT
     desktop_caption = (
-        "💻 <b>Child Security — Windows Noutbuk & PC O'rnatgichi</b>\n\n"
-        "1️⃣ Ushbu <code>ChildSecurity_Desktop_Setup.bat</code> faylini yuklab oling va ustiga bosing.\n"
-        "2️⃣ <b>Eslatma:</b> Agar Windows himoyasi (SmartScreen) chiqsa:\n"
-        "   👉 <i>«Подробнее» (Batafsil)</i> -> <i>«Выполнить в любом случае» (Baribir bajarish)</i> tugmasini bosing.\n"
-        "3️⃣ Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va mustaqil dastur oynasida ishga tushadi! 🚀"
+        "⚙️ <b>Child Security — Windows Ish Stoli O'rnatgichi (.bat)</b>\n\n"
+        "1️⃣ Ushbu faylni yuklab oling va ishga tushiring.\n"
+        "2️⃣ Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi!\n"
+        "⚠️ <i>Agar SmartScreen oynasi chiqsa: «Подробнее» ➔ «Выполнить в любом случае» bosing.</i>"
     )
-
-    # 1. Send Windows BAT
     try:
         await message.answer_document(
             document=TG_FILE_ID_DESKTOP_BAT,
@@ -3578,44 +3620,6 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
         )
     except Exception as e_fid:
         logger.warning(f"Could not send desktop BAT by file_id: {e_fid}")
-        try:
-            from aiogram.types import BufferedInputFile
-            doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
-            await message.answer_document(
-                document=doc,
-                caption=desktop_caption,
-                parse_mode=ParseMode.HTML
-            )
-        except Exception as e:
-            logger.warning(f"Could not send desktop setup BAT document: {e}")
-
-    # 2. Send Apple Mac ZIP
-    mac_caption = (
-        "🍏 <b>Child Security — Apple Mac (macOS / MacBook) O'rnatgichi</b>\n\n"
-        "1️⃣ Ushbu <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching (unzip).\n"
-        "2️⃣ Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
-        "3️⃣ Mac ish stolingizda <b>Child Security</b> paydo bo'ladi va to'liq ekranda ishga tushadi! 🚀\n\n"
-        "💡 <i>Yoki Safari / Chrome'da saytni ochib, «Fayl > Dock-ga qo'shish» (Add to Dock) yoki «O'rnatish» tugmasini bosing!</i>"
-    )
-    try:
-        await message.answer_document(
-            document=TG_FILE_ID_MAC_ZIP,
-            caption=mac_caption,
-            parse_mode=ParseMode.HTML
-        )
-    except Exception as e_mac:
-        logger.warning(f"Could not send Mac setup zip by file_id: {e_mac}")
-        mac_zip_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Mac_Setup.zip")
-        if os.path.exists(mac_zip_path):
-            try:
-                from aiogram.types import FSInputFile
-                await message.answer_document(
-                    document=FSInputFile(mac_zip_path, filename="ChildSecurity_Mac_Setup.zip"),
-                    caption=mac_caption,
-                    parse_mode=ParseMode.HTML
-                )
-            except Exception as e:
-                logger.warning(f"Could not send Mac setup zip file: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([
@@ -3627,7 +3631,7 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
     "mac"
 ]))
 @router.message(StateFilter("*"), Command("mac", "macbook", "macos"))
-@router.callback_query(F.data == "download_mac")
+@router.callback_query(F.data.in_(["desktop_os_mac", "download_mac"]))
 async def on_download_mac(event, bot: Bot, state: FSMContext = None):
     """Send dedicated Apple Mac (macOS / MacBook) setup file and Web App instructions."""
     if state:
@@ -3646,7 +3650,7 @@ async def on_download_mac(event, bot: Bot, state: FSMContext = None):
         "⚡ <b>1-USUL: Avtomatik O'rnatuvchi Paket (.zip)</b>\n"
         "1. Quyidagi <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching.\n"
         "2. Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
-        "3. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va alohida dastur oynasida ishga tushadi!\n\n"
+        "3. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va mustaqil dastur bo'lib ishga tushadi!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🌐 <b>2-USUL: Safari / Chrome orqali to'g'ridan-to'g'ri o'rnatish</b>\n"
         "1. Brauzerda oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
@@ -3671,12 +3675,8 @@ async def on_download_mac(event, bot: Bot, state: FSMContext = None):
             ],
             [
                 InlineKeyboardButton(
-                    text="💻 Windows versiya",
+                    text="⬅️ Boshqa tizimni tanlash (Windows / Linux)",
                     callback_data="download_desktop"
-                ),
-                InlineKeyboardButton(
-                    text="🍎 iPhone / iOS",
-                    callback_data="download_ios"
                 )
             ]
         ]
@@ -3710,6 +3710,96 @@ async def on_download_mac(event, bot: Bot, state: FSMContext = None):
                 )
             except Exception as e:
                 logger.warning(f"Could not send Mac setup zip file: {e}")
+
+
+@router.message(StateFilter("*"), F.text.in_([
+    "🐧 Linux",
+    "Linux",
+    "linux",
+    "ubuntu",
+    "Ubuntu",
+    "debian",
+    "mint"
+]))
+@router.message(StateFilter("*"), Command("linux", "ubuntu"))
+@router.callback_query(F.data.in_(["desktop_os_linux", "download_linux"]))
+async def on_download_linux(event, bot: Bot, state: FSMContext = None):
+    """Send dedicated Linux setup file and Web App instructions."""
+    if state:
+        await state.clear()
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer("🐧 Linux versiyasi tayyorlanmoqda...")
+
+    webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
+    desktop_linux_url = f"{webapp_url}/download/desktop-linux"
+
+    text = (
+        "🐧 <b>Child Security — Linux uchun Rasmiy Dastur (Ubuntu / Debian / Fedora / Mint)</b>\n\n"
+        "Linux tizimlarida Child Security'ni ish stoli ilovasi sifatida o'rnatish yo'llari:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ <b>1-USUL: Avtomatik Linux O'rnatgichi (.zip & .sh)</b>\n"
+        "1. Quyidagi <code>ChildSecurity_Linux_Setup.zip</code> arxivini yuklab oling va oching.\n"
+        "2. Terminalda quyidagi buyruqni bering:\n"
+        "   <code>chmod +x ChildSecurity_Linux_Setup.sh && ./ChildSecurity_Linux_Setup.sh</code>\n"
+        "3. Ish stolingizda (Desktop) va Ilovalar menyusida <b>Child Security</b> paydo bo'ladi!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🌐 <b>2-USUL: Chrome / Chromium orqali 1-bosishda o'rnatish</b>\n"
+        "1. Brauzerda oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
+        "2. Manzil satridagi ⬇️ <b>«O'rnatish» (Install App)</b> belgisini bosing!\n\n"
+        "✨ <b>Natija:</b> Ilova mustaqil desktop oynada brauzersiz toza ochiladi! 🚀"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🐧 Linux o'rnatgichini yuklab olish (.zip)",
+                    url=desktop_linux_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Linux Web App'ni ochish",
+                    url=webapp_url
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Boshqa tizimni tanlash (Windows / Mac)",
+                    callback_data="download_desktop"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
+    linux_caption = (
+        "🐧 <b>Child Security — Linux O'rnatgichi (.zip)</b>\n\n"
+        "1️⃣ Arxivni oching va <code>ChildSecurity_Linux_Setup.sh</code> ni ishga tushiring.\n"
+        "2️⃣ Ish stolingizda (Desktop) <b>Child Security</b> mustaqil ilovasi yaratiladi! 🚀"
+    )
+
+    try:
+        await message.answer_document(
+            document=TG_FILE_ID_LINUX_ZIP,
+            caption=linux_caption,
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e_lin:
+        logger.warning(f"Could not send Linux setup zip by file_id: {e_lin}")
+        lin_zip_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Linux_Setup.zip")
+        if os.path.exists(lin_zip_path):
+            try:
+                from aiogram.types import FSInputFile
+                await message.answer_document(
+                    document=FSInputFile(lin_zip_path, filename="ChildSecurity_Linux_Setup.zip"),
+                    caption=linux_caption,
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.warning(f"Could not send Linux setup zip file: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([

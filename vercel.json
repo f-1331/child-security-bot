@@ -56,7 +56,47 @@
       }
     },
     {
+      "src": "/download/desktop-linux",
+      "dest": "/webapp/downloads/ChildSecurity_Linux_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Linux_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/linux",
+      "dest": "/webapp/downloads/ChildSecurity_Linux_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Linux_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/desktop-windows-zip",
+      "dest": "/webapp/downloads/ChildSecurity_Windows_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Windows_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/windows-zip",
+      "dest": "/webapp/downloads/ChildSecurity_Windows_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Windows_Setup.zip\""
+      }
+    },
+    {
       "src": "/download/desktop-windows",
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
+    },
+    {
+      "src": "/download/windows",
       "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
       "headers": {
         "content-type": "application/x-bat",

@@ -25,7 +25,27 @@
       "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
     },
     {
+      "source": "/download/desktop-linux",
+      "destination": "/downloads/ChildSecurity_Linux_Setup.zip"
+    },
+    {
+      "source": "/download/linux",
+      "destination": "/downloads/ChildSecurity_Linux_Setup.zip"
+    },
+    {
+      "source": "/download/desktop-windows-zip",
+      "destination": "/downloads/ChildSecurity_Windows_Setup.zip"
+    },
+    {
+      "source": "/download/windows-zip",
+      "destination": "/downloads/ChildSecurity_Windows_Setup.zip"
+    },
+    {
       "source": "/download/desktop-windows",
+      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
+    },
+    {
+      "source": "/download/windows",
       "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
     },
     {

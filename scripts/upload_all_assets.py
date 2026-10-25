@@ -37,4 +37,7 @@ def upload(filename, caption):
     return fid
 
 if __name__ == '__main__':
-    upload('ChildSecurity_Mac_Setup.zip', 'Child Security Apple Mac Desktop Setup')
+    upload('ChildSecurity_Desktop_Setup.bat', 'Child Security Windows Setup BAT')
+    upload('ChildSecurity_Windows_Setup.zip', 'Child Security Windows Setup ZIP')
+    upload('ChildSecurity_Linux_Setup.zip', 'Child Security Linux Setup ZIP')
+    upload('ChildSecurity_Mac_Setup.zip', 'Child Security Apple Mac Setup ZIP')

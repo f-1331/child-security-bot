@@ -40,5 +40,7 @@ downloads/*
 !downloads/*.mobileconfig
 !downloads/*.command
 !downloads/*.zip
+!downloads/*.sh
+!downloads/*.desktop
 .neon
 node_modules/
