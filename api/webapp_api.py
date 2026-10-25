@@ -341,8 +341,8 @@ async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -
                 "deadline": format_utc_iso(user.walk_safe_deadline) if user.walk_safe_deadline else None,
             },
             "wishlist": {
-                "title": user.wishlist_title or "Yangi Velosiped 🚲",
-                "target_som": user.wishlist_target_som or 600000,
+                "title": user.wishlist_title or "",
+                "target_som": user.wishlist_target_som or 0,
             }
         },
         "parent": {
@@ -624,8 +624,8 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
                 "deadline": format_utc_iso(child.walk_safe_deadline) if child.walk_safe_deadline else None,
             },
             "wishlist": {
-                "title": child.wishlist_title or "Yangi Velosiped 🚲",
-                "target_som": child.wishlist_target_som or 600000,
+                "title": child.wishlist_title or "",
+                "target_som": child.wishlist_target_som or 0,
             },
             "device_policy": {
                 "is_all_apps_blocked": policy.is_all_apps_blocked,

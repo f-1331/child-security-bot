@@ -279,6 +279,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            android.webkit.CookieManager.getInstance().flush();
+        }
+    }
+
     /**
      * JavaScript Interface Bridge exposed to web app as window.AndroidBridge
      */
@@ -339,6 +347,62 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 Log.e(TAG, "Error stopping tracking service: " + e.getMessage());
             }
+        }
+
+        @JavascriptInterface
+        public void saveSession(String sessionJson, String authCode, String role) {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                SharedPreferences.Editor ed = prefs.edit();
+                if (sessionJson != null) ed.putString("saved_session_json", sessionJson);
+                if (authCode != null) ed.putString("saved_auth_code", authCode);
+                if (role != null) ed.putString("saved_role", role);
+                ed.apply();
+                Log.d(TAG, "Saved permanent session in native Android SharedPreferences");
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public String getSavedSession() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                return prefs.getString("saved_session_json", "");
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public String getSavedAuthCode() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                return prefs.getString("saved_auth_code", "");
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public String getSavedRole() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                return prefs.getString("saved_role", "");
+            } catch (Exception ignored) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
+        public void clearSavedSession() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                prefs.edit()
+                     .remove("saved_session_json")
+                     .remove("saved_auth_code")
+                     .remove("saved_role")
+                     .remove(ChildTrackingService.KEY_CHILD_ID)
+                     .apply();
+            } catch (Exception ignored) {}
         }
 
         @JavascriptInterface

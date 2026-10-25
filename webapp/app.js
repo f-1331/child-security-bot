@@ -490,8 +490,24 @@ async function checkAuthenticationState() {
   }
 
   // 3. Check localStorage session (User previously authenticated or offline fallback)
-  const stored = localStorage.getItem("smart_tracker_session");
-  const storedCode = localStorage.getItem("smart_tracker_auth_code");
+  let stored = localStorage.getItem("smart_tracker_session");
+  let storedCode = localStorage.getItem("smart_tracker_auth_code");
+
+  // Check native AndroidBridge backup if localStorage was lost or emptied
+  if ((!stored || stored === "null" || stored === "{}") && window.AndroidBridge && typeof window.AndroidBridge.getSavedSession === "function") {
+    try {
+      const nativeSess = window.AndroidBridge.getSavedSession();
+      const nativeCode = window.AndroidBridge.getSavedAuthCode();
+      if (nativeSess && nativeSess.length > 10) {
+        stored = nativeSess;
+        localStorage.setItem("smart_tracker_session", nativeSess);
+        if (nativeCode) {
+          storedCode = nativeCode;
+          localStorage.setItem("smart_tracker_auth_code", nativeCode);
+        }
+      }
+    } catch (e) {}
+  }
   if (stored) {
     try {
       const data = JSON.parse(stored);
@@ -814,6 +830,12 @@ async function submitAuthCode() {
     localStorage.setItem("smart_tracker_role", data.role);
     localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Never prompt automatically on reload again
 
+    if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
+      try {
+        window.AndroidBridge.saveSession(JSON.stringify(data), code, data.role);
+      } catch (e) {}
+    }
+
     haptic("success");
     hideAuthGateModal();
     applyAuthenticatedUser(data);
@@ -917,6 +939,14 @@ function applyAuthenticatedUser(data) {
   authenticatedSession = data;
   isDemoMode = false;
   currentRole = data.role;
+
+  // Persist session into native AndroidBridge so app never logs out on exit
+  if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
+    try {
+      const codeToSave = data.user?.web_access_code || localStorage.getItem("smart_tracker_auth_code") || "";
+      window.AndroidBridge.saveSession(JSON.stringify(data), codeToSave, data.role || currentRole);
+    } catch (e) {}
+  }
   sessionStorage.removeItem("smart_tracker_demo_role");
   document.getElementById("demoBadge")?.classList.add("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
@@ -1341,6 +1371,9 @@ async function loadChildSelfData(user) {
 function logoutSession() {
   haptic("medium");
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.clearSavedSession === "function") {
+      try { window.AndroidBridge.clearSavedSession(); } catch (e) {}
+    }
     localStorage.removeItem("smart_tracker_session");
     localStorage.removeItem("smart_tracker_auth_code");
     localStorage.removeItem("smart_tracker_role");
@@ -2705,7 +2738,7 @@ function renderHistoryToMapAndList(points) {
     let matchedCluster = null;
     for (const c of clusters) {
       const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
-      if (dist <= 25) { // 25 meters proximity = same street or junction
+      if (dist <= 10) { // 10 meters proximity (uyimiz tochkasi ichida 10 metr)
         matchedCluster = c;
         break;
       }
@@ -2780,14 +2813,17 @@ function renderHistoryToMapAndList(points) {
   // C. Render repeated visit spots & intermediate step checkpoints
   clusters.forEach((c) => {
     if (c.visits.length > 1) {
-      // REPEATED LOCATION: Child walked here 2+ times!
+      // REPEATED LOCATION: Child walked here 2+ times
       const passCount = c.visits.length;
+      const isHundredPlus = passCount >= 100;
+      const badgeText = isHundredPlus ? "100+" : `${passCount}x`;
+
       const repeatIcon = L.divIcon({
         className: "route-repeat-badge",
         html: `
-          <div class="relative group cursor-pointer transform -translate-x-1/2 -translate-y-1/2">
-            <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-600 via-pink-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xl border-2 border-white animate-bounce">
-              ${passCount}x
+          <div class="relative group cursor-pointer transform -translate-x-1/2 -translate-y-1/2" title="${isHundredPlus ? '100+ marta' : passCount + ' marta'}">
+            <div class="h-7 min-w-[28px] px-1.5 rounded-full bg-gradient-to-tr from-rose-600 via-pink-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xl border-2 border-white animate-bounce">
+              ${badgeText}
             </div>
             <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full border border-white animate-ping"></span>
           </div>
@@ -2797,12 +2833,17 @@ function renderHistoryToMapAndList(points) {
       });
 
       const repeatMarker = L.marker([c.latitude, c.longitude], { icon: repeatIcon });
-      const passesHtml = c.visits.map((v, i) => `
+
+      // If passCount >= 100, ONLY show the LAST 10 times as specifically demanded!
+      const displayedVisits = isHundredPlus ? c.visits.slice(-10) : c.visits;
+      const passesHtml = displayedVisits.map((v, i) => {
+        const orderNumber = isHundredPlus ? (passCount - displayedVisits.length + i + 1) : (i + 1);
+        return `
         <div class="flex items-center justify-between p-2 bg-slate-800/90 rounded-xl border border-slate-700/70 text-xs">
           <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full bg-rose-500/25 text-rose-300 font-black text-[10px] flex items-center justify-center border border-rose-500/40">${i + 1}</span>
+            <span class="w-5 h-5 rounded-full bg-rose-500/25 text-rose-300 font-black text-[10px] flex items-center justify-center border border-rose-500/40">${orderNumber}</span>
             <div>
-              <p class="font-bold text-white text-xs">${i + 1}-o'tish vaqti:</p>
+              <p class="font-bold text-white text-xs">${orderNumber}-o'tish vaqti:</p>
               <p class="font-mono text-amber-300 font-extrabold text-[11px]">${v.time}</p>
             </div>
           </div>
@@ -2811,18 +2852,23 @@ function renderHistoryToMapAndList(points) {
             <div class="text-cyan-300 font-bold">⚡ ${v.speed}</div>
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
+
+      const headerTitle = isHundredPlus
+        ? `<span>Ushbu joyda bola <b>100+</b> marta bo'lgan (Oxirgi 10 marta):</span>`
+        : `<span>Ushbu joydan bola ${passCount} marta o'tgan:</span>`;
 
       repeatMarker.bindPopup(`
         <div class="p-2 min-w-[260px] max-w-[320px] text-slate-100 font-sans">
           <div class="flex items-center gap-1.5 font-black text-xs text-rose-400 mb-2 border-b border-white/10 pb-1.5">
             <span class="text-base">🔁</span>
-            <span>Ushbu joydan bola ${passCount} marta o'tgan:</span>
+            ${headerTitle}
           </div>
           <div class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll">
             ${passesHtml}
           </div>
-          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} (santimetr aniqlik)</p>
+          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} (10m hudud)</p>
         </div>
       `);
       repeatMarker.addTo(routeLayerGroup);
@@ -5637,6 +5683,32 @@ let childNotificationPollTimer = null;
 let activeBannerTimer = null;
 
 const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
+
+function sendLocationUpdate() {
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+  if (targetId && !isDemoMode) {
+    fetchInstantChildLocation(targetId);
+  }
+}
+window.sendLocationUpdate = sendLocationUpdate;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && currentRole === "child") {
+    const targetId = currentChildId || authenticatedSession?.user?.id;
+    if (targetId && !isDemoMode) {
+      fetchInstantChildLocation(targetId);
+    }
+  }
+});
+
+window.addEventListener("focus", () => {
+  if (currentRole === "child") {
+    const targetId = currentChildId || authenticatedSession?.user?.id;
+    if (targetId && !isDemoMode) {
+      fetchInstantChildLocation(targetId);
+    }
+  }
+});
 
 async function fetchInstantChildLocation(childId) {
   if (!childId || isDemoMode) return;

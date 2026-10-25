@@ -90,23 +90,21 @@ public class ChildTrackingService extends Service implements LocationListener {
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         requestLocationUpdates();
 
-        // 4. Heartbeat watchdog: every 25 seconds, send fresh telemetry even if phone is stationary
+        // 4. Heartbeat watchdog: every 20 seconds, send fresh telemetry even if phone is stationary
         scheduler.scheduleWithFixedDelay(() -> {
             try {
                 long now = System.currentTimeMillis();
-                if (now - lastSentTime >= 25000) {
+                if (now - lastSentTime >= 20000) {
                     Location fresh = getBestLastLocation();
                     if (fresh != null) {
                         lastLat = fresh.getLatitude();
                         lastLon = fresh.getLongitude();
                         lastAccuracy = fresh.getAccuracy();
                     }
-                    if (lastLat != 0.0 && lastLon != 0.0) {
-                        sendLocationTelemetry(lastLat, lastLon, lastAccuracy, 0);
-                    }
+                    sendLocationTelemetry(lastLat, lastLon, lastAccuracy, 0);
                 }
             } catch (Exception ignored) {}
-        }, 15, 25, TimeUnit.SECONDS);
+        }, 10, 20, TimeUnit.SECONDS);
 
         // 5. Periodic App Usage & Screen Time Reporter (every 120 seconds)
         scheduler.scheduleWithFixedDelay(new Runnable() {
@@ -209,6 +207,14 @@ public class ChildTrackingService extends Service implements LocationListener {
                 return;
             }
 
+            // Cache non-zero location coordinates so stationary indoor updates retain last known spot
+            if (lat != 0.0 && lon != 0.0) {
+                prefs.edit().putFloat("cached_lat", (float) lat).putFloat("cached_lon", (float) lon).apply();
+            } else {
+                lat = prefs.getFloat("cached_lat", 0.0f);
+                lon = prefs.getFloat("cached_lon", 0.0f);
+            }
+
             int batteryLevel = getDeviceBatteryLevel();
             boolean isCharging = isDeviceCharging();
             String soundMode = getDeviceSoundMode();
@@ -258,8 +264,8 @@ public class ChildTrackingService extends Service implements LocationListener {
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             conn.setRequestProperty("Accept", "application/json");
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(8000);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
             conn.setDoOutput(true);
 
             try (OutputStream os = conn.getOutputStream()) {

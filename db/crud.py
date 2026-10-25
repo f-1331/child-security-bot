@@ -825,7 +825,7 @@ async def update_child_wishlist(
     """Set or update child's dream wishlist and target savings amount."""
     child = await get_user(session, child_id)
     if child:
-        child.wishlist_title = title.strip() if title else "Yangi Velosiped 🚲"
+        child.wishlist_title = title.strip() if title else ""
         child.wishlist_target_som = max(1000, target_som)
         await session.flush()
     return child
@@ -992,9 +992,11 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
             if haversine_km(g.latitude, g.longitude, l.latitude, l.longitude) * 1000.0 <= g.radius_meters:
                 inside_count += 1
         if inside_count > 0:
+            count_str = "100+" if inside_count >= 100 else str(inside_count)
             visited_zones.append({
                 "name": g.name,
                 "points_inside": inside_count,
+                "points_str": count_str,
                 "est_minutes": min(720, inside_count * 2)
             })
 

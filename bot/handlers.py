@@ -1170,6 +1170,7 @@ async def on_refresh_battery_callback(callback: CallbackQuery):
                     "type": "active_check",
                     "time": datetime.now(TASHKENT_TZ).strftime("%H:%M")
                 })
+            await asyncio.sleep(0.3)
         except Exception:
             pass
 
@@ -1239,7 +1240,11 @@ async def on_daily_summary_pressed(message: Message):
 
                 zones_list = rep["visited_zones"]
                 if zones_list:
-                    zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
+                    zones_str = " ➔ ".join([
+                        f"{html.escape(z['name'])} ({z.get('points_str', z.get('points_inside', 1))} marta)"
+                        if z.get('points_inside', 0) > 1 else html.escape(z["name"])
+                        for z in zones_list
+                    ])
                     est_time = sum(z["est_minutes"] for z in zones_list)
                     hours = est_time // 60
                     mins = est_time % 60
@@ -1302,7 +1307,11 @@ async def on_refresh_report_callback(callback: CallbackQuery):
             c_name = html.escape(rep["child_name"])
             zones_list = rep["visited_zones"]
             if zones_list:
-                zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
+                zones_str = " ➔ ".join([
+                    f"{html.escape(z['name'])} ({z.get('points_str', z.get('points_inside', 1))} marta)"
+                    if z.get('points_inside', 0) > 1 else html.escape(z["name"])
+                    for z in zones_list
+                ])
                 est_time = sum(z["est_minutes"] for z in zones_list)
                 hours = est_time // 60
                 mins = est_time % 60
