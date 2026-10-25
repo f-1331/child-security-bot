@@ -24,6 +24,12 @@ from db.database import AsyncSessionLocal
 import db.crud as crud
 from api import telemetry
 from bot.geofence import evaluate_geofences_and_notify, haversine_distance
+
+# Permanent Telegram CDN cached file_ids for zero-delay instant document delivery
+TG_FILE_ID_PARENT_APK = "BQACAgIAAxkDAAIC5mreMhe2YYW7kXQ3dRC_RDdx4BrAAAJYpAACkXzxSqCXbmUrcbZgPQQ"
+TG_FILE_ID_CHILD_APK = "BQACAgIAAxkDAAIC6GreMjrspfxKqP3TTU64vZmwbxPfAAJZpAACkXzxSpQJ0c774dgsPQQ"
+TG_FILE_ID_DESKTOP_BAT = "BQACAgIAAxkDAAIC6WreMjq9xWYkPZq8P0TeWpRRcELKAAJapAACkXzxSiJOn8-Ny45HPQQ"
+TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIC6mreMjvc9e0X-zI8GZXTnSauecdfAAJbpAACkXzxSmsBddhrPfmIPQQ"
 from bot.keyboards import (
     get_role_selection_keyboard,
     get_parent_main_keyboard,
@@ -3137,33 +3143,30 @@ async def on_download_parent_apk(event, bot: Bot, state: FSMContext = None):
     target = local_parent_apk if (os.path.exists(local_parent_apk) and os.path.getsize(local_parent_apk) > 1_000_000) else local_apk
 
     sent = False
+    # Priority 1: Instant delivery via Telegram CDN cached file_id
     try:
-        if os.path.exists(target) and os.path.getsize(target) > 1_000_000:
-            doc = FSInputFile(target, filename="ChildSecurity_Parent.apk")
-            await message.answer_document(
-                document=doc,
-                caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
-                parse_mode=ParseMode.HTML
-            )
-            sent = True
-        else:
-            import httpx
-            from aiogram.types import BufferedInputFile
-            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
-                resp = await client.get(direct_github_apk)
-                if resp.status_code == 200 and len(resp.content) > 1_000_000:
-                    os.makedirs(os.path.dirname(local_parent_apk), exist_ok=True)
-                    with open(local_parent_apk, "wb") as f_out:
-                        f_out.write(resp.content)
-                    doc = BufferedInputFile(resp.content, filename="ChildSecurity_Parent.apk")
-                    await message.answer_document(
-                        document=doc,
-                        caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
-                        parse_mode=ParseMode.HTML
-                    )
-                    sent = True
-    except Exception as e:
-        logger.warning(f"Could not send parent APK document: {e}")
+        await message.answer_document(
+            document=TG_FILE_ID_PARENT_APK,
+            caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! O'z telefoningizdan barcha farzandlaringizni xaritada bevosita nazorat qiling! 🛡️✨",
+            parse_mode=ParseMode.HTML
+        )
+        sent = True
+    except Exception as e_fid:
+        logger.warning(f"Could not send parent APK by file_id: {e_fid}")
+
+    # Priority 2: Fallback to local disk file
+    if not sent:
+        try:
+            if os.path.exists(target) and os.path.getsize(target) > 1_000_000:
+                doc = FSInputFile(target, filename="ChildSecurity_Parent.apk")
+                await message.answer_document(
+                    document=doc,
+                    caption="👨‍👩‍👧 <b>Child Security — Ota-ona Ilovasi (v1.0.0)</b>\n\nO'rnatish uchun fayl ustiga bosing! 🛡️✨",
+                    parse_mode=ParseMode.HTML
+                )
+                sent = True
+        except Exception as e:
+            logger.warning(f"Could not send parent APK document: {e}")
 
     if not sent:
         await message.answer(
@@ -3259,45 +3262,41 @@ async def on_download_child_apk(event, bot: Bot, state: FSMContext = None):
     target = local_child_apk if (os.path.exists(local_child_apk) and os.path.getsize(local_child_apk) > 1_000_000) else local_apk
 
     sent = False
+    # Priority 1: Instant delivery via Telegram CDN cached file_id
     try:
-        if os.path.exists(target) and os.path.getsize(target) > 1_000_000:
-            doc = FSInputFile(target, filename="ChildSecurity_Child.apk")
-            await message.answer_document(
-                document=doc,
-                caption=(
-                    "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
-                    "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
-                    "1️⃣ Farzand telefonida ilovani oching.\n"
-                    "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
-                    "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
-                ),
-                parse_mode=ParseMode.HTML
-            )
-            sent = True
-        else:
-            import httpx
-            from aiogram.types import BufferedInputFile
-            async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
-                resp = await client.get(direct_github_apk)
-                if resp.status_code == 200 and len(resp.content) > 1_000_000:
-                    os.makedirs(os.path.dirname(local_child_apk), exist_ok=True)
-                    with open(local_child_apk, "wb") as f_out:
-                        f_out.write(resp.content)
-                    doc = BufferedInputFile(resp.content, filename="ChildSecurity_Child.apk")
-                    await message.answer_document(
-                        document=doc,
-                        caption=(
-                            "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
-                            "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
-                            "1️⃣ Farzand telefonida ilovani oching.\n"
-                            "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
-                            "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
-                        ),
-                        parse_mode=ParseMode.HTML
-                    )
-                    sent = True
-    except Exception as e:
-        logger.warning(f"Could not send child APK document: {e}")
+        await message.answer_document(
+            document=TG_FILE_ID_CHILD_APK,
+            caption=(
+                "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
+                "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
+                "1️⃣ Farzand telefonida ilovani oching.\n"
+                "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish / Allow all the time) tugmasini bosing!\n"
+                "3️⃣ Shunda ota-ona xaritada bolaning qayerdaligini ko'ra oladi! 🛡️✨"
+            ),
+            parse_mode=ParseMode.HTML
+        )
+        sent = True
+    except Exception as e_fid:
+        logger.warning(f"Could not send child APK by file_id: {e_fid}")
+
+    # Priority 2: Fallback to local disk file
+    if not sent:
+        try:
+            if os.path.exists(target) and os.path.getsize(target) > 1_000_000:
+                doc = FSInputFile(target, filename="ChildSecurity_Child.apk")
+                await message.answer_document(
+                    document=doc,
+                    caption=(
+                        "👦 <b>Child Security — Farzand Ilovasi (v1.0.0)</b>\n\n"
+                        "⚠️ <b>O'RNATGANDAN SO'NG JUDA MUHIM QADAM:</b>\n"
+                        "1️⃣ Farzand telefonida ilovani oching.\n"
+                        "2️⃣ Ilovaga kirib, <b>«Doimiy joylashuvga ruxsat berish»</b> (Har doim ruxsat berish) tugmasini bosing! 🛡️✨"
+                    ),
+                    parse_mode=ParseMode.HTML
+                )
+                sent = True
+        except Exception as e:
+            logger.warning(f"Could not send child APK document: {e}")
 
     if not sent:
         await message.answer(
@@ -3384,29 +3383,44 @@ async def on_download_ios(event, bot: Bot, state: FSMContext = None):
 
     await message.answer(text, reply_markup=kb, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-    profile_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.mobileconfig")
-    if not os.path.exists(profile_path):
-        try:
-            from scripts.generate_mobileconfig import generate
-            generate()
-        except Exception:
-            pass
-    if os.path.exists(profile_path):
-        try:
-            doc = FSInputFile(profile_path, filename="ChildSecurity.mobileconfig")
-            await message.answer_document(
-                document=doc,
-                caption=(
-                    "🍎 <b>Child Security — Apple iPhone O'rnatuvchi Fayli (.mobileconfig)</b>\n\n"
-                    "1️⃣ Faylni yuklab oling va oching (Ruxsat berish / Allow).\n"
-                    "2️⃣ iPhone <b>«Sozlamalar» (Настройки)</b> ➔ <b>«Profil yuklandi» (Профиль загружен)</b> ga kiring.\n"
-                    "3️⃣ Yuqoridagi <b>«O'rnatish» (Установить)</b> tugmasini bosing.\n\n"
-                    "✨ Child Security ilovasi iPhone ekraningizga alohida ilova bo'lib o'rnatiladi! 🛡️📱"
-                ),
-                parse_mode=ParseMode.HTML
-            )
-        except Exception as e:
-            logger.warning(f"Could not send iOS mobileconfig document: {e}")
+    # Priority 1: Instant delivery via Telegram CDN cached file_id
+    try:
+        await message.answer_document(
+            document=TG_FILE_ID_IOS_PROFILE,
+            caption=(
+                "🍎 <b>Child Security — Apple iPhone O'rnatuvchi Fayli (.mobileconfig)</b>\n\n"
+                "1️⃣ Faylni yuklab oling va oching (Ruxsat berish / Allow).\n"
+                "2️⃣ iPhone <b>«Sozlamalar» (Настройки)</b> ➔ <b>«Profil yuklandi» (Профиль загружен)</b> ga kiring.\n"
+                "3️⃣ Yuqoridagi <b>«O'rnatish» (Установить)</b> tugmasini bosing.\n\n"
+                "✨ Child Security ilovasi iPhone ekraningizga alohida ilova bo'lib o'rnatiladi! 🛡️📱"
+            ),
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e_fid:
+        logger.warning(f"Could not send iOS mobileconfig by file_id: {e_fid}")
+        profile_path = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity.mobileconfig")
+        if not os.path.exists(profile_path):
+            try:
+                from scripts.generate_mobileconfig import generate
+                generate()
+            except Exception:
+                pass
+        if os.path.exists(profile_path):
+            try:
+                doc = FSInputFile(profile_path, filename="ChildSecurity.mobileconfig")
+                await message.answer_document(
+                    document=doc,
+                    caption=(
+                        "🍎 <b>Child Security — Apple iPhone O'rnatuvchi Fayli (.mobileconfig)</b>\n\n"
+                        "1️⃣ Faylni yuklab oling va oching (Ruxsat berish / Allow).\n"
+                        "2️⃣ iPhone <b>«Sozlamalar» (Настройки)</b> ➔ <b>«Profil yuklandi» (Профиль загружен)</b> ga kiring.\n"
+                        "3️⃣ Yuqoridagi <b>«O'rnatish» (Установить)</b> tugmasini bosing.\n\n"
+                        "✨ Child Security ilovasi iPhone ekraningizga alohida ilova bo'lib o'rnatiladi! 🛡️📱"
+                    ),
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception as e:
+                logger.warning(f"Could not send iOS mobileconfig document: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([
@@ -3503,11 +3517,10 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
         "start msedge.exe --app=\"%URL%\" 2>nul || start chrome.exe --app=\"%URL%\" 2>nul || start \"\" \"%URL%\"\r\n"
         "exit\r\n"
     )
+    # Priority 1: Instant delivery via Telegram CDN cached file_id
     try:
-        from aiogram.types import BufferedInputFile
-        doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
         await message.answer_document(
-            document=doc,
+            document=TG_FILE_ID_DESKTOP_BAT,
             caption=(
                 "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
                 "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
@@ -3516,8 +3529,23 @@ async def on_download_desktop(event, bot: Bot, state: FSMContext = None):
             ),
             parse_mode=ParseMode.HTML
         )
-    except Exception as e:
-        logger.warning(f"Could not send desktop setup BAT document: {e}")
+    except Exception as e_fid:
+        logger.warning(f"Could not send desktop BAT by file_id: {e_fid}")
+        try:
+            from aiogram.types import BufferedInputFile
+            doc = BufferedInputFile(desktop_bat_content.encode("utf-8"), filename="ChildSecurity_Desktop_Setup.bat")
+            await message.answer_document(
+                document=doc,
+                caption=(
+                    "💻 <b>Child Security — Noutbuk & PC O'rnatgichi</b>\n\n"
+                    "1. Ushbu faylni yuklab oling va ustiga bosing.\n"
+                    "2. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi!\n"
+                    "3. Dastur to'liq ekranda alohida oyna bo'lib ishga tushadi. 🚀"
+                ),
+                parse_mode=ParseMode.HTML
+            )
+        except Exception as e:
+            logger.warning(f"Could not send desktop setup BAT document: {e}")
 
 
 @router.message(StateFilter("*"), F.text.in_([
