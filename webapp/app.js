@@ -566,6 +566,128 @@ async function checkAuthenticationState() {
   }
 }
 
+// =========================================================
+// Saytdan kod olish & Telegram botdan kod olish taklifi
+// =========================================================
+window._selectedCodeGenRole = "parent";
+window._lastGeneratedWebCode = "";
+
+function selectCodeGenRole(role) {
+  window._selectedCodeGenRole = role === "child" ? "child" : "parent";
+  const btnParent = document.getElementById("btnRoleParent");
+  const btnChild = document.getElementById("btnRoleChild");
+
+  if (window._selectedCodeGenRole === "child") {
+    if (btnChild) {
+      btnChild.className = "py-2 px-2.5 rounded-xl border border-emerald-500 bg-emerald-600/30 text-white text-xs font-bold transition flex items-center justify-center gap-1.5";
+    }
+    if (btnParent) {
+      btnParent.className = "py-2 px-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5";
+    }
+  } else {
+    if (btnParent) {
+      btnParent.className = "py-2 px-2.5 rounded-xl border border-blue-500 bg-blue-600/30 text-white text-xs font-bold transition flex items-center justify-center gap-1.5";
+    }
+    if (btnChild) {
+      btnChild.className = "py-2 px-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5";
+    }
+  }
+}
+
+function toggleWebCodeGenBox() {
+  const box = document.getElementById("webCodeGenBox");
+  const icon = document.getElementById("toggleCodeGenIcon");
+  const text = document.getElementById("toggleCodeGenText");
+  if (!box) return;
+
+  const isHidden = box.classList.contains("hidden");
+  if (isHidden) {
+    box.classList.remove("hidden");
+    if (icon) icon.classList.add("rotate-180");
+    if (text) text.textContent = "Yashirish";
+    if (window._pendingTargetRole) {
+      selectCodeGenRole(window._pendingTargetRole);
+    }
+  } else {
+    box.classList.add("hidden");
+    if (icon) icon.classList.remove("rotate-180");
+    if (text) text.textContent = "Kodni olish";
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+async function generateWebCodeAction() {
+  const btn = document.getElementById("btnGenerateWebCode");
+  const nameInput = document.getElementById("inputWebGenName");
+  const resultBox = document.getElementById("webCodeGenResult");
+  const codeDisplay = document.getElementById("generatedCodeDisplay");
+
+  const role = window._selectedCodeGenRole || "parent";
+  const fullName = nameInput ? nameInput.value.trim() : "";
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-pulse">Yangi kod yaratilmoqda...</span>`;
+  }
+
+  try {
+    const res = await fetch("/api/v1/webapp/auth/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: role, full_name: fullName })
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || "Kod yaratishda xatolik yuz berdi.");
+    }
+
+    window._lastGeneratedWebCode = data.code;
+    if (codeDisplay) codeDisplay.textContent = data.code;
+    if (resultBox) resultBox.classList.remove("hidden");
+
+    // Automatically fill the code input so 1-click login works smoothly
+    const inputAuth = document.getElementById("inputAuthCode");
+    if (inputAuth) inputAuth.value = data.code;
+
+    haptic("success");
+    showToast(`🎉 Yangi kod yaratildi: ${data.code}`);
+  } catch (err) {
+    console.error("Web code generation error:", err);
+    haptic("warning");
+    showToast(`⚠️ ${err.message || "Xatolik yuz berdi"}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="key-round" class="w-3.5 h-3.5"></i><span>Saytda yangi kod yaratish</span>`;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function copyGeneratedCode() {
+  const code = window._lastGeneratedWebCode;
+  if (!code) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(() => {
+      haptic("light");
+      showToast("Kod nusxalandi! 📋");
+    }).catch(() => {
+      prompt("Kodingiz:", code);
+    });
+  } else {
+    prompt("Kodingiz:", code);
+  }
+}
+
+function applyGeneratedCodeAndLogin() {
+  const code = window._lastGeneratedWebCode;
+  if (!code) return;
+  const inputAuth = document.getElementById("inputAuthCode");
+  if (inputAuth) inputAuth.value = code;
+  submitAuthCode();
+}
+
 function showAuthGateModal(targetRole = null) {
   setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("authGateModal");
@@ -583,6 +705,7 @@ function showAuthGateModal(targetRole = null) {
 
   if (targetRole) {
     window._pendingTargetRole = targetRole;
+    selectCodeGenRole(targetRole);
     if (modalTitle) {
       modalTitle.textContent = targetRole === "child" ? "👦 Farzand hisobiga o'tish" : "👨‍👩‍👧 Ota-ona hisobiga o'tish";
     }
@@ -593,6 +716,7 @@ function showAuthGateModal(targetRole = null) {
     }
   } else {
     window._pendingTargetRole = null;
+    selectCodeGenRole("parent");
     if (modalTitle) modalTitle.textContent = "Child Security Bot";
     if (modalSub) modalSub.textContent = "Bolalar xavfsizligi va rag'batlantirish platformasi";
   }

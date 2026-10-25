@@ -1,6 +1,7 @@
 import html
 import json
 import logging
+import random
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -77,6 +78,7 @@ class RateLimiter:
     def __init__(self):
         self.failed_auth: dict[str, list[float]] = defaultdict(list)
         self.upload_requests: dict[str, list[float]] = defaultdict(list)
+        self.code_gen_requests: dict[str, list[float]] = defaultdict(list)
         self.last_location_update: dict[int, float] = {}
 
     def check_auth_rate_limit(self, ip: str, max_attempts: int = 5, window_seconds: int = 300) -> tuple[bool, int]:
@@ -86,6 +88,19 @@ class RateLimiter:
             oldest = self.failed_auth[ip][0]
             retry_after = max(1, int(window_seconds - (now - oldest)))
             return False, retry_after
+        return True, 0
+
+    def check_code_gen_rate_limit(self, ip: str, max_requests: int = 10, window_seconds: int = 300) -> tuple[bool, int]:
+        """Prevent abuse and automated spam generation of web access codes."""
+        now = time.time()
+        if not hasattr(self, "code_gen_requests"):
+            self.code_gen_requests = defaultdict(list)
+        self.code_gen_requests[ip] = [t for t in self.code_gen_requests[ip] if now - t < window_seconds]
+        if len(self.code_gen_requests[ip]) >= max_requests:
+            oldest = self.code_gen_requests[ip][0]
+            retry_after = max(1, int(window_seconds - (now - oldest)))
+            return False, retry_after
+        self.code_gen_requests[ip].append(now)
         return True, 0
 
     def record_auth_failure(self, ip: str):
@@ -195,6 +210,11 @@ class CreateGeofenceRequest(BaseModel):
 
 class AuthCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
+
+
+class GenerateWebCodeRequest(BaseModel):
+    role: str = Field("parent", description="User role: 'parent' or 'child'")
+    full_name: Optional[str] = Field(None, max_length=100)
 
 
 class TelegramAuthRequest(BaseModel):
@@ -358,6 +378,73 @@ async def verify_auth_code_endpoint(
 
     rate_limiter.reset_auth_failures(client_ip)
     return await build_user_auth_payload(user, session, code=code)
+
+
+@router.post("/auth/generate-code")
+async def generate_web_code_endpoint(
+    request: Request,
+    payload: GenerateWebCodeRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Generate a new 6-digit access code directly from the website.
+    Still actively suggests connecting via Telegram bot for full push notifications & SOS features.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = rate_limiter.check_code_gen_rate_limit(client_ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Xavfsizlik tizimi: Ko'p so'rov yuborildi. Iltimos, {retry_after} soniyadan so'ng qayta urinib ko'ring."
+        )
+
+    role = (payload.role or "parent").strip().lower()
+    if role not in ("parent", "child"):
+        role = "parent"
+
+    # Generate unique user_id for web-created users in high range (9_000_000_000+)
+    # to avoid any collision with standard Telegram IDs
+    web_user_id = None
+    for _ in range(50):
+        candidate_id = 9_000_000_000 + random.randint(100_000_000, 999_999_999)
+        existing = await crud.get_user(session, candidate_id)
+        if not existing:
+            web_user_id = candidate_id
+            break
+
+    if not web_user_id:
+        web_user_id = int(time.time() * 1000)
+
+    clean_name = (payload.full_name or "").strip()
+    if not clean_name:
+        clean_name = "Ota-ona (Veb)" if role == "parent" else "Farzand (Veb)"
+
+    user, _ = await crud.get_or_create_user(
+        session=session,
+        user_id=web_user_id,
+        role=role,
+        full_name=clean_name
+    )
+
+    code = await crud.generate_web_access_code(session, web_user_id)
+    await session.commit()
+
+    bot_username = getattr(settings, "BOT_USERNAME", "child_security_bot") or "child_security_bot"
+
+    return {
+        "status": "success",
+        "code": code,
+        "role": role,
+        "user_id": web_user_id,
+        "full_name": user.full_name,
+        "bot_username": bot_username,
+        "bot_url": f"https://t.me/{bot_username}",
+        "message": "Saytga kirish uchun yangi 6 xonali kod muvaffaqiyatli yaratildi.",
+        "recommendation": (
+            f"💡 Tavsiya: Real vaqtda SOS signallari, bildirishnomalar va to'liq monitoring uchun "
+            f"bizning Telegram botimizdan (@{bot_username}) foydalanishni tavsiya qilamiz!"
+        )
+    }
 
 
 @router.post("/auth/telegram")

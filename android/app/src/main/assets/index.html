@@ -1444,18 +1444,113 @@
         </button>
       </div>
 
-      <!-- Telegram Bot Direct Clickable Button -->
-      <a href="https://t.me/child_security_bot" target="_blank" class="w-full py-2.5 mb-2.5 bg-gradient-to-r from-sky-600/30 via-blue-600/30 to-indigo-600/30 hover:from-sky-600/45 hover:to-blue-600/45 border border-sky-400/40 text-sky-200 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm">
-        <svg class="w-4 h-4 shrink-0 fill-current text-sky-400" viewBox="0 0 24 24">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
-        </svg>
-        <span class="truncate">Telegram Botdan Kirish Kodini Olish (@child_security_bot)</span>
-      </a>
+      <!-- KOD OLISH USULLARI: TELEGRAM BOT (TAVSIYA ETILADI) VA SAYT (MUQOBIL) -->
+      <div class="space-y-2.5 mb-3 text-left">
 
-      <!-- Telegram Bot Info Helper -->
-      <div class="text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60 text-left mb-3 leading-relaxed">
-        💡 <b>Kod qayerdan olinadi?</b><br/>
-        <a href="https://t.me/child_security_bot" target="_blank" class="text-sky-400 hover:underline font-bold">@child_security_bot</a> Telegram botimizga kiring va <b>«🔑 Saytga kirish kodi»</b> tugmasini bosing.
+        <!-- 1-USUL: TELEGRAM BOT (ASOSIY VA TAVSIYA ETILADIGAN USUL) -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-br from-sky-950/70 via-slate-900 to-indigo-950/70 border-2 border-sky-400/50 shadow-lg relative overflow-hidden">
+          <div class="flex items-center justify-between mb-2">
+            <span class="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-sky-500/25 text-sky-200 border border-sky-400/40 px-2 py-0.5 rounded-full">
+              <span>⭐</span>
+              <span>Tavsiya etiladi</span>
+            </span>
+            <span class="text-[10px] font-semibold text-sky-300">Eng qulay usul</span>
+          </div>
+
+          <p class="text-xs font-bold text-white mb-1 flex items-center gap-1.5">
+            <span>🤖 Telegram Bot orqali kod olish</span>
+          </p>
+          <p class="text-[11px] text-slate-300 leading-relaxed mb-2.5">
+            Real vaqtda SOS chaqiruvlari, push-bildirishnomalar va qulay boshqaruv uchun kodni rasmiy Telegram botimizdan olishingizni <b>tavsiya qilamiz</b>. Botga kiring va <b>«🔑 Saytga kirish kodi»</b> tugmasini bosing.
+          </p>
+
+          <a href="https://t.me/child_security_bot" target="_blank" class="w-full py-2.5 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-sky-600/30 transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 shrink-0 fill-current" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
+            </svg>
+            <span>Telegram Botdan kod olish (@child_security_bot)</span>
+          </a>
+        </div>
+
+        <!-- 2-USUL: SAYTNING O'ZIDAN YANGI KOD OLISH (TELEGRAM BO'LMAGANDA) -->
+        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-left">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs">🌐</span>
+              <span class="text-xs font-bold text-slate-200">Saytning o'zidan kod olish</span>
+            </div>
+            <button type="button" onclick="toggleWebCodeGenBox()" id="btnToggleCodeGen" class="text-xs text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-1 transition">
+              <span id="toggleCodeGenText">Kodni olish</span>
+              <i id="toggleCodeGenIcon" data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform duration-200"></i>
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-1">
+            Agar Telegram ilovangiz bo'lmasa, to'g'ridan-to'g'ri sayt orqali yangi 6 xonali kirish kodi yaratishingiz mumkin.
+          </p>
+
+          <!-- COLLAPSIBLE GENERATION FORM -->
+          <div id="webCodeGenBox" class="hidden mt-3 pt-3 border-t border-slate-700/70 animate-fade-in">
+            <label class="block text-[11px] font-semibold text-slate-300 mb-1.5">1. Hisob turini tanlang:</label>
+            <div class="grid grid-cols-2 gap-2 mb-2.5">
+              <button type="button" onclick="selectCodeGenRole('parent')" id="btnRoleParent" class="py-2 px-2.5 rounded-xl border border-blue-500 bg-blue-600/30 text-white text-xs font-bold transition flex items-center justify-center gap-1.5">
+                <span>👨‍👩‍👧</span>
+                <span>Ota-ona</span>
+              </button>
+              <button type="button" onclick="selectCodeGenRole('child')" id="btnRoleChild" class="py-2 px-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs font-semibold transition flex items-center justify-center gap-1.5">
+                <span>👦</span>
+                <span>Farzand</span>
+              </button>
+            </div>
+
+            <label class="block text-[11px] font-semibold text-slate-300 mb-1">2. Ismingiz (ixtiyoriy):</label>
+            <input
+              id="inputWebGenName"
+              type="text"
+              placeholder="Masalan: Azizbek"
+              maxlength="40"
+              class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-blue-500 mb-2.5 transition"
+            />
+
+            <button
+              id="btnGenerateWebCode"
+              type="button"
+              onclick="generateWebCodeAction()"
+              class="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
+            >
+              <i data-lucide="key-round" class="w-3.5 h-3.5"></i>
+              <span>Saytda yangi kod yaratish</span>
+            </button>
+
+            <!-- RESULT BOX AFTER GENERATION -->
+            <div id="webCodeGenResult" class="hidden mt-3 p-3 rounded-xl bg-slate-950/90 border border-emerald-500/40 text-center animate-fade-in">
+              <p class="text-[11px] text-emerald-400 font-bold mb-1">🎉 Yangi kodingiz yaratildi!</p>
+              <div class="flex items-center justify-center gap-2 my-2">
+                <span id="generatedCodeDisplay" class="font-mono text-2xl font-black text-amber-300 tracking-widest bg-black/60 px-3 py-1 rounded-lg border border-amber-400/30">------</span>
+                <button type="button" onclick="copyGeneratedCode()" class="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition active:scale-90" title="Nusxalash">
+                  <i data-lucide="copy" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-400 leading-tight mb-2.5">
+                Ushbu kodni saqlab qo'ying. Keyingi safar saytga kirishda shu kod kerak bo'ladi.
+              </p>
+
+              <button
+                type="button"
+                onclick="applyGeneratedCodeAndLogin()"
+                class="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
+              >
+                <span>Tizimga kirish</span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+              </button>
+
+              <!-- Telegram Bot Suggestion reminder inside result -->
+              <div class="mt-2.5 pt-2 border-t border-slate-800/80 text-[10px] text-slate-300 text-left leading-relaxed">
+                💡 <b>Tavsiya:</b> Tezkor SOS qo'ng'iroqlari va hisobotlarni olish uchun baribir Telegram botimiz (<a href="https://t.me/child_security_bot" target="_blank" class="text-sky-400 font-bold underline">@child_security_bot</a>) orqali ulanish tavsiya etiladi.
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Mobil ilovalarni yuklab olish kartasi (Ota-ona & Farzand) -->
