@@ -9271,3 +9271,54 @@ function openAllChildZonesOnMap() {
   }, 150);
 }
 window.openAllChildZonesOnMap = openAllChildZonesOnMap;
+
+
+// =========================================================
+// LAST BREATH & TAMPER UI NOTIFICATIONS
+// =========================================================
+function showLastBreathAlertBanner(msg) {
+  let banner = document.getElementById("lastBreathAlertBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "lastBreathAlertBanner";
+    banner.className = "fixed top-3 left-3 right-3 z-50 bg-gradient-to-r from-red-900 to-rose-950 border border-red-500 rounded-2xl p-4 shadow-2xl flex items-start gap-3 text-white animate-bounce-short";
+    document.body.appendChild(banner);
+  }
+  const appInfo = msg.last_active_app ? ` | Oxirgi ilova: ${msg.last_active_app}` : "";
+  const wifiInfo = msg.wifi_ssid ? ` | Tarmoq: ${msg.wifi_ssid}` : "";
+  banner.innerHTML = `
+    <div class="text-2xl">🪫</div>
+    <div class="flex-1 text-xs">
+      <div class="font-bold text-sm text-red-200">⚠️ TELEFON QUVVATI TUGAB O'CHDI!</div>
+      <div class="text-slate-300 mt-1">Oxirgi ma'lum bo'lgan joylashuv xaritada belgilandi.${appInfo}${wifiInfo}</div>
+      <div class="mt-2 flex gap-2">
+        <button onclick="if(map&&childMarker)map.flyTo(childMarker.getLatLng(),16);this.parentElement.parentElement.parentElement.remove();" class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded-lg font-bold text-[11px]">📍 Xaritada ko'rish</button>
+        <button onclick="this.parentElement.parentElement.parentElement.remove();" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg text-[11px]">Yopish</button>
+      </div>
+    </div>
+  `;
+  haptic("heavy");
+}
+window.showLastBreathAlertBanner = showLastBreathAlertBanner;
+
+function showTamperAlertBanner(msg) {
+  let banner = document.getElementById("tamperAlertBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "tamperAlertBanner";
+    banner.className = "fixed top-3 left-3 right-3 z-50 bg-gradient-to-r from-amber-900 to-red-950 border border-amber-500 rounded-2xl p-4 shadow-2xl flex items-start gap-3 text-white";
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `
+    <div class="text-2xl">🚨</div>
+    <div class="flex-1 text-xs">
+      <div class="font-bold text-sm text-amber-300">${msg.title || "QOIDABUZARLIK ANIQLANDI!"}</div>
+      <div class="text-slate-200 mt-1">${msg.details || "Bolaning telefonida xavfsizlik cheklovi buzildi."}</div>
+      <div class="mt-2">
+        <button onclick="this.parentElement.parentElement.remove();" class="px-3 py-1 bg-amber-600 hover:bg-amber-500 rounded-lg font-bold text-[11px]">Tushundim</button>
+      </div>
+    </div>
+  `;
+  haptic("heavy");
+}
+window.showTamperAlertBanner = showTamperAlertBanner;

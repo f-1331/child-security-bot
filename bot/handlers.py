@@ -40,6 +40,13 @@ TG_FILE_ID_IOS_PROFILE = "BQACAgIAAxkDAAIDBGreN2RP4HQZPqZFSP0xiRIiSYxhAAKqpAACkX
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
 
+def clean_md(text: Optional[str]) -> str:
+    """Escapes Telegram Markdown reserved characters (*, _, `, [) to prevent parsing crashes."""
+    if not text:
+        return ""
+    return str(text).replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("[", "\\[")
+
+
 def format_tashkent_time(dt: Optional[datetime], include_date: bool = False, include_freshness: bool = True) -> str:
     """Formats a UTC timestamp from DB to Tashkent local time (UTC+5) with relative freshness badge."""
     if not dt:
@@ -230,7 +237,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                                     chat_id=target_child_id,
                                     text=(
                                         f"🎉 **Ajoyib yangilik!**\n\n"
-                                        f"Ota-onangiz (**{full_name}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
+                                        f"Ota-onangiz (**{clean_md(full_name)}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
                                     ),
                                     reply_markup=get_child_main_keyboard(),
                                     parse_mode="Markdown"
@@ -311,7 +318,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             chat_id=primary_parent_id,
                             text=(
                                 f"🎉 **Oilangizga ikkinchi ota-ona qo'shildi!**\n\n"
-                                f"👤 Hamkor: **{full_name}**\n\n"
+                                f"👤 Hamkor: **{clean_md(full_name)}**\n\n"
                                 f"Endi ikkalangiz ham farzandlaringiz xavfsizligini birgalikda kuzatishingiz mumkin. 🛡️"
                             ),
                             reply_markup=get_parent_main_keyboard(primary_parent_id),
@@ -468,7 +475,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 ]
             )
             await message.answer(
-                f"Assalomu alaykum, **{full_name}**!\n\n"
+                f"Assalomu alaykum, **{clean_md(full_name)}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
                 f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
                 f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n\n"
@@ -509,7 +516,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 ]
             )
             await message.answer(
-                f"Salom, **{full_name}**!\n\n"
+                f"Salom, **{clean_md(full_name)}**!\n\n"
                 f"👦 Siz **Farzand** rejimidasiz.\n"
                 f"Ulangan ota-ona: **{parent_names}**.\n\n"
                 f"Har qanday favqulodda vaziyatda darhol **'🚨 SOS'** tugmasini bosing!\n\n"
@@ -526,7 +533,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
 
         # If user has no role yet, ask for role selection
         await message.answer(
-            f"Assalomu alaykum, **{full_name}**!\n\n"
+            f"Assalomu alaykum, **{clean_md(full_name)}**!\n\n"
             f"🌟 **Smart Bolalar Nazorati & Joylashuv Tizimi**ga xush kelibsiz!\n\n"
             f"Iltimos, tizimdan foydalanish uchun o'z rolingizni tanlang:",
             reply_markup=get_role_selection_keyboard(),
@@ -1137,14 +1144,14 @@ async def on_battery_status_pressed(message: Message):
                 time_str = format_tashkent_time(latest.recorded_at)
 
                 text += (
-                    f"👤 **{ch.full_name}**\n"
+                    f"👤 **{clean_md(ch.full_name)}**\n"
                     f"• Batareya: **{lvl}%** ({status_emoji})\n"
                     f"• Holat: {charging_icon}\n"
                     f"• Ovoz rejimi: **{sound_mode}**\n"
                     f"• Oxirgi signal: **{time_str}**\n\n"
                 )
             else:
-                text += f"👤 **{ch.full_name}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
+                text += f"👤 **{clean_md(ch.full_name)}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
 
         refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
@@ -1198,14 +1205,14 @@ async def on_refresh_battery_callback(callback: CallbackQuery):
                 time_str = format_tashkent_time(latest.recorded_at)
 
                 text += (
-                    f"👤 **{ch.full_name}**\n"
+                    f"👤 **{clean_md(ch.full_name)}**\n"
                     f"• Batareya: **{lvl}%** ({status_emoji})\n"
                     f"• Holat: {charging_icon}\n"
                     f"• Ovoz rejimi: **{sound_mode}**\n"
                     f"• Oxirgi signal: **{time_str}**\n\n"
                 )
             else:
-                text += f"👤 **{ch.full_name}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
+                text += f"👤 **{clean_md(ch.full_name)}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
 
         refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
@@ -4446,7 +4453,7 @@ async def perform_account_logout(user_id: int, full_name: str, message_obj, stat
                     chat_id=partner_id,
                     text=(
                         f"ℹ️ **Hisob yangilanishi:**\n\n"
-                        f"Bog'langan foydalanuvchi (**{full_name}**) o'z hisobidan chiqdi va rolni qayta tanlash holatiga o'tdi.\n"
+                        f"Bog'langan foydalanuvchi (**{clean_md(full_name)}**) o'z hisobidan chiqdi va rolni qayta tanlash holatiga o'tdi.\n"
                         f"Zarur bo'lsa, qaytadan 6 xonali ulanish kodi orqali bog'lanishingiz mumkin."
                     ),
                     parse_mode="Markdown"
