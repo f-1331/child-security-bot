@@ -427,6 +427,31 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void playNativeSiren() {
+            try {
+                android.net.Uri alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM);
+                if (alert == null) {
+                    alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE);
+                }
+                android.media.Ringtone r = android.media.RingtoneManager.getRingtone(context, alert);
+                if (r != null) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        r.setAudioAttributes(new android.media.AudioAttributes.Builder()
+                                .setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                                .build());
+                    }
+                    r.play();
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                        try {
+                            if (r.isPlaying()) r.stop();
+                        } catch (Exception ignored) {}
+                    }, 15000);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
         public void requestBatteryOptimizationExemption() {
             runOnUiThread(() -> requestBatteryOptimization());
         }

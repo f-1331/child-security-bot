@@ -32,6 +32,10 @@ child_daily_tamper_log: dict[int, list[dict]] = {}
 # Track discipline bonus awarded date: (child_id, date_str) -> bool
 discipline_bonus_awarded: set[str] = set()
 
+# Speed change tracker for crash / sudden deceleration: child_id -> (speed, timestamp)
+last_known_speed_tracker: dict[int, tuple[float, float]] = {}
+last_impact_alert_map: dict[int, float] = {}
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot
@@ -139,6 +143,32 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                 except Exception as e:
                     logger.error(f"Failed to dispatch speed alert to parent {p.id}: {e}")
             last_speed_alert_map[payload.child_id] = now
+
+    # 2.6 Sudden Impact / Emergency Stop Alert (>40 km/h dropped to < 5 km/h in <= 4s)
+    prev_speed_data = last_known_speed_tracker.get(payload.child_id)
+    curr_speed = payload.speed or 0.0
+    if prev_speed_data and telegram_bot:
+        prev_spd, prev_time = prev_speed_data
+        dt = now_ts - prev_time
+        last_impact_time = last_impact_alert_map.get(payload.child_id, 0.0)
+        if prev_spd >= 40.0 and curr_speed < 5.0 and 0.5 <= dt <= 4.5 and (now_ts - last_impact_time) > 300.0:
+            parents = await crud.get_parents_for_child(session, payload.child_id)
+            child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.lat},{payload.lon}"
+            impact_msg = (
+                f"🚨 <b>OGOHLANTIRISH: KESKIN TO'XTASH ANIQLANDI!</b>\n\n"
+                f"👤 Farzandingiz: <b>{child_name}</b>\n"
+                f"⚠️ Harakatlanayotgan transport tezligi <b>{prev_spd:.0f} km/soat</b>dan <b>{curr_speed:.0f} km/soat</b>ga keskin tushdi ({dt:.1f} soniya ichida).\n"
+                f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ko'rish</a>\n\n"
+                f"Iltimos, farzandingiz bilan bog'lanib, xavfsizligiga ishonch hosil qiling."
+            )
+            for p in parents:
+                try:
+                    await telegram_bot.send_message(chat_id=p.id, text=impact_msg, parse_mode="HTML")
+                except Exception as e:
+                    logger.debug(f"Impact alert delivery notice: {e}")
+            last_impact_alert_map[payload.child_id] = now_ts
+    last_known_speed_tracker[payload.child_id] = (curr_speed, now_ts)
 
     # 3. Geofence Boundary Check (Entry / Exit transitions)
     geofence_events = await evaluate_geofences_and_notify(

@@ -1290,8 +1290,15 @@ async def on_daily_summary_pressed(message: Message):
                     f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
                 )
                 report_kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🗺 Xaritada harakat marshrutini ko'rish", web_app=WebAppInfo(url=settings.MINI_APP_URL))],
-                    [InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"refresh_report:{ch.id}")]
+                    [InlineKeyboardButton(text="🗺 Xaritada harakat marshrutini ko'rish", web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={parent_id}&child_id={ch.id}"))],
+                    [
+                        InlineKeyboardButton(text="🔔 Baland signal", callback_data=f"siren_child_{ch.id}"),
+                        InlineKeyboardButton(text="🎁 +100 Tanga", callback_data=f"night_reward_{ch.id}_100")
+                    ],
+                    [
+                        InlineKeyboardButton(text="🛌 Tungi uyqu", callback_data=f"night_bedtime_{ch.id}"),
+                        InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"refresh_report:{ch.id}")
+                    ]
                 ])
                 await message.answer(report_msg, reply_markup=report_kb, parse_mode="HTML")
             except Exception as e:
@@ -1365,6 +1372,153 @@ async def on_refresh_report_callback(callback: CallbackQuery):
         except Exception as e:
             logger.error(f"Error refreshing daily report: {e}")
             await callback.answer("Hozircha yangi ma'lumot yo'q.")
+
+@router.callback_query(F.data.startswith("siren_child_"))
+async def on_siren_child_callback(callback: CallbackQuery, bot: Bot):
+    """Parent triggers remote siren / loud sound ping to child's device."""
+    try:
+        child_id = int(callback.data.split("_")[2])
+    except (IndexError, ValueError):
+        await callback.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
+        child = await crud.get_user(session, child_id)
+        child_name = html.escape(child.full_name or "Farzand") if child else "Farzand"
+
+    # Send telegram message to child
+    try:
+        await bot.send_message(
+            chat_id=child_id,
+            text="🔔 <b>DIQQAT: Ota-onangiz telefoningizga qidiruv/ogohlantirish signali yubordi!</b>",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.debug(f"Failed to send siren telegram alert to child {child_id}: {e}")
+
+    # Broadcast to WebApp / Mobile App via WebSocket
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "remote_siren",
+            "message": "Ota-onangiz telefoningizga qidiruv signali yubordi!"
+        })
+    except Exception as e:
+        logger.debug(f"WebSocket siren broadcast notice: {e}")
+
+    await callback.answer(f"🔔 {child_name} telefoniga baland signal (sirena) yuborildi!", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("night_reward_"))
+async def on_night_reward_callback(callback: CallbackQuery, bot: Bot):
+    """Parent awards coins to child directly from nightly safety report."""
+    parts = callback.data.split("_")
+    try:
+        child_id = int(parts[2])
+        amount = int(parts[3])
+    except (IndexError, ValueError):
+        await callback.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
+        await crud.add_coins_to_user(session, child_id, amount)
+        child = await crud.get_user(session, child_id)
+        child_name = html.escape(child.full_name or "Farzand") if child else "Farzand"
+        new_balance = child.virtual_balance if child else 0
+
+    # Notify child
+    try:
+        await bot.send_message(
+            chat_id=child_id,
+            text=(
+                f"🌟 <b>TABRIKLAYMIZ! MUKOFOT TANGA!</b>\n\n"
+                f"Ota-onangiz namunali intizomingiz va xavfsizligingiz uchun sizga <b>+{amount:,} tanga</b> mukofot berdi!\n"
+                f"💰 Hozirgi balansingiz: <b>{new_balance:,} tanga</b> 🎉"
+            ),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.debug(f"Failed to notify child {child_id} of reward: {e}")
+
+    # Broadcast balance update to WebApp
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "balance_update",
+            "balance": new_balance,
+            "reward": amount
+        })
+    except Exception:
+        pass
+
+    await callback.answer(f"🎁 {child_name}ga +{amount} tanga mukofot berildi! Balans: {new_balance:,}", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("night_bedtime_"))
+async def on_night_bedtime_callback(callback: CallbackQuery, bot: Bot):
+    """Parent locks child device for bedtime until 07:00 AM."""
+    try:
+        child_id = int(callback.data.split("_")[2])
+    except (IndexError, ValueError):
+        await callback.answer("Noto'g'ri so'rov.", show_alert=True)
+        return
+
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if parents and parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
+        policy = await crud.update_device_policy(
+            session=session,
+            child_id=child_id,
+            parent_id=parent_id,
+            is_all_apps_blocked=True,
+            lockdown_reason="Tungi uyqu vaqti (07:00 gacha)",
+            bedtime_start="22:00",
+            bedtime_end="07:00"
+        )
+        child = await crud.get_user(session, child_id)
+        child_name = html.escape(child.full_name or "Farzand") if child else "Farzand"
+
+    # Notify child
+    try:
+        await bot.send_message(
+            chat_id=child_id,
+            text="🛌 <b>TUNGI UYQU REJIMI FAOL!</b>\n\nOta-onangiz telefoningizni soat 07:00 gacha tungi uyqu rejimiga oldi. Xayrli tun!",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
+    # Broadcast policy update to WebApp & Android
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "device_policy_update",
+            "is_all_apps_blocked": True,
+            "lockdown_reason": "Tungi uyqu vaqti (07:00 gacha)",
+            "bedtime_start": "22:00",
+            "bedtime_end": "07:00"
+        })
+    except Exception:
+        pass
+
+    await callback.answer(f"🛌 {child_name} telefoni soat 07:00 gacha tungi uyqu rejimiga olindi!", show_alert=True)
+
 
 
 # ---------------------------------------------------------

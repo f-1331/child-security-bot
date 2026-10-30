@@ -8,6 +8,7 @@ except ImportError:
     ZoneInfo = None
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from config import settings
 from db.database import AsyncSessionLocal
 import db.crud as crud
@@ -121,7 +122,22 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                     f"━━━━━━━━━━━━━━━━━━━\n"
                                     f"✨ <i>Farzandingiz xavfsizligi va kunlik intizomi to'liq nazoratda! Xayrli tun!</i>"
                                 )
-                                await bot.send_message(chat_id=p.id, text=report_msg, parse_mode="HTML")
+                                report_kb = InlineKeyboardMarkup(inline_keyboard=[
+                                    [
+                                        InlineKeyboardButton(
+                                            text="🗺 Xaritada marshrutni ko'rish",
+                                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                                        )
+                                    ],
+                                    [
+                                        InlineKeyboardButton(text="🔔 Baland signal chalish", callback_data=f"siren_child_{ch.id}"),
+                                        InlineKeyboardButton(text="🎁 +100 Tanga mukofot", callback_data=f"night_reward_{ch.id}_100")
+                                    ],
+                                    [
+                                        InlineKeyboardButton(text="🛌 Tungi uyqu rejimiga olish", callback_data=f"night_bedtime_{ch.id}")
+                                    ]
+                                ])
+                                await bot.send_message(chat_id=p.id, text=report_msg, reply_markup=report_kb, parse_mode="HTML")
                             except Exception as ch_err:
                                 logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {p.id}: {ch_err}")
 
