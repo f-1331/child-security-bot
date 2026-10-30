@@ -70,6 +70,7 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
             // If elapsed time grew by >5s but wall time moved backward by >30s or jumped >30 min
             if (elapsedDelta >= 5000 && (wallDelta < -30000 || Math.abs(wallDelta - elapsedDelta) > 1800000)) {
                 Log.w(TAG, "⚠️ Tamper detected: Child manually manipulated system clock!");
+                TamperReporter.report(this, "CLOCK_MANIPULATION", "Telefon vaqti qo'lda o'zgartirildi (Vaqt manipulyatsiyasi)!");
                 performGlobalAction(GLOBAL_ACTION_HOME);
                 launchLockOverlay("settings", "Sozlamalar", "Telefon vaqti o'zgartirilishi aniqlandi! Cheklovni aylanib o'tish taqiqlanadi.");
                 return;

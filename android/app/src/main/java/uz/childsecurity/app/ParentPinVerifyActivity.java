@@ -180,6 +180,7 @@ public class ParentPinVerifyActivity extends AppCompatActivity {
 
         if (isValid) {
             Toast.makeText(this, "✅ Ota-ona tasdiqlandi!", Toast.LENGTH_SHORT).show();
+            prefs.edit().putInt("pin_failed_attempts", 0).apply();
 
             // Store temporary unlock grant timestamp (5 minutes)
             prefs.edit().putLong("temp_settings_unlock_time", System.currentTimeMillis()).apply();
@@ -190,7 +191,21 @@ public class ParentPinVerifyActivity extends AppCompatActivity {
 
             finish();
         } else {
-            Toast.makeText(this, "❌ Noto'g'ri PIN-kod! Qayta urinib ko'ring.", Toast.LENGTH_SHORT).show();
+            int failed = prefs.getInt("pin_failed_attempts", 0) + 1;
+            prefs.edit().putInt("pin_failed_attempts", failed).apply();
+
+            if (failed >= 3) {
+                TamperReporter.report(this, "INTRUDER_PIN_BRUTE_FORCE", "Ota-ona PIN-kodi 3 marta ketma-ket noto'g'ri kiritildi!");
+                Toast.makeText(this, "🚨 Xavfsizlik: PIN-kod 3 marta xato kiritildi! Qurilma 5 daqiqaga bloklandi.", Toast.LENGTH_LONG).show();
+                Intent lockIntent = new Intent(this, LockOverlayActivity.class);
+                lockIntent.putExtra(LockOverlayActivity.EXTRA_APP_NAME, "Xavfsizlik Himoyasi");
+                lockIntent.putExtra(LockOverlayActivity.EXTRA_REASON, "PIN-kod 3 marta xato kiritildi. Cheklov faollashtirildi!");
+                startActivity(lockIntent);
+                finish();
+                return;
+            }
+
+            Toast.makeText(this, "❌ Noto'g'ri PIN-kod! Qolgan urinishlar: " + (3 - failed), Toast.LENGTH_SHORT).show();
             currentPin.setLength(0);
             updatePinDisplay();
         }

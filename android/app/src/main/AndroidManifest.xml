@@ -124,6 +124,21 @@
             </intent-filter>
         </receiver>
 
+        <!-- OEM Killer Bypass & Self-Healing Watchdog (Xiaomi/Samsung) and Last Breath Receiver -->
+        <receiver
+            android:name="uz.childsecurity.app.WatchdogReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.BATTERY_LOW" />
+                <action android:name="uz.childsecurity.app.ACTION_WATCHDOG_PULSE" />
+                <action android:name="uz.childsecurity.app.ACTION_RESTART_TRACKING" />
+            </intent-filter>
+        </receiver>
+
         <!-- Local VPN Firewall Service (Cuts off internet for games & social apps in Lockdown Mode) -->
         <service
             android:name="uz.childsecurity.app.LocalVpnService"

@@ -26,6 +26,12 @@ last_sos_alert_map: dict[int, datetime] = {}
 # Telemetry ping throttle map: child_id -> timestamp (prevents GPS flooding)
 last_telemetry_ping_map: dict[int, float] = {}
 
+# Tamper incidents log: child_id -> list of tamper dicts
+child_daily_tamper_log: dict[int, list[dict]] = {}
+
+# Track discipline bonus awarded date: (child_id, date_str) -> bool
+discipline_bonus_awarded: set[str] = set()
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot

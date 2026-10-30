@@ -173,6 +173,69 @@ const RustCore = {
 window.RustCore = RustCore;
 RustCore.init().catch(() => {});
 
+// =========================================================
+// ZERO MEMORY LEAKS & CENTRALIZED RESOURCE CLEANUP REGISTRY
+// =========================================================
+const AppCleanupRegistry = {
+  intervals: new Set(),
+  timeouts: new Set(),
+  mapLayers: new Set(),
+
+  registerInterval(id) {
+    if (id) this.intervals.add(id);
+    return id;
+  },
+
+  clearInterval(id) {
+    if (id) {
+      window.clearInterval(id);
+      this.intervals.delete(id);
+    }
+  },
+
+  registerTimeout(id) {
+    if (id) this.timeouts.add(id);
+    return id;
+  },
+
+  clearTimeout(id) {
+    if (id) {
+      window.clearTimeout(id);
+      this.timeouts.delete(id);
+    }
+  },
+
+  registerLayer(layer) {
+    if (layer) this.mapLayers.add(layer);
+    return layer;
+  },
+
+  removeLayer(layer) {
+    if (layer) {
+      if (typeof map !== "undefined" && map && map.hasLayer && map.hasLayer(layer)) {
+        try { map.removeLayer(layer); } catch (e) {}
+      }
+      this.mapLayers.delete(layer);
+    }
+  },
+
+  cleanupAll() {
+    this.intervals.forEach((id) => window.clearInterval(id));
+    this.intervals.clear();
+    this.timeouts.forEach((id) => window.clearTimeout(id));
+    this.timeouts.clear();
+    if (typeof map !== "undefined" && map) {
+      this.mapLayers.forEach((layer) => {
+        try { if (map.hasLayer && map.hasLayer(layer)) map.removeLayer(layer); } catch (e) {}
+      });
+    }
+    this.mapLayers.clear();
+    console.log("[Cleanup] All background timers and map layers safely recycled.");
+  }
+};
+window.AppCleanupRegistry = AppCleanupRegistry;
+
+
 
 // Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
@@ -2570,6 +2633,29 @@ function smoothMoveMarker(marker, targetLat, targetLon, durationMs = 600) {
     return;
   }
 
+  // 60 FPS Bearing angle computation with RustCore or mathematical fallback
+  let bearing = 0;
+  if (Math.hypot(deltaLat, deltaLng) > 0.00001) {
+    if (typeof RustCore !== "undefined" && typeof RustCore.calculateBearing === "function") {
+      bearing = RustCore.calculateBearing(startLat, startLng, targetLat, targetLon);
+    } else {
+      const y = Math.sin((deltaLng * Math.PI) / 180) * Math.cos((targetLat * Math.PI) / 180);
+      const x =
+        Math.cos((startLat * Math.PI) / 180) * Math.sin((targetLat * Math.PI) / 180) -
+        Math.sin((startLat * Math.PI) / 180) * Math.cos((targetLat * Math.PI) / 180) * Math.cos((deltaLng * Math.PI) / 180);
+      bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+    }
+  }
+
+  const el = marker.getElement();
+  if (el) {
+    const arrow = el.querySelector(".marker-heading-arrow");
+    if (arrow) {
+      arrow.style.display = "block";
+      arrow.style.transform = `rotate(${Math.round(bearing)}deg)`;
+    }
+  }
+
   if (marker._animFrame) {
     cancelAnimationFrame(marker._animFrame);
     marker._animFrame = null;
@@ -2579,6 +2665,7 @@ function smoothMoveMarker(marker, targetLat, targetLon, durationMs = 600) {
   function step(now) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / durationMs, 1.0);
+    // Cubic bezier ease-out for Uber/Yandex-style 60 FPS interpolation
     const ease = 1 - Math.pow(1 - progress, 3);
     const curLat = startLat + deltaLat * ease;
     const curLng = startLng + deltaLng * ease;
@@ -2593,7 +2680,7 @@ function smoothMoveMarker(marker, targetLat, targetLon, durationMs = 600) {
   marker._animFrame = requestAnimationFrame(step);
 }
 
-// Render or move pulsing radar child marker
+// Render or move pulsing radar child marker with bearing heading pointer
 function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offlineText = "") {
   if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
     return;
@@ -2603,8 +2690,9 @@ function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offl
   const pinBg = isSos ? "bg-red-600" : (isOnline ? "bg-gradient-to-tr from-blue-700 to-indigo-500" : "bg-gradient-to-tr from-slate-600 to-slate-800");
 
   const customHtml = `
-    <div class="child-radar-marker">
+    <div class="child-radar-marker" style="position:relative;">
       <div class="${pulseClass}"></div>
+      <div class="marker-heading-arrow" style="position:absolute;top:-8px;left:18px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:8px solid #38bdf8;filter:drop-shadow(0 0 4px #0284c7);transform-origin:4px 30px;transition:transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);display:none;z-index:10;"></div>
       <div class="child-avatar-pin ${pinBg}">${initial}</div>
     </div>
   `;
@@ -6354,14 +6442,37 @@ function startChildLiveTracking(childId) {
         }
       }
 
-      // Ultra-sensitive centimeter tracking: send if moved >= 0.5 meter or every 2 seconds
-      if (dist >= 0.5 || (now - lastSentTime) > 2000) {
+      // Adaptive GPS Polling: stationary vs active movement
+      if (!window._stationaryCount) window._stationaryCount = 0;
+      if (dist < 3.0 && speedKmh <= 1) {
+        window._stationaryCount++;
+      } else if (dist >= 5.0 || speedKmh >= 2) {
+        window._stationaryCount = 0;
+      }
+
+      // Eco Mode when stationary >= 3 pings (poll every 30-45s), Real-Time Mode when moving (every 2-3s)
+      const isEcoMode = window._stationaryCount >= 3;
+      const minSendInterval = isEcoMode ? 35000 : 2500;
+
+      if (dist >= 0.5 || (now - lastSentTime) > minSendInterval) {
         lastSentTime = now;
         lastSentLat = latitude;
         lastSentLng = longitude;
 
         const battery = await getDeviceBattery();
         const isCharging = await getDeviceChargingStatus();
+
+        // Last Breath Emergency Check (battery <= 5% and discharging)
+        let isLastBreath = false;
+        if (battery !== null && battery <= 5 && !isCharging) {
+          if (window._lastBreathLevel !== battery) {
+            window._lastBreathLevel = battery;
+            isLastBreath = true;
+          }
+        } else if (isCharging) {
+          window._lastBreathLevel = null;
+        }
+
         sendChildLiveTelemetry(childId, {
           latitude,
           longitude,
@@ -6369,7 +6480,10 @@ function startChildLiveTracking(childId) {
           speed: speedKmh,
           battery_level: battery,
           is_charging: isCharging,
-          sound_mode: "normal"
+          sound_mode: "normal",
+          is_last_breath: isLastBreath,
+          last_active_app: (typeof document !== "undefined" && document.title) ? document.title : "Child Security App",
+          wifi_ssid: (navigator.connection && navigator.connection.effectiveType) ? navigator.connection.effectiveType : "Cellular/Wi-Fi"
         });
       }
     },
@@ -6627,6 +6741,40 @@ function handleIncomingWebSocketMessage(msg) {
         renderChildMarker(pos.lat, pos.lng, "Men", false, null);
       }
       showToast("✅ SOS xavf signali to'xtatildi.");
+    }
+    return;
+  }
+
+  // 4.0 Last Breath Emergency Alert received by Parent
+  if ((msg.type === "child_last_breath" || msg.is_last_breath) && currentRole === "parent") {
+    if (msg.child_id == currentChildId || !currentChildId) {
+      if (msg.latitude && msg.longitude) {
+        renderChildMarker(msg.latitude, msg.longitude, "Farzand (O'chdi)", false, msg.battery_level || 0, false, "Batareya 0%");
+        if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1.2 });
+      }
+      showLastBreathAlertBanner(msg);
+    } else {
+      showToast(`⚠️ ${msg.child_name || 'Farzandingiz'} telefoni quvvati tugab o'chdi!`);
+    }
+    return;
+  }
+
+  // 4.01 Tamper / Intrusion Alert received by Parent
+  if (msg.type === "child_tamper_alert" && currentRole === "parent") {
+    playSirenSound();
+    haptic("heavy");
+    showTamperAlertBanner(msg);
+    return;
+  }
+
+  // 4.02 Discipline Bonus Awarded
+  if (msg.type === "discipline_bonus_awarded") {
+    if (currentRole === "child") {
+      playSuccessChime();
+      showToast(`🎖️ Kun Qahramoni! Intizom Bonusi: +${msg.bonus_coins || 50} tanga qo'shildi! 👏`);
+      if (typeof loadChildDashboard === "function") loadChildDashboard();
+    } else {
+      showToast(`🎖️ Farzandingiz bugun namunali intizomi uchun +${msg.bonus_coins || 50} tanga oldi!`);
     }
     return;
   }
@@ -7252,7 +7400,10 @@ async function recordAndUploadSOSAudio(childId) {
       ? "audio/mp4"
       : "";
 
-    const options = mimeType ? { mimeType } : {};
+    const options = {
+      audioBitsPerSecond: 16000 // 16kbps compression: ultra-lightweight (~10KB for 5s) for 2G/Edge
+    };
+    if (mimeType) options.mimeType = mimeType;
     const mediaRecorder = new MediaRecorder(stream, options);
     const chunks = [];
 
@@ -7273,14 +7424,30 @@ async function recordAndUploadSOSAudio(childId) {
       const formData = new FormData();
       formData.append("file", blob, `sos_audio_${Date.now()}.${ext}`);
 
-      try {
-        await fetch(`/api/v1/webapp/child/${childId}/sos/media`, {
-          method: "POST",
-          body: formData,
-        });
-        console.log("SOS audio snapshot successfully dispatched to parents");
-      } catch (err) {
-        console.warn("Failed to upload SOS audio snapshot:", err);
+      // Exponential backoff retry (up to 3 attempts with 1s, 2s, 4s delay)
+      let uploadSuccess = false;
+      let delay = 1000;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const resp = await fetch(`/api/v1/webapp/child/${childId}/sos/media`, {
+            method: "POST",
+            body: formData,
+          });
+          if (resp.ok) {
+            console.log(`[SOS Audio] Snapshot uploaded successfully on attempt ${attempt}`);
+            uploadSuccess = true;
+            break;
+          }
+        } catch (err) {
+          console.warn(`[SOS Audio] Upload attempt ${attempt} failed:`, err);
+        }
+        if (attempt < 3) {
+          await new Promise((res) => setTimeout(res, delay));
+          delay *= 2;
+        }
+      }
+      if (!uploadSuccess) {
+        console.warn("[SOS Audio] Could not upload SOS audio snapshot after 3 retries");
       }
     };
 

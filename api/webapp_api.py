@@ -199,6 +199,9 @@ class ChildLocationUpdate(BaseModel):
     battery_level: Optional[int] = Field(None, ge=0, le=100)
     is_charging: Optional[bool] = False
     sound_mode: Optional[str] = "normal"
+    is_last_breath: Optional[bool] = False
+    last_active_app: Optional[str] = None
+    wifi_ssid: Optional[str] = None
 
 
 class CreateGeofenceRequest(BaseModel):
@@ -229,6 +232,15 @@ class ChildSOSRequest(BaseModel):
     longitude: Optional[float] = None
     accuracy: Optional[float] = None
     battery_level: Optional[int] = None
+
+
+class TamperAlertRequest(BaseModel):
+    event_type: str = Field(..., description="Tamper type: INTRUDER_PIN_BRUTE_FORCE, CLOCK_MANIPULATION, ACCESSIBILITY_DISABLED, ADMIN_DISABLED, MOCK_LOCATION")
+    details: Optional[str] = "Xavfsizlik qoidabuzarligi aniqlandi"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    battery_level: Optional[int] = None
+    device_model: Optional[str] = None
 
 
 class DevicePolicyUpdateRequest(BaseModel):
@@ -1542,6 +1554,37 @@ async def update_child_live_location_endpoint(
             except Exception as batt_err:
                 logger.error(f"Battery alert check error: {batt_err}")
 
+        # 2.5. Last Breath emergency alert check (is_last_breath or battery <= 5%)
+        if payload.is_last_breath and telemetry.telegram_bot:
+            try:
+                parents = await crud.get_parents_for_child(session, child_id)
+                child_name = child.full_name or f"Farzand ID:{child.id}"
+                safe_cname = html.escape(child_name)
+                maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+                app_info = f"\n📱 Oxirgi faol ilova: <b>{html.escape(payload.last_active_app)}</b>" if payload.last_active_app else ""
+                wifi_info = f"\n📶 Wi-Fi: <b>{html.escape(payload.wifi_ssid)}</b>" if payload.wifi_ssid else ""
+
+                last_breath_msg = (
+                    f"🪫🚨 <b>OXIRGI NAFAS (LAST BREATH) SIGNALI!</b>\n\n"
+                    f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+                    f"⚠️ <b>Telefon quvvati tugab o'chdi!</b> (Batareya: {payload.battery_level}%)\n"
+                    f"📍 Oxirgi aniqlangan joyi: <a href=\"{maps_url}\">Xaritada ochish (Google Maps)</a>"
+                    f"{app_info}"
+                    f"{wifi_info}\n\n"
+                    f"ℹ️ Telefon o'chishidan bir necha soniya oldin oxirgi GPS koordinata avtomatik saqlandi."
+                )
+                for p in parents:
+                    try:
+                        await telemetry.telegram_bot.send_message(
+                            chat_id=p.id,
+                            text=last_breath_msg,
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+            except Exception as lb_err:
+                logger.error(f"Last breath alert error: {lb_err}")
+
         # 3. Active SOS push: Handled exclusively by SOS trigger endpoint to avoid duplicate Telegram location balloons
 
     await session.commit()
@@ -1549,7 +1592,7 @@ async def update_child_live_location_endpoint(
     # Broadcast updated location to parents via WebSocket
     parents = await crud.get_parents_for_child(session, child_id)
     telemetry_data = {
-        "type": "child_location_update",
+        "type": "child_last_breath" if payload.is_last_breath else "child_location_update",
         "child_id": child_id,
         "latitude": payload.latitude,
         "longitude": payload.longitude,
@@ -1557,6 +1600,9 @@ async def update_child_live_location_endpoint(
         "speed": payload.speed,
         "battery_level": payload.battery_level,
         "is_charging": payload.is_charging,
+        "is_last_breath": payload.is_last_breath,
+        "last_active_app": payload.last_active_app,
+        "wifi_ssid": payload.wifi_ssid,
         "recorded_at": format_utc_iso(log.recorded_at) if log.recorded_at else format_utc_iso(datetime.now(timezone.utc))
     }
     for p in parents:
@@ -2626,6 +2672,148 @@ async def router_download_desktop():
         media_type="application/x-bat",
         headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Desktop_Setup.bat"'}
     )
+
+
+@router.post("/child/{child_id}/tamper-alert")
+async def report_tamper_alert_endpoint(
+    child_id: int,
+    payload: TamperAlertRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Log tamper attempt (3x PIN, clock tampering, accessibility disabled, mock location) and alert parents."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child and child.full_name else f"Farzand #{child_id}"
+    safe_cname = html.escape(child_name)
+    parents = await crud.get_parents_for_child(session, child_id)
+
+    event_titles = {
+        "INTRUDER_PIN_BRUTE_FORCE": "❌ PIN-kod 3 marta xato kiritildi!",
+        "ACCESSIBILITY_DISABLED": "⚠️ Maxsus imkoniyatlar (Accessibility) o'chirildi!",
+        "ADMIN_DISABLED": "🛡️ Qurilma administratori ruxsati o'chirildi!",
+        "CLOCK_MANIPULATION": "⏰ Tizim soati o'zgartirildi (Vaqt manipulyatsiyasi)!",
+        "MOCK_LOCATION": "📍 Soxta GPS (Mock Location) aniqlandi!"
+    }
+    title = event_titles.get(payload.event_type, "⚠️ Xavfsizlik qoidabuzarligi aniqlandi!")
+
+    now_tashkent = datetime.now(TASHKENT_TZ)
+    if child_id not in telemetry.child_daily_tamper_log:
+        telemetry.child_daily_tamper_log[child_id] = []
+    telemetry.child_daily_tamper_log[child_id].append({
+        "event_type": payload.event_type,
+        "details": payload.details,
+        "time": now_tashkent.isoformat(),
+        "latitude": payload.latitude,
+        "longitude": payload.longitude
+    })
+
+    alert_msg = (
+        f"🚨 <b>XAVFSIZLIK OGOHLANTIRISHI!</b>\n\n"
+        f"👤 Farzand: <b>{safe_cname}</b>\n"
+        f"⚠️ Holat: <b>{title}</b>\n"
+        f"📝 Tafsilot: {html.escape(payload.details or '')}\n"
+    )
+    if payload.latitude and payload.longitude:
+        maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+        alert_msg += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
+    if payload.device_model:
+        alert_msg += f"📱 Qurilma: <code>{html.escape(payload.device_model)}</code>\n"
+    alert_msg += "\nℹ️ Ilova bolaning telefonida xavfsizlik cheklovlarini darhol kuchaytirdi."
+
+    if telemetry.telegram_bot:
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=p.id,
+                    text=alert_msg,
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+
+    ws_data = {
+        "type": "child_tamper_alert",
+        "child_id": child_id,
+        "event_type": payload.event_type,
+        "title": title,
+        "details": payload.details,
+        "timestamp": now_tashkent.strftime("%H:%M")
+    }
+    for p in parents:
+        await ws_manager.send_to_user(p.id, ws_data)
+
+    return {"status": "success", "child_id": child_id, "alert_logged": True}
+
+
+@router.post("/child/{child_id}/daily-discipline-check")
+async def daily_discipline_check_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Check if child had zero infractions today. If clean, award Kun Qahramoni (Intizom Bonusi) +50 coins!
+    """
+    today_key = f"{child_id}_{datetime.now(TASHKENT_TZ).strftime('%Y-%m-%d')}"
+    if today_key in telemetry.discipline_bonus_awarded:
+        return {"status": "already_awarded", "message": "Bugun uchun intizom bonusi allaqachon berilgan"}
+
+    tamper_events = telemetry.child_daily_tamper_log.get(child_id, [])
+    today_str = datetime.now(TASHKENT_TZ).strftime('%Y-%m-%d')
+    today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str)]
+
+    if len(today_tamper) > 0:
+        return {
+            "status": "forfeited",
+            "message": "Bugun qoidabuzarliklar aniqlangani sababli intizom bonusi berilmadi",
+            "infractions_count": len(today_tamper)
+        }
+
+    awarded_coins = 50
+    user = await crud.add_coins_to_user(session, child_id, awarded_coins)
+    telemetry.discipline_bonus_awarded.add(today_key)
+
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child and child.full_name else f"Farzand #{child_id}"
+    safe_cname = html.escape(child_name)
+    parents = await crud.get_parents_for_child(session, child_id)
+
+    if telemetry.telegram_bot:
+        bot_msg = (
+            f"🎖️ <b>KUN QAHRAMONI (INTIZOM BONUSI)!</b>\n\n"
+            f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+            f"🌟 Bugun telefon xavfsizlik cheklovlariga 100% to'liq amal qildi!\n"
+            f"🪙 Hamyonga <b>+{awarded_coins} tanga</b> intizom bonusi qo'shildi! 👏"
+        )
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(chat_id=p.id, text=bot_msg, parse_mode="HTML")
+            except Exception:
+                pass
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text=f"🎉 <b>Qoyil, Kun Qahramoni!</b>\n\nBugun hech qanday qoidabuzarlik qilmadingiz! 🌟\n🪙 Hamyoningizga <b>+{awarded_coins} tanga</b> Intizom Bonusi qo'shildi! 🚀",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    for p in parents:
+        await ws_manager.send_to_user(p.id, {
+            "type": "discipline_bonus_awarded",
+            "child_id": child_id,
+            "bonus_coins": awarded_coins
+        })
+    await ws_manager.send_to_user(child_id, {
+        "type": "discipline_bonus_awarded",
+        "child_id": child_id,
+        "bonus_coins": awarded_coins
+    })
+
+    return {
+        "status": "awarded",
+        "bonus_coins": awarded_coins,
+        "new_balance": user.virtual_balance if user else None
+    }
 
 
 @router.get("/security/status", tags=["Security"])

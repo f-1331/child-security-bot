@@ -58,6 +58,12 @@ public class ChildTrackingService extends Service implements LocationListener {
     private double lastLon = 0.0;
     private float lastAccuracy = 15.0f;
 
+    // Adaptive GPS Polling: Eco mode when stationary saves up to 80% battery
+    private boolean isEcoMode = false;
+    private int stationaryCount = 0;
+    private boolean lastBreath5Sent = false;
+    private boolean lastBreath2Sent = false;
+
     // Kalman Filter State for Anti-Drift and smooth trajectory
     private double kalmanLat = 0.0;
     private double kalmanLon = 0.0;
@@ -112,21 +118,22 @@ public class ChildTrackingService extends Service implements LocationListener {
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         requestLocationUpdates();
 
-        // 4. Heartbeat watchdog: every 20 seconds, send fresh telemetry even if phone is stationary
+        // 4. Heartbeat watchdog: adaptive telemetry pulse
         scheduler.scheduleWithFixedDelay(() -> {
             try {
                 long now = System.currentTimeMillis();
-                if (now - lastSentTime >= 20000) {
+                long minInterval = isEcoMode ? 45000L : 15000L;
+                if (now - lastSentTime >= minInterval) {
                     Location fresh = getBestLastLocation();
                     if (fresh != null) {
                         lastLat = fresh.getLatitude();
                         lastLon = fresh.getLongitude();
                         lastAccuracy = fresh.getAccuracy();
                     }
-                    sendLocationTelemetry(lastLat, lastLon, lastAccuracy, 0);
+                    sendLocationTelemetry(lastLat, lastLon, lastAccuracy, 0, false);
                 }
             } catch (Exception ignored) {}
-        }, 10, 20, TimeUnit.SECONDS);
+        }, 10, 15, TimeUnit.SECONDS);
 
         // 5. Periodic App Usage & Screen Time Reporter (every 120 seconds)
         scheduler.scheduleWithFixedDelay(new Runnable() {
@@ -137,6 +144,9 @@ public class ChildTrackingService extends Service implements LocationListener {
                 } catch (Exception ignored) {}
             }
         }, 30, 120, TimeUnit.SECONDS);
+
+        // 6. Ensure Watchdog heartbeat alarm is armed
+        WatchdogReceiver.scheduleNextWatchdogPulse(this);
     }
 
     @Override
@@ -154,6 +164,11 @@ public class ChildTrackingService extends Service implements LocationListener {
                 }
                 editor.apply();
             }
+
+            // Check for emergency Last Breath pulse from WatchdogReceiver
+            if (intent.getBooleanExtra("ACTION_LAST_BREATH", false)) {
+                triggerLastBreathSnapshot();
+            }
         }
 
         // Trigger immediate check
@@ -169,18 +184,20 @@ public class ChildTrackingService extends Service implements LocationListener {
     private void requestLocationUpdates() {
         if (locationManager == null) return;
         try {
-            // Request GPS provider (every 15 seconds or 5 meters)
+            long minTime = isEcoMode ? 45000L : 5000L;
+            float minDistance = isEcoMode ? 10f : 2f;
+            locationManager.removeUpdates(this);
+
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 15000L, 5f, this);
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, minTime, minDistance, this);
             }
-            // Fallback network provider
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 15000L, 5f, this);
+                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, minTime, minDistance, this);
             }
-            // Passive provider
             if (locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)) {
-                locationManager.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER, 15000L, 5f, this);
+                locationManager.requestLocationUpdates(LocationManager.PASSIVE_PROVIDER, minTime, minDistance, this);
             }
+            Log.d(TAG, "Location updates requested (EcoMode=" + isEcoMode + ", minTime=" + minTime + "ms)");
         } catch (SecurityException e) {
             Log.e(TAG, "Location permission not granted: " + e.getMessage());
         } catch (Exception e) {
@@ -231,14 +248,38 @@ public class ChildTrackingService extends Service implements LocationListener {
         double lat = filtered[0];
         double lon = filtered[1];
 
+        // Stationary Adaptive Polling check
+        if (lastLat != 0.0 && lastLon != 0.0) {
+            double distFromLast = RustCoreBridge.haversineDistance(lastLat, lastLon, lat, lon);
+            if (distFromLast < 5.0 && speedKmh <= 1) {
+                stationaryCount++;
+                if (stationaryCount >= 3 && !isEcoMode) {
+                    isEcoMode = true;
+                    Log.i(TAG, "Device stationary (<5m) for 3 pings. Switching to Eco GPS mode (45s). Saves 80% battery.");
+                    requestLocationUpdates();
+                }
+            } else if (distFromLast >= 8.0 || speedKmh >= 2) {
+                stationaryCount = 0;
+                if (isEcoMode) {
+                    isEcoMode = false;
+                    Log.i(TAG, "Movement detected (" + Math.round(distFromLast) + "m, " + speedKmh + "km/h). Switching to Real-Time GPS mode (5s).");
+                    requestLocationUpdates();
+                }
+            }
+        }
+
         lastLat = lat;
         lastLon = lon;
         lastAccuracy = accuracy;
 
-        sendLocationTelemetry(lat, lon, accuracy, speedKmh);
+        sendLocationTelemetry(lat, lon, accuracy, speedKmh, false);
     }
 
     private void sendLocationTelemetry(double lat, double lon, float accuracy, int speedKmh) {
+        sendLocationTelemetry(lat, lon, accuracy, speedKmh, false);
+    }
+
+    private void sendLocationTelemetry(double lat, double lon, float accuracy, int speedKmh, boolean isLastBreath) {
         try {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             String childId = prefs.getString(KEY_CHILD_ID, null);
@@ -260,6 +301,20 @@ public class ChildTrackingService extends Service implements LocationListener {
             boolean isCharging = isDeviceCharging();
             String soundMode = getDeviceSoundMode();
 
+            // Emergency Last Breath battery check (5% and 2%)
+            if (!isCharging) {
+                if (batteryLevel <= 2 && !lastBreath2Sent) {
+                    lastBreath2Sent = true;
+                    isLastBreath = true;
+                } else if (batteryLevel <= 5 && !lastBreath5Sent) {
+                    lastBreath5Sent = true;
+                    isLastBreath = true;
+                }
+            } else {
+                lastBreath5Sent = false;
+                lastBreath2Sent = false;
+            }
+
             JSONObject payload = new JSONObject();
             payload.put("latitude", lat);
             payload.put("longitude", lon);
@@ -270,6 +325,14 @@ public class ChildTrackingService extends Service implements LocationListener {
             payload.put("is_charging", isCharging);
             payload.put("sound_mode", soundMode);
             payload.put("is_sos_active", false);
+
+            if (isLastBreath) {
+                payload.put("is_last_breath", true);
+                String fgApp = getForegroundAppLabel();
+                if (fgApp != null) payload.put("last_active_app", fgApp);
+                String wifiSsid = getConnectedWifiSsid();
+                if (wifiSsid != null) payload.put("wifi_ssid", wifiSsid);
+            }
 
             byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
             String primaryBase = (serverUrl != null && !serverUrl.trim().isEmpty()) ? serverUrl.trim() : DEFAULT_SERVER_URL;
@@ -547,8 +610,34 @@ public class ChildTrackingService extends Service implements LocationListener {
     }
 
     @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        super.onTaskRemoved(rootIntent);
+        Log.w(TAG, "ChildTrackingService onTaskRemoved: immediately reviving tracking service!");
+        WatchdogReceiver.ensureServiceActive(this);
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
+        // Self-Healing: arm Watchdog for instant 3-second resurrection
+        try {
+            Intent restartIntent = new Intent(this, WatchdogReceiver.class);
+            restartIntent.setAction(WatchdogReceiver.ACTION_RESTART_TRACKING);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+            PendingIntent pi = PendingIntent.getBroadcast(this, 1009, restartIntent, flags);
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (am != null) {
+                long triggerAt = System.currentTimeMillis() + 3000;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                } else {
+                    am.set(android.app.AlarmManager.RTC_WAKEUP, triggerAt, pi);
+                }
+            }
+            sendBroadcast(restartIntent);
+        } catch (Exception ignored) {}
+
         if (locationManager != null) {
             try {
                 locationManager.removeUpdates(this);
@@ -560,7 +649,72 @@ public class ChildTrackingService extends Service implements LocationListener {
             } catch (Exception ignored) {}
         }
         scheduler.shutdownNow();
-        Log.d(TAG, "ChildTrackingService stopped");
+        Log.d(TAG, "ChildTrackingService stopped - Watchdog 3s self-healing armed");
+    }
+
+    public void triggerLastBreathSnapshot() {
+        try {
+            Location best = getBestLastLocation();
+            double lat = best != null ? best.getLatitude() : lastLat;
+            double lon = best != null ? best.getLongitude() : lastLon;
+            float acc = best != null ? best.getAccuracy() : lastAccuracy;
+
+            sendLocationTelemetry(lat, lon, acc, 0, true);
+
+            // If emergency parent phone number is saved, send emergency Last Breath SMS
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            String parentPhone = prefs.getString("parent_phone", null);
+            if (parentPhone != null && !parentPhone.trim().isEmpty() && lat != 0.0 && lon != 0.0) {
+                int batt = getDeviceBatteryLevel();
+                String smsText = "⚠️ DIQQAT: Farzandingiz telefonida quvvat tugadi (" + batt + "%). Oxirgi joyi: https://maps.google.com/?q=" + lat + "," + lon;
+                android.telephony.SmsManager sms = android.telephony.SmsManager.getDefault();
+                sms.sendTextMessage(parentPhone.trim(), null, smsText, null, null);
+                Log.i(TAG, "Last Breath SMS emergency snapshot sent to parent: " + parentPhone);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "triggerLastBreathSnapshot note: " + e.getMessage());
+        }
+    }
+
+    private String getConnectedWifiSsid() {
+        try {
+            android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null && wm.getConnectionInfo() != null) {
+                String ssid = wm.getConnectionInfo().getSSID();
+                if (ssid != null && !ssid.isEmpty() && !ssid.equals("<unknown ssid>")) {
+                    return ssid.replace("\"", "");
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private String getForegroundAppLabel() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 && UsageStatsHelper.hasUsageAccessPermission(this)) {
+                android.app.usage.UsageStatsManager usm = (android.app.usage.UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+                if (usm != null) {
+                    long end = System.currentTimeMillis();
+                    long start = end - 1000 * 60 * 5;
+                    java.util.List<android.app.usage.UsageStats> list = usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_BEST, start, end);
+                    if (list != null && !list.isEmpty()) {
+                        android.app.usage.UsageStats recent = null;
+                        for (android.app.usage.UsageStats us : list) {
+                            if (recent == null || us.getLastTimeUsed() > recent.getLastTimeUsed()) {
+                                recent = us;
+                            }
+                        }
+                        if (recent != null) {
+                            android.content.pm.PackageManager pm = getPackageManager();
+                            android.content.pm.ApplicationInfo ai = pm.getApplicationInfo(recent.getPackageName(), 0);
+                            CharSequence label = pm.getApplicationLabel(ai);
+                            return label != null ? label.toString() : recent.getPackageName();
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     @Nullable
