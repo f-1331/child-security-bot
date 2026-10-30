@@ -92,17 +92,12 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                 batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
                                 spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
 
-                                # Discipline Bonus Check: award +50 coins if 0 infractions today
-                                today_key = f"{ch.id}_{today_str}"
-                                is_awarded = today_key in telemetry.discipline_bonus_awarded
+                                # Discipline Status Check (Informational only - coins are awarded only by parents)
                                 tamper_events = telemetry.child_daily_tamper_log.get(ch.id, [])
                                 today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str)]
 
                                 if len(today_tamper) == 0:
-                                    if not is_awarded:
-                                        await crud.add_coins_to_user(session, ch.id, 50)
-                                        telemetry.discipline_bonus_awarded.add(today_key)
-                                    discipline_line = "🎖️ <b>Kun Qahramoni:</b> Bugun hech qanday qoidabuzarlik qilinmadi (+50 tanga intizom bonusi berildi)! 🌟\n"
+                                    discipline_line = "🎖️ <b>Kun Qahramoni:</b> Bugun hech qanday qoidabuzarlik qilinmadi! 🌟\n"
                                 else:
                                     discipline_line = f"⚠️ <b>Intizom holati:</b> Bugun {len(today_tamper)} ta qoidabuzarlik qayd etildi\n"
 

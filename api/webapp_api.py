@@ -2056,22 +2056,15 @@ async def complete_walk_safe_endpoint(
     child_name = child.full_name or f"Farzand #{child_id}"
     await crud.complete_walk_safe(session, child_id)
 
-    # Smart Gamification: Reward on-time arrival (+100 virtual coins = 1,000 so'm)
-    awarded_coins = 0
-    try:
-        new_balance = await crud.add_coins_to_user(session, child_id, 100)
-        awarded_coins = 100
-    except Exception as e:
-        logger.warning(f"Failed to award walk-safe bonus coins: {e}")
-
+    # Safe Gamification: On-time arrival marks "Vaqt ustasi" badge without automatic unearned coins
     parents = await crud.get_parents_for_child(session, child_id)
     if telemetry.telegram_bot and parents:
         safe_cname = html.escape(child_name)
         safe_dest = html.escape(dest)
-        reward_txt = f"\n🏆 <i>O'z vaqtida yetib kelgani uchun <b>+{awarded_coins} tanga</b> berildi va «Vaqt ustasi» ballari qo'shildi! ✨</i>" if awarded_coins > 0 else ""
         msg = (
             f"🎉 <b>FARZANDINGIZ ESON-OMON YETIB KELDI!</b>\n\n"
-            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi.{reward_txt}"
+            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi.\n"
+            f"🏆 <i>«Vaqt ustasi» nishoni yangilandi! ✨</i>"
         )
         for p in parents:
             try:
@@ -2750,69 +2743,23 @@ async def daily_discipline_check_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """
-    Check if child had zero infractions today. If clean, award Kun Qahramoni (Intizom Bonusi) +50 coins!
+    Check if child had zero infractions today. Reports clean discipline status without automatic unearned coins.
     """
-    today_key = f"{child_id}_{datetime.now(TASHKENT_TZ).strftime('%Y-%m-%d')}"
-    if today_key in telemetry.discipline_bonus_awarded:
-        return {"status": "already_awarded", "message": "Bugun uchun intizom bonusi allaqachon berilgan"}
-
     tamper_events = telemetry.child_daily_tamper_log.get(child_id, [])
     today_str = datetime.now(TASHKENT_TZ).strftime('%Y-%m-%d')
     today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str)]
 
     if len(today_tamper) > 0:
         return {
-            "status": "forfeited",
-            "message": "Bugun qoidabuzarliklar aniqlangani sababli intizom bonusi berilmadi",
+            "status": "infractions_found",
+            "message": "Bugun qoidabuzarliklar aniqlandi",
             "infractions_count": len(today_tamper)
         }
 
-    awarded_coins = 50
-    user = await crud.add_coins_to_user(session, child_id, awarded_coins)
-    telemetry.discipline_bonus_awarded.add(today_key)
-
-    child = await crud.get_user(session, child_id)
-    child_name = child.full_name if child and child.full_name else f"Farzand #{child_id}"
-    safe_cname = html.escape(child_name)
-    parents = await crud.get_parents_for_child(session, child_id)
-
-    if telemetry.telegram_bot:
-        bot_msg = (
-            f"🎖️ <b>KUN QAHRAMONI (INTIZOM BONUSI)!</b>\n\n"
-            f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
-            f"🌟 Bugun telefon xavfsizlik cheklovlariga 100% to'liq amal qildi!\n"
-            f"🪙 Hamyonga <b>+{awarded_coins} tanga</b> intizom bonusi qo'shildi! 👏"
-        )
-        for p in parents:
-            try:
-                await telemetry.telegram_bot.send_message(chat_id=p.id, text=bot_msg, parse_mode="HTML")
-            except Exception:
-                pass
-        try:
-            await telemetry.telegram_bot.send_message(
-                chat_id=child_id,
-                text=f"🎉 <b>Qoyil, Kun Qahramoni!</b>\n\nBugun hech qanday qoidabuzarlik qilmadingiz! 🌟\n🪙 Hamyoningizga <b>+{awarded_coins} tanga</b> Intizom Bonusi qo'shildi! 🚀",
-                parse_mode="HTML"
-            )
-        except Exception:
-            pass
-
-    for p in parents:
-        await ws_manager.send_to_user(p.id, {
-            "type": "discipline_bonus_awarded",
-            "child_id": child_id,
-            "bonus_coins": awarded_coins
-        })
-    await ws_manager.send_to_user(child_id, {
-        "type": "discipline_bonus_awarded",
-        "child_id": child_id,
-        "bonus_coins": awarded_coins
-    })
-
     return {
-        "status": "awarded",
-        "bonus_coins": awarded_coins,
-        "new_balance": user.virtual_balance if user else None
+        "status": "clean",
+        "message": "Bugun hech qanday qoidabuzarlik qilinmadi! Namunali intizom.",
+        "infractions_count": 0
     }
 
 
