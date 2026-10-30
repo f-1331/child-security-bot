@@ -21,7 +21,7 @@ logger = logging.getLogger("scheduler")
 # Robust local Tashkent timezone (UTC+5) that never fails even on systems without tzdata
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
-NIGHTLY_STATE_FILE = "nightly_report_state.txt"
+NIGHTLY_STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "nightly_report_state.txt"))
 
 
 def _get_last_nightly_sent_date() -> Optional[str]:

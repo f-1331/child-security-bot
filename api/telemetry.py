@@ -213,9 +213,12 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
 
     policy_data = {
         "is_all_apps_blocked": policy.is_all_apps_blocked,
+        "is_network_restricted": getattr(policy, "is_network_restricted", False),
         "lockdown_reason": policy.lockdown_reason,
         "blocked_packages": blocked_packages,
         "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+        "bedtime_start": getattr(policy, "bedtime_start", None),
+        "bedtime_end": getattr(policy, "bedtime_end", None),
         "has_parent_pin": bool(policy.parent_pin_hash),
     }
 

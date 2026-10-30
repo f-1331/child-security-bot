@@ -778,7 +778,12 @@ async def on_request_current_location(message: Message, bot: Bot):
 @router.callback_query(F.data.startswith("locate_child:"))
 async def on_locate_child_callback(callback: CallbackQuery, bot: Bot):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         if not child:
             await callback.answer("Farzand topilmadi.", show_alert=True)
@@ -1385,7 +1390,7 @@ async def on_siren_child_callback(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
@@ -1429,7 +1434,7 @@ async def on_night_reward_callback(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
@@ -1478,7 +1483,7 @@ async def on_night_bedtime_callback(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
@@ -2442,7 +2447,17 @@ async def on_noop_callback(callback: CallbackQuery):
 async def on_approve_task(callback: CallbackQuery, bot: Bot):
     """Parent approves task and rewards coins."""
     task_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        task_preview = await crud.get_task_by_id(session, task_id)
+        if not task_preview:
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
+            return
+        parents = await crud.get_parents_for_child(session, task_preview.child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
         task = await crud.approve_task(session, task_id)
         if not task:
             await callback.answer("Vazifa topilmadi.", show_alert=True)
@@ -2502,7 +2517,17 @@ async def on_approve_task(callback: CallbackQuery, bot: Bot):
 async def on_reject_task(callback: CallbackQuery, bot: Bot):
     """Parent rejects task."""
     task_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        task_preview = await crud.get_task_by_id(session, task_id)
+        if not task_preview:
+            await callback.answer("Vazifa topilmadi.", show_alert=True)
+            return
+        parents = await crud.get_parents_for_child(session, task_preview.child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
         task = await crud.reject_task(session, task_id)
         if task:
             try:
@@ -2833,7 +2858,12 @@ async def on_list_children_callback(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("child_view:"))
 async def on_child_view_details(callback: CallbackQuery):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         latest_loc = await crud.get_latest_location(session, child_id)
 
@@ -2876,7 +2906,12 @@ async def on_child_view_details(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("battery_child:"))
 async def on_child_battery_callback(callback: CallbackQuery):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         latest_loc = await crud.get_latest_location(session, child_id)
 
@@ -2915,6 +2950,12 @@ async def on_child_battery_callback(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("add_zone:"))
 async def on_child_add_zone_callback(callback: CallbackQuery, state: FSMContext):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
     await state.set_state(KerakliJoyAddState.waiting_for_name)
     await state.update_data(target_child_id=child_id)
     await callback.message.answer(
@@ -2992,7 +3033,12 @@ async def on_cancel_action(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data.startswith("delete_child_confirm:"))
 async def on_delete_child_confirm(callback: CallbackQuery):
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else "Farzand"
 
@@ -3049,11 +3095,15 @@ async def on_delete_child_do(callback: CallbackQuery, bot: Bot):
 async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
     child_id = int(callback.data.split(":")[1])
     parent_id = callback.from_user.id
-    telemetry.last_sos_alert_map.pop(child_id, None)
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
+        telemetry.last_sos_alert_map.pop(child_id, None)
         await crud.set_child_sos(session, child_id, False)
         child = await crud.get_user(session, child_id)
-        parents = await crud.get_parents_for_child(session, child_id)
         await session.commit()
 
         if child:
@@ -4421,9 +4471,9 @@ async def on_parent_approve_role_switch(callback: CallbackQuery, bot: Bot):
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else f"ID: {child_id}"
 
-        if not link and (not child or child.role != "child"):
-            await callback.message.edit_text("ℹ️ Ushbu so'rov allaqachon bajarilgan yoki eskirgan.")
-            await callback.answer()
+        if not link:
+            await callback.message.edit_text("⚠️ Siz ushbu farzandning ota-onasi emassiz yoki so'rov eskirgan.")
+            await callback.answer("Ruxsat berilmagan", show_alert=True)
             return
 
         # Reset child's role
@@ -4459,9 +4509,14 @@ async def on_parent_approve_role_switch(callback: CallbackQuery, bot: Bot):
 async def on_parent_reject_role_switch(callback: CallbackQuery, bot: Bot):
     """Parent rejects child's role switch request."""
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     parent_name = callback.from_user.full_name
 
     async with AsyncSessionLocal() as session:
+        link = await crud.get_parent_child_link(session, parent_id, child_id)
+        if not link:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else f"ID: {child_id}"
 
@@ -5106,9 +5161,7 @@ async def st_child_callback_handler(callback: CallbackQuery):
         children = await crud.get_children_for_parent(session, callback.from_user.id)
         target_child = next((c for c in children if c.id == child_id), None)
         if not target_child:
-            target_child = await crud.get_user(session, child_id)
-        if not target_child:
-            await callback.answer("Farzand topilmadi.", show_alert=True)
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
         report = await crud.get_app_usage_report_today(session, target_child.id)
@@ -5123,10 +5176,10 @@ async def st_refresh_callback_handler(callback: CallbackQuery):
     """Refresh child screen time data."""
     child_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
-        target_child = await crud.get_user(session, child_id)
         children = await crud.get_children_for_parent(session, callback.from_user.id)
+        target_child = next((c for c in children if c.id == child_id), None)
         if not target_child:
-            await callback.answer("Ma'lumot topilmadi.")
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
         report = await crud.get_app_usage_report_today(session, target_child.id)
@@ -5142,7 +5195,12 @@ async def st_refresh_callback_handler(callback: CallbackQuery):
 async def toggle_net_lock_callback_handler(callback: CallbackQuery):
     """Handle 1-tap toggle network lockdown (Local VPN Firewall) from Telegram."""
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         policy = await crud.get_or_create_device_policy(session, child_id)
         new_state = not bool(policy.is_network_restricted)
         updated_policy = await crud.update_device_policy(
@@ -5167,7 +5225,12 @@ async def toggle_net_lock_callback_handler(callback: CallbackQuery):
 async def sms_controls_callback_handler(callback: CallbackQuery):
     """Display encrypted offline SMS fallback instructions and templates."""
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         child = await crud.get_user(session, child_id)
         child_name = child.full_name or f"Farzand #{child_id}" if child else "Farzand"
         policy = await crud.get_or_create_device_policy(session, child_id)
@@ -5212,7 +5275,12 @@ async def sms_controls_callback_handler(callback: CallbackQuery):
 async def lock_all_callback_handler(callback: CallbackQuery):
     """Handle 1-tap master lock all apps from Telegram inline button."""
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         await crud.update_device_policy(
             session=session,
             child_id=child_id,
@@ -5233,7 +5301,12 @@ async def lock_all_callback_handler(callback: CallbackQuery):
 async def unlock_all_callback_handler(callback: CallbackQuery):
     """Handle 1-tap unblock all apps from Telegram inline button."""
     child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
         await crud.update_device_policy(
             session=session,
             child_id=child_id,

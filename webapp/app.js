@@ -5627,7 +5627,8 @@ async function approveTask(taskId) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/approve`, { method: "POST" });
+    const approveUrl = parentId ? `/api/v1/webapp/task/${taskId}/approve?parent_id=${parentId}` : `/api/v1/webapp/task/${taskId}/approve`;
+    const res = await fetch(approveUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
       playCoinChime();
@@ -5651,7 +5652,8 @@ async function rejectTask(taskId) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/reject`, { method: "POST" });
+    const rejectUrl = parentId ? `/api/v1/webapp/task/${taskId}/reject?parent_id=${parentId}` : `/api/v1/webapp/task/${taskId}/reject`;
+    const res = await fetch(rejectUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
       showToast("❌ Topshiriq rad etildi.");

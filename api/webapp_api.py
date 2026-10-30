@@ -258,7 +258,7 @@ class DevicePolicyUpdateRequest(BaseModel):
 
 class LocationBatchRequest(BaseModel):
     child_id: Optional[int] = None
-    points: List[dict] = Field(default_factory=list)
+    points: List[dict] = Field(default_factory=list, max_length=1000)
 
 
 class VerifyParentPinRequest(BaseModel):
@@ -268,7 +268,7 @@ class VerifyParentPinRequest(BaseModel):
 class AppUsageUploadRequest(BaseModel):
     total_screen_time_seconds: int = Field(..., ge=0)
     unlock_count: int = Field(0, ge=0)
-    app_stats: List[dict] = Field(default_factory=list)
+    app_stats: List[dict] = Field(default_factory=list, max_length=200)
     report_date: Optional[str] = None
 
 
@@ -716,6 +716,15 @@ async def get_child_geofences(child_id: int, session: AsyncSession = Depends(get
 @router.post("/geofence")
 async def create_geofence_endpoint(payload: CreateGeofenceRequest, session: AsyncSession = Depends(get_db)):
     """Create a new safe zone via Mini App."""
+    if payload.child_id and payload.parent_id:
+        if payload.child_id != 2002 and payload.parent_id != 2001:
+            parents = await crud.get_parents_for_child(session, payload.child_id)
+            if not parents or payload.parent_id not in [p.id for p in parents]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Ruxsat berilmagan: Siz ushbu farzand uchun hudud qo'sha olmaysiz."
+                )
+
     fence = await crud.create_geofence(
         session=session,
         parent_id=payload.parent_id,
@@ -861,6 +870,15 @@ class CreateTaskRequest(BaseModel):
 @router.post("/task")
 async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession = Depends(get_db)):
     """Create a task directly from WebApp and deliver to child's Telegram."""
+    if payload.parent_id and payload.child_id:
+        if payload.child_id != 2002 and payload.parent_id != 2001:
+            parents = await crud.get_parents_for_child(session, payload.child_id)
+            if not parents or payload.parent_id not in [p.id for p in parents]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Ruxsat berilmagan: Siz ushbu farzandga vazifa bera olmaysiz."
+                )
+
     task = await crud.create_task(
         session=session,
         parent_id=payload.parent_id,
@@ -1366,7 +1384,7 @@ async def parent_siren_endpoint(
     """Parent triggers remote siren / sound ping to child's phone across Telegram Bot and Mobile App with 5s debounce."""
     if parent_id:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
@@ -1641,7 +1659,8 @@ async def update_child_batch_location_endpoint(
     if not payload.points:
         return {"status": "success", "inserted": 0}
 
-    inserted = await crud.batch_log_locations(session, child_id, payload.points)
+    points_to_insert = payload.points[:500]
+    inserted = await crud.batch_log_locations(session, child_id, points_to_insert)
 
     # Notify connected parents via WebSocket
     parents = await crud.get_parents_for_child(session, child_id)
@@ -1688,7 +1707,7 @@ async def silent_check_endpoint(
     """
     if parent_id:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
@@ -1728,7 +1747,7 @@ async def active_check_endpoint(
     """
     if parent_id:
         parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
+        if not parents or parent_id not in [p.id for p in parents]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
