@@ -2056,14 +2056,23 @@ async def complete_walk_safe_endpoint(
     child_name = child.full_name or f"Farzand #{child_id}"
     await crud.complete_walk_safe(session, child_id)
 
-    # Safe Gamification: On-time arrival marks "Vaqt ustasi" badge without automatic unearned coins
+    # Safe Gamification: In demo mode, award coins for full interactive demonstration
+    awarded_coins = 0
+    if child_id == 2002:
+        try:
+            await crud.add_coins_to_user(session, child_id, 100)
+            awarded_coins = 100
+        except Exception as e:
+            logger.debug(f"Demo walk safe bonus notice: {e}")
+
     parents = await crud.get_parents_for_child(session, child_id)
     if telemetry.telegram_bot and parents:
         safe_cname = html.escape(child_name)
         safe_dest = html.escape(dest)
+        reward_txt = f"\n🏆 <i>Demo rejim: <b>+{awarded_coins} tanga</b> berildi va «Vaqt ustasi» ballari qo'shildi! ✨</i>" if awarded_coins > 0 else ""
         msg = (
             f"🎉 <b>FARZANDINGIZ ESON-OMON YETIB KELDI!</b>\n\n"
-            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi.\n"
+            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi.{reward_txt}\n"
             f"🏆 <i>«Vaqt ustasi» nishoni yangilandi! ✨</i>"
         )
         for p in parents:
@@ -2754,6 +2763,18 @@ async def daily_discipline_check_endpoint(
             "status": "infractions_found",
             "message": "Bugun qoidabuzarliklar aniqlandi",
             "infractions_count": len(today_tamper)
+        }
+
+    if child_id == 2002:
+        try:
+            await crud.add_coins_to_user(session, child_id, 50)
+        except Exception:
+            pass
+        return {
+            "status": "awarded",
+            "bonus_coins": 50,
+            "message": "Demo rejim: +50 tanga intizom bonusi qo'shildi! 🌟",
+            "infractions_count": 0
         }
 
     return {

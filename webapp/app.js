@@ -1248,16 +1248,16 @@ function enableChildDemoMode() {
   currentChildId = 2002;
   coinRateCoins = 1000;
   coinRateSom = 10000;
-  childBalanceCoins = 0;
-  childBalanceSom = 0;
+  childBalanceCoins = 15000;
+  childBalanceSom = 150000;
 
   childrenList = [
     {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 0,
-      virtual_money_som: 0,
+      virtual_balance: 15000,
+      virtual_money_som: 150000,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -1265,8 +1265,8 @@ function enableChildDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 0,
-      virtual_money_som: 0,
+      virtual_balance: 8000,
+      virtual_money_som: 80000,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -1275,8 +1275,8 @@ function enableChildDemoMode() {
   applyChildUI({
     id: 2002,
     full_name: "Azizbek Karimov (Farzand Demo)",
-    virtual_balance: 0,
-    virtual_money_som: 0,
+    virtual_balance: 15000,
+    virtual_money_som: 150000,
     coin_rate_coins: 1000,
     coin_rate_som: 10000,
     parent_phone: "+998901234567",
@@ -2438,8 +2438,8 @@ function enableDemoMode() {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 0,
-      virtual_money_som: 0,
+      virtual_balance: 15000,
+      virtual_money_som: 150000,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -2447,8 +2447,8 @@ function enableDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 0,
-      virtual_money_som: 0,
+      virtual_balance: 8000,
+      virtual_money_som: 80000,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -7852,7 +7852,22 @@ async function childWalkSafeComplete() {
     btnCard.onclick = openWalkSafeModal;
   }
 
-  showToast("🎉 Manzilga eson-omon yetib keldingiz! Ota-onangizga xabar yetkazildi.");
+  if (isDemoMode) {
+    childBalanceCoins += 100;
+    childBalanceSom = Math.round(childBalanceCoins * (coinRateSom / Math.max(1, coinRateCoins)));
+    const c = childrenList.find(ch => ch.id == currentChildId);
+    if (c) {
+      c.virtual_balance = childBalanceCoins;
+      c.virtual_money_som = childBalanceSom;
+    }
+    const heroMoney = document.getElementById("childHeroMoneyText");
+    if (heroMoney) heroMoney.textContent = `${childBalanceSom.toLocaleString()} so'm`;
+    playCoinChime();
+    launchHeroConfetti();
+    showToast("🎉 Manzilga yetib keldingiz! (+100 tanga demo bonusi qo'shildi)");
+  } else {
+    showToast("🎉 Manzilga eson-omon yetib keldingiz! Ota-onangizga xabar yetkazildi.");
+  }
 
   if (!isDemoMode && currentChildId) {
     try {
