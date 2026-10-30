@@ -417,9 +417,10 @@ async def batch_log_locations(
                 recorded_at = datetime.fromtimestamp(epoch_ms / 1000.0, tz=timezone.utc)
             except Exception:
                 pass
-        if not recorded_at and p.get("timestamp"):
+        ts_val = p.get("recorded_at") or p.get("timestamp")
+        if not recorded_at and ts_val:
             try:
-                s = str(p.get("timestamp")).strip()
+                s = str(ts_val).strip()
                 if not s.endswith("Z") and not ("+" in s):
                     s += "Z"
                 recorded_at = datetime.fromisoformat(s.replace("Z", "+00:00"))
