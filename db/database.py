@@ -61,6 +61,7 @@ async def init_db() -> None:
         ]
 
         bool_default = "0" if is_sqlite else "FALSE"
+        bool_true_default = "1" if is_sqlite else "TRUE"
         new_loc_columns = [
             ("speed", "FLOAT DEFAULT 0.0"),
             ("battery_level", "INTEGER"),
@@ -68,6 +69,18 @@ async def init_db() -> None:
             ("sound_mode", "VARCHAR(20) DEFAULT 'normal'"),
             ("source", "VARCHAR(30) DEFAULT 'telegram_live'"),
             ("is_offline_cached", f"BOOLEAN DEFAULT {bool_default}")
+        ]
+
+        new_policy_columns = [
+            ("is_all_apps_blocked", f"BOOLEAN DEFAULT {bool_default}"),
+            ("is_network_restricted", f"BOOLEAN DEFAULT {bool_default}"),
+            ("lockdown_reason", "VARCHAR(100) DEFAULT 'Dars vaqti'"),
+            ("blocked_packages", "TEXT DEFAULT '[]'"),
+            ("parent_pin_hash", "VARCHAR(128)"),
+            ("anti_uninstall_enabled", f"BOOLEAN DEFAULT {bool_true_default}"),
+            ("bedtime_start", "VARCHAR(10)"),
+            ("bedtime_end", "VARCHAR(10)"),
+            ("daily_limit_minutes", "INTEGER")
         ]
 
         new_user_columns = [
@@ -100,6 +113,11 @@ async def init_db() -> None:
                     await conn.execute(text(f"ALTER TABLE location_logs ADD COLUMN {col_name} {col_type}"))
                 except Exception:
                     pass
+            for col_name, col_type in new_policy_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE child_device_policies ADD COLUMN {col_name} {col_type}"))
+                except Exception:
+                    pass
         else:
             for col_name, col_type in new_task_columns:
                 try:
@@ -116,6 +134,11 @@ async def init_db() -> None:
                     await conn.execute(text(f"ALTER TABLE location_logs ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                 except Exception as e:
                     logger.debug(f"Location log column migration notice ({col_name}): {e}")
+            for col_name, col_type in new_policy_columns:
+                try:
+                    await conn.execute(text(f"ALTER TABLE child_device_policies ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                except Exception as e:
+                    logger.debug(f"Device policy column migration notice ({col_name}): {e}")
 
     # If running on PostgreSQL, check if auto-seed from SQLite is needed
     if "postgres" in settings.RESOLVED_DATABASE_URL:

@@ -705,7 +705,9 @@ function playSuccessChime() {
       gain.connect(ctx.destination);
       osc.start(now + idx * 0.08);
       osc.stop(now + idx * 0.08 + 0.25);
-    }
+    });
+  } catch (e) {}
+}
 
 function launchHeroConfetti() {
   try {
@@ -772,9 +774,6 @@ function launchHeroConfetti() {
   } catch (e) {}
 }
 window.launchHeroConfetti = launchHeroConfetti;
-);
-  } catch (e) {}
-}
 
 function playPingSound() {
   try {

@@ -370,20 +370,27 @@ async def log_location(
     is_charging: bool = False,
     sound_mode: str = "normal",
     source: str = "telegram_live",
-    speed: Optional[float] = None
+    speed: Optional[float] = None,
+    is_offline_cached: bool = False,
+    recorded_at: Optional[datetime] = None
 ) -> LocationLog:
     """Record a location telemetry entry."""
-    entry = LocationLog(
-        child_id=child_id,
-        latitude=latitude,
-        longitude=longitude,
-        accuracy=accuracy,
-        speed=speed,
-        battery_level=battery_level,
-        is_charging=is_charging,
-        sound_mode=sound_mode,
-        source=source
-    )
+    entry_kwargs = {
+        "child_id": child_id,
+        "latitude": latitude,
+        "longitude": longitude,
+        "accuracy": accuracy,
+        "speed": speed,
+        "battery_level": battery_level,
+        "is_charging": is_charging,
+        "sound_mode": sound_mode,
+        "source": source,
+        "is_offline_cached": is_offline_cached
+    }
+    if recorded_at is not None:
+        entry_kwargs["recorded_at"] = recorded_at
+
+    entry = LocationLog(**entry_kwargs)
     session.add(entry)
     await session.flush()
     return entry
