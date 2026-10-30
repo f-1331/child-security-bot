@@ -1,6 +1,8 @@
 import asyncio
+import os
 import logging
 import html
+from typing import Optional
 from datetime import datetime, timezone, timedelta
 try:
     from zoneinfo import ZoneInfo
@@ -19,15 +21,35 @@ logger = logging.getLogger("scheduler")
 # Robust local Tashkent timezone (UTC+5) that never fails even on systems without tzdata
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
+NIGHTLY_STATE_FILE = "nightly_report_state.txt"
+
+
+def _get_last_nightly_sent_date() -> Optional[str]:
+    try:
+        if os.path.exists(NIGHTLY_STATE_FILE):
+            with open(NIGHTLY_STATE_FILE, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return None
+
+
+def _save_last_nightly_sent_date(date_str: str) -> None:
+    try:
+        with open(NIGHTLY_STATE_FILE, "w", encoding="utf-8") as f:
+            f.write(date_str)
+    except Exception:
+        pass
+
 
 async def run_nightly_and_walksafe_worker(bot: Bot):
     """
     Background worker loop:
-    1. At 22:00 every night (Tashkent time), sends daily safety report & discipline bonus to all parents.
+    1. At 22:00 every night (Tashkent time), sends daily safety report to all parents.
     2. Checks active Walk Safe sessions and alerts parents if deadline expired without completion.
     """
     logger.info("Nightly report and Walk Safe background scheduler activated.")
-    last_sent_date = None
+    last_sent_date = _get_last_nightly_sent_date()
     alerted_expired_walk_safes = set()
 
     # Determine timezone with absolute priority to Tashkent UTC+5
@@ -43,8 +65,8 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 22:00 Nightly Safety Report (Triggers at or after 22:00 once per day)
-            if now_tz.hour >= 22 and last_sent_date != today_str:
+            # 1. 22:00 Nightly Safety Report (Strictly at 22:00 Tashkent time, exactly once per day)
+            if now_tz.hour == 22 and now_tz.minute == 0 and last_sent_date != today_str:
                 logger.info(f"Triggering 22:00 nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select
@@ -143,6 +165,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                     await session.commit()
 
                 last_sent_date = today_str
+                _save_last_nightly_sent_date(today_str)
                 logger.info(f"Nightly safety reports dispatched for {today_str}.")
 
             # 2. Walk Safe Deadline Monitoring
