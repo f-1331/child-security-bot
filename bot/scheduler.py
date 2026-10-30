@@ -1,53 +1,50 @@
 import asyncio
 import logging
 import html
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
     ZoneInfo = None
 
-try:
-    import pytz
-except ImportError:
-    pytz = None
 from aiogram import Bot
 from config import settings
 from db.database import AsyncSessionLocal
 import db.crud as crud
+from api import telemetry
 
 logger = logging.getLogger("scheduler")
+
+# Robust local Tashkent timezone (UTC+5) that never fails even on systems without tzdata
+TASHKENT_TZ = timezone(timedelta(hours=5))
 
 
 async def run_nightly_and_walksafe_worker(bot: Bot):
     """
     Background worker loop:
-    1. At 22:00 every night (Tashkent time), sends daily safety report to all parents.
+    1. At 22:00 every night (Tashkent time), sends daily safety report & discipline bonus to all parents.
     2. Checks active Walk Safe sessions and alerts parents if deadline expired without completion.
     """
     logger.info("Nightly report and Walk Safe background scheduler activated.")
     last_sent_date = None
     alerted_expired_walk_safes = set()
 
-    try:
-        if ZoneInfo is not None:
+    # Determine timezone with absolute priority to Tashkent UTC+5
+    tz = TASHKENT_TZ
+    if ZoneInfo is not None:
+        try:
             tz = ZoneInfo(settings.TIMEZONE)
-        elif pytz is not None:
-            tz = pytz.timezone(settings.TIMEZONE)
-        else:
-            tz = timezone.utc
-    except Exception as tz_err:
-        logger.warning(f"Could not initialize timezone {settings.TIMEZONE}: {tz_err}. Falling back to UTC.")
-        tz = timezone.utc
+        except Exception:
+            tz = TASHKENT_TZ
 
     while True:
         try:
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 22:00 Nightly Safety Report
-            if now_tz.hour == 22 and now_tz.minute == 0 and last_sent_date != today_str:
-                logger.info(f"Triggering 22:00 nightly safety reports for {today_str}...")
+            # 1. 22:00 Nightly Safety Report (Triggers at or after 22:00 once per day)
+            if now_tz.hour >= 22 and last_sent_date != today_str:
+                logger.info(f"Triggering 22:00 nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select
                     from db.models import User
@@ -66,7 +63,11 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                 c_name = html.escape(rep["child_name"])
                                 zones_list = rep["visited_zones"]
                                 if zones_list:
-                                    zones_str = " ➔ ".join([html.escape(z["name"]) for z in zones_list])
+                                    zones_str = " ➔ ".join([
+                                        f"{html.escape(z['name'])} ({z.get('points_str', z.get('points_inside', 1))} marta)"
+                                        if z.get('points_inside', 0) > 1 else html.escape(z["name"])
+                                        for z in zones_list
+                                    ])
                                     est_time = sum(z["est_minutes"] for z in zones_list)
                                     hours = est_time // 60
                                     mins = est_time % 60
@@ -75,14 +76,34 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                     zones_str = "Hali qayd etilmagan"
                                     time_str = "0 daqiqa"
 
-                                wishlist = rep.get("wishlist") or {}
-                                w_title = html.escape(wishlist.get("title") or "Orzu")
-                                w_prog = wishlist.get("progress_percent", 0)
-                                w_cur = wishlist.get("current_som", 0)
-                                w_tgt = wishlist.get("target_som", 0)
+                                # Only include wishlist if configured by parent/child
+                                wishlist = rep.get("wishlist")
+                                if wishlist and wishlist.get("title") and wishlist.get("target_som", 0) > 0:
+                                    w_title = html.escape(wishlist.get("title"))
+                                    w_prog = wishlist.get("progress_percent", 0)
+                                    w_cur = wishlist.get("current_som", 0)
+                                    w_tgt = wishlist.get("target_som", 0)
+                                    wishlist_line = f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                                else:
+                                    wishlist_line = ""
 
+                                dist_str = rep.get("distance_formatted") or f"{rep.get('total_distance_km', 0)} km"
                                 batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
                                 spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
+
+                                # Discipline Bonus Check: award +50 coins if 0 infractions today
+                                today_key = f"{ch.id}_{today_str}"
+                                is_awarded = today_key in telemetry.discipline_bonus_awarded
+                                tamper_events = telemetry.child_daily_tamper_log.get(ch.id, [])
+                                today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str)]
+
+                                if len(today_tamper) == 0:
+                                    if not is_awarded:
+                                        await crud.add_coins_to_user(session, ch.id, 50)
+                                        telemetry.discipline_bonus_awarded.add(today_key)
+                                    discipline_line = "🎖️ <b>Kun Qahramoni:</b> Bugun hech qanday qoidabuzarlik qilinmadi (+50 tanga intizom bonusi berildi)! 🌟\n"
+                                else:
+                                    discipline_line = f"⚠️ <b>Intizom holati:</b> Bugun {len(today_tamper)} ta qoidabuzarlik qayd etildi\n"
 
                                 report_msg = (
                                     f"🌙 <b>KUNLIK XAVFSIZLIK HISOBOTI (22:00)</b>\n"
@@ -91,17 +112,20 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                     f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
                                     f"   └ {zones_str}\n\n"
                                     f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
-                                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {rep['total_distance_km']} km ({rep['points_count']} ta signal)\n"
+                                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {dist_str} ({rep['points_count']} ta signal)\n"
                                     f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
                                     f"🔋 <b>Batareya quvvati:</b> {batt_str}\n\n"
                                     f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
-                                    f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                                    f"{wishlist_line}"
+                                    f"{discipline_line}"
                                     f"━━━━━━━━━━━━━━━━━━━\n"
                                     f"✨ <i>Farzandingiz xavfsizligi va kunlik intizomi to'liq nazoratda! Xayrli tun!</i>"
                                 )
                                 await bot.send_message(chat_id=p.id, text=report_msg, parse_mode="HTML")
                             except Exception as ch_err:
                                 logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {p.id}: {ch_err}")
+
+                    await session.commit()
 
                 last_sent_date = today_str
                 logger.info(f"Nightly safety reports dispatched for {today_str}.")
@@ -131,7 +155,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                 dest_esc = html.escape(ch.walk_safe_destination or "Uyga qaytish")
                                 latest_loc = await crud.get_latest_location(session, ch.id)
                                 maps_url = f"https://www.google.com/maps/search/?api=1&query={latest_loc.latitude},{latest_loc.longitude}" if latest_loc else None
-    
+
                                 warn_msg = (
                                     f"🚨 <b>DIQQAT: XAVFSIZ YO'L VAQTI TUGADI!</b>\n\n"
                                     f"Farzandingiz <b>{ch_name_esc}</b> «Xavfsiz yo'l» (<b>{dest_esc}</b>) rejimida belgilangan vaqt ichida yetib borganini tasdiqlamadi!\n\n"
@@ -149,4 +173,4 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
         except Exception as err:
             logger.error(f"Scheduler worker error: {err}")
 
-        await asyncio.sleep(25)
+        await asyncio.sleep(15)
