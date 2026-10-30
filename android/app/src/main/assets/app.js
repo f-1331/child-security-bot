@@ -10,6 +10,170 @@ window.fetch = function (resource, init) {
   return _nativeFetch.call(this, resource, init);
 };
 
+// =========================================================
+// RUST CORE HYBRID ENGINE (WASM + EMBEDDED HIGH-SPEED MATH)
+// =========================================================
+const RustCore = {
+  isWasmLoaded: false,
+  wasmModule: null,
+
+  async init() {
+    try {
+      if (typeof WebAssembly !== "undefined") {
+        const res = await fetch("/rust_core_bg.wasm");
+        if (res.ok) {
+          const bytes = await res.arrayBuffer();
+          const module = await WebAssembly.instantiate(bytes, {});
+          this.wasmModule = module.instance.exports;
+          this.isWasmLoaded = true;
+          console.log("⚡ Rust Core WASM engine loaded successfully.");
+          return;
+        }
+      }
+    } catch (e) {
+      // Graceful fallback to embedded high-performance engine
+    }
+    this.isWasmLoaded = false;
+  },
+
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    if (this.isWasmLoaded && this.wasmModule && this.wasmModule.rust_haversine_distance) {
+      return this.wasmModule.rust_haversine_distance(lat1, lon1, lat2, lon2);
+    }
+    const R = 6371000.0;
+    const toRad = Math.PI / 180.0;
+    const dLat = (lat2 - lat1) * toRad;
+    const dLon = (lon2 - lon1) * toRad;
+    const rLat1 = lat1 * toRad;
+    const rLat2 = lat2 * toRad;
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(rLat1) * Math.cos(rLat2) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  },
+
+  calculateBearing(lat1, lon1, lat2, lon2) {
+    if (this.isWasmLoaded && this.wasmModule && this.wasmModule.rust_calculate_bearing) {
+      return this.wasmModule.rust_calculate_bearing(lat1, lon1, lat2, lon2);
+    }
+    const toRad = Math.PI / 180.0;
+    const phi1 = lat1 * toRad;
+    const phi2 = lat2 * toRad;
+    const dLambda = (lon2 - lon1) * toRad;
+
+    const y = Math.sin(dLambda) * Math.cos(phi2);
+    const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+    const theta = Math.atan2(y, x);
+    return ((theta * 180.0 / Math.PI) + 360.0) % 360.0;
+  },
+
+  isInsideGeofence(childLat, childLon, fenceLat, fenceLon, radiusMeters) {
+    return this.haversineDistance(childLat, childLon, fenceLat, fenceLon) <= radiusMeters;
+  },
+
+  filterTrajectoryKalman(points) {
+    if (!points || points.length < 2) return points || [];
+    const smoothed = [];
+    let estLat = points[0].latitude;
+    let estLon = points[0].longitude;
+    let variance = 5.0;
+    const decayVar = 3.0;
+
+    for (let i = 0; i < points.length; i++) {
+      const pt = points[i];
+      const acc = pt.accuracy || 15.0;
+
+      // Anti-drift: reject severe noise jumps (>70m accuracy while stationary)
+      if (acc > 70.0 && (!pt.speed || pt.speed < 1.0)) {
+        continue;
+      }
+
+      variance += decayVar;
+      const measVar = acc > 0 ? acc * acc : 16.0;
+      const k = variance / (variance + measVar);
+
+      estLat += k * (pt.latitude - estLat);
+      estLon += k * (pt.longitude - estLon);
+      variance = (1.0 - k) * variance;
+
+      smoothed.push({
+        ...pt,
+        latitude: estLat,
+        longitude: estLon
+      });
+    }
+
+    return smoothed.length > 0 ? smoothed : points;
+  },
+
+  detectStopPoints(points, minDurationMs = 180000, maxRadiusMeters = 25.0) {
+    const stops = [];
+    if (!points || points.length < 2) return stops;
+
+    let startIdx = 0;
+    while (startIdx < points.length) {
+      const pStart = points[startIdx];
+      let tStart = 0;
+      if (pStart.recorded_at) {
+        let s = String(pStart.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        tStart = new Date(s).getTime();
+      } else if (pStart.timestamp_ms) {
+        tStart = pStart.timestamp_ms;
+      } else {
+        startIdx++;
+        continue;
+      }
+
+      let endIdx = startIdx + 1;
+      let lastValidEnd = startIdx;
+
+      while (endIdx < points.length) {
+        const pCurr = points[endIdx];
+        const dist = this.haversineDistance(pStart.latitude, pStart.longitude, pCurr.latitude, pCurr.longitude);
+        if (dist <= maxRadiusMeters) {
+          lastValidEnd = endIdx;
+          endIdx++;
+        } else {
+          break;
+        }
+      }
+
+      if (lastValidEnd > startIdx) {
+        const pEnd = points[lastValidEnd];
+        let tEnd = 0;
+        if (pEnd.recorded_at) {
+          let s = String(pEnd.recorded_at).trim();
+          if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+          tEnd = new Date(s).getTime();
+        } else if (pEnd.timestamp_ms) {
+          tEnd = pEnd.timestamp_ms;
+        }
+        const duration = tEnd - tStart;
+        if (duration >= minDurationMs) {
+          stops.push({
+            latitude: pStart.latitude,
+            longitude: pStart.longitude,
+            durationMinutes: Math.round(duration / 60000),
+            startTimeStr: new Date(tStart).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+            startTimestampMs: tStart,
+            endTimestampMs: tEnd
+          });
+          startIdx = lastValidEnd + 1;
+          continue;
+        }
+      }
+      startIdx++;
+    }
+    return stops;
+  }
+};
+window.RustCore = RustCore;
+RustCore.init().catch(() => {});
+
+
 // Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
 let tg = window.Telegram?.WebApp;
@@ -184,6 +348,9 @@ let isSatellite = false;
 let childMarker = null;
 let geofenceLayers = [];
 let routePolyline = null;
+let routeLayerGroup = null;
+let routePointsCache = [];
+let lastRouteFetchTime = 0;
 let previewCircle = null;
 let zonePickerMarker = null;
 let isZonePickerActive = false;
@@ -279,12 +446,15 @@ document.addEventListener("DOMContentLoaded", () => {
   initMap();
   checkAuthenticationState();
 
-  // Polling every 8 seconds for live telemetry
+  // Polling every 2 seconds for high-frequency live telemetry and route tracking
   pollInterval = setInterval(() => {
     if (currentChildId && !isDemoMode) {
       updateLiveTelemetry(currentChildId);
+      if (isRouteVisible && (Date.now() - lastRouteFetchTime > 3000)) {
+        loadRouteHistory(currentChildId, true);
+      }
     }
-  }, 8000);
+  }, 2000);
 
   // Responsive map size adjustment on screen resize & device orientation change
   window.addEventListener("resize", () => {
@@ -484,8 +654,24 @@ async function checkAuthenticationState() {
   }
 
   // 3. Check localStorage session (User previously authenticated or offline fallback)
-  const stored = localStorage.getItem("smart_tracker_session");
-  const storedCode = localStorage.getItem("smart_tracker_auth_code");
+  let stored = localStorage.getItem("smart_tracker_session");
+  let storedCode = localStorage.getItem("smart_tracker_auth_code");
+
+  // Check native AndroidBridge backup if localStorage was lost or emptied
+  if ((!stored || stored === "null" || stored === "{}") && window.AndroidBridge && typeof window.AndroidBridge.getSavedSession === "function") {
+    try {
+      const nativeSess = window.AndroidBridge.getSavedSession();
+      const nativeCode = window.AndroidBridge.getSavedAuthCode();
+      if (nativeSess && nativeSess.length > 10) {
+        stored = nativeSess;
+        localStorage.setItem("smart_tracker_session", nativeSess);
+        if (nativeCode) {
+          storedCode = nativeCode;
+          localStorage.setItem("smart_tracker_auth_code", nativeCode);
+        }
+      }
+    } catch (e) {}
+  }
   if (stored) {
     try {
       const data = JSON.parse(stored);
@@ -808,6 +994,12 @@ async function submitAuthCode() {
     localStorage.setItem("smart_tracker_role", data.role);
     localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Never prompt automatically on reload again
 
+    if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
+      try {
+        window.AndroidBridge.saveSession(JSON.stringify(data), code, data.role);
+      } catch (e) {}
+    }
+
     haptic("success");
     hideAuthGateModal();
     applyAuthenticatedUser(data);
@@ -852,16 +1044,16 @@ function enableChildDemoMode() {
   currentChildId = 2002;
   coinRateCoins = 1000;
   coinRateSom = 10000;
-  childBalanceCoins = 18000;
-  childBalanceSom = 180000;
+  childBalanceCoins = 0;
+  childBalanceSom = 0;
 
   childrenList = [
     {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 18000,
-      virtual_money_som: 180000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -869,8 +1061,8 @@ function enableChildDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 24000,
-      virtual_money_som: 240000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -879,8 +1071,8 @@ function enableChildDemoMode() {
   applyChildUI({
     id: 2002,
     full_name: "Azizbek Karimov (Farzand Demo)",
-    virtual_balance: 18000,
-    virtual_money_som: 180000,
+    virtual_balance: 0,
+    virtual_money_som: 0,
     coin_rate_coins: 1000,
     coin_rate_som: 10000,
     parent_phone: "+998901234567",
@@ -911,6 +1103,14 @@ function applyAuthenticatedUser(data) {
   authenticatedSession = data;
   isDemoMode = false;
   currentRole = data.role;
+
+  // Persist session into native AndroidBridge so app never logs out on exit
+  if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
+    try {
+      const codeToSave = data.user?.web_access_code || localStorage.getItem("smart_tracker_auth_code") || "";
+      window.AndroidBridge.saveSession(JSON.stringify(data), codeToSave, data.role || currentRole);
+    } catch (e) {}
+  }
   sessionStorage.removeItem("smart_tracker_demo_role");
   document.getElementById("demoBadge")?.classList.add("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
@@ -1133,7 +1333,7 @@ function updateChildLevelAndXP(coins = 0, completedTasksCount = 0) {
   const dashXpText = document.getElementById("childDashboardXpText");
   if (dashXpText) {
     dashXpText.textContent = lvl.level >= 5
-      ? "Maksimal daraja zabt etildi! (Cheksiz XP)"
+      ? "Maksimal daraja (Cheksiz XP)"
       : `Keyingi darajagacha ${lvl.remainingXp.toLocaleString()} XP qoldi`;
   }
 
@@ -1335,6 +1535,9 @@ async function loadChildSelfData(user) {
 function logoutSession() {
   haptic("medium");
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
+    if (window.AndroidBridge && typeof window.AndroidBridge.clearSavedSession === "function") {
+      try { window.AndroidBridge.clearSavedSession(); } catch (e) {}
+    }
     localStorage.removeItem("smart_tracker_session");
     localStorage.removeItem("smart_tracker_auth_code");
     localStorage.removeItem("smart_tracker_role");
@@ -2031,8 +2234,8 @@ function enableDemoMode() {
       id: 2002,
       full_name: "Azizbek Karimov (Farzand)",
       username: "azizbek_child",
-      virtual_balance: 18000,
-      virtual_money_som: 180000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
@@ -2040,8 +2243,8 @@ function enableDemoMode() {
       id: 2003,
       full_name: "Madinaxon Karimova (Farzand 2)",
       username: "madina_child",
-      virtual_balance: 24000,
-      virtual_money_som: 240000,
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -2240,14 +2443,43 @@ async function updateLiveTelemetry(childId) {
       updateSoundUI(loc.sound_mode);
       updateSpeedUI(loc.speed);
 
+      // Accurate Online/Offline computation (> 3 minutes without telemetry = offline)
+      const lastSeenEl = document.getElementById("lastSeenText");
+      const onlineDot = document.getElementById("onlineDot");
+      let isOnline = false;
+      let offlineText = "";
+
       if (loc.recorded_at) {
-        document.getElementById("lastSeenText").innerHTML = `
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>${formatTimeAgo(loc.recorded_at)}</span>
-        `;
+        let s = String(loc.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        const recordedDate = new Date(s);
+        const diffMinutes = Math.floor((Date.now() - recordedDate.getTime()) / 60000);
+        isOnline = diffMinutes <= 3;
+        const timeFormatted = recordedDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" });
+
+        if (isOnline) {
+          if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full shadow-sm";
+          if (lastSeenEl) {
+            lastSeenEl.innerHTML = `
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+              <span class="text-emerald-400 font-extrabold text-xs">Online</span>
+              <span class="text-slate-400 text-[10px]">(${formatTimeAgo(loc.recorded_at)})</span>
+            `;
+          }
+        } else {
+          offlineText = `${timeFormatted} da uzilgan`;
+          if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-slate-950 rounded-full shadow-sm";
+          if (lastSeenEl) {
+            lastSeenEl.innerHTML = `
+              <span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+              <span class="text-rose-400 font-extrabold text-xs">Oflayn</span>
+              <span class="text-slate-300 text-[10px]">(${timeFormatted} da uzilgan — ${formatTimeAgo(loc.recorded_at)})</span>
+            `;
+          }
+        }
       }
 
-      renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level);
+      renderChildMarker(lat, lon, child.full_name, child.is_sos_active, loc.battery_level, isOnline, offlineText);
       resolveAddress(lat, lon);
     } else {
       if (noLocCard) {
@@ -2279,17 +2511,28 @@ async function resolveAddress(lat, lon) {
   const numLon = Number(lon);
   const key = `${numLat.toFixed(4)},${numLon.toFixed(4)}`;
   if (addressCache.has(key)) {
-    document.getElementById("addressText").textContent = addressCache.get(key);
+    const cached = addressCache.get(key);
+    const el = document.getElementById("addressText");
+    if (el) el.textContent = cached;
     return;
   }
+
+  const el = document.getElementById("addressText");
+  if (el) el.textContent = `${numLat.toFixed(5)}, ${numLon.toFixed(5)} (Manzil aniqlanmoqda...)`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, 2500);
 
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLon}&zoom=18&addressdetails=1`, {
       headers: { "Accept-Language": "uz,ru,en" },
+      signal: controller.signal
     });
+    clearTimeout(timer);
     const data = await res.json();
     if (data && data.display_name) {
-      // Extract street and district and real city/region (e.g. Navoiy, Samarqand, etc.)
       const addr = data.address || {};
       const cityName = addr.city || addr.town || addr.village || addr.county || addr.state || "";
       const shortAddr = addr.road || addr.suburb || addr.neighbourhood || addr.city_district;
@@ -2304,25 +2547,60 @@ async function resolveAddress(lat, lon) {
         fullText = data.display_name.split(",").slice(0, 2).join(",");
       }
       addressCache.set(key, fullText);
-      const el = document.getElementById("addressText");
       if (el) el.textContent = fullText;
       return;
     }
   } catch (e) {
-    // Fallback to coordinates
+    clearTimeout(timer);
   }
 
-  document.getElementById("addressText").textContent = `Koordinata: ${numLat.toFixed(5)}, ${numLon.toFixed(5)}`;
+  if (el) el.textContent = `Koordinata: ${numLat.toFixed(6)}, ${numLon.toFixed(6)}`;
+}
+
+// Ultra-smooth marker interpolation (0.01s / 10ms frame animation)
+function smoothMoveMarker(marker, targetLat, targetLon, durationMs = 600) {
+  if (!marker) return;
+  const fromLatLng = marker.getLatLng();
+  const startLat = fromLatLng.lat;
+  const startLng = fromLatLng.lng;
+  const deltaLat = targetLat - startLat;
+  const deltaLng = targetLon - startLng;
+  if (Math.abs(deltaLat) < 0.0000001 && Math.abs(deltaLng) < 0.0000001) {
+    marker.setLatLng([targetLat, targetLon]);
+    return;
+  }
+
+  if (marker._animFrame) {
+    cancelAnimationFrame(marker._animFrame);
+    marker._animFrame = null;
+  }
+
+  const startTime = performance.now();
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / durationMs, 1.0);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const curLat = startLat + deltaLat * ease;
+    const curLng = startLng + deltaLng * ease;
+    marker.setLatLng([curLat, curLng]);
+    if (progress < 1.0) {
+      marker._animFrame = requestAnimationFrame(step);
+    } else {
+      marker.setLatLng([targetLat, targetLon]);
+      marker._animFrame = null;
+    }
+  }
+  marker._animFrame = requestAnimationFrame(step);
 }
 
 // Render or move pulsing radar child marker
-function renderChildMarker(lat, lon, name, isSos, battery) {
+function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offlineText = "") {
   if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
     return;
   }
   const initial = (name || "B").charAt(0).toUpperCase();
   const pulseClass = isSos ? "sos-pulse-ring" : "child-pulse-ring";
-  const pinBg = isSos ? "bg-red-600" : "bg-gradient-to-tr from-blue-700 to-indigo-500";
+  const pinBg = isSos ? "bg-red-600" : (isOnline ? "bg-gradient-to-tr from-blue-700 to-indigo-500" : "bg-gradient-to-tr from-slate-600 to-slate-800");
 
   const customHtml = `
     <div class="child-radar-marker">
@@ -2339,7 +2617,7 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
   });
 
   if (childMarker) {
-    childMarker.setLatLng([lat, lon]);
+    smoothMoveMarker(childMarker, lat, lon, 600);
     childMarker.setIcon(icon);
   } else {
     childMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
@@ -2360,11 +2638,16 @@ function renderChildMarker(lat, lon, name, isSos, battery) {
     }
   }
 
+  const statusBadge = isOnline
+    ? `<div class="text-[11px] font-bold text-emerald-600 flex items-center gap-1 mt-1">🟢 <span>Online (Jonli nazorat faol)</span></div>`
+    : `<div class="text-[11px] font-bold text-rose-600 flex items-center gap-1 mt-1">🔴 <span>Oflayn ${offlineText ? '(' + offlineText + ')' : ''}</span></div>`;
+
   childMarker.bindPopup(`
-    <div class="p-1 text-slate-900 text-xs font-semibold">
+    <div class="p-1 text-slate-900 text-xs font-semibold font-sans">
       <div class="font-bold text-sm mb-1 text-blue-700">${name || "Farzand"}</div>
-      <div>🔋 Batareya: <b>${battery !== null ? battery + "%" : "Noma'lum"}</b></div>
-      <div class="text-[10px] text-slate-500 mt-1">Jonli xavfsizlik nazorati faol</div>
+      <div>🔋 Batareya: <b>${battery !== null && battery !== undefined ? battery + "%" : "Noma'lum"}</b></div>
+      ${statusBadge}
+      <div class="text-[9px] text-slate-500 font-mono mt-1">📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
     </div>
   `);
 }
@@ -2501,7 +2784,7 @@ function renderFencesToMapAndList(fences) {
         </div>
         ${
           isChild
-            ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">🛡️ Xavfsiz</span>`
+            ? `<button onclick="openChildZoneOnMap('${f.id}', ${f.latitude || 0}, ${f.longitude || 0}, '${(f.name || '').replace(/'/g, "\\'")}', ${f.radius_meters || 100})" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>Xaritada</span> 🗺️</button>`
             : `<button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>`
@@ -2529,199 +2812,813 @@ function renderFencesToMapAndList(fences) {
 
 // Render Demo Geofences
 function renderDemoGeofences() {
-  if (!isDemoMode) {
-    geofencesList = [];
-    renderChildDashboardCastles();
-    return;
-  }
-  const demoFences = [
-    { id: 1, name: "🏠 Uyimiz (Chilonzor)", latitude: 41.2858, longitude: 69.2035, radius_meters: 200 },
-    { id: 2, name: "🏫 Maktab №45", latitude: 41.2915, longitude: 69.2120, radius_meters: 250 },
-    { id: 3, name: "📚 O'quv Markazi", latitude: 41.3000, longitude: 69.2250, radius_meters: 200 },
-  ];
-  renderFencesToMapAndList(demoFences);
+  geofencesList = [];
+  renderFencesToMapAndList([]);
 }
 
-// Load route history
-async function loadRouteHistory(childId) {
+// Focus a specific route checkpoint on map in Fullscreen mode
+function focusRoutePoint(lat, lon) {
+  haptic("light");
+  closeModal("history");
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
+  }
+  toggleMapUiVisibility(true);
+  if (map) {
+    map.flyTo([lat, lon], 17, { animate: true, duration: 0.8 });
+  }
+}
+
+// Load route history with high precision
+async function loadRouteHistory(childId, isSilent = false) {
   if (isDemoMode) {
     renderDemoHistory();
     return;
   }
+  const targetId = childId || currentChildId;
+  if (!targetId) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/history`);
+    lastRouteFetchTime = Date.now();
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/history?limit=500`);
     const data = await res.json();
     if (data.status !== "success") return;
 
-    if (routePolyline) {
-      map.removeLayer(routePolyline);
-      routePolyline = null;
-    }
-
-    const points = data.points;
-    const container = document.getElementById("historyListContainer");
-
-    if (points.length === 0) {
-      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
-      return;
-    }
-
+    const points = data.points || [];
     renderHistoryToMapAndList(points);
   } catch (err) {
-    console.error("Failed to load route history:", err);
+    if (!isSilent) console.error("Failed to load route history:", err);
   }
 }
 
 function renderHistoryToMapAndList(points) {
+  routePointsCache = points || [];
+
+  if (routeLayerGroup && map) {
+    try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    routeLayerGroup = null;
+  }
   if (routePolyline && map) {
     try { map.removeLayer(routePolyline); } catch (e) {}
     routePolyline = null;
   }
+
   const container = document.getElementById("historyListContainer");
-  const latlngs = points.map((p) => [p.latitude, p.longitude]);
-
-  routePolyline = L.polyline(latlngs, {
-    color: "#f59e0b",
-    weight: 4,
-    opacity: 0.85,
-    dashArray: "6, 8",
-  });
-
-  if (isRouteVisible) {
-    routePolyline.addTo(map);
+  if (!points || points.length === 0) {
+    if (container) {
+      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
+    }
+    return;
   }
 
-  container.innerHTML = points
+  routeLayerGroup = L.featureGroup();
+
+  // Rust Core Kalman smoothing
+  const smoothed = (window.RustCore && typeof RustCore.filterTrajectoryKalman === "function")
+    ? RustCore.filterTrajectoryKalman(points)
+    : points;
+
+  const latlngs = smoothed.map((p) => [p.latitude, p.longitude]);
+
+  // 1. Layered high-contrast glowing polyline base
+  const glowPolyline = L.polyline(latlngs, {
+    color: "#38bdf8",
+    weight: 8,
+    opacity: 0.3,
+    lineCap: "round",
+    lineJoin: "round"
+  });
+  glowPolyline.addTo(routeLayerGroup);
+
+  // 1.1 Speed-colored polyline segments:
+  // - Walking (< 15 km/h): #10b981 (emerald) / #f59e0b (amber)
+  // - City transit / bike (15 - 45 km/h): #0284c7 (blue/cyan)
+  // - High-speed vehicle (> 45 km/h): #ef4444 (red)
+  // - Offline cached: #a855f7 (purple dashed)
+  for (let i = 0; i < smoothed.length - 1; i++) {
+    const pt1 = smoothed[i];
+    const pt2 = smoothed[i + 1];
+    const spd = Math.max(pt1.speed || 0, pt2.speed || 0);
+
+    let segColor = "#10b981"; // walking / pedestrian
+    if (spd > 45) {
+      segColor = "#ef4444"; // car / high-speed
+    } else if (spd > 15) {
+      segColor = "#0284c7"; // bike / city transit
+    } else if (spd > 5) {
+      segColor = "#f59e0b"; // fast walking / jogging
+    }
+
+    const isOffline = pt1.is_offline_cached || pt2.is_offline_cached;
+    const segLine = L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
+      color: isOffline ? "#a855f7" : segColor,
+      weight: 4,
+      opacity: 0.95,
+      dashArray: isOffline ? "6, 6" : null,
+      lineCap: "round"
+    });
+    segLine.addTo(routeLayerGroup);
+  }
+
+  routePolyline = glowPolyline;
+
+  // 2. Identify repeated visits (Bitta yo'ldan qayta-qayta yurgan joylarni aniqlash)
+  // Cluster points within 25 meters
+  const clusters = [];
+  const pointVisitInfo = new Map();
+
+  points.forEach((p, idx) => {
+    let pTimeStr = "--:--:--";
+    let rawDate = null;
+    if (p.recorded_at) {
+      let s = String(p.recorded_at).trim();
+      if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+      rawDate = new Date(s);
+      pTimeStr = rawDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+    const speedVal = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/soat` : "Piyoda";
+    const batVal = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
+
+    let matchedCluster = null;
+    for (const c of clusters) {
+      const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
+      if (dist <= 10) { // 10 meters proximity (uyimiz tochkasi ichida 10 metr)
+        matchedCluster = c;
+        break;
+      }
+    }
+
+    const visitItem = {
+      pointIndex: idx,
+      stepNum: idx + 1,
+      time: pTimeStr,
+      rawDate: rawDate,
+      battery: batVal,
+      speed: speedVal,
+      isCharging: p.is_charging,
+      lat: p.latitude,
+      lng: p.longitude
+    };
+
+    if (matchedCluster) {
+      matchedCluster.visits.push(visitItem);
+    } else {
+      clusters.push({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        visits: [visitItem]
+      });
+    }
+  });
+
+  // Annotate each point with its pass index and total passes
+  clusters.forEach((c) => {
+    c.visits.forEach((v, passIdx) => {
+      pointVisitInfo.set(v.pointIndex, {
+        passNumber: passIdx + 1,
+        totalPasses: c.visits.length
+      });
+    });
+  });
+
+  // 3. Render Checkpoints on Map
+  // A. Start point
+  const firstP = points[0];
+  let firstTime = firstP.recorded_at ? new Date(firstP.recorded_at.endsWith("Z") ? firstP.recorded_at : firstP.recorded_at + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "";
+  const startIcon = L.divIcon({
+    className: "route-pin-start",
+    html: `
+      <div class="flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-2xl border-2 border-white whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2">
+        <span>🟢 Boshlanish</span> <span class="opacity-95 font-mono">${firstTime}</span>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0]
+  });
+  L.marker([firstP.latitude, firstP.longitude], { icon: startIcon }).addTo(routeLayerGroup);
+
+  // B. Finish / Latest point
+  if (points.length > 1) {
+    const lastP = points[points.length - 1];
+    let lastTime = lastP.recorded_at ? new Date(lastP.recorded_at.endsWith("Z") ? lastP.recorded_at : lastP.recorded_at + "Z").toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "";
+    const endIcon = L.divIcon({
+      className: "route-pin-end",
+      html: `
+        <div class="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-rose-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-2xl border-2 border-white whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2">
+          <span>🏁 Oxirgi joy</span> <span class="opacity-95 font-mono">${lastTime}</span>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+    L.marker([lastP.latitude, lastP.longitude], { icon: endIcon }).addTo(routeLayerGroup);
+  }
+
+  // C. Render repeated visit spots & intermediate step checkpoints
+  clusters.forEach((c) => {
+    if (c.visits.length > 1) {
+      // REPEATED LOCATION: Child walked here 2+ times
+      const passCount = c.visits.length;
+      const isHundredPlus = passCount >= 100;
+      const badgeText = isHundredPlus ? "100+" : `${passCount}x`;
+
+      const repeatIcon = L.divIcon({
+        className: "route-repeat-badge",
+        html: `
+          <div class="relative group cursor-pointer transform -translate-x-1/2 -translate-y-1/2" title="${isHundredPlus ? '100+ marta' : passCount + ' marta'}">
+            <div class="h-7 min-w-[28px] px-1.5 rounded-full bg-gradient-to-tr from-rose-600 via-pink-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-2xl border-2 border-white animate-bounce">
+              ${badgeText}
+            </div>
+            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-yellow-400 rounded-full border border-white animate-ping"></span>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      });
+
+      const repeatMarker = L.marker([c.latitude, c.longitude], { icon: repeatIcon });
+
+      // If passCount >= 100, ONLY show the LAST 10 times as specifically demanded!
+      const displayedVisits = isHundredPlus ? c.visits.slice(-10) : c.visits;
+      const passesHtml = displayedVisits.map((v, i) => {
+        const orderNumber = isHundredPlus ? (passCount - displayedVisits.length + i + 1) : (i + 1);
+        return `
+        <div class="flex items-center justify-between p-2 bg-slate-800/90 rounded-xl border border-slate-700/70 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-rose-500/25 text-rose-300 font-black text-[10px] flex items-center justify-center border border-rose-500/40">${orderNumber}</span>
+            <div>
+              <p class="font-bold text-white text-xs">${orderNumber}-o'tish vaqti:</p>
+              <p class="font-mono text-amber-300 font-extrabold text-[11px]">${v.time}</p>
+            </div>
+          </div>
+          <div class="text-[10px] text-slate-300 text-right">
+            <div>🔋 ${v.battery}</div>
+            <div class="text-cyan-300 font-bold">⚡ ${v.speed}</div>
+          </div>
+        </div>
+      `;
+      }).join("");
+
+      const headerTitle = isHundredPlus
+        ? `<span>Ushbu joyda bola <b>100+</b> marta bo'lgan (Oxirgi 10 marta):</span>`
+        : `<span>Ushbu joydan bola ${passCount} marta o'tgan:</span>`;
+
+      repeatMarker.bindPopup(`
+        <div class="p-2 min-w-[260px] max-w-[320px] text-slate-100 font-sans">
+          <div class="flex items-center gap-1.5 font-black text-xs text-rose-400 mb-2 border-b border-white/10 pb-1.5">
+            <span class="text-base">🔁</span>
+            ${headerTitle}
+          </div>
+          <div class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll">
+            ${passesHtml}
+          </div>
+          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} (10m hudud)</p>
+        </div>
+      `);
+      repeatMarker.addTo(routeLayerGroup);
+    } else {
+      // Single pass intermediate point
+      const v = c.visits[0];
+      if (v.stepNum !== 1 && v.stepNum !== points.length) {
+        const stepIcon = L.divIcon({
+          className: "route-step-pin",
+          html: `
+            <div class="w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-slate-950 shadow-md hover:scale-150 transition cursor-pointer transform -translate-x-1/2 -translate-y-1/2" title="Qadam #${v.stepNum}"></div>
+          `,
+          iconSize: [0, 0],
+          iconAnchor: [0, 0]
+        });
+        const stepMarker = L.marker([c.latitude, c.longitude], { icon: stepIcon });
+        stepMarker.bindPopup(`
+          <div class="p-1.5 text-xs text-slate-900 font-semibold font-sans">
+            <div class="font-black text-blue-700">Qadam #${v.stepNum}</div>
+            <div class="mt-0.5">🕒 Vaqti: <b>${v.time}</b></div>
+            <div>🔋 Batareya: <b>${v.battery}</b></div>
+            <div>⚡ Tezlik: <b>${v.speed}</b></div>
+            <div class="text-[9px] text-slate-500 font-mono mt-1">${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}</div>
+          </div>
+        `);
+        stepMarker.addTo(routeLayerGroup);
+      }
+    }
+  });
+
+  // D. Render Stop Point Markers (To'xtash joylari - 3+ min within 25m)
+  const stopPoints = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    if (p1.recorded_at && p2.recorded_at) {
+      let s1 = String(p1.recorded_at).trim();
+      if (!s1.endsWith("Z") && !s1.includes("+")) s1 += "Z";
+      let s2 = String(p2.recorded_at).trim();
+      if (!s2.endsWith("Z") && !s2.includes("+")) s2 += "Z";
+      const t1 = new Date(s1).getTime();
+      const t2 = new Date(s2).getTime();
+      const durationMs = t2 - t1;
+      const dist = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+
+      if (durationMs >= 180000 && dist <= 25) {
+        const stopMinutes = Math.round(durationMs / 60000);
+        stopPoints.push({
+          lat: p1.latitude,
+          lng: p1.longitude,
+          minutes: stopMinutes,
+          timeStr: new Date(s1).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })
+        });
+      }
+    }
+  }
+
+  stopPoints.forEach((sp, sIdx) => {
+    const stopIcon = L.divIcon({
+      className: "route-stop-pin",
+      html: `
+        <div class="flex items-center gap-1 bg-purple-700 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg border border-purple-300 whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-110 transition" title="To'xtash joyi: ${sp.minutes} daqiqa">
+          <span>🛑 ${sp.minutes} daq</span>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+    const stopMarker = L.marker([sp.lat, sp.lng], { icon: stopIcon });
+    stopMarker.bindPopup(`
+      <div class="p-2 text-xs text-slate-900 font-sans">
+        <div class="font-black text-purple-800">🛑 To'xtash joyi #${sIdx + 1}</div>
+        <div class="mt-1">⏱ To'xtab turilgan vaqt: <b>${sp.minutes} daqiqa</b></div>
+        <div>🕒 Boshlangan vaqt: <b>${sp.timeStr}</b></div>
+      </div>
+    `);
+    stopMarker.addTo(routeLayerGroup);
+  });
+
+  if (isRouteVisible && map) {
+    routeLayerGroup.addTo(map);
+  }
+
+  // 4. Calculate Route Stats & Populate Summary Cards
+  calculateRouteStats(points);
+
+  // 5. Populate Detailed History List with Repeat Badges & Zoom triggers
+  renderHistoryListItems(points);
+}
+
+// Calculate total distance, max speed, stops, and steps
+function calculateRouteStats(points) {
+  if (!points || points.length === 0) {
+    document.getElementById("statTotalDistance") && (document.getElementById("statTotalDistance").textContent = "0.0 km");
+    document.getElementById("statTotalSteps") && (document.getElementById("statTotalSteps").textContent = "0 ta");
+    document.getElementById("statMaxSpeed") && (document.getElementById("statMaxSpeed").textContent = "0 km/s");
+    document.getElementById("statTotalStops") && (document.getElementById("statTotalStops").textContent = "0 joy");
+    return;
+  }
+
+  let totalDistM = 0;
+  let maxSpd = 0;
+  let stops = 0;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const d = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+    if (d < 50000) {
+      totalDistM += d;
+    }
+    if (p2.speed && p2.speed > maxSpd) {
+      maxSpd = Math.round(p2.speed);
+    }
+    if (p1.recorded_at && p2.recorded_at) {
+      const t1 = new Date(p1.recorded_at.endsWith("Z") ? p1.recorded_at : p1.recorded_at + "Z").getTime();
+      const t2 = new Date(p2.recorded_at.endsWith("Z") ? p2.recorded_at : p2.recorded_at + "Z").getTime();
+      if ((t2 - t1) >= 300000 && d <= 30) { // 5 minutes stopped in one place
+        stops++;
+      }
+    }
+  }
+
+  const distKm = (totalDistM / 1000).toFixed(1);
+  const elDist = document.getElementById("statTotalDistance");
+  const elSteps = document.getElementById("statTotalSteps");
+  const elSpeed = document.getElementById("statMaxSpeed");
+  const elStops = document.getElementById("statTotalStops");
+
+  if (elDist) elDist.textContent = `${distKm} km`;
+  if (elSteps) elSteps.textContent = `${points.length} ta`;
+  if (elSpeed) elSpeed.textContent = `${maxSpd} km/s`;
+  if (elStops) elStops.textContent = `${stops} joy`;
+}
+
+// Filter History List by Time of Day (All, Morning, Afternoon, Evening)
+let currentHistoryFilter = "all";
+function filterHistoryByTime(filterType) {
+  haptic("light");
+  currentHistoryFilter = filterType;
+
+  document.querySelectorAll(".filter-time-pill").forEach((btn) => {
+    btn.classList.remove("bg-blue-600", "text-white");
+    btn.classList.add("bg-slate-800", "text-slate-300");
+  });
+  const activeBtn = document.getElementById(`btnFilterTime-${filterType}`);
+  if (activeBtn) {
+    activeBtn.classList.remove("bg-slate-800", "text-slate-300");
+    activeBtn.classList.add("bg-blue-600", "text-white");
+  }
+
+  renderHistoryListItems(routePointsCache);
+}
+
+function renderHistoryListItems(points) {
+  const container = document.getElementById("historyListContainer");
+  if (!container || !points) return;
+
+  let filtered = points.slice();
+  if (currentHistoryFilter === "morning") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 6 && h < 12;
+    });
+  } else if (currentHistoryFilter === "afternoon") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 12 && h < 18;
+    });
+  } else if (currentHistoryFilter === "evening") {
+    filtered = filtered.filter((p) => {
+      if (!p.recorded_at) return true;
+      const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
+      return h >= 18 || h < 6;
+    });
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Ushbu vaqt oralig'ida harakatlar topilmadi.</p>`;
+    return;
+  }
+
+  container.innerHTML = filtered
     .slice()
     .reverse()
     .map((p, idx) => {
-      const time = p.recorded_at ? new Date(p.recorded_at).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-      const batteryStr = p.battery_level ? `${p.battery_level}%` : "--";
+      const origIdx = points.indexOf(p);
+      let timeWithSec = "--:--:--";
+      if (p.recorded_at) {
+        let s = String(p.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        timeWithSec = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+      const batteryStr = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
       const chargingIcon = p.is_charging ? "⚡" : "";
+      const speedStr = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/s` : "Piyoda";
 
       return `
-      <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl flex items-center justify-between text-xs">
-        <div class="flex items-center gap-2">
-          <div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-          <span class="font-mono text-slate-200">${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}</span>
+        <div onclick="focusRoutePoint(${p.latitude}, ${p.longitude})" class="bg-slate-800/80 hover:bg-slate-800 active:scale-[0.99] border border-slate-700/60 hover:border-amber-500/50 p-2.5 rounded-2xl flex flex-col gap-1.5 text-xs transition cursor-pointer shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-amber-400/20 text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40">#${origIdx + 1}</span>
+              <span class="font-mono text-slate-200 text-xs font-bold">${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}</span>
+            </div>
+            <span class="font-mono font-black text-amber-400 text-xs">🕒 ${timeWithSec}</span>
+          </div>
+          <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-700/40">
+            <div class="flex items-center gap-2">
+              <span>🔋 ${batteryStr} ${chargingIcon}</span>
+              <span>⚡ ${speedStr}</span>
+            </div>
+            <span class="text-cyan-400 font-bold text-[10px] flex items-center gap-1">📍 Xaritada ko'rish</span>
+          </div>
         </div>
-        <div class="flex items-center gap-2.5 text-slate-400 text-[11px]">
-          <span>🔋 ${batteryStr} ${chargingIcon}</span>
-          <span class="font-bold text-slate-200">🕒 ${time}</span>
-        </div>
-      </div>
-    `;
+      `;
     })
     .join("");
+}
+
+// =========================================================
+// 8. INTERACTIVE ROUTE PLAYBACK HUD & SCRUBBER ENGINE
+// =========================================================
+let replayCurrentStep = 0;
+let replaySpeedMultiplier = 1; // 1x, 2x, 4x, 8x
+let isReplayPlaying = false;
+
+function showRoutePlaybackHud() {
+  const hud = document.getElementById("routePlaybackHud");
+  if (!hud) return;
+  hud.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+
+  const scrubber = document.getElementById("routeTimelineScrubber");
+  if (scrubber && routePointsCache.length > 0) {
+    scrubber.min = "0";
+    scrubber.max = String(routePointsCache.length - 1);
+    scrubber.value = String(replayCurrentStep);
+  }
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function hideRoutePlaybackHud() {
+  const hud = document.getElementById("routePlaybackHud");
+  if (hud) hud.classList.add("hidden");
+}
+
+function updateRoutePlaybackHud(stepIdx) {
+  if (!routePointsCache || routePointsCache.length === 0) return;
+  const clampedIdx = Math.max(0, Math.min(stepIdx, routePointsCache.length - 1));
+  const pt = routePointsCache[clampedIdx];
+
+  const timeEl = document.getElementById("routeHudTimeText");
+  const speedEl = document.getElementById("routeHudSpeedText");
+  const statsEl = document.getElementById("routeHudStatsText");
+  const scrubber = document.getElementById("routeTimelineScrubber");
+
+  if (pt && pt.recorded_at) {
+    const s = pt.recorded_at.endsWith("Z") ? pt.recorded_at : pt.recorded_at + "Z";
+    const tStr = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    if (timeEl) timeEl.textContent = `🕒 ${tStr}`;
+  }
+  if (speedEl) {
+    const spd = typeof pt.speed === "number" && pt.speed > 0 ? `${Math.round(pt.speed)} km/s` : "0 km/s";
+    speedEl.textContent = `⚡ ${spd}`;
+  }
+  if (statsEl) {
+    statsEl.textContent = `${clampedIdx + 1} / ${routePointsCache.length} ta`;
+  }
+  if (scrubber) {
+    scrubber.value = String(clampedIdx);
+  }
+}
+
+function onRouteScrubberInput(val) {
+  const idx = parseInt(val, 10);
+  if (isNaN(idx) || !routePointsCache || !routePointsCache[idx]) return;
+  replayCurrentStep = idx;
+
+  ensureReplayMarkerAt(replayCurrentStep);
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function stepRoutePrev() {
+  haptic("light");
+  if (replayCurrentStep > 0) {
+    replayCurrentStep--;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+  }
+}
+
+function stepRouteNext() {
+  haptic("light");
+  if (routePointsCache && replayCurrentStep < routePointsCache.length - 1) {
+    replayCurrentStep++;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+  }
+}
+
+function cycleRouteSpeed() {
+  haptic("light");
+  const speeds = [1, 2, 4, 8];
+  const curIdx = speeds.indexOf(replaySpeedMultiplier);
+  replaySpeedMultiplier = speeds[(curIdx + 1) % speeds.length];
+
+  const btn = document.getElementById("btnRouteSpeed");
+  if (btn) btn.textContent = `${replaySpeedMultiplier}x`;
+
+  if (isReplayPlaying) {
+    clearInterval(replayTimer);
+    const intervalMs = Math.max(80, Math.round(500 / replaySpeedMultiplier));
+    replayTimer = setInterval(routePlaybackTick, intervalMs);
+  }
+}
+
+function ensureReplayMarkerAt(idx) {
+  if (!routePointsCache || !routePointsCache[idx]) return;
+  const pt = routePointsCache[idx];
+
+  if (!replayMarker && map) {
+    const replayIcon = L.divIcon({
+      html: `
+        <div class="relative transform -translate-x-1/2 -translate-y-1/2">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-400 via-orange-500 to-rose-600 flex items-center justify-center text-white shadow-2xl border-2 border-white animate-pulse">
+            🚶‍♂️
+          </div>
+          <span class="absolute -top-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full border border-white animate-ping"></span>
+        </div>
+      `,
+      className: "custom-replay-icon",
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+    replayMarker = L.marker([pt.latitude, pt.longitude], { icon: replayIcon }).addTo(map);
+  } else if (replayMarker) {
+    smoothMoveMarker(replayMarker, pt.latitude, pt.longitude, 350);
+  }
+
+  if (map) {
+    map.panTo([pt.latitude, pt.longitude], { animate: true, duration: 0.35 });
+  }
+}
+
+function routePlaybackTick() {
+  if (!routePointsCache || routePointsCache.length < 2) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+    updatePlayPauseButtonUI();
+    return;
+  }
+
+  replayCurrentStep++;
+  if (replayCurrentStep >= routePointsCache.length) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+    updatePlayPauseButtonUI();
+    showToast("🏁 Harakat yakunlandi");
+    return;
+  }
+
+  ensureReplayMarkerAt(replayCurrentStep);
+  updateRoutePlaybackHud(replayCurrentStep);
+}
+
+function toggleRoutePlayPause() {
+  haptic("medium");
+  if (!routePointsCache || routePointsCache.length < 2) {
+    showToast("Harakat nuqtalari yetarli emas");
+    return;
+  }
+
+  if (isReplayPlaying) {
+    clearInterval(replayTimer);
+    isReplayPlaying = false;
+  } else {
+    if (replayCurrentStep >= routePointsCache.length - 1) {
+      replayCurrentStep = 0;
+    }
+    isReplayPlaying = true;
+    ensureReplayMarkerAt(replayCurrentStep);
+    updateRoutePlaybackHud(replayCurrentStep);
+
+    clearInterval(replayTimer);
+    const intervalMs = Math.max(80, Math.round(500 / replaySpeedMultiplier));
+    replayTimer = setInterval(routePlaybackTick, intervalMs);
+  }
+
+  updatePlayPauseButtonUI();
+}
+
+function updatePlayPauseButtonUI() {
+  const icon = document.getElementById("iconRoutePlayPause");
+  const label = document.getElementById("labelRoutePlayPause");
+  const btn = document.getElementById("btnRoutePlayPause");
+
+  if (isReplayPlaying) {
+    if (icon) icon.setAttribute("data-lucide", "pause");
+    if (label) label.textContent = "Pauza";
+    if (btn) {
+      btn.classList.remove("bg-amber-500", "hover:bg-amber-400");
+      btn.classList.add("bg-rose-500", "hover:bg-rose-400");
+    }
+  } else {
+    if (icon) icon.setAttribute("data-lucide", "play");
+    if (label) label.textContent = replayCurrentStep > 0 ? "Davom" : "Boshlash";
+    if (btn) {
+      btn.classList.remove("bg-rose-500", "hover:bg-rose-400");
+      btn.classList.add("bg-amber-500", "hover:bg-amber-400");
+    }
+  }
+  if (window.lucide) lucide.createIcons();
+}
+
+function exitRouteView() {
+  haptic("light");
+  clearInterval(replayTimer);
+  isReplayPlaying = false;
+  if (replayMarker && map) {
+    try { map.removeLayer(replayMarker); } catch (e) {}
+    replayMarker = null;
+  }
+  hideRoutePlaybackHud();
+  toggleRouteHistory(false);
 }
 
 // Render Demo History
 function renderDemoHistory() {
   const demoPoints = [
-    { latitude: 41.2858, longitude: 69.2035, battery_level: 85, is_charging: false, recorded_at: "2026-10-16T08:00:00" },
-    { latitude: 41.2870, longitude: 69.2060, battery_level: 84, is_charging: false, recorded_at: "2026-10-16T08:10:00" },
-    { latitude: 41.2890, longitude: 69.2090, battery_level: 83, is_charging: false, recorded_at: "2026-10-16T08:20:00" },
-    { latitude: 41.2915, longitude: 69.2120, battery_level: 82, is_charging: false, recorded_at: "2026-10-16T08:30:00" },
-    { latitude: 41.2916, longitude: 69.2121, battery_level: 80, is_charging: false, recorded_at: "2026-10-16T08:45:00" },
+    { latitude: 41.285800, longitude: 69.203500, battery_level: 85, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:00:00" },
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 84, is_charging: false, speed: 5, recorded_at: "2026-10-25T08:10:00" },
+    { latitude: 41.289000, longitude: 69.209000, battery_level: 83, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:20:00" },
+    { latitude: 41.291500, longitude: 69.212000, battery_level: 82, is_charging: false, speed: 3, recorded_at: "2026-10-25T08:30:00" },
+    // Return trip through same coordinate (Repeated pass demonstration!)
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 75, is_charging: false, speed: 4, recorded_at: "2026-10-25T13:40:00" },
+    { latitude: 41.285800, longitude: 69.203500, battery_level: 70, is_charging: false, speed: 3, recorded_at: "2026-10-25T14:00:00" },
+    // 3rd pass in evening!
+    { latitude: 41.287000, longitude: 69.206000, battery_level: 60, is_charging: false, speed: 5, recorded_at: "2026-10-25T17:15:00" },
+    { latitude: 41.300000, longitude: 69.225000, battery_level: 55, is_charging: false, speed: 6, recorded_at: "2026-10-25T17:45:00" },
   ];
   renderHistoryToMapAndList(demoPoints);
 }
 
-// Smooth Route Playback Animation
+// Smooth Route Playback Animation Entrypoint
 function startRoutePlayback() {
   haptic("medium");
-  if (!routePolyline) {
-    showToast("Harakat marshruti mavjud emas");
-    return;
-  }
-
-  const latlngs = routePolyline.getLatLngs();
-  if (latlngs.length < 2) {
+  if (!routePointsCache || routePointsCache.length < 2) {
     showToast("Harakat nuqtalari yetarli emas");
     return;
   }
 
   closeModal("history");
-  showToast("▶ Marshrut harakati ko'rsatilmoqda...");
-
-  if (replayMarker) {
-    map.removeLayer(replayMarker);
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
   }
+  toggleMapUiVisibility(true); // Automatically switch to fullscreen mode!
 
-  const replayIcon = L.divIcon({
-    html: `<div class="replay-marker-dot"></div>`,
-    className: "custom-replay-icon",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
+  // Reveal the interactive Scrubber HUD
+  showRoutePlaybackHud();
 
-  replayMarker = L.marker(latlngs[0], { icon: replayIcon }).addTo(map);
-  map.panTo(latlngs[0]);
-
-  let step = 0;
-  clearInterval(replayTimer);
-
-  replayTimer = setInterval(() => {
-    step++;
-    if (step >= latlngs.length) {
-      clearInterval(replayTimer);
-      showToast("🏁 Harakat yakunlandi");
-      setTimeout(() => {
-        if (replayMarker) map.removeLayer(replayMarker);
-      }, 2000);
-      return;
-    }
-
-    replayMarker.setLatLng(latlngs[step]);
-    map.panTo(latlngs[step], { animate: true, duration: 0.5 });
-  }, 900);
+  // Reset and start playback
+  replayCurrentStep = 0;
+  toggleRoutePlayPause();
 }
 
 // Toggle route history polyline on map
-function toggleRouteHistory() {
+async function toggleRouteHistory(forceState) {
   haptic("light");
-  if (!routePolyline) {
-    showToast("Harakat tarixi mavjud emas");
-    return;
+  const newState = typeof forceState === "boolean" ? forceState : !isRouteVisible;
+  isRouteVisible = newState;
+
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
   }
 
-  isRouteVisible = !isRouteVisible;
   const btn = document.getElementById("btnToggleRoute");
 
   if (isRouteVisible) {
-    routePolyline.addTo(map);
-    btn.classList.add("text-amber-400");
-    btn.classList.remove("text-slate-500");
-    showToast("Marshrut ko'rsatildi");
+    toggleMapUiVisibility(true);
+    if (btn) {
+      btn.classList.add("text-amber-400");
+      btn.classList.remove("text-slate-500");
+    }
+    showToast("🗺️ Marshrut xaritada ochilmoqda...");
+    await loadRouteHistory(currentChildId);
+    if (routeLayerGroup && map) {
+      if (!map.hasLayer(routeLayerGroup)) {
+        routeLayerGroup.addTo(map);
+      }
+      try {
+        const bounds = routeLayerGroup.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.15));
+        }
+      } catch (e) {}
+    }
+    showRoutePlaybackHud();
+    showToast("🗺️ Marshrut to'liq xaritada ochildi");
   } else {
-    map.removeLayer(routePolyline);
-    btn.classList.remove("text-amber-400");
-    btn.classList.add("text-slate-500");
+    if (routeLayerGroup && map) {
+      try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    }
+    if (btn) {
+      btn.classList.remove("text-amber-400");
+      btn.classList.add("text-slate-500");
+    }
+    hideRoutePlaybackHud();
     showToast("Marshrut yashirildi");
   }
 }
 
-// Battery UI styling
+// Battery UI styling (with anti-flicker persistent level cache)
+let lastKnownBatteryLevel = null;
+let lastKnownIsCharging = false;
+
 function updateBatteryUI(level, isCharging) {
   const pill = document.getElementById("batteryPill");
   const text = document.getElementById("batteryText");
   const dynBatText = document.getElementById("dynamicIslandBatteryText");
 
-  if (level === null || level === undefined) {
+  if (typeof level === "number" && !isNaN(level) && level >= 0) {
+    lastKnownBatteryLevel = Math.round(level);
+  }
+  if (typeof isCharging === "boolean") {
+    lastKnownIsCharging = isCharging;
+  }
+
+  const effectiveLevel = lastKnownBatteryLevel;
+  const effectiveCharging = lastKnownIsCharging;
+
+  if (effectiveLevel === null || effectiveLevel === undefined) {
     if (text) text.textContent = "--%";
     if (dynBatText) dynBatText.textContent = "--%";
     return;
   }
 
-  if (text) text.textContent = `${level}%`;
-  if (dynBatText) dynBatText.textContent = `${level}%`;
+  if (text) text.textContent = `${effectiveLevel}%`;
+  if (dynBatText) dynBatText.textContent = `${effectiveLevel}%`;
 
-  if (isCharging) {
+  if (effectiveCharging) {
     pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
-  } else if (level <= 15) {
+  } else if (effectiveLevel <= 15) {
     pill.className = "flex items-center gap-1 bg-red-900/60 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/60 animate-pulse";
-  } else if (level <= 30) {
+  } else if (effectiveLevel <= 30) {
     pill.className = "flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/50";
   } else {
     pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/40";
@@ -2987,6 +3884,11 @@ function toggleMapUiVisibility(forceState) {
   }
 }
 
+function openModal(tabName) {
+  switchTab(tabName);
+}
+window.openModal = openModal;
+
 function switchTab(tabName) {
   if (tabName !== "map" && document.body.classList.contains("fullscreen-map-mode")) {
     toggleMapUiVisibility(false);
@@ -3049,6 +3951,12 @@ function switchTab(tabName) {
       } else {
         if (addZoneSec) addZoneSec.classList.remove("hidden");
         if (modalTitle) modalTitle.textContent = "Kerakli Joylar (Geozonalar)";
+      }
+    }
+    if (tabName === "history") {
+      const activeChild = currentChildId || (authenticatedSession?.user?.id);
+      if (activeChild) {
+        loadRouteHistory(activeChild);
       }
     }
     if (tabName === "settings") {
@@ -3127,24 +4035,7 @@ function renderChildDashboardQuests() {
   const container = document.getElementById("childDashboardTasksList");
   if (!container) return;
 
-  if (!isDemoMode && (!tasksList || tasksList.length === 0)) {
-    container.innerHTML = `
-      <div class="p-3.5 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center">
-        <span class="text-xl">🎯</span>
-        <p class="text-xs font-bold text-slate-300 mt-1">Hozircha topshiriqlar yo'q</p>
-        <p class="text-[10px] text-slate-400 mt-0.5">Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi</p>
-      </div>
-    `;
-    return;
-  }
-
-  const activeTasks = (tasksList && tasksList.length > 0)
-    ? tasksList.slice(0, 3)
-    : (isDemoMode ? [
-        { id: 901, title: "Matematika darslarini bajarish", reward_coins: 5000, status: "pending" },
-        { id: 902, title: "Xonani tozalash va tartibga keltirish", reward_coins: 3000, status: "scheduled", promised_time: "30 daqiqadan keyin" },
-        { id: 903, title: "Ingliz tili yangi lug'at yodlash", reward_coins: 4000, status: "completed_by_child" }
-      ] : []);
+  const activeTasks = (tasksList && tasksList.length > 0) ? tasksList.slice(0, 3) : [];
 
   if (activeTasks.length === 0) {
     container.innerHTML = `
@@ -3191,24 +4082,7 @@ function renderChildDashboardCastles() {
   const container = document.getElementById("childDashboardZonesList");
   if (!container) return;
 
-  if (!isDemoMode && (!geofencesList || geofencesList.length === 0)) {
-    container.innerHTML = `
-      <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
-        <span class="text-lg">🛡️</span>
-        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
-        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
-      </div>
-    `;
-    return;
-  }
-
-  const places = (geofencesList && geofencesList.length > 0)
-    ? geofencesList
-    : (isDemoMode ? [
-        { name: "Uyimiz (Asosiy Baza 🏡)", radius_meters: 200 },
-        { name: "Maktab №45 (Bilim Maskani 🏫)", radius_meters: 250 },
-        { name: "O'quv Markazi (Zukko Hub 📚)", radius_meters: 200 }
-      ] : []);
+  const places = (geofencesList && geofencesList.length > 0) ? geofencesList : [];
 
   if (places.length === 0) {
     container.innerHTML = `
@@ -3233,13 +4107,22 @@ function renderChildDashboardCastles() {
     else if (n.includes("sport") || n.includes("zal")) icon = "🥋";
     else if (n.includes("bobo") || n.includes("buvi") || n.includes("ota")) icon = "👵";
 
+    const fenceNameEscaped = (c.name || "").replace(/'/g, "\\'");
+    const fLat = c.latitude || 0;
+    const fLon = c.longitude || 0;
+    const fRad = c.radius_meters || 100;
+    const fId = c.id || (i + 1);
+
     return `
-      <div class="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 flex items-center gap-2">
-        <span class="text-xl shrink-0">${icon}</span>
-        <div class="min-w-0">
-          <p class="font-bold text-white text-xs truncate">${c.name}</p>
-          <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(c.radius_meters || 100)}m)</p>
+      <div onclick="openChildZoneOnMap('${fId}', ${fLat}, ${fLon}, '${fenceNameEscaped}', ${fRad})" class="cursor-pointer active:scale-95 transition bg-slate-950/60 hover:bg-slate-900 p-2.5 rounded-2xl border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between gap-2 shadow-sm" title="Xaritada ko'rish">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-xl shrink-0">${icon}</span>
+          <div class="min-w-0">
+            <p class="font-bold text-white text-xs truncate">${escapeHtml(c.name || 'Makon')}</p>
+            <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(fRad)}m)</p>
+          </div>
         </div>
+        <span class="text-slate-400 hover:text-emerald-400 text-xs shrink-0">🗺️</span>
       </div>
     `;
   }).join("");
@@ -3262,8 +4145,9 @@ function openAddZoneModal() {
   const listModal = document.getElementById("modal-zones");
   if (listModal) listModal.classList.add("hidden");
 
-  // 2. Ensure map tab is active and visible
+  // 2. Ensure map tab is active and visible in Fullscreen Mode
   switchTab("map");
+  toggleMapUiVisibility(true);
   isZonePickerActive = true;
 
   // 3. Hide standard HUD controls so map is clean and clear
@@ -3458,10 +4342,17 @@ async function reverseGeocodePickerLocation(lat, lon) {
 
   addrText.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)} (Manzil aniqlanmoqda...)`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, 2500);
+
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
-      headers: { "Accept-Language": "uz,ru,en" }
+      headers: { "Accept-Language": "uz,ru,en" },
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && data.display_name) {
@@ -3472,7 +4363,9 @@ async function reverseGeocodePickerLocation(lat, lon) {
         return;
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    clearTimeout(timer);
+  }
 
   addrText.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
 }
@@ -3710,47 +4603,7 @@ async function loadTasks() {
 }
 
 function renderDemoTasks() {
-  tasksList = [
-    {
-      id: 991,
-      title: "Matematika darslarini qilish",
-      description: "45-sahifadagi 1-dan 5-gacha bo'lgan misollar",
-      reward_coins: 5000,
-      status: "pending",
-      media_type: null,
-      media_url: null,
-      seen_at: null,
-      promised_time: null,
-      proof_photo_url: null,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 992,
-      title: "Xonani tartibga keltirish",
-      description: "Kitoblarni taxlab, kiyimlarni joyiga qo'yish",
-      reward_coins: 3000,
-      status: "scheduled",
-      media_type: null,
-      media_url: null,
-      seen_at: new Date().toISOString(),
-      promised_time: "30 daqiqadan keyin",
-      proof_photo_url: null,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: 993,
-      title: "Ingliz tili yangi lug'at yodlash",
-      description: "Unit 4 mavzusidagi 15 ta yangi so'zni daftarga yozib yodlash",
-      reward_coins: 4000,
-      status: "completed_by_child",
-      media_type: null,
-      media_url: null,
-      seen_at: new Date().toISOString(),
-      promised_time: "1 soat ichida",
-      proof_photo_url: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=600&q=80",
-      created_at: new Date().toISOString()
-    }
-  ];
+  tasksList = [];
   renderTasksList();
 }
 
@@ -5106,12 +5959,55 @@ let activeBannerTimer = null;
 
 const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
 
+function sendLocationUpdate() {
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+  if (targetId && !isDemoMode) {
+    fetchInstantChildLocation(targetId);
+  }
+}
+window.sendLocationUpdate = sendLocationUpdate;
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && currentRole === "child") {
+    const targetId = currentChildId || authenticatedSession?.user?.id;
+    if (targetId && !isDemoMode) {
+      fetchInstantChildLocation(targetId);
+    }
+  }
+});
+
+window.addEventListener("focus", () => {
+  if (currentRole === "child") {
+    const targetId = currentChildId || authenticatedSession?.user?.id;
+    if (targetId && !isDemoMode) {
+      fetchInstantChildLocation(targetId);
+    }
+  }
+});
+
 async function fetchInstantChildLocation(childId) {
   if (!childId || isDemoMode) return;
-  if (navigator.geolocation) {
-    try {
-      const battery = await getDeviceBattery();
-      const isCharging = await getDeviceChargingStatus();
+  try {
+    const battery = await getDeviceBattery();
+    const isCharging = await getDeviceChargingStatus();
+
+    // 1. Immediately send cached device location if present so telemetry response is 0ms instant
+    if (cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+      renderChildMarker(cachedDeviceLocation.latitude, cachedDeviceLocation.longitude, "Men", false, battery);
+      sendChildLiveTelemetry(childId, {
+        latitude: cachedDeviceLocation.latitude,
+        longitude: cachedDeviceLocation.longitude,
+        accuracy: cachedDeviceLocation.accuracy || null,
+        speed: 0,
+        battery_level: battery,
+        is_charging: isCharging,
+        sound_mode: "normal",
+        is_sos_active: false
+      });
+    }
+
+    // 2. Query fresh GPS position from device sensors
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude, accuracy, speed } = pos.coords;
@@ -5131,11 +6027,67 @@ async function fetchInstantChildLocation(childId) {
         },
         (err) => {
           console.warn("fetchInstantChildLocation note:", err);
+          if (!cachedDeviceLocation) {
+            sendChildLiveTelemetry(childId, {
+              latitude: 41.311081,
+              longitude: 69.240562,
+              accuracy: 1000,
+              speed: 0,
+              battery_level: battery,
+              is_charging: isCharging,
+              sound_mode: "normal",
+              is_sos_active: false
+            });
+          }
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
-    } catch (e) {}
+    }
+  } catch (e) {
+    console.warn("fetchInstantChildLocation error:", e);
   }
+}
+
+// Global hook for location update triggering
+window.sendLocationUpdate = function() {
+  const targetId = currentChildId || authenticatedSession?.user?.id;
+  if (targetId) fetchInstantChildLocation(targetId);
+};
+
+// Web screen time accumulator for browser/Telegram visitors
+let _webScreenTimeAccumulatedSeconds = 0;
+
+function startChildWebSessionTracker(childId) {
+  if (!childId || isDemoMode) return;
+  if (window._childWebSessionTimer) clearInterval(window._childWebSessionTimer);
+
+  window._childWebSessionTimer = setInterval(async () => {
+    if (currentRole !== "child" || document.hidden) return;
+    _webScreenTimeAccumulatedSeconds += 30;
+
+    // Every 60 seconds of active browser usage, upload to backend if native APK isn't already reporting
+    if (_webScreenTimeAccumulatedSeconds >= 60 && !window.AndroidBridge) {
+      try {
+        await fetch(`/api/v1/webapp/child/${childId}/app-usage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            total_screen_time_seconds: _webScreenTimeAccumulatedSeconds,
+            unlock_count: 1,
+            app_stats: [
+              {
+                package: "org.telegram.messenger",
+                app_name: "Telegram & Mini App",
+                usage_seconds: _webScreenTimeAccumulatedSeconds,
+                category: "social",
+                icon: "smartphone"
+              }
+            ]
+          })
+        });
+      } catch (e) {}
+    }
+  }, 30000);
 }
 
 function initChildPermissionsAndTracking(childId) {
@@ -5157,7 +6109,13 @@ function initChildPermissionsAndTracking(childId) {
   // Start HTTP fallback polling for active check alerts
   startChildNotificationPolling(childId);
 
-  // Check if permissions were previously granted or dismissed
+  // Start active screen time session tracker for web/Telegram visitors
+  startChildWebSessionTracker(childId);
+
+  // ALWAYS attempt background telemetry acquisition immediately so live signal connects with 0 wait!
+  trySilentBackgroundLocationTracking(childId);
+
+  // Check if permissions onboarding modal needs to be shown for first-time instructions
   const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
   if (!granted) {
     const modal = document.getElementById("childOnboardingModal");
@@ -5165,9 +6123,6 @@ function initChildPermissionsAndTracking(childId) {
       modal.classList.remove("hidden");
       if (window.lucide) lucide.createIcons();
     }
-  } else if (granted === "true") {
-    // Automatically attempt silent background tracking without any browser prompt!
-    trySilentBackgroundLocationTracking(childId);
   }
 }
 
@@ -5366,8 +6321,8 @@ function startChildLiveTracking(childId) {
 
   const options = {
     enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 5000
+    timeout: 10000,
+    maximumAge: 0 // Fresh GPS fix always with centimeter resolution, no cached data!
   };
 
   childWatchId = navigator.geolocation.watchPosition(
@@ -5399,8 +6354,8 @@ function startChildLiveTracking(childId) {
         }
       }
 
-      // Throttle: send if moved > 5 meters or at least once every 10 seconds
-      if (dist >= 5 || (now - lastSentTime) > 10000) {
+      // Ultra-sensitive centimeter tracking: send if moved >= 0.5 meter or every 2 seconds
+      if (dist >= 0.5 || (now - lastSentTime) > 2000) {
         lastSentTime = now;
         lastSentLat = latitude;
         lastSentLng = longitude;
@@ -5423,26 +6378,99 @@ function startChildLiveTracking(childId) {
     },
     options
   );
+
+  // Periodic heartbeat timer (every 15s) ensuring fresh telemetry even when stationary
+  if (!window._childHeartbeatInterval) {
+    window._childHeartbeatInterval = setInterval(async () => {
+      if (currentRole !== "child") return;
+      const targetId = currentChildId || authenticatedSession?.user?.id;
+      if (!targetId || isDemoMode) return;
+      const now = Date.now();
+      if ((now - lastSentTime) >= 15000 && cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+        lastSentTime = now;
+        const battery = await getDeviceBattery();
+        const isCharging = await getDeviceChargingStatus();
+        sendChildLiveTelemetry(targetId, {
+          latitude: cachedDeviceLocation.latitude,
+          longitude: cachedDeviceLocation.longitude,
+          accuracy: cachedDeviceLocation.accuracy || null,
+          speed: 0,
+          battery_level: battery,
+          is_charging: isCharging,
+          sound_mode: "normal",
+          is_sos_active: false
+        });
+      }
+    }, 15000);
+  }
 }
 
 async function sendChildLiveTelemetry(childId, payload) {
   if (isDemoMode) return;
-  try {
-    // 1. Send via WebSocket if connected
-    if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
-      appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload }));
-    }
+  const targetId = childId || (authenticatedSession?.user?.id);
+  if (!targetId) return;
 
-    // 2. Post to backend live location telemetry endpoint
-    await fetch(`/api/v1/webapp/child/${childId}/location`, {
+  // 1. Send via WebSocket if connected
+  if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
+    try { appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload })); } catch (e) {}
+  }
+
+  // 2. Post to backend live location telemetry endpoint
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/location`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    if (res.ok) {
+      // Successfully sent online: flush any pending offline-buffered points
+      flushOfflineTelemetryBatch(targetId);
+      return;
+    }
+    throw new Error("HTTP " + res.status);
   } catch (e) {
-    // Silent catch, next watchPosition tick will retry
+    // OFFLINE BUFFER: Store point locally in offline queue when internet is off
+    enqueueOfflineTelemetryPoint(targetId, payload);
   }
 }
+
+function enqueueOfflineTelemetryPoint(childId, payload) {
+  try {
+    const key = `_offline_gps_queue_${childId}`;
+    let queue = JSON.parse(localStorage.getItem(key) || "[]");
+    queue.push({
+      ...payload,
+      recorded_at: new Date().toISOString()
+    });
+    if (queue.length > 500) queue = queue.slice(-500);
+    localStorage.setItem(key, JSON.stringify(queue));
+  } catch (err) {}
+}
+
+async function flushOfflineTelemetryBatch(childId) {
+  try {
+    const key = `_offline_gps_queue_${childId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const queue = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    const res = await fetch(`/api/v1/webapp/child/${childId}/location/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ points: queue })
+    });
+    if (res.ok) {
+      localStorage.removeItem(key);
+      console.log(`Successfully synced ${queue.length} offline GPS points.`);
+    }
+  } catch (err) {}
+}
+
+window.addEventListener("online", () => {
+  const targetId = currentChildId || (authenticatedSession?.user?.id);
+  if (targetId) flushOfflineTelemetryBatch(targetId);
+});
 
 // =========================================================
 // 5. WEBSOCKET & CHILD ALERT BANNER DISPATCHER
@@ -5761,6 +6789,9 @@ async function checkChildPendingNotifications(childId) {
         for (const notif of data.notifications) {
           if (notif.type === "active_check") {
             showChildActiveCheckBanner(notif.time || new Date().toLocaleTimeString().slice(0, 5));
+            if (typeof window.sendLocationUpdate === "function") {
+              try { window.sendLocationUpdate(); } catch(e) {}
+            }
           }
         }
       }
@@ -6555,12 +7586,13 @@ function renderParentWalkSafeBanner(walkSafe) {
 // FUNKSIYA 4: "ORZULAR QUTISI" (Wishlist / Bolaning maqsadi)
 // ----------------------------------------------------------------------------
 let currentWishlistData = {
-  title: "Yangi Velosiped 🚲",
-  target_som: 600000,
+  title: "",
+  target_som: 0,
   balance: 0,
   percent: 0,
-  remaining_som: 600000,
-  is_reached: false
+  remaining_som: 0,
+  is_reached: false,
+  has_custom_target: false
 };
 
 async function loadWishlist(childId) {
@@ -6579,10 +7611,13 @@ async function loadWishlist(childId) {
 
 function renderWishlistUI(wl) {
   if (!wl) return;
+  const hasTarget = Boolean(wl.target_som && wl.target_som > 0 && wl.title && wl.title.trim().length > 0 && wl.title !== "Yangi Velosiped 🚲");
   const titleEl = document.getElementById("wishlistTitleText");
-  if (titleEl) titleEl.textContent = `Maqsad: ${wl.title || 'Yangi Velosiped 🚲'}`;
+  if (titleEl) {
+    titleEl.textContent = hasTarget ? `Maqsad: ${wl.title}` : "Maqsad: Hali belgilanmagan 🎯";
+  }
 
-  const pct = Math.min(100, Math.max(0, wl.percent || 0));
+  const pct = hasTarget ? Math.min(100, Math.max(0, wl.percent || 0)) : 0;
   const pctEl = document.getElementById("wishlistPercentBadge");
   if (pctEl) pctEl.textContent = `${pct}%`;
 
@@ -6591,14 +7626,21 @@ function renderWishlistUI(wl) {
 
   const moneyEl = document.getElementById("wishlistMoneyProgress");
   if (moneyEl) {
-    const balStr = (wl.balance || 0).toLocaleString();
-    const tgtStr = (wl.target_som || 600000).toLocaleString();
-    moneyEl.textContent = `${balStr} / ${tgtStr} so'm`;
+    if (hasTarget) {
+      const balStr = (wl.balance || 0).toLocaleString();
+      const tgtStr = (wl.target_som || 0).toLocaleString();
+      moneyEl.textContent = `${balStr} / ${tgtStr} so'm`;
+    } else {
+      moneyEl.textContent = `0 / 0 so'm`;
+    }
   }
 
   const remEl = document.getElementById("wishlistRemainingText");
   if (remEl) {
-    if (wl.is_reached || pct >= 100) {
+    if (!hasTarget) {
+      remEl.textContent = "Orzu maqsadini belgilash uchun bosing ✏️";
+      remEl.className = "text-slate-400 font-medium";
+    } else if (wl.is_reached || pct >= 100) {
       remEl.textContent = "🎉 Orzu ushaldi! Tabriklaymiz!";
       remEl.className = "text-amber-300 font-bold animate-pulse";
     } else {
@@ -7041,6 +8083,23 @@ function toggleHelpFaq(id) {
 // SCREEN TIME & DEVICE POLICY / APP BLOCKING CONTROLLER
 // ==============================================================================
 
+function getEffectiveParentId() {
+  if (parentId) return parentId;
+  if (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) {
+    return authenticatedSession.user.id;
+  }
+  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  if (tgUser && tgUser.id) return tgUser.id;
+  try {
+    const saved = localStorage.getItem("parent_user_id");
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      return !isNaN(parsed) ? parsed : saved;
+    }
+  } catch (e) {}
+  return null;
+}
+
 let currentDevicePolicy = {
   is_all_apps_blocked: false,
   lockdown_reason: "Dars vaqti",
@@ -7050,6 +8109,74 @@ let currentDevicePolicy = {
 };
 
 let currentScreenTimeData = null;
+let currentMergedAppsList = [];
+let currentAppFilterQuery = "";
+let currentAppCategoryFilter = "all";
+
+const DEFAULT_POPULAR_APPS_LIST = [
+  { package: "com.zhiliaoapp.musically", app_name: "TikTok", category: "social", icon: "video" },
+  { package: "com.google.android.youtube", app_name: "YouTube", category: "video", icon: "youtube" },
+  { package: "com.instagram.android", app_name: "Instagram", category: "social", icon: "instagram" },
+  { package: "com.tencent.ig", app_name: "PUBG Mobile", category: "game", icon: "gamepad-2" },
+  { package: "com.roblox.client", app_name: "Roblox", category: "game", icon: "gamepad-2" },
+  { package: "com.supercell.brawlstars", app_name: "Brawl Stars", category: "game", icon: "gamepad-2" },
+  { package: "com.dts.freefireth", app_name: "Free Fire", category: "game", icon: "gamepad-2" },
+  { package: "com.supercell.clashofclans", app_name: "Clash of Clans", category: "game", icon: "gamepad-2" },
+  { package: "com.mojang.minecraftpe", app_name: "Minecraft", category: "game", icon: "gamepad-2" },
+  { package: "org.telegram.messenger", app_name: "Telegram", category: "chat", icon: "message-circle" },
+  { package: "com.whatsapp", app_name: "WhatsApp", category: "chat", icon: "message-circle" },
+  { package: "com.snapchat.android", app_name: "Snapchat", category: "social", icon: "video" },
+  { package: "video.like", app_name: "Likee", category: "social", icon: "video" },
+  { package: "com.android.chrome", app_name: "Google Chrome", category: "browser", icon: "globe" }
+];
+
+const KNOWN_PACKAGE_ALIASES = {
+  "tiktok": "com.zhiliaoapp.musically",
+  "tik": "com.zhiliaoapp.musically",
+  "youtube": "com.google.android.youtube",
+  "yt": "com.google.android.youtube",
+  "instagram": "com.instagram.android",
+  "insta": "com.instagram.android",
+  "pubg": "com.tencent.ig",
+  "pubgmobile": "com.tencent.ig",
+  "roblox": "com.roblox.client",
+  "telegram": "org.telegram.messenger",
+  "tg": "org.telegram.messenger",
+  "brawlstars": "com.supercell.brawlstars",
+  "brawl": "com.supercell.brawlstars",
+  "freefire": "com.dts.freefireth",
+  "ff": "com.dts.freefireth",
+  "clashofclans": "com.supercell.clashofclans",
+  "minecraft": "com.mojang.minecraftpe",
+  "snapchat": "com.snapchat.android",
+  "whatsapp": "com.whatsapp",
+  "likee": "video.like",
+  "chrome": "com.android.chrome"
+};
+
+function formatPackageDisplayName(pkg) {
+  if (!pkg) return "Noma'lum ilova";
+  const known = {
+    "com.zhiliaoapp.musically": "TikTok",
+    "com.google.android.youtube": "YouTube",
+    "com.instagram.android": "Instagram",
+    "com.tencent.ig": "PUBG Mobile",
+    "com.roblox.client": "Roblox",
+    "org.telegram.messenger": "Telegram",
+    "com.supercell.brawlstars": "Brawl Stars",
+    "com.dts.freefireth": "Free Fire",
+    "com.supercell.clashofclans": "Clash of Clans",
+    "com.mojang.minecraftpe": "Minecraft",
+    "com.snapchat.android": "Snapchat",
+    "com.whatsapp": "WhatsApp",
+    "video.like": "Likee",
+    "com.android.chrome": "Google Chrome"
+  };
+  if (known[pkg]) return known[pkg];
+  const parts = pkg.split(".");
+  const last = parts[parts.length - 1] || pkg;
+  return last.charAt(0).toUpperCase() + last.slice(1);
+}
 
 function updateDevicePolicyUI(policy) {
   if (!policy) return;
@@ -7065,7 +8192,7 @@ function updateDevicePolicyUI(policy) {
     }
   }
 
-  // 2. Map banner alert
+  // 2. Map banner alert in Parent Dashboard
   const lockdownBanner = document.getElementById("parentLockdownBanner");
   const lockdownText = document.getElementById("parentLockdownBannerText");
   if (lockdownBanner) {
@@ -7079,7 +8206,21 @@ function updateDevicePolicyUI(policy) {
     }
   }
 
-  // 3. Modal switches if open
+  // 3. Child Dashboard Alert Banner (if child is viewing)
+  const childLockBanner = document.getElementById("childLockdownAlertBanner");
+  const childLockReason = document.getElementById("childLockdownAlertReason");
+  if (childLockBanner) {
+    if (currentDevicePolicy.is_all_apps_blocked) {
+      childLockBanner.classList.remove("hidden");
+      if (childLockReason) {
+        childLockReason.textContent = `${currentDevicePolicy.lockdown_reason || "Ota-ona tomonidan cheklandi"}`;
+      }
+    } else {
+      childLockBanner.classList.add("hidden");
+    }
+  }
+
+  // 4. Modal switches if open
   const toggleLockAll = document.getElementById("toggleLockAllApps");
   if (toggleLockAll) {
     toggleLockAll.checked = Boolean(currentDevicePolicy.is_all_apps_blocked);
@@ -7096,11 +8237,45 @@ function updateDevicePolicyUI(policy) {
     blockedCountEl.textContent = `${count} ta bloklangan`;
   }
 
-  // 4. Android native bridge sync
-  if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
-    try {
-      window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
-    } catch (e) {}
+  // 4.1 Network restriction toggle switch
+  const toggleNet = document.getElementById("toggleNetworkRestricted");
+  if (toggleNet) {
+    toggleNet.checked = Boolean(currentDevicePolicy.is_network_restricted);
+  }
+
+  // 4.2 Bedtime inputs
+  if (currentDevicePolicy.bedtime_start) {
+    const inputStart = document.getElementById("inputBedtimeStart");
+    if (inputStart) inputStart.value = currentDevicePolicy.bedtime_start;
+  }
+  if (currentDevicePolicy.bedtime_end) {
+    const inputEnd = document.getElementById("inputBedtimeEnd");
+    if (inputEnd) inputEnd.value = currentDevicePolicy.bedtime_end;
+  }
+
+  // Reason buttons active styling
+  document.querySelectorAll(".btn-lock-reason").forEach(btn => {
+    if (currentDevicePolicy.lockdown_reason && btn.textContent.includes(currentDevicePolicy.lockdown_reason)) {
+      btn.classList.add("bg-rose-600", "text-white");
+      btn.classList.remove("bg-white/10");
+    } else {
+      btn.classList.remove("bg-rose-600");
+      btn.classList.add("bg-white/10");
+    }
+  });
+
+  // 5. Android native bridge sync
+  if (window.AndroidBridge) {
+    if (typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
+      try {
+        window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
+      } catch (e) {}
+    }
+    if (typeof window.AndroidBridge.setNetworkLockdown === "function") {
+      try {
+        window.AndroidBridge.setNetworkLockdown(Boolean(currentDevicePolicy.is_network_restricted));
+      } catch (e) {}
+    }
   }
 }
 
@@ -7159,6 +8334,48 @@ function renderScreenTimeChildSelector() {
   }).join("");
 }
 
+function checkNativeAppPermissions() {
+  const banner = document.getElementById("stNativePermissionBanner");
+  const text = document.getElementById("stNativePermissionText");
+  const btn = document.getElementById("btnGrantNativePermission");
+  if (!banner) return;
+
+  if (window.AndroidBridge) {
+    let missing = [];
+    if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
+      missing.push("Maxsus imkoniyatlar (Accessibility)");
+    }
+    if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
+      missing.push("Ekran vaqti telemetriyasi (Usage Access)");
+    }
+    if (missing.length > 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = `Ilovalarni bloklash to'liq ishlashi uchun telefonda ${missing.join(" va ")} ruxsatini yoqing:`;
+      if (btn) btn.textContent = "Ruxsat berish";
+      return;
+    }
+  }
+  banner.classList.add("hidden");
+}
+
+function requestNeededNativePermission() {
+  haptic("medium");
+  if (!window.AndroidBridge) return;
+  if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
+    if (typeof window.AndroidBridge.requestAccessibility === "function") {
+      window.AndroidBridge.requestAccessibility();
+      return;
+    }
+  }
+  if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
+    if (typeof window.AndroidBridge.requestUsageAccess === "function") {
+      window.AndroidBridge.requestUsageAccess();
+      return;
+    }
+  }
+  showToast("Barcha kerakli ruxsatlar yoqilgan ✅");
+}
+
 function openScreenTimeControlModal() {
   haptic("medium");
   setTimeout(updateTelegramBackButton, 50);
@@ -7166,6 +8383,7 @@ function openScreenTimeControlModal() {
   if (!modal) return;
   modal.classList.remove("hidden");
   renderScreenTimeChildSelector();
+  checkNativeAppPermissions();
   if (window.lucide) lucide.createIcons();
 
   loadScreenTimeAndPolicy();
@@ -7181,21 +8399,34 @@ function closeScreenTimeControlModal() {
 async function loadScreenTimeAndPolicy() {
   const container = document.getElementById("stAppsListContainer");
   if (container) {
-    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Ilovalar va statistika yuklanmoqda...</p>';
+    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6 animate-pulse">Ilovalar va statistika yuklanmoqda...</p>';
   }
 
+  checkNativeAppPermissions();
+
   if (isDemoMode || !currentChildId) {
-    const emptyData = {
-      total_screen_time_seconds: 0,
-      total_screen_time_formatted: "0 daqiqa",
-      unlock_count: 0,
+    const demoData = {
+      total_screen_time_seconds: 13500,
+      total_screen_time_formatted: "3 soat 45 daqiqa",
+      unlock_count: 42,
       is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
       lockdown_reason: currentDevicePolicy.lockdown_reason,
       anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
-      blocked_packages: currentDevicePolicy.blocked_packages || [],
-      apps: []
+      blocked_packages: currentDevicePolicy.blocked_packages || ["com.zhiliaoapp.musically"],
+      apps: [
+        { package: "com.zhiliaoapp.musically", app_name: "TikTok", category: "social", usage_seconds: 4500 },
+        { package: "com.google.android.youtube", app_name: "YouTube", category: "video", usage_seconds: 4320 },
+        { package: "com.tencent.ig", app_name: "PUBG Mobile", category: "game", usage_seconds: 3000 },
+        { package: "com.supercell.brawlstars", app_name: "Brawl Stars", category: "game", usage_seconds: 1500 },
+        { package: "org.telegram.messenger", app_name: "Telegram", category: "chat", usage_seconds: 1800 },
+        { package: "com.instagram.android", app_name: "Instagram", category: "social", usage_seconds: 900 },
+        { package: "com.roblox.client", app_name: "Roblox", category: "game", usage_seconds: 0 },
+        { package: "video.like", app_name: "Likee", category: "social", usage_seconds: 0 },
+        { package: "com.android.chrome", app_name: "Google Chrome", category: "browser", usage_seconds: 600 }
+      ],
+      popular_apps: DEFAULT_POPULAR_APPS_LIST
     };
-    renderScreenTimeData(emptyData);
+    renderScreenTimeData(demoData);
     return;
   }
 
@@ -7212,7 +8443,7 @@ async function loadScreenTimeAndPolicy() {
     console.warn("Screen time fetch error:", e);
   }
 
-  // Fallback real empty state if offline or no reports yet
+  // Fallback initial state if child has not uploaded usage yet
   renderScreenTimeData({
     total_screen_time_seconds: 0,
     total_screen_time_formatted: "0 daqiqa",
@@ -7221,12 +8452,13 @@ async function loadScreenTimeAndPolicy() {
     lockdown_reason: currentDevicePolicy.lockdown_reason,
     anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
     blocked_packages: currentDevicePolicy.blocked_packages || [],
-    apps: []
+    apps: [],
+    popular_apps: DEFAULT_POPULAR_APPS_LIST
   });
 }
 
 function renderScreenTimeData(data) {
-  currentScreenTimeData = data;
+  currentScreenTimeData = data || {};
 
   const totalEl = document.getElementById("stTotalTime");
   if (totalEl) totalEl.textContent = data.total_screen_time_formatted || "0 daqiqa";
@@ -7248,9 +8480,52 @@ function renderScreenTimeData(data) {
     }
   }
 
+  // Merge reported apps + popular apps + blocked apps
+  const popular = (data.popular_apps && data.popular_apps.length > 0) ? data.popular_apps : DEFAULT_POPULAR_APPS_LIST;
+  const reportedApps = Array.isArray(data.apps) ? data.apps : [];
+  const blockedList = data.blocked_packages || currentDevicePolicy.blocked_packages || [];
+
+  const appMap = new Map();
+
+  // 1. First insert telemetry apps reported from phone
+  reportedApps.forEach(a => {
+    if (a && a.package) {
+      appMap.set(a.package, {
+        package: a.package,
+        app_name: a.app_name || formatPackageDisplayName(a.package),
+        category: a.category || "other",
+        usage_seconds: a.usage_seconds || 0
+      });
+    }
+  });
+
+  // 2. Insert popular apps that parent may want to block
+  popular.forEach(p => {
+    if (p && p.package && !appMap.has(p.package)) {
+      appMap.set(p.package, {
+        package: p.package,
+        app_name: p.app_name || formatPackageDisplayName(p.package),
+        category: p.category || "other",
+        usage_seconds: 0
+      });
+    }
+  });
+
+  // 3. Insert any custom blocked package from database policy
+  blockedList.forEach(pkg => {
+    if (pkg && !appMap.has(pkg)) {
+      appMap.set(pkg, {
+        package: pkg,
+        app_name: formatPackageDisplayName(pkg),
+        category: "other",
+        usage_seconds: 0
+      });
+    }
+  });
+
   // Calculate category totals
   let gamesSec = 0, socialSec = 0, chatSec = 0, otherSec = 0;
-  (data.apps || []).forEach(a => {
+  appMap.forEach(a => {
     const s = a.usage_seconds || 0;
     if (a.category === "game") gamesSec += s;
     else if (a.category === "social" || a.category === "video") socialSec += s;
@@ -7273,74 +8548,118 @@ function renderScreenTimeData(data) {
   const barO = document.getElementById("barOther");
   if (barO) { barO.style.width = pOther + "%"; barO.title = `Boshqa: ${pOther}%`; }
 
+  // Convert to sorted array: blocked items first, then by usage time descending, then alphabetical
+  currentMergedAppsList = Array.from(appMap.values());
+  currentMergedAppsList.sort((a, b) => {
+    const aBlocked = blockedList.includes(a.package);
+    const bBlocked = blockedList.includes(b.package);
+    if (aBlocked && !bBlocked) return -1;
+    if (!aBlocked && bBlocked) return 1;
+    if ((b.usage_seconds || 0) !== (a.usage_seconds || 0)) {
+      return (b.usage_seconds || 0) - (a.usage_seconds || 0);
+    }
+    return (a.app_name || "").localeCompare(b.app_name || "");
+  });
+
   // Update policy UI
   updateDevicePolicyUI({
     is_all_apps_blocked: data.is_all_apps_blocked,
     lockdown_reason: data.lockdown_reason,
-    blocked_packages: data.blocked_packages,
+    blocked_packages: blockedList,
     anti_uninstall_enabled: data.anti_uninstall_enabled
   });
 
-  renderAppsList(data.apps || []);
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 }
 
-function renderAppsList(apps, filterText = "") {
+function renderAppsList(apps, filterText = "", categoryFilter = "all") {
   const container = document.getElementById("stAppsListContainer");
   if (!container) return;
 
   const q = (filterText || "").trim().toLowerCase();
-  const filtered = apps.filter(a => {
-    if (!q) return true;
-    return (a.app_name && a.app_name.toLowerCase().includes(q)) ||
-           (a.package && a.package.toLowerCase().includes(q));
+  const blockedList = currentDevicePolicy.blocked_packages || [];
+  const isMasterLocked = currentDevicePolicy.is_all_apps_blocked;
+
+  const filtered = (apps || []).filter(a => {
+    if (q) {
+      const matchName = a.app_name && a.app_name.toLowerCase().includes(q);
+      const matchPkg = a.package && a.package.toLowerCase().includes(q);
+      if (!matchName && !matchPkg) return false;
+    }
+    if (categoryFilter === "blocked") {
+      return blockedList.includes(a.package) || isMasterLocked;
+    }
+    if (categoryFilter === "game") {
+      return a.category === "game";
+    }
+    if (categoryFilter === "social") {
+      return a.category === "social" || a.category === "video";
+    }
+    if (categoryFilter === "chat") {
+      return a.category === "chat";
+    }
+    return true;
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Mos keluvchi ilovalar topilmadi</p>';
+    container.innerHTML = `
+      <div class="text-center py-6 px-4 bg-slate-800/40 rounded-2xl border border-white/5">
+        <span class="text-2xl block mb-1">🔍</span>
+        <p class="text-xs font-bold text-slate-300">Mos keluvchi ilovalar topilmadi</p>
+        <p class="text-2xs text-slate-500 mt-1">Yuqoridagi maydon orqali yangi ilovani tezkor bloklashingiz mumkin.</p>
+      </div>
+    `;
     return;
   }
-
-  const blockedList = currentDevicePolicy.blocked_packages || [];
-  const isMasterLocked = currentDevicePolicy.is_all_apps_blocked;
 
   let html = "";
   filtered.forEach(app => {
     const pkg = app.package;
-    const name = app.app_name || pkg;
+    const name = escapeHtml(app.app_name || formatPackageDisplayName(pkg));
     const isIndividuallyBlocked = blockedList.includes(pkg);
     const isEffectivelyBlocked = isMasterLocked || isIndividuallyBlocked;
 
     const sec = app.usage_seconds || 0;
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const durStr = h > 0 ? `${h}s ${m}d` : `${m} daqiqa`;
+    let durStr = "Bugun: Ishlatilmagan";
+    if (sec > 0) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      durStr = h > 0 ? `${h}s ${m}d` : `${m} daqiqa`;
+    }
 
-    let iconHtml = '<i data-lucide="smartphone" class="w-4 h-4"></i>';
+    let iconHtml = '<i data-lucide="smartphone" class="w-4 h-4 text-slate-300"></i>';
     if (app.category === "game") iconHtml = '<i data-lucide="gamepad-2" class="w-4 h-4 text-amber-400"></i>';
     else if (app.category === "video") iconHtml = '<i data-lucide="youtube" class="w-4 h-4 text-rose-500"></i>';
     else if (app.category === "social") iconHtml = '<i data-lucide="video" class="w-4 h-4 text-purple-400"></i>';
     else if (app.category === "chat") iconHtml = '<i data-lucide="message-circle" class="w-4 h-4 text-blue-400"></i>';
+    else if (app.category === "browser") iconHtml = '<i data-lucide="globe" class="w-4 h-4 text-emerald-400"></i>';
+
+    const safePkgAttr = escapeHtml(pkg);
 
     html += `
-      <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border ${isEffectivelyBlocked ? 'border-rose-500/40 bg-rose-950/20' : 'border-white/5'} transition">
+      <div class="flex items-center justify-between p-2.5 rounded-2xl bg-slate-800/70 border ${isEffectivelyBlocked ? 'border-rose-500/50 bg-rose-950/25 shadow-sm' : 'border-white/5'} transition">
         <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-xl bg-slate-700/60 flex items-center justify-center shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-slate-700/60 border border-white/5 flex items-center justify-center shrink-0 shadow-inner">
             ${iconHtml}
           </div>
           <div class="min-w-0">
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
               <h5 class="text-xs font-black text-white truncate max-w-[140px] sm:max-w-[200px]">${name}</h5>
-              ${isEffectivelyBlocked ? '<span class="text-2xs bg-rose-500/30 text-rose-300 px-1 rounded font-bold">BLOK</span>' : ''}
+              ${isMasterLocked
+                ? '<span class="text-[9px] bg-red-600/30 text-rose-300 border border-red-500/40 px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wide">CHEKLOV</span>'
+                : (isIndividuallyBlocked
+                    ? '<span class="text-[9px] bg-rose-500/30 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-extrabold uppercase tracking-wide">BLOK</span>'
+                    : '')}
             </div>
             <p class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-              <span>⏱ Bugun:</span> <b class="text-slate-200 font-bold">${durStr}</b>
+              <span>⏱</span> <b class="${sec > 0 ? 'text-slate-200' : 'text-slate-500'} font-bold">${durStr}</b>
             </p>
           </div>
         </div>
 
         <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="${isIndividuallyBlocked ? 'Blokdan chiqarish' : 'Bloklash'}">
-          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${pkg}', this.checked)" class="sr-only peer">
-          <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${safePkgAttr}', this.checked)" class="sr-only peer">
+          <div class="w-10 h-5.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-rose-600 shadow-sm"></div>
         </label>
       </div>
     `;
@@ -7351,9 +8670,68 @@ function renderAppsList(apps, filterText = "") {
 }
 
 function filterAppsList(val) {
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps, val);
+  currentAppFilterQuery = val || "";
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
+}
+
+function filterAppsByCategory(cat) {
+  haptic("light");
+  currentAppCategoryFilter = cat || "all";
+
+  const tabs = [
+    { id: "stTabAll", key: "all" },
+    { id: "stTabBlocked", key: "blocked" },
+    { id: "stTabGame", key: "game" },
+    { id: "stTabSocial", key: "social" },
+    { id: "stTabChat", key: "chat" }
+  ];
+
+  tabs.forEach(t => {
+    const el = document.getElementById(t.id);
+    if (!el) return;
+    if (t.key === currentAppCategoryFilter) {
+      el.className = "st-cat-tab px-3 py-1 rounded-xl bg-rose-600 text-white transition active:scale-95 shrink-0 shadow-sm font-extrabold";
+    } else {
+      el.className = "st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0 font-bold";
+    }
+  });
+
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
+}
+
+function addCustomAppToBlock() {
+  const input = document.getElementById("inputCustomBlockApp");
+  if (!input) return;
+  const raw = (input.value || "").trim();
+  if (!raw) {
+    showToast("⚠️ Ilova nomi yoki paketini kiriting");
+    return;
   }
+
+  const cleanLower = raw.toLowerCase().replace(/\s+/g, "");
+  let pkg = KNOWN_PACKAGE_ALIASES[cleanLower];
+  if (!pkg) {
+    if (raw.includes(".") && !raw.includes(" ")) {
+      pkg = raw.trim();
+    } else {
+      const slug = raw.toLowerCase().replace(/[^a-z0-9]/g, "");
+      pkg = `com.${slug || "custom"}.app`;
+    }
+  }
+
+  const exists = currentMergedAppsList.find(a => a.package === pkg);
+  if (!exists) {
+    currentMergedAppsList.unshift({
+      package: pkg,
+      app_name: formatPackageDisplayName(pkg) || raw,
+      category: "other",
+      usage_seconds: 0
+    });
+  }
+
+  toggleAppBlock(pkg, true);
+  input.value = "";
+  showToast(`🛑 «${raw}» bloklandi!`);
 }
 
 async function handleMasterLockToggle(isChecked) {
@@ -7362,27 +8740,29 @@ async function handleMasterLockToggle(isChecked) {
   updateDevicePolicyUI(currentDevicePolicy);
 
   if (isChecked) {
-    showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason})`);
+    showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason || "Dars vaqti"})`);
   } else {
     showToast("✅ Barcha ilovalar cheklovi ochildi");
   }
 
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps);
-  }
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         is_all_apps_blocked: isChecked,
         lockdown_reason: currentDevicePolicy.lockdown_reason,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
+    if (!res.ok) {
+      console.warn("Master lock save returned status:", res.status);
+    }
   } catch (e) {
     console.warn("Master lock save error:", e);
   }
@@ -7394,16 +8774,7 @@ async function setLockdownReason(reason) {
   updateDevicePolicyUI(currentDevicePolicy);
   showToast(`Sabab o'rnatildi: «${reason}»`);
 
-  document.querySelectorAll(".btn-lock-reason").forEach(btn => {
-    if (btn.textContent.includes(reason)) {
-      btn.classList.add("bg-rose-600", "text-white");
-      btn.classList.remove("bg-white/10");
-    } else {
-      btn.classList.remove("bg-rose-600");
-      btn.classList.add("bg-white/10");
-    }
-  });
-
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -7412,7 +8783,7 @@ async function setLockdownReason(reason) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         lockdown_reason: reason,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}
@@ -7420,32 +8791,34 @@ async function setLockdownReason(reason) {
 
 async function toggleAppBlock(pkg, isBlocked) {
   haptic("medium");
-  let blocked = currentDevicePolicy.blocked_packages || [];
+  let blocked = [...(currentDevicePolicy.blocked_packages || [])];
   if (isBlocked) {
     if (!blocked.includes(pkg)) blocked.push(pkg);
-    showToast("Ilova bloklandi 🛑");
+    showToast(`🛑 Ilova bloklandi (${formatPackageDisplayName(pkg)})`);
   } else {
     blocked = blocked.filter(p => p !== pkg);
-    showToast("Ilovaga ruxsat berildi 🟢");
+    showToast(`🟢 Ilovaga ruxsat berildi (${formatPackageDisplayName(pkg)})`);
   }
   currentDevicePolicy.blocked_packages = blocked;
   updateDevicePolicyUI(currentDevicePolicy);
 
-  if (currentScreenTimeData && currentScreenTimeData.apps) {
-    renderAppsList(currentScreenTimeData.apps);
-  }
+  renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         blocked_packages: blocked,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
+    if (!res.ok) {
+      console.warn("App block save returned status:", res.status);
+    }
   } catch (e) {
     console.warn("App block save error:", e);
   }
@@ -7462,6 +8835,7 @@ async function handleAntiUninstallToggle(isChecked) {
     showToast("⚠️ Sozlamalar himoyasi o'chirildi");
   }
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -7470,11 +8844,94 @@ async function handleAntiUninstallToggle(isChecked) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         anti_uninstall_enabled: isChecked,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}
 }
+
+async function handleNetworkRestrictedToggle(isChecked) {
+  haptic("heavy");
+  currentDevicePolicy.is_network_restricted = isChecked;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  if (isChecked) {
+    showToast("📴 Qurilma interneti cheklandi (Offline rejim / Firewall faol)!");
+  } else {
+    showToast("🌐 Qurilma interneti tiklandi (Online)");
+  }
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.setNetworkLockdown === "function") {
+    try { window.AndroidBridge.setNetworkLockdown(isChecked); } catch (e) {}
+  }
+
+  const effParentId = getEffectiveParentId();
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        is_network_restricted: isChecked,
+        parent_id: effParentId
+      })
+    });
+  } catch (e) {
+    console.warn("Network restriction save error:", e);
+  }
+}
+window.handleNetworkRestrictedToggle = handleNetworkRestrictedToggle;
+
+async function saveBedtimeSchedule() {
+  haptic("medium");
+  const startEl = document.getElementById("inputBedtimeStart");
+  const endEl = document.getElementById("inputBedtimeEnd");
+  const start = startEl ? startEl.value : "22:00";
+  const end = endEl ? endEl.value : "07:00";
+
+  currentDevicePolicy.bedtime_start = start;
+  currentDevicePolicy.bedtime_end = end;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  showToast(`🌙 Uyqu jadvali saqlandi: ${start} - ${end}`);
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.setBedtimeSchedule === "function") {
+    try { window.AndroidBridge.setBedtimeSchedule(start, end); } catch (e) {}
+  }
+
+  const effParentId = getEffectiveParentId();
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bedtime_start: start,
+        bedtime_end: end,
+        parent_id: effParentId
+      })
+    });
+  } catch (e) {
+    console.warn("Bedtime schedule save error:", e);
+  }
+}
+window.saveBedtimeSchedule = saveBedtimeSchedule;
+
+function openSmsCommandsModal() {
+  haptic("light");
+  const modal = document.getElementById("modalSmsCommands");
+  if (modal) modal.classList.remove("hidden");
+}
+window.openSmsCommandsModal = openSmsCommandsModal;
+
+function closeSmsCommandsModal() {
+  haptic("light");
+  const modal = document.getElementById("modalSmsCommands");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeSmsCommandsModal = closeSmsCommandsModal;
 
 function openParentPinSetupModal() {
   haptic("light");
@@ -7510,6 +8967,7 @@ async function saveNewParentPin() {
   showToast("✅ Ota-ona PIN-kodi muvaffaqiyatli saqlandi!");
   closeParentPinSetupModal();
 
+  const effParentId = getEffectiveParentId();
   if (isDemoMode || !currentChildId) return;
 
   try {
@@ -7518,9 +8976,62 @@ async function saveNewParentPin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         new_pin: pin,
-        parent_id: currentUserId
+        parent_id: effParentId
       })
     });
   } catch (e) {}
 }
 
+
+
+// Child Interactive Safe Zone Map Explorer
+function openChildZoneOnMap(id, lat, lon, name, radius) {
+  haptic("medium");
+  const zonesModal = document.getElementById("modal-zones");
+  if (zonesModal) zonesModal.classList.add("hidden");
+
+  openChildMapModal();
+
+  if (map && lat && lon) {
+    setTimeout(() => {
+      map.invalidateSize();
+      map.flyTo([lat, lon], 17, { animate: true, duration: 1.0 });
+
+      L.popup({ offset: [0, -10] })
+        .setLatLng([lat, lon])
+        .setContent(`
+          <div class="p-2 text-center">
+            <p class="font-black text-sm text-slate-900">🛡️ ${escapeHtml(name || 'Xavfsiz Makon')}</p>
+            <p class="text-xs text-emerald-600 font-bold mt-1">Xavfsiz hudud radiusi: ${Math.round(radius || 100)}m</p>
+          </div>
+        `)
+        .openOn(map);
+    }, 150);
+  } else {
+    showToast(`📍 ${name || 'Xavfsiz makon'}`);
+  }
+}
+window.openChildZoneOnMap = openChildZoneOnMap;
+
+function openAllChildZonesOnMap() {
+  haptic("medium");
+  const zonesModal = document.getElementById("modal-zones");
+  if (zonesModal) zonesModal.classList.add("hidden");
+
+  openChildMapModal();
+
+  setTimeout(() => {
+    if (map) {
+      map.invalidateSize();
+      if (geofenceLayers && geofenceLayers.length > 0) {
+        const group = new L.featureGroup(geofenceLayers.concat(childMarker ? [childMarker] : []));
+        map.fitBounds(group.getBounds().pad(0.25));
+        showToast(`🛡️ ${geofencesList.length} ta xavfsiz makon xaritada`);
+      } else if (childMarker) {
+        centerOnChild();
+        showToast("Hozircha xavfsiz makonlar qo'shilmagan 🛡️");
+      }
+    }
+  }, 150);
+}
+window.openAllChildZonesOnMap = openAllChildZonesOnMap;

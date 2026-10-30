@@ -10,6 +10,170 @@ window.fetch = function (resource, init) {
   return _nativeFetch.call(this, resource, init);
 };
 
+// =========================================================
+// RUST CORE HYBRID ENGINE (WASM + EMBEDDED HIGH-SPEED MATH)
+// =========================================================
+const RustCore = {
+  isWasmLoaded: false,
+  wasmModule: null,
+
+  async init() {
+    try {
+      if (typeof WebAssembly !== "undefined") {
+        const res = await fetch("/rust_core_bg.wasm");
+        if (res.ok) {
+          const bytes = await res.arrayBuffer();
+          const module = await WebAssembly.instantiate(bytes, {});
+          this.wasmModule = module.instance.exports;
+          this.isWasmLoaded = true;
+          console.log("⚡ Rust Core WASM engine loaded successfully.");
+          return;
+        }
+      }
+    } catch (e) {
+      // Graceful fallback to embedded high-performance engine
+    }
+    this.isWasmLoaded = false;
+  },
+
+  haversineDistance(lat1, lon1, lat2, lon2) {
+    if (this.isWasmLoaded && this.wasmModule && this.wasmModule.rust_haversine_distance) {
+      return this.wasmModule.rust_haversine_distance(lat1, lon1, lat2, lon2);
+    }
+    const R = 6371000.0;
+    const toRad = Math.PI / 180.0;
+    const dLat = (lat2 - lat1) * toRad;
+    const dLon = (lon2 - lon1) * toRad;
+    const rLat1 = lat1 * toRad;
+    const rLat2 = lat2 * toRad;
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(rLat1) * Math.cos(rLat2) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  },
+
+  calculateBearing(lat1, lon1, lat2, lon2) {
+    if (this.isWasmLoaded && this.wasmModule && this.wasmModule.rust_calculate_bearing) {
+      return this.wasmModule.rust_calculate_bearing(lat1, lon1, lat2, lon2);
+    }
+    const toRad = Math.PI / 180.0;
+    const phi1 = lat1 * toRad;
+    const phi2 = lat2 * toRad;
+    const dLambda = (lon2 - lon1) * toRad;
+
+    const y = Math.sin(dLambda) * Math.cos(phi2);
+    const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+    const theta = Math.atan2(y, x);
+    return ((theta * 180.0 / Math.PI) + 360.0) % 360.0;
+  },
+
+  isInsideGeofence(childLat, childLon, fenceLat, fenceLon, radiusMeters) {
+    return this.haversineDistance(childLat, childLon, fenceLat, fenceLon) <= radiusMeters;
+  },
+
+  filterTrajectoryKalman(points) {
+    if (!points || points.length < 2) return points || [];
+    const smoothed = [];
+    let estLat = points[0].latitude;
+    let estLon = points[0].longitude;
+    let variance = 5.0;
+    const decayVar = 3.0;
+
+    for (let i = 0; i < points.length; i++) {
+      const pt = points[i];
+      const acc = pt.accuracy || 15.0;
+
+      // Anti-drift: reject severe noise jumps (>70m accuracy while stationary)
+      if (acc > 70.0 && (!pt.speed || pt.speed < 1.0)) {
+        continue;
+      }
+
+      variance += decayVar;
+      const measVar = acc > 0 ? acc * acc : 16.0;
+      const k = variance / (variance + measVar);
+
+      estLat += k * (pt.latitude - estLat);
+      estLon += k * (pt.longitude - estLon);
+      variance = (1.0 - k) * variance;
+
+      smoothed.push({
+        ...pt,
+        latitude: estLat,
+        longitude: estLon
+      });
+    }
+
+    return smoothed.length > 0 ? smoothed : points;
+  },
+
+  detectStopPoints(points, minDurationMs = 180000, maxRadiusMeters = 25.0) {
+    const stops = [];
+    if (!points || points.length < 2) return stops;
+
+    let startIdx = 0;
+    while (startIdx < points.length) {
+      const pStart = points[startIdx];
+      let tStart = 0;
+      if (pStart.recorded_at) {
+        let s = String(pStart.recorded_at).trim();
+        if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+        tStart = new Date(s).getTime();
+      } else if (pStart.timestamp_ms) {
+        tStart = pStart.timestamp_ms;
+      } else {
+        startIdx++;
+        continue;
+      }
+
+      let endIdx = startIdx + 1;
+      let lastValidEnd = startIdx;
+
+      while (endIdx < points.length) {
+        const pCurr = points[endIdx];
+        const dist = this.haversineDistance(pStart.latitude, pStart.longitude, pCurr.latitude, pCurr.longitude);
+        if (dist <= maxRadiusMeters) {
+          lastValidEnd = endIdx;
+          endIdx++;
+        } else {
+          break;
+        }
+      }
+
+      if (lastValidEnd > startIdx) {
+        const pEnd = points[lastValidEnd];
+        let tEnd = 0;
+        if (pEnd.recorded_at) {
+          let s = String(pEnd.recorded_at).trim();
+          if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
+          tEnd = new Date(s).getTime();
+        } else if (pEnd.timestamp_ms) {
+          tEnd = pEnd.timestamp_ms;
+        }
+        const duration = tEnd - tStart;
+        if (duration >= minDurationMs) {
+          stops.push({
+            latitude: pStart.latitude,
+            longitude: pStart.longitude,
+            durationMinutes: Math.round(duration / 60000),
+            startTimeStr: new Date(tStart).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+            startTimestampMs: tStart,
+            endTimestampMs: tEnd
+          });
+          startIdx = lastValidEnd + 1;
+          continue;
+        }
+      }
+      startIdx++;
+    }
+    return stops;
+  }
+};
+window.RustCore = RustCore;
+RustCore.init().catch(() => {});
+
+
 // Smart Parental Control - Mini App Client Logic (Enhanced Ideal Edition)
 
 let tg = window.Telegram?.WebApp;
@@ -2347,17 +2511,28 @@ async function resolveAddress(lat, lon) {
   const numLon = Number(lon);
   const key = `${numLat.toFixed(4)},${numLon.toFixed(4)}`;
   if (addressCache.has(key)) {
-    document.getElementById("addressText").textContent = addressCache.get(key);
+    const cached = addressCache.get(key);
+    const el = document.getElementById("addressText");
+    if (el) el.textContent = cached;
     return;
   }
+
+  const el = document.getElementById("addressText");
+  if (el) el.textContent = `${numLat.toFixed(5)}, ${numLon.toFixed(5)} (Manzil aniqlanmoqda...)`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, 2500);
 
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${numLat}&lon=${numLon}&zoom=18&addressdetails=1`, {
       headers: { "Accept-Language": "uz,ru,en" },
+      signal: controller.signal
     });
+    clearTimeout(timer);
     const data = await res.json();
     if (data && data.display_name) {
-      // Extract street and district and real city/region (e.g. Navoiy, Samarqand, etc.)
       const addr = data.address || {};
       const cityName = addr.city || addr.town || addr.village || addr.county || addr.state || "";
       const shortAddr = addr.road || addr.suburb || addr.neighbourhood || addr.city_district;
@@ -2372,15 +2547,14 @@ async function resolveAddress(lat, lon) {
         fullText = data.display_name.split(",").slice(0, 2).join(",");
       }
       addressCache.set(key, fullText);
-      const el = document.getElementById("addressText");
       if (el) el.textContent = fullText;
       return;
     }
   } catch (e) {
-    // Fallback to coordinates
+    clearTimeout(timer);
   }
 
-  document.getElementById("addressText").textContent = `Koordinata: ${numLat.toFixed(6)}, ${numLon.toFixed(6)}`;
+  if (el) el.textContent = `Koordinata: ${numLat.toFixed(6)}, ${numLon.toFixed(6)}`;
 }
 
 // Ultra-smooth marker interpolation (0.01s / 10ms frame animation)
@@ -2698,25 +2872,55 @@ function renderHistoryToMapAndList(points) {
   }
 
   routeLayerGroup = L.featureGroup();
-  const latlngs = points.map((p) => [p.latitude, p.longitude]);
 
-  // 1. Layered high-contrast glowing polyline
+  // Rust Core Kalman smoothing
+  const smoothed = (window.RustCore && typeof RustCore.filterTrajectoryKalman === "function")
+    ? RustCore.filterTrajectoryKalman(points)
+    : points;
+
+  const latlngs = smoothed.map((p) => [p.latitude, p.longitude]);
+
+  // 1. Layered high-contrast glowing polyline base
   const glowPolyline = L.polyline(latlngs, {
     color: "#38bdf8",
-    weight: 7,
-    opacity: 0.35,
+    weight: 8,
+    opacity: 0.3,
     lineCap: "round",
     lineJoin: "round"
   });
   glowPolyline.addTo(routeLayerGroup);
 
-  routePolyline = L.polyline(latlngs, {
-    color: "#f59e0b",
-    weight: 4,
-    opacity: 0.95,
-    dashArray: "8, 6"
-  });
-  routePolyline.addTo(routeLayerGroup);
+  // 1.1 Speed-colored polyline segments:
+  // - Walking (< 15 km/h): #10b981 (emerald) / #f59e0b (amber)
+  // - City transit / bike (15 - 45 km/h): #0284c7 (blue/cyan)
+  // - High-speed vehicle (> 45 km/h): #ef4444 (red)
+  // - Offline cached: #a855f7 (purple dashed)
+  for (let i = 0; i < smoothed.length - 1; i++) {
+    const pt1 = smoothed[i];
+    const pt2 = smoothed[i + 1];
+    const spd = Math.max(pt1.speed || 0, pt2.speed || 0);
+
+    let segColor = "#10b981"; // walking / pedestrian
+    if (spd > 45) {
+      segColor = "#ef4444"; // car / high-speed
+    } else if (spd > 15) {
+      segColor = "#0284c7"; // bike / city transit
+    } else if (spd > 5) {
+      segColor = "#f59e0b"; // fast walking / jogging
+    }
+
+    const isOffline = pt1.is_offline_cached || pt2.is_offline_cached;
+    const segLine = L.polyline([[pt1.latitude, pt1.longitude], [pt2.latitude, pt2.longitude]], {
+      color: isOffline ? "#a855f7" : segColor,
+      weight: 4,
+      opacity: 0.95,
+      dashArray: isOffline ? "6, 6" : null,
+      lineCap: "round"
+    });
+    segLine.addTo(routeLayerGroup);
+  }
+
+  routePolyline = glowPolyline;
 
   // 2. Identify repeated visits (Bitta yo'ldan qayta-qayta yurgan joylarni aniqlash)
   // Cluster points within 25 meters
@@ -3382,26 +3586,39 @@ async function toggleRouteHistory(forceState) {
   }
 }
 
-// Battery UI styling
+// Battery UI styling (with anti-flicker persistent level cache)
+let lastKnownBatteryLevel = null;
+let lastKnownIsCharging = false;
+
 function updateBatteryUI(level, isCharging) {
   const pill = document.getElementById("batteryPill");
   const text = document.getElementById("batteryText");
   const dynBatText = document.getElementById("dynamicIslandBatteryText");
 
-  if (level === null || level === undefined) {
+  if (typeof level === "number" && !isNaN(level) && level >= 0) {
+    lastKnownBatteryLevel = Math.round(level);
+  }
+  if (typeof isCharging === "boolean") {
+    lastKnownIsCharging = isCharging;
+  }
+
+  const effectiveLevel = lastKnownBatteryLevel;
+  const effectiveCharging = lastKnownIsCharging;
+
+  if (effectiveLevel === null || effectiveLevel === undefined) {
     if (text) text.textContent = "--%";
     if (dynBatText) dynBatText.textContent = "--%";
     return;
   }
 
-  if (text) text.textContent = `${level}%`;
-  if (dynBatText) dynBatText.textContent = `${level}%`;
+  if (text) text.textContent = `${effectiveLevel}%`;
+  if (dynBatText) dynBatText.textContent = `${effectiveLevel}%`;
 
-  if (isCharging) {
+  if (effectiveCharging) {
     pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
-  } else if (level <= 15) {
+  } else if (effectiveLevel <= 15) {
     pill.className = "flex items-center gap-1 bg-red-900/60 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/60 animate-pulse";
-  } else if (level <= 30) {
+  } else if (effectiveLevel <= 30) {
     pill.className = "flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/50";
   } else {
     pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/40";
@@ -4125,10 +4342,17 @@ async function reverseGeocodePickerLocation(lat, lon) {
 
   addrText.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)} (Manzil aniqlanmoqda...)`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    try { controller.abort(); } catch (e) {}
+  }, 2500);
+
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`, {
-      headers: { "Accept-Language": "uz,ru,en" }
+      headers: { "Accept-Language": "uz,ru,en" },
+      signal: controller.signal
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && data.display_name) {
@@ -4139,7 +4363,9 @@ async function reverseGeocodePickerLocation(lat, lon) {
         return;
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    clearTimeout(timer);
+  }
 
   addrText.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
 }

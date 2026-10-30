@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Child Security
+Comment=Bolalar xavfsizligi va ota-ona nazorati ilovasi
+Exec=sh -c "google-chrome --app=https://child-security-bot.vercel.app 2>/dev/null || chromium --app=https://child-security-bot.vercel.app 2>/dev/null || chromium-browser --app=https://child-security-bot.vercel.app 2>/dev/null || xdg-open https://child-security-bot.vercel.app"
+Icon=security-high
+Terminal=false
+Categories=Utility;Security;Network;
+StartupNotify=true

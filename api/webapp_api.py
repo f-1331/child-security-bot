@@ -2010,13 +2010,22 @@ async def complete_walk_safe_endpoint(
     child_name = child.full_name or f"Farzand #{child_id}"
     await crud.complete_walk_safe(session, child_id)
 
+    # Smart Gamification: Reward on-time arrival (+100 virtual coins = 1,000 so'm)
+    awarded_coins = 0
+    try:
+        new_balance = await crud.add_coins_to_user(session, child_id, 100)
+        awarded_coins = 100
+    except Exception as e:
+        logger.warning(f"Failed to award walk-safe bonus coins: {e}")
+
     parents = await crud.get_parents_for_child(session, child_id)
     if telemetry.telegram_bot and parents:
         safe_cname = html.escape(child_name)
         safe_dest = html.escape(dest)
+        reward_txt = f"\n🏆 <i>O'z vaqtida yetib kelgani uchun <b>+{awarded_coins} tanga</b> berildi va «Vaqt ustasi» ballari qo'shildi! ✨</i>" if awarded_coins > 0 else ""
         msg = (
             f"🎉 <b>FARZANDINGIZ ESON-OMON YETIB KELDI!</b>\n\n"
-            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi."
+            f"👤 Farzandingiz <b>{safe_cname}</b> manzilga (<b>{safe_dest}</b>) xavfsiz yetib kelganini tasdiqladi! Xavfsiz yo'l rejimi yakunlandi.{reward_txt}"
         )
         for p in parents:
             try:
@@ -2024,14 +2033,36 @@ async def complete_walk_safe_endpoint(
             except Exception:
                 pass
 
+    if telemetry.telegram_bot and awarded_coins > 0:
+        try:
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text=f"🎉 <b>Qoyilmaqom, Qahramon!</b>\n\nSiz manzilga o'z vaqtida yetib keldingiz!\n🪙 Hamyoningizga <b>+{awarded_coins} tanga</b> qo'shildi! 🚀",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
     for p in parents:
         await ws_manager.send_to_user(p.id, {
             "type": "walk_safe_completed",
             "child_id": child_id,
-            "destination": dest
+            "destination": dest,
+            "awarded_coins": awarded_coins
         })
+    await ws_manager.send_to_user(child_id, {
+        "type": "walk_safe_completed",
+        "child_id": child_id,
+        "destination": dest,
+        "awarded_coins": awarded_coins
+    })
 
-    return {"status": "success", "child_id": child_id, "message": "Walk safe completed successfully"}
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "message": "Walk safe completed successfully",
+        "awarded_coins": awarded_coins
+    }
 
 
 @router.get("/child/{child_id}/walk-safe/status")
