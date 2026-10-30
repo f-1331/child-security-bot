@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>uz</string>
+	<key>CFBundleDisplayName</key>
+	<string>Child Security</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>uz.childsecurity.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Child Security</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+		<string>audio</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>uz.childsecurity.app.sync</string>
+		<string>uz.childsecurity.app.location_pulse</string>
+	</array>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Farzandingiz xavfsizligini 24/7 ta'minlash, real vaqtda joylashuvni ota-onaga ko'rsatish va xavfsiz makonlarga kirish/chiqishni monitoring qilish uchun zarur.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Farzandingiz xavfsizligini ta'minlash va xaritada joylashuvni aniq ko'rsatish uchun ruxsat berishingiz lozim.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Ilova yopiq bo'lganda ham xavfsiz yo'l taymeri va SOS signallarini to'g'ri ishlashi uchun doimiy joylashuv kerak.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Favqulodda SOS holatlarida ota-onaga atrof-muhitdagi ovoz haqida 5 soniyalik audio snapshot yuborish uchun mikrofon kerak.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Farzandning harakatlanish (piyoda, yugurish yoki transportda) holatini aniqlash va qadamlarni hisoblash uchun kerak.</string>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+		<string>location-services</string>
+		<string>gps</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+</dict>
+</plist>

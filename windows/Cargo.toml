@@ -1,0 +1,27 @@
+[package]
+name = "child_security_windows"
+version = "2.0.0"
+edition = "2021"
+authors = ["Child Security Team"]
+description = "Windows Desktop Agent & Parental Control Service"
+
+[dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Power",
+    "Win32_System_Services",
+    "Win32_System_SystemInformation",
+    "Win32_NetworkManagement_WiFi",
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = "2.9"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

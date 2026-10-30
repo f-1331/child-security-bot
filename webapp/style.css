@@ -1689,3 +1689,24 @@ button {
 }
 
 
+
+/* =========================================================
+   LOW-RAM LITE MODE (HIGH-PERFORMANCE RENDERING FOR LEGACY DEVICES)
+   ========================================================= */
+.low-ram-lite-mode * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+
+.low-ram-lite-mode .glass-panel,
+.low-ram-lite-mode .backdrop-blur-md,
+.low-ram-lite-mode .backdrop-blur-lg,
+.low-ram-lite-mode .backdrop-blur-xl {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+}
+
+.low-ram-lite-mode .shadow-2xl,
+.low-ram-lite-mode .shadow-xl {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}

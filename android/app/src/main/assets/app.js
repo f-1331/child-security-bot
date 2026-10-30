@@ -1,3 +1,65 @@
+// =========================================================
+// UNIVERSAL COMPATIBILITY (ES5/ES6 POLYFILLS & LOW-RAM LITE MODE)
+// =========================================================
+(function() {
+  // Promise.allSettled polyfill for older iOS 12 and Android 5-7 WebViews
+  if (!Promise.allSettled) {
+    Promise.allSettled = function(promises) {
+      return Promise.all(promises.map(function(p) {
+        return Promise.resolve(p).then(
+          function(value) { return { status: 'fulfilled', value: value }; },
+          function(reason) { return { status: 'rejected', reason: reason }; }
+        );
+      }));
+    };
+  }
+
+  // AbortSignal.timeout polyfill
+  if (typeof AbortSignal !== 'undefined' && !AbortSignal.timeout) {
+    AbortSignal.timeout = function(ms) {
+      var controller = new AbortController();
+      setTimeout(function() {
+        try { controller.abort(new DOMException("TimeoutError")); } catch(e) {}
+      }, ms);
+      return controller.signal;
+    };
+  }
+
+  // Low-RAM Lite Mode detector (<= 2GB RAM or weak CPU)
+  try {
+    var isLowMemory = (typeof navigator !== 'undefined' && navigator.deviceMemory && navigator.deviceMemory <= 2);
+    var isSmallScreen = (typeof screen !== 'undefined' && (screen.width <= 360 || screen.height <= 640));
+    if (isLowMemory || isSmallScreen) {
+      document.documentElement.classList.add("low-ram-lite-mode");
+      console.log("[Compatibility] Low-RAM Lite Mode activated for smooth 60fps performance.");
+    }
+  } catch(e) {}
+})();
+
+// =========================================================
+// UNIVERSAL NATIVE BRIDGE (ANDROID, iOS, macOS & WINDOWS)
+// =========================================================
+const UniversalNativeBridge = {
+  get isAndroid() { return typeof window.AndroidBridge !== 'undefined'; },
+  get isiOS() { return typeof window.webkit !== 'undefined' && typeof window.webkit.messageHandlers !== 'undefined' && typeof window.webkit.messageHandlers.NativeBridge !== 'undefined'; },
+  get isWindows() { return typeof window.chrome !== 'undefined' && typeof window.chrome.webview !== 'undefined'; },
+
+  postMessage: function(msg) {
+    try {
+      if (this.isAndroid && typeof window.AndroidBridge.postMessage === 'function') {
+        window.AndroidBridge.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      } else if (this.isiOS) {
+        window.webkit.messageHandlers.NativeBridge.postMessage(msg);
+      } else if (this.isWindows) {
+        window.chrome.webview.postMessage(msg);
+      }
+    } catch(e) {
+      console.warn("[NativeBridge] postMessage note:", e);
+    }
+  }
+};
+window.UniversalNativeBridge = UniversalNativeBridge;
+
 // Universal API Base Resolver (Supports Web, Telegram Mini App, and Native Android APK)
 const REMOTE_API_HOST = "https://child-security-site.onrender.com";
 const _nativeFetch = window.fetch;
@@ -546,6 +608,11 @@ function escapeHtml(unsafe) {
 
 // Trigger haptic feedback when Telegram WebApp is available
 function haptic(type = "light") {
+  try {
+    if (typeof UniversalNativeBridge !== "undefined") {
+      UniversalNativeBridge.postMessage({ type: "haptic", style: type });
+    }
+  } catch (e) {}
   if (tg && tg.HapticFeedback) {
     try {
       if (type === "medium") tg.HapticFeedback.impactOccurred("medium");
@@ -6528,6 +6595,8 @@ async function sendChildLiveTelemetry(childId, payload) {
   if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
     try { appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload })); } catch (e) {}
   }
+  // 1.1 Forward to Native Host (iOS / macOS / Windows) if active
+  UniversalNativeBridge.postMessage({ type: "telemetry", ...payload });
 
   // 2. Post to backend live location telemetry endpoint
   try {

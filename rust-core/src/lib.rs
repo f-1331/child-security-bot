@@ -1,4 +1,5 @@
 pub mod anti_tamper;
+pub mod ffi;
 pub mod geofence;
 pub mod kalman;
 
