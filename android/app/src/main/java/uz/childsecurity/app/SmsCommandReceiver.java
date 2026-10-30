@@ -127,17 +127,49 @@ public class SmsCommandReceiver extends BroadcastReceiver {
                 break;
 
             case "#GPS":
-                // Fetch best last location and reply
                 Location loc = getBestLocation(context);
                 int battery = getBatteryLevel(context);
-                if (loc != null) {
-                    double lat = loc.getLatitude();
-                    double lon = loc.getLongitude();
-                    String mapsUrl = "https://maps.google.com/?q=" + lat + "," + lon;
-                    String reply = "📍 Farzand koordinatasi:\n" + mapsUrl + "\n🔋 Batareya: " + battery + "%\n⚡ Vaqt: Real vaqt (Oflayn GPS)";
+                double lat = 0.0;
+                double lon = 0.0;
+                int speed = 0;
+                float accuracy = 10.0f;
+                boolean hasFix = false;
+
+                if (loc != null && (System.currentTimeMillis() - loc.getTime()) < 300000) {
+                    lat = loc.getLatitude();
+                    lon = loc.getLongitude();
+                    speed = (int) (loc.getSpeed() * 3.6f);
+                    accuracy = loc.getAccuracy();
+                    hasFix = true;
+                } else {
+                    org.json.JSONObject lastOffline = OfflineDbHelper.getInstance(context).getLatestLocation();
+                    if (lastOffline != null) {
+                        lat = lastOffline.optDouble("latitude", 0.0);
+                        lon = lastOffline.optDouble("longitude", 0.0);
+                        speed = lastOffline.optInt("speed_kmh", 0);
+                        accuracy = (float) lastOffline.optDouble("accuracy", 15.0);
+                        battery = lastOffline.optInt("battery_level", battery);
+                        hasFix = (lat != 0.0 && lon != 0.0);
+                    } else if (loc != null) {
+                        lat = loc.getLatitude();
+                        lon = loc.getLongitude();
+                        speed = (int) (loc.getSpeed() * 3.6f);
+                        accuracy = loc.getAccuracy();
+                        hasFix = true;
+                    }
+                }
+
+                if (hasFix) {
+                    String gmaps = "https://maps.google.com/?q=" + lat + "," + lon;
+                    String yandex = "https://yandex.com/maps/?pt=" + lon + "," + lat + "&z=16";
+                    String reply = "📍 Farzand koordinatasi (Oflayn GPS):\n"
+                            + "Google Maps: " + gmaps + "\n"
+                            + "Yandex: " + yandex + "\n"
+                            + "🔋 Batareya: " + battery + "% | Tezlik: " + speed + " km/s | Aniqlik: ~" + Math.round(accuracy) + "m\n"
+                            + "⚡ GPS sun'iy yo'ldoshidan internetsiz olindi.";
                     replySms(sender, reply);
                 } else {
-                    replySms(sender, "📍 GPS sun'iy yo'ldosh signalini qidirmoqda... 🔋 Batareya: " + battery + "%");
+                    replySms(sender, "📍 GPS sun'iy yo'ldosh signalini qidirmoqda... 🔋 Batareya: " + battery + "%. Iltimos, 1 daqiqadan so'ng qayta urinib ko'ring.");
                 }
                 break;
 

@@ -136,6 +136,9 @@ class TaskProofState(StatesGroup):
 class PhoneSaveState(StatesGroup):
     waiting_for_phone = State()
 
+class ChildPhoneSaveState(StatesGroup):
+    waiting_for_child_phone = State()
+
 
 # ---------------------------------------------------------
 # /start & Onboarding Handlers
@@ -807,24 +810,51 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
 
     latest_loc = await crud.get_latest_location(session, child.id)
 
-    if not latest_loc:
-        # Prompt child to send location
-        try:
-            await bot.send_message(
-                chat_id=child.id,
-                text="🔔 **Ota-onangiz joriy joylashuvingizni so'radi!**\n\nIltimos, pastdagi **'📍 Jonli joylashuvimni yuborish'** tugmasini bosing.",
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            logger.warn(f"Failed to ping child for location: {e}")
+    now_utc = datetime.now(timezone.utc)
+    is_offline = False
+    if latest_loc and latest_loc.recorded_at:
+        rec_time = latest_loc.recorded_at
+        if rec_time.tzinfo is None:
+            rec_time = rec_time.replace(tzinfo=timezone.utc)
+        if (now_utc - rec_time) > timedelta(minutes=5):
+            is_offline = True
+    elif not latest_loc:
+        is_offline = True
 
+    if not latest_loc:
         safe_child_name = html.escape(child.full_name or "Farzand")
+        phone = child.phone_number.strip() if child.phone_number else None
+        policy = await crud.get_or_create_device_policy(session, child.id)
+        pin_code = "1234" if not policy.parent_pin_hash else "PIN"
+
+        sms_rows = []
+        if phone:
+            sms_rows.append([
+                InlineKeyboardButton(text="✉️ 1-Tap SMS: Oflayn GPS so'rash", url=f"sms:{phone}?body=%23GPS:{pin_code}")
+            ])
+            sms_rows.append([
+                InlineKeyboardButton(text=f"📱 Raqam: {phone} (O'zgartirish)", callback_data=f"set_child_phone:{child.id}")
+            ])
+        else:
+            sms_rows.append([
+                InlineKeyboardButton(text="📱 Farzand telefon raqamini kiritish", callback_data=f"set_child_phone:{child.id}")
+            ])
+            sms_rows.append([
+                InlineKeyboardButton(text="✉️ Internetsiz SMS Buyruqlar", callback_data=f"sms_controls:{child.id}")
+            ])
+        sms_rows.append([
+            InlineKeyboardButton(text="🔄 Qayta tekshirish", callback_data=f"locate_child:{child.id}")
+        ])
+
         await bot.send_message(
             chat_id=chat_id,
             text=(
-                f"📍 <b>{safe_child_name}</b> hali birorta ham joylashuv yubormagan.\n\n"
-                f"Farzandingiz telefoniga joylashuvni yangilash haqida eslatma yuborildi."
+                f"📍 <b>{safe_child_name}</b> telefonidan hali internet orqali joylashuv kelmagan.\n\n"
+                f"💡 <b>Eslatma:</b> Telefonning sun'iy yo'ldosh (GPS) moduli <b>internetsiz ham ishlayveradi</b>!\n"
+                f"Agar farzandingiz telefonida internet (Wi-Fi yoki mobil internet) o'chirilgan bo'lsa, "
+                f"quyidagi tugma orqali <b>1-bosishda SMS so'rov</b> yuborib, aniq joylashuvni darhol bilib oling."
             ),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=sms_rows),
             parse_mode="HTML"
         )
         return
@@ -871,10 +901,13 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
     )
 
     try:
+        if is_offline:
+            card_text += f"\n\n⚠️ <i>Diqqat: Telefon hozir oflayn bo'lishi mumkin (oxirgi signal {time_str} da kelgan). Sun'iy yo'ldosh GPS koordinatasini internetsiz olish uchun pastdagi 1-Tap SMS tugmasini bosing.</i>"
+
         await bot.send_message(
             chat_id=chat_id,
             text=card_text,
-            reply_markup=get_location_actions_keyboard(latest_loc.latitude, latest_loc.longitude, child.id),
+            reply_markup=get_location_actions_keyboard(latest_loc.latitude, latest_loc.longitude, child.id, is_offline=is_offline, child_phone=child.phone_number),
             parse_mode="HTML"
         )
     except Exception as e:
@@ -5254,16 +5287,50 @@ async def sms_controls_callback_handler(callback: CallbackQuery):
             f"  *Misol:* `#SIREN:1234`\n\n"
             f"ℹ️ _Farzand telefoni SMS ni olishi bilanoq (internetsiz) buyruqni bajaradi va ota-onaga hisobot beradi._"
         )
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="⬅️ Ekran tahliliga qaytish",
-                        callback_data=f"st_child:{child_id}"
-                    )
-                ]
-            ]
-        )
+        phone = child.phone_number.strip() if child and child.phone_number else None
+        pin_code = "1234"
+        if policy and policy.parent_pin_hash:
+            pin_code = "PIN"
+
+        kb_rows = []
+        if phone:
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text="📍 1-Tap SMS: GPS so'rash",
+                    url=f"sms:{phone}?body=%23GPS:{pin_code}"
+                )
+            ])
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text="🔔 1-Tap SMS: Sirena",
+                    url=f"sms:{phone}?body=%23SIREN:{pin_code}"
+                ),
+                InlineKeyboardButton(
+                    text="🛑 1-Tap SMS: Bloklash",
+                    url=f"sms:{phone}?body=%23LOCK:{pin_code}"
+                )
+            ])
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text=f"📱 Raqam: {phone} (O'zgartirish)",
+                    callback_data=f"set_child_phone:{child_id}"
+                )
+            ])
+        else:
+            kb_rows.append([
+                InlineKeyboardButton(
+                    text="📱 Farzand telefon raqamini kiritish",
+                    callback_data=f"set_child_phone:{child_id}"
+                )
+            ])
+
+        kb_rows.append([
+            InlineKeyboardButton(
+                text="⬅️ Ekran tahliliga qaytish",
+                callback_data=f"st_child:{child_id}"
+            )
+        ])
+        kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
         try:
             await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
             await callback.answer()
@@ -5350,3 +5417,82 @@ async def fallback_text_handler(message: Message):
                 reply_markup=get_child_main_keyboard(),
                 parse_mode="Markdown"
             )
+
+
+@router.callback_query(F.data.startswith("set_child_phone:"))
+async def on_set_child_phone_callback(callback: CallbackQuery, state: FSMContext):
+    """Parent initiates setting or updating child's phone number for offline SMS commands."""
+    child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or parent_id not in [p.id for p in parents]:
+            await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
+            return
+
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name or "Farzand" if child else "Farzand"
+        cur_phone = child.phone_number or "Kiritilmagan" if child else "Kiritilmagan"
+
+    await state.set_state(ChildPhoneSaveState.waiting_for_child_phone)
+    await state.update_data(target_child_id=child_id)
+
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"child_view:{child_id}")]
+    ])
+    safe_name = html.escape(child_name)
+    safe_p = html.escape(cur_phone)
+    await callback.message.answer(
+        f"📱 <b>Farzandingiz telefon raqamini kiriting</b>\n\n"
+        f"👤 Farzand: <b>{safe_name}</b>\n"
+        f"📞 Hozirgi raqam: <code>{safe_p}</code>\n\n"
+        f"Farzandingiz telefonidagi SIM-karta raqamini yozing (masalan: <code>+998901234567</code>):\n"
+        f"<i>Ushbu raqam internet o'chirilgan holatlarda 1-bosishda SMS orqali GPS olish va boshqarish uchun xizmat qiladi.</i>",
+        reply_markup=cancel_kb,
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(ChildPhoneSaveState.waiting_for_child_phone, F.text)
+async def on_child_phone_entered(message: Message, state: FSMContext):
+    data = await state.get_data()
+    child_id = data.get("target_child_id")
+    raw_text = message.text.strip()
+
+    cleaned = "".join([c for c in raw_text if c.isdigit() or c == "+"])
+    if not cleaned.startswith("+"):
+        if cleaned.startswith("998"):
+            cleaned = "+" + cleaned
+        elif len(cleaned) == 9:
+            cleaned = "+998" + cleaned
+        else:
+            cleaned = "+" + cleaned
+
+    digits = [c for c in cleaned if c.isdigit()]
+    if len(digits) < 7:
+        await message.answer("⚠️ Telefon raqam noto'g'ri formatda. Iltimos, qaytadan kiriting (masalan: `+998901234567`):", parse_mode="Markdown")
+        return
+
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        if child:
+            child.phone_number = cleaned
+            await session.commit()
+            child_name = child.full_name or "Farzand"
+        else:
+            child_name = "Farzand"
+
+    await state.clear()
+    
+    test_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📍 1-Tap SMS: GPS so'rab ko'rish", url=f"sms:{cleaned}?body=%23GPS:1234")],
+        [InlineKeyboardButton(text="⬅️ Farzand boshqaruviga qaytish", callback_data=f"child_view:{child_id}")]
+    ])
+    safe_cname = html.escape(child_name)
+    await message.answer(
+        f"✅ <b>{safe_cname}</b> uchun telefon raqami saqlandi: <code>{cleaned}</code>\n\n"
+        f"Endi internet butunlay o'chirilgan bo'lsa ham, pastdagi <b>1-Tap SMS</b> tugmasi orqali bolaning sun'iy yo'ldosh GPS koordinatasini olishingiz mumkin!",
+        reply_markup=test_kb,
+        parse_mode="HTML"
+    )

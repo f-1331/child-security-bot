@@ -193,4 +193,30 @@ public class OfflineDbHelper extends SQLiteOpenHelper {
             Log.e(TAG, "Error deleting synced records: " + e.getMessage());
         }
     }
+
+    /**
+     * Retrieve the most recent recorded GPS location from offline database.
+     */
+    public synchronized JSONObject getLatestLocation() {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = null;
+        try {
+            cursor = db.query(TABLE_LOCATIONS, null, null, null, null, null, COL_ID + " DESC", "1");
+            if (cursor.moveToFirst()) {
+                JSONObject obj = new JSONObject();
+                obj.put("latitude", cursor.getDouble(cursor.getColumnIndexOrThrow(COL_LATITUDE)));
+                obj.put("longitude", cursor.getDouble(cursor.getColumnIndexOrThrow(COL_LONGITUDE)));
+                obj.put("accuracy", cursor.getFloat(cursor.getColumnIndexOrThrow(COL_ACCURACY)));
+                obj.put("speed_kmh", cursor.getInt(cursor.getColumnIndexOrThrow(COL_SPEED_KMH)));
+                obj.put("battery_level", cursor.getInt(cursor.getColumnIndexOrThrow(COL_BATTERY)));
+                obj.put("recorded_at_epoch_ms", cursor.getLong(cursor.getColumnIndexOrThrow(COL_RECORDED_AT)));
+                return obj;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error fetching latest location: " + e.getMessage());
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return null;
+    }
 }

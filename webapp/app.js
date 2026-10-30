@@ -2670,6 +2670,8 @@ async function updateLiveTelemetry(childId) {
               <span class="text-slate-400 text-[10px]">(${formatTimeAgo(loc.recorded_at)})</span>
             `;
           }
+          const offlineSmsBox = document.getElementById("offlineSmsPillContainer");
+          if (offlineSmsBox) offlineSmsBox.classList.add("hidden");
         } else {
           offlineText = `${timeFormatted} da uzilgan`;
           if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-slate-950 rounded-full shadow-sm";
@@ -2679,6 +2681,20 @@ async function updateLiveTelemetry(childId) {
               <span class="text-rose-400 font-extrabold text-xs">Oflayn</span>
               <span class="text-slate-300 text-[10px]">(${timeFormatted} da uzilgan — ${formatTimeAgo(loc.recorded_at)})</span>
             `;
+          }
+          // Show offline SMS trigger fallback when child is offline
+          const offlineSmsBox = document.getElementById("offlineSmsPillContainer");
+          const btnSmsTrig = document.getElementById("btnOfflineSmsTrigger");
+          if (offlineSmsBox) {
+            offlineSmsBox.classList.remove("hidden");
+            const childPhone = child.phone_number ? child.phone_number.trim() : "";
+            if (btnSmsTrig) {
+              if (childPhone) {
+                btnSmsTrig.href = `sms:${childPhone}?body=${encodeURIComponent("#GPS:1234")}`;
+              } else {
+                btnSmsTrig.href = `sms:?body=${encodeURIComponent("#GPS:1234")}`;
+              }
+            }
           }
         }
       }
@@ -3416,13 +3432,97 @@ function calculateRouteStats(points) {
     if (p2.speed && p2.speed > maxSpd) {
       maxSpd = Math.round(p2.speed);
     }
-    if (p1.recorded_at && p2.recorded_at) {
-      const t1 = new Date(p1.recorded_at.endsWith("Z") ? p1.recorded_at : p1.recorded_at + "Z").getTime();
-      const t2 = new Date(p2.recorded_at.endsWith("Z") ? p2.recorded_at : p2.recorded_at + "Z").getTime();
-      if ((t2 - t1) >= 300000 && d <= 30) { // 5 minutes stopped in one place
-        stops++;
+  }
+
+  // Calculate high-precision stationary stops (stayed in one spot >= 3 minutes)
+  routeStopsCache = [];
+  let stopBatch = [];
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i];
+    if (stopBatch.length === 0) {
+      stopBatch.push(pt);
+      continue;
+    }
+    const prevPt = stopBatch[stopBatch.length - 1];
+    const dBetween = calculateDistanceMeters(prevPt.latitude, prevPt.longitude, pt.latitude, pt.longitude);
+    const spd = pt.speed || 0;
+
+    if (dBetween <= 30 && spd < 5) {
+      stopBatch.push(pt);
+    } else {
+      if (stopBatch.length >= 2) {
+        const first = stopBatch[0];
+        const last = stopBatch[stopBatch.length - 1];
+        if (first.recorded_at && last.recorded_at) {
+          const t1 = new Date(first.recorded_at.endsWith("Z") ? first.recorded_at : first.recorded_at + "Z").getTime();
+          const t2 = new Date(last.recorded_at.endsWith("Z") ? last.recorded_at : last.recorded_at + "Z").getTime();
+          const durMin = Math.round((t2 - t1) / 60000);
+          if (durMin >= 3) {
+            routeStopsCache.push({
+              latitude: first.latitude,
+              longitude: first.longitude,
+              startTime: new Date(t1).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+              endTime: new Date(t2).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+              durationMinutes: durMin,
+              pointsCount: stopBatch.length,
+              battery: last.battery_level
+            });
+          }
+        }
+      }
+      stopBatch = [pt];
+    }
+  }
+  if (stopBatch.length >= 2) {
+    const first = stopBatch[0];
+    const last = stopBatch[stopBatch.length - 1];
+    if (first.recorded_at && last.recorded_at) {
+      const t1 = new Date(first.recorded_at.endsWith("Z") ? first.recorded_at : first.recorded_at + "Z").getTime();
+      const t2 = new Date(last.recorded_at.endsWith("Z") ? last.recorded_at : last.recorded_at + "Z").getTime();
+      const durMin = Math.round((t2 - t1) / 60000);
+      if (durMin >= 3) {
+        routeStopsCache.push({
+          latitude: first.latitude,
+          longitude: first.longitude,
+          startTime: new Date(t1).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+          endTime: new Date(t2).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" }),
+          durationMinutes: durMin,
+          pointsCount: stopBatch.length,
+          battery: last.battery_level
+        });
       }
     }
+  }
+
+  // Render Stop Markers on Map
+  if (routeLayerGroup) {
+    routeStopsCache.forEach((st, sIdx) => {
+      const stopIcon = L.divIcon({
+        className: "route-stop-pin",
+        html: `
+          <div class="relative transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group" title="To'xtash: ${st.durationMinutes} daqiqa">
+            <div class="h-6 min-w-[26px] px-2 rounded-full bg-rose-600 text-white font-black text-[10px] flex items-center justify-center gap-1 shadow-2xl border-2 border-white">
+              <span>🛑</span>
+              <span>${st.durationMinutes}m</span>
+            </div>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0]
+      });
+      const stMarker = L.marker([st.latitude, st.longitude], { icon: stopIcon });
+      stMarker.bindPopup(`
+        <div class="p-2 min-w-[210px] text-slate-100 font-sans">
+          <div class="flex items-center gap-1.5 font-black text-xs text-rose-400 mb-1 border-b border-white/10 pb-1">
+            <span>🛑 To'xtash joyi (${st.durationMinutes} daqiqa)</span>
+          </div>
+          <p class="text-xs text-slate-200"><b>Vaqti:</b> ${st.startTime} — ${st.endTime}</p>
+          <p class="text-xs text-slate-300 mt-0.5"><b>Batareya:</b> ${st.battery ? st.battery + '%' : '--'}</p>
+          <p class="text-2xs font-mono text-slate-400 mt-1">${st.latitude.toFixed(5)}, ${st.longitude.toFixed(5)}</p>
+        </div>
+      `);
+      stMarker.addTo(routeLayerGroup);
+    });
   }
 
   const distKm = (totalDistM / 1000).toFixed(1);
@@ -3460,8 +3560,37 @@ function renderHistoryListItems(points) {
   const container = document.getElementById("historyListContainer");
   if (!container || !points) return;
 
+  if (currentHistoryFilter === "stops") {
+    if (!routeStopsCache || routeStopsCache.length === 0) {
+      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun 3 daqiqadan ortiq to'xtashlar qayd etilmagan.</p>`;
+      return;
+    }
+    container.innerHTML = routeStopsCache.map((st, idx) => `
+      <div onclick="focusRoutePoint(${st.latitude}, ${st.longitude})" class="bg-gradient-to-r from-rose-950/70 to-slate-800/90 hover:bg-slate-800 active:scale-[0.99] border border-rose-500/40 hover:border-rose-400 p-3 rounded-2xl flex flex-col gap-1.5 text-xs transition cursor-pointer shadow-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-rose-500/30 text-rose-300 font-black text-xs flex items-center justify-center border border-rose-500/50">🛑</span>
+            <span class="text-white text-xs font-black">${idx + 1}-To'xtash (${st.durationMinutes} daqiqa)</span>
+          </div>
+          <span class="font-mono font-black text-rose-400 text-xs">⏱ ${st.startTime} — ${st.endTime}</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400 text-[11px] pt-1.5 border-t border-white/10">
+          <span>🔋 Batareya: ${st.battery ? st.battery + '%' : '--'}</span>
+          <span class="text-rose-400 font-bold text-[10px] flex items-center gap-1">📍 Xaritada ko'rish</span>
+        </div>
+      </div>
+    `).join("");
+    return;
+  }
+
   let filtered = points.slice();
-  if (currentHistoryFilter === "morning") {
+  if (currentHistoryFilter === "offline") {
+    filtered = filtered.filter((p) => p.is_offline_cached === true);
+    if (filtered.length === 0) {
+      container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Oflayn GPS nuqtalari yo'q (barcha signallar jonli kelgan).</p>`;
+      return;
+    }
+  } else if (currentHistoryFilter === "morning") {
     filtered = filtered.filter((p) => {
       if (!p.recorded_at) return true;
       const h = new Date(p.recorded_at.endsWith("Z") ? p.recorded_at : p.recorded_at + "Z").getHours();
@@ -3523,6 +3652,8 @@ function renderHistoryListItems(points) {
     .join("");
 }
 
+let routeStopsCache = [];
+
 // =========================================================
 // 8. INTERACTIVE ROUTE PLAYBACK HUD & SCRUBBER ENGINE
 // =========================================================
@@ -3570,7 +3701,8 @@ function updateRoutePlaybackHud(stepIdx) {
     speedEl.textContent = `⚡ ${spd}`;
   }
   if (statsEl) {
-    statsEl.textContent = `${clampedIdx + 1} / ${routePointsCache.length} ta`;
+    const stopsTxt = routeStopsCache.length > 0 ? ` • 🛑 ${routeStopsCache.length}` : "";
+    statsEl.textContent = `${clampedIdx + 1} / ${routePointsCache.length} ta${stopsTxt}`;
   }
   if (scrubber) {
     scrubber.value = String(clampedIdx);

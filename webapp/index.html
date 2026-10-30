@@ -586,6 +586,16 @@
               </div>
               <p id="addressText" class="text-xs font-bold text-white truncate mt-0.5">Manzil aniqlanmoqda...</p>
               <span id="zoneStatusText" class="text-[10px] text-emerald-400 font-semibold truncate block mt-0.5">Kerakli joylar tekshirilmoqda</span>
+              <!-- Offline Satellite GPS Fallback Pill (Visible when child phone has no internet) -->
+              <div id="offlineSmsPillContainer" class="hidden mt-1.5 flex flex-wrap items-center gap-1.5 pointer-events-auto">
+                <span class="text-2xs text-purple-300 font-bold bg-purple-950/80 border border-purple-500/40 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping"></span>
+                  <span>Oflayn (Internet o'chiq)</span>
+                </span>
+                <a id="btnOfflineSmsTrigger" href="#" class="text-2xs bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black px-2.5 py-0.5 rounded-full shadow border border-purple-300/40 flex items-center gap-1 transition active:scale-95" title="Internetsiz telefonning GPS moduliga SMS so'rov yuborish">
+                  <span>✉️ 1-Tap SMS: GPS so'rash</span>
+                </a>
+              </div>
             </div>
           </div>
           
@@ -1022,6 +1032,12 @@
         </button>
         <button onclick="filterHistoryByTime('evening')" id="btnFilterTime-evening" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0">
           🌙 Kechqurun (18-24)
+        </button>
+        <button onclick="filterHistoryByTime('stops')" id="btnFilterTime-stops" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-rose-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-rose-500/30">
+          🛑 To'xtashlar
+        </button>
+        <button onclick="filterHistoryByTime('offline')" id="btnFilterTime-offline" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-purple-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-purple-500/30">
+          📴 Oflayn GPS
         </button>
       </div>
 

@@ -381,22 +381,30 @@ def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def get_location_actions_keyboard(lat: float, lon: float, child_id: int) -> InlineKeyboardMarkup:
+def get_location_actions_keyboard(lat: float, lon: float, child_id: int, is_offline: bool = False, child_phone: Optional[str] = None) -> InlineKeyboardMarkup:
     """Interactive navigation buttons sent with child's native location pin."""
     google_maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
     yandex_maps_url = f"https://yandex.com/maps/?pt={lon},{lat}&z=16&l=map"
 
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🗺 Google Maps", url=google_maps_url),
-                InlineKeyboardButton(text="🗺 Yandex Maps", url=yandex_maps_url),
-            ],
-            [
-                InlineKeyboardButton(text="🔄 Joylashuvni yangilash", callback_data=f"locate_child:{child_id}")
-            ]
+    rows = [
+        [
+            InlineKeyboardButton(text="🗺 Google Maps", url=google_maps_url),
+            InlineKeyboardButton(text="🗺 Yandex Maps", url=yandex_maps_url),
         ]
-    )
+    ]
+    if is_offline and child_phone:
+        clean_p = child_phone.strip()
+        rows.append([
+            InlineKeyboardButton(text="✉️ 1-Tap SMS: Oflayn GPS so'rash", url=f"sms:{clean_p}?body=%23GPS:1234")
+        ])
+    elif is_offline:
+        rows.append([
+            InlineKeyboardButton(text="✉️ Internetsiz SMS Buyruqlar", callback_data=f"sms_controls:{child_id}")
+        ])
+    rows.append([
+        InlineKeyboardButton(text="🔄 Joylashuvni yangilash", callback_data=f"locate_child:{child_id}")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_contact_request_keyboard() -> ReplyKeyboardMarkup:
