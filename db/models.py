@@ -80,6 +80,7 @@ class LocationLog(Base):
     is_charging: Mapped[bool] = mapped_column(Boolean, default=False)
     sound_mode: Mapped[Optional[str]] = mapped_column(String(20), default="normal")  # "normal", "vibrate", "silent"
     source: Mapped[str] = mapped_column(String(30), default="telegram_live")  # "telegram_live", "telegram_pin", "api_telemetry"
+    is_offline_cached: Mapped[bool] = mapped_column(Boolean, default=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     child: Mapped["User"] = relationship("User", back_populates="location_logs", foreign_keys=[child_id])
@@ -168,10 +169,14 @@ class ChildDevicePolicy(Base):
     child_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
     parent_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     is_all_apps_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_network_restricted: Mapped[bool] = mapped_column(Boolean, default=False)
     lockdown_reason: Mapped[str] = mapped_column(String(100), default="Dars vaqti")
     blocked_packages: Mapped[Optional[str]] = mapped_column(Text, default="[]")  # JSON string of blocked packages
     parent_pin_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)  # SHA-256 hash
     anti_uninstall_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    bedtime_start: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # e.g. "22:00"
+    bedtime_end: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)    # e.g. "07:00"
+    daily_limit_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

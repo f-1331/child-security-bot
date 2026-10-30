@@ -58,6 +58,28 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
 
         SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, Context.MODE_PRIVATE);
 
+        // 0. ANTI-CLOCK TAMPERING SHIELD (Soatni orqaga yoki oldinga surib blokdan qochishni aniqlash)
+        long currentWallMs = System.currentTimeMillis();
+        long currentElapsedMs = android.os.SystemClock.elapsedRealtime();
+        long lastWall = prefs.getLong("last_check_wall_time", 0);
+        long lastElapsed = prefs.getLong("last_check_elapsed_time", 0);
+
+        if (lastWall > 0 && lastElapsed > 0) {
+            long wallDelta = currentWallMs - lastWall;
+            long elapsedDelta = currentElapsedMs - lastElapsed;
+            // If elapsed time grew by >5s but wall time moved backward by >30s or jumped >30 min
+            if (elapsedDelta >= 5000 && (wallDelta < -30000 || Math.abs(wallDelta - elapsedDelta) > 1800000)) {
+                Log.w(TAG, "⚠️ Tamper detected: Child manually manipulated system clock!");
+                performGlobalAction(GLOBAL_ACTION_HOME);
+                launchLockOverlay("settings", "Sozlamalar", "Telefon vaqti o'zgartirilishi aniqlandi! Cheklovni aylanib o'tish taqiqlanadi.");
+                return;
+            }
+        }
+        prefs.edit()
+                .putLong("last_check_wall_time", currentWallMs)
+                .putLong("last_check_elapsed_time", currentElapsedMs)
+                .apply();
+
         // 1. SETTINGS & ANTI-UNINSTALL PROTECTION
         if (isSettingsPackage(currentPackage)) {
             boolean antiUninstall = prefs.getBoolean("anti_uninstall_enabled", true);
@@ -75,6 +97,15 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
                     return;
                 }
             }
+        }
+
+        // 1.5. BEDTIME OFFLINE SCHEDULE (Internetsiz ham aniq ishlaydigan uyqu rejimi)
+        String bedtimeStart = prefs.getString("bedtime_start", "");
+        String bedtimeEnd = prefs.getString("bedtime_end", "");
+        if (isWithinBedtime(bedtimeStart, bedtimeEnd)) {
+            String appName = getAppLabel(currentPackage);
+            launchLockOverlay(currentPackage, appName, "🌙 Uyqu vaqti rejimi: Telefon dam olish vaqtida (Bloklangan)");
+            return;
         }
 
         // 2. MASTER LOCKDOWN (BARCHA ILOVALARNI BLOKLASH)
@@ -166,6 +197,28 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
             if (label != null) return label.toString();
         } catch (Exception ignored) {}
         return pkg;
+    }
+
+    private boolean isWithinBedtime(String start, String end) {
+        if (start == null || start.isEmpty() || end == null || end.isEmpty()) return false;
+        try {
+            java.util.Calendar now = java.util.Calendar.getInstance();
+            int curMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE);
+
+            String[] s = start.split(":");
+            int sMinutes = Integer.parseInt(s[0].trim()) * 60 + Integer.parseInt(s[1].trim());
+
+            String[] e = end.split(":");
+            int eMinutes = Integer.parseInt(e[0].trim()) * 60 + Integer.parseInt(e[1].trim());
+
+            if (sMinutes <= eMinutes) {
+                return curMinutes >= sMinutes && curMinutes < eMinutes;
+            } else {
+                return curMinutes >= sMinutes || curMinutes < eMinutes;
+            }
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private void launchLockOverlay(String pkg, String appName, String reason) {

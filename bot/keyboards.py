@@ -320,7 +320,7 @@ def get_pairing_share_keyboard(bot_username: str, pairing_code: str) -> InlineKe
 
 
 def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
-    """Action buttons for a specific child."""
+    """Action buttons for a specific child including offline controls and SMS fallback."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -349,6 +349,20 @@ def get_child_details_keyboard(child_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="🔋 Telefon holati (Batareya)",
                     callback_data=f"battery_child:{child_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📱 Ilovalar & Ekran",
+                    callback_data=f"st_child:{child_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📴 Internetni Cheklash (Offline)",
+                    callback_data=f"toggle_net_lock:{child_id}"
+                ),
+                InlineKeyboardButton(
+                    text="✉️ Oflayn SMS Buyruqlar",
+                    callback_data=f"sms_controls:{child_id}"
                 )
             ],
             [

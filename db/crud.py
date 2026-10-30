@@ -389,6 +389,66 @@ async def log_location(
     return entry
 
 
+async def batch_log_locations(
+    session: AsyncSession,
+    child_id: int,
+    points: List[dict]
+) -> int:
+    """Batch insert offline locations with timestamp ordering and deduplication."""
+    if not points:
+        return 0
+
+    inserted_count = 0
+    for p in points:
+        lat = p.get("latitude")
+        lon = p.get("longitude")
+        if lat is None or lon is None:
+            continue
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (ValueError, TypeError):
+            continue
+
+        recorded_at = None
+        epoch_ms = p.get("recorded_at_epoch_ms")
+        if epoch_ms:
+            try:
+                recorded_at = datetime.fromtimestamp(epoch_ms / 1000.0, tz=timezone.utc)
+            except Exception:
+                pass
+        if not recorded_at and p.get("timestamp"):
+            try:
+                s = str(p.get("timestamp")).strip()
+                if not s.endswith("Z") and not ("+" in s):
+                    s += "Z"
+                recorded_at = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except Exception:
+                pass
+        if not recorded_at:
+            recorded_at = datetime.now(timezone.utc)
+
+        entry = LocationLog(
+            child_id=child_id,
+            latitude=lat,
+            longitude=lon,
+            accuracy=float(p.get("accuracy", 10.0)) if p.get("accuracy") is not None else None,
+            speed=float(p.get("speed", p.get("speed_kmh", 0))) if (p.get("speed") is not None or p.get("speed_kmh") is not None) else 0.0,
+            battery_level=int(p.get("battery_level", 100)) if p.get("battery_level") is not None else None,
+            is_charging=bool(p.get("is_charging", False)),
+            sound_mode=str(p.get("sound_mode", "normal")),
+            source="offline_batch_sync",
+            is_offline_cached=True,
+            recorded_at=recorded_at
+        )
+        session.add(entry)
+        inserted_count += 1
+
+    if inserted_count > 0:
+        await session.commit()
+    return inserted_count
+
+
 async def get_latest_location(session: AsyncSession, child_id: int) -> Optional[LocationLog]:
     """Fetch the most recent location log for a child."""
     result = await session.execute(
@@ -1320,18 +1380,30 @@ async def update_device_policy(
     child_id: int,
     parent_id: Optional[int] = None,
     is_all_apps_blocked: Optional[bool] = None,
+    is_network_restricted: Optional[bool] = None,
     lockdown_reason: Optional[str] = None,
     blocked_packages: Optional[List[str]] = None,
     anti_uninstall_enabled: Optional[bool] = None,
     new_pin: Optional[str] = None,
-    parent_pin: Optional[str] = None
+    parent_pin: Optional[str] = None,
+    bedtime_start: Optional[str] = None,
+    bedtime_end: Optional[str] = None,
+    daily_limit_minutes: Optional[int] = None
 ) -> ChildDevicePolicy:
-    """Update child device policy (lock all apps, selective blocks, anti-uninstall shield, or PIN)."""
+    """Update child device policy (lock all apps, selective blocks, network restriction, bedtime, anti-uninstall shield, or PIN)."""
     policy = await get_or_create_device_policy(session, child_id, parent_id)
     if is_all_apps_blocked is not None:
         policy.is_all_apps_blocked = is_all_apps_blocked
+    if is_network_restricted is not None:
+        policy.is_network_restricted = is_network_restricted
     if lockdown_reason is not None:
         policy.lockdown_reason = lockdown_reason.strip()
+    if bedtime_start is not None:
+        policy.bedtime_start = bedtime_start.strip()
+    if bedtime_end is not None:
+        policy.bedtime_end = bedtime_end.strip()
+    if daily_limit_minutes is not None:
+        policy.daily_limit_minutes = daily_limit_minutes
     if blocked_packages is not None:
         if isinstance(blocked_packages, list):
             clean_list = []

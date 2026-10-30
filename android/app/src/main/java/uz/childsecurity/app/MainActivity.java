@@ -499,6 +499,48 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void setNetworkLockdown(boolean active) {
+            if (active) {
+                LocalVpnService.startLockdown(context);
+            } else {
+                LocalVpnService.stopLockdown(context);
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isNetworkLockdownActive() {
+            return LocalVpnService.isRunning();
+        }
+
+        @JavascriptInterface
+        public int getOfflineLocationCount() {
+            return OfflineDbHelper.getInstance(context).getUnsyncedCount();
+        }
+
+        @JavascriptInterface
+        public void setBedtimeSchedule(String start, String end) {
+            try {
+                SharedPreferences.Editor ed = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE).edit();
+                ed.putString("bedtime_start", start != null ? start : "");
+                ed.putString("bedtime_end", end != null ? end : "");
+                ed.apply();
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public void sendParentSmsCommand(String childPhone, String command, String pin) {
+            try {
+                if (childPhone == null || childPhone.isEmpty()) return;
+                android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
+                String body = "#" + command.toUpperCase() + ":" + pin;
+                sm.sendTextMessage(childPhone, null, body, null, null);
+                showToast("SMS buyruq jo'natildi: " + body);
+            } catch (Exception e) {
+                showToast("SMS xatolik: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
         public String getTodayScreenTimeJson() {
             try {
                 return UsageStatsHelper.getDailyAppUsageStats(context).toString();
@@ -523,6 +565,21 @@ public class MainActivity extends AppCompatActivity {
                 }
                 if (obj.has("anti_uninstall_enabled")) {
                     ed.putBoolean("anti_uninstall_enabled", obj.getBoolean("anti_uninstall_enabled"));
+                }
+                if (obj.has("is_network_restricted")) {
+                    boolean netRestricted = obj.getBoolean("is_network_restricted");
+                    ed.putBoolean("is_network_restricted", netRestricted);
+                    if (netRestricted) {
+                        LocalVpnService.startLockdown(context);
+                    } else {
+                        LocalVpnService.stopLockdown(context);
+                    }
+                }
+                if (obj.has("bedtime_start")) {
+                    ed.putString("bedtime_start", obj.getString("bedtime_start"));
+                }
+                if (obj.has("bedtime_end")) {
+                    ed.putString("bedtime_end", obj.getString("bedtime_end"));
                 }
                 if (obj.has("parent_pin_hash")) {
                     ed.putString(ParentPinVerifyActivity.PREFS_PIN_HASH, obj.getString("parent_pin_hash"));

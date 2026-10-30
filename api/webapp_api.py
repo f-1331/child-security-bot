@@ -233,11 +233,20 @@ class ChildSOSRequest(BaseModel):
 
 class DevicePolicyUpdateRequest(BaseModel):
     is_all_apps_blocked: Optional[bool] = None
+    is_network_restricted: Optional[bool] = None
     lockdown_reason: Optional[str] = None
     blocked_packages: Optional[List[str]] = None
     anti_uninstall_enabled: Optional[bool] = None
     new_pin: Optional[str] = None
     parent_id: Optional[int] = None
+    bedtime_start: Optional[str] = None
+    bedtime_end: Optional[str] = None
+    daily_limit_minutes: Optional[int] = None
+
+
+class LocationBatchRequest(BaseModel):
+    child_id: Optional[int] = None
+    points: List[dict] = Field(default_factory=list)
 
 
 class VerifyParentPinRequest(BaseModel):
@@ -629,9 +638,13 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             },
             "device_policy": {
                 "is_all_apps_blocked": policy.is_all_apps_blocked,
+                "is_network_restricted": getattr(policy, "is_network_restricted", False),
                 "lockdown_reason": policy.lockdown_reason,
                 "blocked_packages": blocked_packages,
                 "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+                "bedtime_start": getattr(policy, "bedtime_start", None),
+                "bedtime_end": getattr(policy, "bedtime_end", None),
+                "daily_limit_minutes": getattr(policy, "daily_limit_minutes", None),
                 "has_parent_pin": bool(policy.parent_pin_hash),
             },
             "screen_time": {
@@ -660,6 +673,7 @@ async def get_child_history(
             "speed": h.speed,
             "battery_level": h.battery_level,
             "is_charging": h.is_charging,
+            "is_offline_cached": getattr(h, "is_offline_cached", False),
             "recorded_at": format_utc_iso(h.recorded_at)
         }
         for h in history
@@ -1560,9 +1574,57 @@ async def update_child_live_location_endpoint(
         "recorded_at": format_utc_iso(log.recorded_at),
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "is_network_restricted": getattr(policy, "is_network_restricted", False),
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked_packages,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "bedtime_start": getattr(policy, "bedtime_start", None),
+            "bedtime_end": getattr(policy, "bedtime_end", None),
+            "has_parent_pin": bool(policy.parent_pin_hash),
+        }
+    }
+
+
+@router.post("/child/{child_id}/location/batch")
+async def update_child_batch_location_endpoint(
+    child_id: int,
+    payload: LocationBatchRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Batch upload of offline GPS points collected when device was disconnected."""
+    if not payload.points:
+        return {"status": "success", "inserted": 0}
+
+    inserted = await crud.batch_log_locations(session, child_id, payload.points)
+
+    # Notify connected parents via WebSocket
+    parents = await crud.get_parents_for_child(session, child_id)
+    batch_msg = {
+        "type": "batch_location_sync",
+        "child_id": child_id,
+        "count": inserted
+    }
+    for p in parents:
+        await ws_manager.send_to_user(p.id, batch_msg)
+
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    try:
+        blocked_packages = json.loads(policy.blocked_packages or "[]")
+    except Exception:
+        blocked_packages = []
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "inserted": inserted,
+        "policy": {
+            "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "is_network_restricted": getattr(policy, "is_network_restricted", False),
+            "lockdown_reason": policy.lockdown_reason,
+            "blocked_packages": blocked_packages,
+            "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "bedtime_start": getattr(policy, "bedtime_start", None),
+            "bedtime_end": getattr(policy, "bedtime_end", None),
             "has_parent_pin": bool(policy.parent_pin_hash),
         }
     }
@@ -2164,6 +2226,10 @@ async def upload_child_app_usage_endpoint(
         "recorded_date": report.report_date,
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "is_network_restricted": policy.is_network_restricted,
+            "bedtime_start": policy.bedtime_start,
+            "bedtime_end": policy.bedtime_end,
+            "daily_limit_minutes": policy.daily_limit_minutes,
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,
@@ -2177,7 +2243,7 @@ async def get_child_device_policy_endpoint(
     child_id: int,
     session: AsyncSession = Depends(get_db)
 ):
-    """Get current app blocking and protection policy for child."""
+    """Get current app blocking, network restriction, bedtime, and protection policy for child."""
     policy = await crud.get_or_create_device_policy(session, child_id)
     try:
         blocked = json.loads(policy.blocked_packages or "[]")
@@ -2188,6 +2254,10 @@ async def get_child_device_policy_endpoint(
         "child_id": child_id,
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "is_network_restricted": policy.is_network_restricted,
+            "bedtime_start": policy.bedtime_start,
+            "bedtime_end": policy.bedtime_end,
+            "daily_limit_minutes": policy.daily_limit_minutes,
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,
@@ -2203,7 +2273,7 @@ async def update_child_device_policy_endpoint(
     payload: DevicePolicyUpdateRequest,
     session: AsyncSession = Depends(get_db)
 ):
-    """Update device policy: toggle lock all apps, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
+    """Update device policy: toggle lock all apps, network restriction, bedtime, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
     parents = await crud.get_parents_for_child(session, child_id)
     parent_ids = [p.id for p in parents]
 
@@ -2231,10 +2301,14 @@ async def update_child_device_policy_endpoint(
         child_id=child_id,
         parent_id=effective_parent_id,
         is_all_apps_blocked=payload.is_all_apps_blocked,
+        is_network_restricted=payload.is_network_restricted,
         lockdown_reason=payload.lockdown_reason,
         blocked_packages=payload.blocked_packages,
         anti_uninstall_enabled=payload.anti_uninstall_enabled,
-        new_pin=payload.new_pin
+        new_pin=payload.new_pin,
+        bedtime_start=payload.bedtime_start,
+        bedtime_end=payload.bedtime_end,
+        daily_limit_minutes=payload.daily_limit_minutes,
     )
 
     try:
@@ -2246,6 +2320,10 @@ async def update_child_device_policy_endpoint(
         "type": "device_policy_update",
         "child_id": child_id,
         "is_all_apps_blocked": policy.is_all_apps_blocked,
+        "is_network_restricted": policy.is_network_restricted,
+        "bedtime_start": policy.bedtime_start,
+        "bedtime_end": policy.bedtime_end,
+        "daily_limit_minutes": policy.daily_limit_minutes,
         "lockdown_reason": policy.lockdown_reason,
         "blocked_packages": blocked,
         "anti_uninstall_enabled": policy.anti_uninstall_enabled,
@@ -2289,11 +2367,46 @@ async def update_child_device_policy_endpoint(
         except Exception:
             pass
 
+    if telemetry.telegram_bot and parents and payload.is_network_restricted is not None:
+        try:
+            ch_user = await crud.get_user(session, child_id)
+            c_name = html.escape(ch_user.full_name) if ch_user and ch_user.full_name else f"Farzand #{child_id}"
+            if payload.is_network_restricted:
+                net_status_txt = "📴 <b>QURILMA INTERNETI CHEKLANDI (OFFLINE QILINDI)!</b>"
+                net_msg_body = (
+                    f"{net_status_txt}\n\n"
+                    f"👤 Farzand: <b>{c_name}</b>\n"
+                    f"🛡 Holat: <b>Mahalliy xavfsizlik devori (Firewall) faollashtirildi</b>\n\n"
+                    f"ℹ️ O'yinlar, brauzer va ijtimoiy tarmoqlar uchun internet uzildi. Faqat ota-ona nazorati va SOS aloqasi ishlaydi."
+                )
+            else:
+                net_status_txt = "🌐 <b>QURILMA INTERNETI TIKLANDI</b>"
+                net_msg_body = (
+                    f"{net_status_txt}\n\n"
+                    f"👤 Farzand: <b>{c_name}</b>\n"
+                    f"📶 Internetdan yana erkin foydalanish mumkin."
+                )
+            for p in parents:
+                try:
+                    await telemetry.telegram_bot.send_message(
+                        chat_id=p.id,
+                        text=net_msg_body,
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     return {
         "status": "success",
         "child_id": child_id,
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
+            "is_network_restricted": policy.is_network_restricted,
+            "bedtime_start": policy.bedtime_start,
+            "bedtime_end": policy.bedtime_end,
+            "daily_limit_minutes": policy.daily_limit_minutes,
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,

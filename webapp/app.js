@@ -2899,6 +2899,55 @@ function renderHistoryToMapAndList(points) {
     }
   });
 
+  // D. Render Stop Point Markers (To'xtash joylari - 3+ min within 25m)
+  const stopPoints = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    if (p1.recorded_at && p2.recorded_at) {
+      let s1 = String(p1.recorded_at).trim();
+      if (!s1.endsWith("Z") && !s1.includes("+")) s1 += "Z";
+      let s2 = String(p2.recorded_at).trim();
+      if (!s2.endsWith("Z") && !s2.includes("+")) s2 += "Z";
+      const t1 = new Date(s1).getTime();
+      const t2 = new Date(s2).getTime();
+      const durationMs = t2 - t1;
+      const dist = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+
+      if (durationMs >= 180000 && dist <= 25) {
+        const stopMinutes = Math.round(durationMs / 60000);
+        stopPoints.push({
+          lat: p1.latitude,
+          lng: p1.longitude,
+          minutes: stopMinutes,
+          timeStr: new Date(s1).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })
+        });
+      }
+    }
+  }
+
+  stopPoints.forEach((sp, sIdx) => {
+    const stopIcon = L.divIcon({
+      className: "route-stop-pin",
+      html: `
+        <div class="flex items-center gap-1 bg-purple-700 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg border border-purple-300 whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-110 transition" title="To'xtash joyi: ${sp.minutes} daqiqa">
+          <span>🛑 ${sp.minutes} daq</span>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+    const stopMarker = L.marker([sp.lat, sp.lng], { icon: stopIcon });
+    stopMarker.bindPopup(`
+      <div class="p-2 text-xs text-slate-900 font-sans">
+        <div class="font-black text-purple-800">🛑 To'xtash joyi #${sIdx + 1}</div>
+        <div class="mt-1">⏱ To'xtab turilgan vaqt: <b>${sp.minutes} daqiqa</b></div>
+        <div>🕒 Boshlangan vaqt: <b>${sp.timeStr}</b></div>
+      </div>
+    `);
+    stopMarker.addTo(routeLayerGroup);
+  });
+
   if (isRouteVisible && map) {
     routeLayerGroup.addTo(map);
   }
@@ -6132,22 +6181,70 @@ function startChildLiveTracking(childId) {
 
 async function sendChildLiveTelemetry(childId, payload) {
   if (isDemoMode) return;
-  try {
-    // 1. Send via WebSocket if connected
-    if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
-      appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload }));
-    }
+  const targetId = childId || (authenticatedSession?.user?.id);
+  if (!targetId) return;
 
-    // 2. Post to backend live location telemetry endpoint
-    await fetch(`/api/v1/webapp/child/${childId}/location`, {
+  // 1. Send via WebSocket if connected
+  if (appWebSocket && appWebSocket.readyState === WebSocket.OPEN) {
+    try { appWebSocket.send(JSON.stringify({ type: "telemetry", ...payload })); } catch (e) {}
+  }
+
+  // 2. Post to backend live location telemetry endpoint
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${targetId}/location`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    if (res.ok) {
+      // Successfully sent online: flush any pending offline-buffered points
+      flushOfflineTelemetryBatch(targetId);
+      return;
+    }
+    throw new Error("HTTP " + res.status);
   } catch (e) {
-    // Silent catch, next watchPosition tick will retry
+    // OFFLINE BUFFER: Store point locally in offline queue when internet is off
+    enqueueOfflineTelemetryPoint(targetId, payload);
   }
 }
+
+function enqueueOfflineTelemetryPoint(childId, payload) {
+  try {
+    const key = `_offline_gps_queue_${childId}`;
+    let queue = JSON.parse(localStorage.getItem(key) || "[]");
+    queue.push({
+      ...payload,
+      recorded_at: new Date().toISOString()
+    });
+    if (queue.length > 500) queue = queue.slice(-500);
+    localStorage.setItem(key, JSON.stringify(queue));
+  } catch (err) {}
+}
+
+async function flushOfflineTelemetryBatch(childId) {
+  try {
+    const key = `_offline_gps_queue_${childId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const queue = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    const res = await fetch(`/api/v1/webapp/child/${childId}/location/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ points: queue })
+    });
+    if (res.ok) {
+      localStorage.removeItem(key);
+      console.log(`Successfully synced ${queue.length} offline GPS points.`);
+    }
+  } catch (err) {}
+}
+
+window.addEventListener("online", () => {
+  const targetId = currentChildId || (authenticatedSession?.user?.id);
+  if (targetId) flushOfflineTelemetryBatch(targetId);
+});
 
 // =========================================================
 // 5. WEBSOCKET & CHILD ALERT BANNER DISPATCHER
@@ -7914,6 +8011,22 @@ function updateDevicePolicyUI(policy) {
     blockedCountEl.textContent = `${count} ta bloklangan`;
   }
 
+  // 4.1 Network restriction toggle switch
+  const toggleNet = document.getElementById("toggleNetworkRestricted");
+  if (toggleNet) {
+    toggleNet.checked = Boolean(currentDevicePolicy.is_network_restricted);
+  }
+
+  // 4.2 Bedtime inputs
+  if (currentDevicePolicy.bedtime_start) {
+    const inputStart = document.getElementById("inputBedtimeStart");
+    if (inputStart) inputStart.value = currentDevicePolicy.bedtime_start;
+  }
+  if (currentDevicePolicy.bedtime_end) {
+    const inputEnd = document.getElementById("inputBedtimeEnd");
+    if (inputEnd) inputEnd.value = currentDevicePolicy.bedtime_end;
+  }
+
   // Reason buttons active styling
   document.querySelectorAll(".btn-lock-reason").forEach(btn => {
     if (currentDevicePolicy.lockdown_reason && btn.textContent.includes(currentDevicePolicy.lockdown_reason)) {
@@ -7926,10 +8039,17 @@ function updateDevicePolicyUI(policy) {
   });
 
   // 5. Android native bridge sync
-  if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
-    try {
-      window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
-    } catch (e) {}
+  if (window.AndroidBridge) {
+    if (typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
+      try {
+        window.AndroidBridge.setLocalDevicePolicy(JSON.stringify(currentDevicePolicy));
+      } catch (e) {}
+    }
+    if (typeof window.AndroidBridge.setNetworkLockdown === "function") {
+      try {
+        window.AndroidBridge.setNetworkLockdown(Boolean(currentDevicePolicy.is_network_restricted));
+      } catch (e) {}
+    }
   }
 }
 
@@ -8503,6 +8623,89 @@ async function handleAntiUninstallToggle(isChecked) {
     });
   } catch (e) {}
 }
+
+async function handleNetworkRestrictedToggle(isChecked) {
+  haptic("heavy");
+  currentDevicePolicy.is_network_restricted = isChecked;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  if (isChecked) {
+    showToast("📴 Qurilma interneti cheklandi (Offline rejim / Firewall faol)!");
+  } else {
+    showToast("🌐 Qurilma interneti tiklandi (Online)");
+  }
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.setNetworkLockdown === "function") {
+    try { window.AndroidBridge.setNetworkLockdown(isChecked); } catch (e) {}
+  }
+
+  const effParentId = getEffectiveParentId();
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        is_network_restricted: isChecked,
+        parent_id: effParentId
+      })
+    });
+  } catch (e) {
+    console.warn("Network restriction save error:", e);
+  }
+}
+window.handleNetworkRestrictedToggle = handleNetworkRestrictedToggle;
+
+async function saveBedtimeSchedule() {
+  haptic("medium");
+  const startEl = document.getElementById("inputBedtimeStart");
+  const endEl = document.getElementById("inputBedtimeEnd");
+  const start = startEl ? startEl.value : "22:00";
+  const end = endEl ? endEl.value : "07:00";
+
+  currentDevicePolicy.bedtime_start = start;
+  currentDevicePolicy.bedtime_end = end;
+  updateDevicePolicyUI(currentDevicePolicy);
+
+  showToast(`🌙 Uyqu jadvali saqlandi: ${start} - ${end}`);
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.setBedtimeSchedule === "function") {
+    try { window.AndroidBridge.setBedtimeSchedule(start, end); } catch (e) {}
+  }
+
+  const effParentId = getEffectiveParentId();
+  if (isDemoMode || !currentChildId) return;
+
+  try {
+    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bedtime_start: start,
+        bedtime_end: end,
+        parent_id: effParentId
+      })
+    });
+  } catch (e) {
+    console.warn("Bedtime schedule save error:", e);
+  }
+}
+window.saveBedtimeSchedule = saveBedtimeSchedule;
+
+function openSmsCommandsModal() {
+  haptic("light");
+  const modal = document.getElementById("modalSmsCommands");
+  if (modal) modal.classList.remove("hidden");
+}
+window.openSmsCommandsModal = openSmsCommandsModal;
+
+function closeSmsCommandsModal() {
+  haptic("light");
+  const modal = document.getElementById("modalSmsCommands");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeSmsCommandsModal = closeSmsCommandsModal;
 
 function openParentPinSetupModal() {
   haptic("light");

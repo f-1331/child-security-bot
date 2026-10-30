@@ -4803,7 +4803,7 @@ async def handle_clean_chat_command(message: Message, bot: Bot):
 # ------------------------------------------------------------------------------
 
 def generate_screen_time_card(child, report, policy, all_children=None):
-    """Format rich screen time, top apps breakdown and master lock controls for parent."""
+    """Format rich screen time, top apps breakdown, network lockdown, and master lock controls for parent."""
     def progress_bar(pct, width=8):
         filled = int(round((pct / 100.0) * width))
         filled = max(0, min(width, filled))
@@ -4822,7 +4822,9 @@ def generate_screen_time_card(child, report, policy, all_children=None):
         time_badge = "🟢 **Me'yorda**"
 
     lock_status_text = "🛑 **BARCHA ILOVALAR BLOKLANGAN!**" if policy.is_all_apps_blocked else "🟢 **Ochiq (Cheklovsiz)**"
+    net_status_text = "📴 **Cheklangan (Offline rejim / Firewall faol)**" if policy.is_network_restricted else "📶 **Ochiq (Normal)**"
     anti_un_status = "🔒 **Faol** _(Bola sozlamalardan ruxsatlarni o'chira olmaydi)_" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
+    bedtime_info = f"🌙 **Uyqu jadvali:** `{policy.bedtime_start} - {policy.bedtime_end}`\n" if (policy.bedtime_start and policy.bedtime_end) else ""
 
     apps_list = report.get("apps", [])
     grand_sec = max(1, sum(a.get("usage_seconds", 0) for a in apps_list))
@@ -4841,7 +4843,7 @@ def generate_screen_time_card(child, report, policy, all_children=None):
             cat = a.get("category", "")
             icon = "🟥" if "youtube" in name.lower() else ("🎵" if "tiktok" in name.lower() else ("🎮" if cat == "game" or "pubg" in name.lower() or "roblox" in name.lower() else ("✈️" if "telegram" in name.lower() else "📱")))
             bl = " 🛑 _Bloklangan_" if a.get("is_blocked") else ""
-            apps_lines.append(f"{i}. {icon} **{name}** — `{dur_str}` ({pct}%)\\n   `[{bar}]`{bl}")
+            apps_lines.append(f"{i}. {icon} **{name}** — `{dur_str}` ({pct}%)\n   `[{bar}]`{bl}")
     else:
         apps_lines.append(
             "_Bugun hali ilovalar sarfi qayd etilmagan._\n\n"
@@ -4859,9 +4861,11 @@ def generate_screen_time_card(child, report, policy, all_children=None):
         f"🔓 Telefon ochilgan: **{unlock_count} marta**\n\n"
         f"📊 **Eng ko'p ishlatilgan ilovalar:**\n"
         f"{apps_text}\n\n"
-        f"🛑 **Qurilma holati:** {lock_status_text}\n"
+        f"🛑 **Ilovalar holati:** {lock_status_text}\n"
+        f"🌐 **Internet holati:** {net_status_text}\n"
+        f"{bedtime_info}"
         f"🛡 **Sozlamalar himoyasi:** {anti_un_status}\n\n"
-        f"ℹ️ _Quyidagi tugmalar orqali barcha ilovalarni darhol bloklashingiz yoki har bir ilovani alohida sozlashingiz mumkin:_"
+        f"ℹ️ _Quyidagi tugmalar orqali ilovalarni yoki internetni bir zumda bloklashingiz, internetsiz SMS buyruqlarni yuborishingiz mumkin:_"
     )
 
     buttons = []
@@ -4879,8 +4883,16 @@ def generate_screen_time_card(child, report, policy, all_children=None):
     else:
         buttons.append([InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")])
 
+    if policy.is_network_restricted:
+        buttons.append([InlineKeyboardButton(text="🌐 Internetni Tiklash (Online)", callback_data=f"toggle_net_lock:{child.id}")])
+    else:
+        buttons.append([InlineKeyboardButton(text="📴 Internetni Cheklash (Offline)", callback_data=f"toggle_net_lock:{child.id}")])
+
+    buttons.append([
+        InlineKeyboardButton(text="✉️ Oflayn SMS Buyruqlar", callback_data=f"sms_controls:{child.id}"),
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"st_refresh:{child.id}")
+    ])
     buttons.append([InlineKeyboardButton(text="⚙️ Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))])
-    buttons.append([InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"st_refresh:{child.id}")])
 
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -4964,66 +4976,75 @@ async def st_refresh_callback_handler(callback: CallbackQuery):
             await callback.answer("🔄 Yangilandi!")
         except Exception:
             await callback.answer("O'zgarish yo'q.")
-    """View child screen time, daily app usage stats, and master lock toggle."""
-    user_id = message.from_user.id
+
+@router.callback_query(F.data.startswith("toggle_net_lock:"))
+async def toggle_net_lock_callback_handler(callback: CallbackQuery):
+    """Handle 1-tap toggle network lockdown (Local VPN Firewall) from Telegram."""
+    child_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
-        user = await crud.get_user(session, user_id)
-        if not user or user.role != "parent":
-            await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
-            return
-
-        children = await crud.get_children_for_parent(session, user_id)
-        if not children:
-            await message.answer(
-                "👶 Sizga hali farzand ulanmagan.\n"
-                "Iltimos, avval farzandingiz telefonida botga ulanish kodini kiriting.",
-                reply_markup=get_parent_main_keyboard(user_id)
-            )
-            return
-
-        child = children[0]
-        report = await crud.get_app_usage_report_today(session, child.id)
-        policy = await crud.get_or_create_device_policy(session, child.id)
-
-        apps_list = report.get("apps", [])
-        apps_text_lines = []
-        for i, app in enumerate(apps_list[:6], 1):
-            name = app.get("app_name", "Ilova")
-            sec = app.get("usage_seconds", 0)
-            h = sec // 3600
-            m = (sec % 3600) // 60
-            dur_str = f"{h}s {m}d" if h > 0 else f"{m} daqiqa"
-            is_bl = app.get("is_blocked", False)
-            bl_icon = "🛑 BLOKLANGAN" if is_bl else "🟢 Faol"
-            apps_text_lines.append(f"{i}. **{name}** — `{dur_str}` ({bl_icon})")
-
-        apps_section = "\n".join(apps_text_lines) if apps_text_lines else "Hozircha ilovalar ochilmagan"
-
-        lock_status_text = "🛑 **BARCHA ILOVALAR BLOKLANGAN (Dars / Uyqu)**" if policy.is_all_apps_blocked else "🟢 **Ochiq (Cheklovsiz)**"
-        anti_un_status = "🔒 **Faol** _(Bola sozlamalardan ruxsatlarni o'chira olmaydi)_" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
-
-        msg_text = (
-            f"📱 **FARZANDINGIZNING TELEFON ISHLATISH STATISTIKASI (BUGUN)**\n\n"
-            f"👤 Farzand: **{child.full_name or 'Farzand'}**\n"
-            f"⏱ Jami ekran vaqti: **{report.get('total_screen_time_formatted', '0 daqiqa')}**\n"
-            f"🔓 Telefon ochilgan: **{report.get('unlock_count', 0)} marta**\n\n"
-            f"📊 **Eng ko'p ishlatilgan ilovalar:**\n"
-            f"{apps_section}\n\n"
-            f"🛑 **Qurilma holati:** {lock_status_text}\n"
-            f"🛡 **Sozlamalar himoyasi:** {anti_un_status}\n\n"
-            f"ℹ️ _Quyidagi tugmalar orqali barcha ilovalarni darhol bloklashingiz yoki har bir ilovani alohida sozlashingiz mumkin:_"
+        policy = await crud.get_or_create_device_policy(session, child_id)
+        new_state = not bool(policy.is_network_restricted)
+        updated_policy = await crud.update_device_policy(
+            session=session,
+            child_id=child_id,
+            is_network_restricted=new_state
         )
+        status_msg = "📴 Internet cheklandi (Offline rejim yoqildi)!" if new_state else "🌐 Internet cheklovi yechildi (Online tiklandi)!"
+        await callback.answer(status_msg, show_alert=True)
 
-        buttons = []
-        if policy.is_all_apps_blocked:
-            buttons.append([InlineKeyboardButton(text="✅ Barcha ilovalarni ochish (Ruxsat berish)", callback_data=f"unlock_all:{child.id}")])
-        else:
-            buttons.append([InlineKeyboardButton(text="🛑 Barcha ilovalarni bloklash (Dars / Uyqu)", callback_data=f"lock_all:{child.id}")])
+        child = await crud.get_user(session, child_id)
+        children = await crud.get_children_for_parent(session, callback.from_user.id)
+        report = await crud.get_app_usage_report_today(session, child_id)
+        text, kb = generate_screen_time_card(child, report, updated_policy, children)
+        try:
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        except Exception:
+            pass
 
-        buttons.append([InlineKeyboardButton(text="📱 Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))])
 
-        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
-        await message.answer(msg_text, reply_markup=kb, parse_mode="Markdown")
+@router.callback_query(F.data.startswith("sms_controls:"))
+async def sms_controls_callback_handler(callback: CallbackQuery):
+    """Display encrypted offline SMS fallback instructions and templates."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name or f"Farzand #{child_id}" if child else "Farzand"
+        policy = await crud.get_or_create_device_policy(session, child_id)
+        pin_hint = "1234 (standart)" if not policy.parent_pin_hash else "Siz o'rnatgan 4 xonali PIN"
+
+        text = (
+            f"✉️ **INTERNETSIZ (OFLAYN) SMS BUYRUQLAR**\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Farzand: **{child_name}**\n"
+            f"🔑 Xavfsizlik PIN-kodi: `{pin_hint}`\n\n"
+            f"Agar bolaning telefonida **internet (Wi-Fi / Mobile Data) butunlay o'chirilgan** bo'lsa, "
+            f"siz bolaning telefon raqamiga oddiy SMS yuborish orqali boshqarishingiz mumkin:\n\n"
+            f"• `#LOCK:PIN` — Telefonni internetsiz darhol to'liq bloklash.\n"
+            f"  *Misol:* `#LOCK:1234`\n\n"
+            f"• `#UNLOCK:PIN` — Barcha cheklovlarni yechish va ochish.\n"
+            f"  *Misol:* `#UNLOCK:1234`\n\n"
+            f"• `#GPS:PIN` — Farzand telefonidan internetsiz aniq **GPS koordinatalari** va batareyasini so'rash. "
+            f"Farzand telefoni darhol javob SMS orqali Google Maps havolasini qaytaradi!\n"
+            f"  *Misol:* `#GPS:1234`\n\n"
+            f"• `#SIREN:PIN` — Farzand telefonida qattiq signal (sirena) chalish.\n"
+            f"  *Misol:* `#SIREN:1234`\n\n"
+            f"ℹ️ _Farzand telefoni SMS ni olishi bilanoq (internetsiz) buyruqni bajaradi va ota-onaga hisobot beradi._"
+        )
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="⬅️ Ekran tahliliga qaytish",
+                        callback_data=f"st_child:{child_id}"
+                    )
+                ]
+            ]
+        )
+        try:
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.answer()
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("lock_all:"))

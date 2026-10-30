@@ -58,6 +58,28 @@ public class ChildTrackingService extends Service implements LocationListener {
     private double lastLon = 0.0;
     private float lastAccuracy = 15.0f;
 
+    // Kalman Filter State for Anti-Drift and smooth trajectory
+    private double kalmanLat = 0.0;
+    private double kalmanLon = 0.0;
+    private float kalmanVariance = -1f;
+
+    private double[] filterKalman(double lat, double lon, float accuracy) {
+        if (kalmanVariance < 0) {
+            kalmanLat = lat;
+            kalmanLon = lon;
+            kalmanVariance = accuracy * accuracy;
+            return new double[]{lat, lon};
+        }
+        float q = 3.0f; // 3 meters movement variance
+        kalmanVariance += q;
+        float r = Math.max(1.0f, accuracy * accuracy);
+        float k = kalmanVariance / (kalmanVariance + r);
+        kalmanLat += k * (lat - kalmanLat);
+        kalmanLon += k * (lon - kalmanLon);
+        kalmanVariance = (1 - k) * kalmanVariance;
+        return new double[]{kalmanLat, kalmanLon};
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -185,10 +207,29 @@ public class ChildTrackingService extends Service implements LocationListener {
     public void onLocationChanged(Location location) {
         if (location == null) return;
 
-        double lat = location.getLatitude();
-        double lon = location.getLongitude();
+        // Anti-Spoofing: Detect Mock Locations
+        boolean isMock = false;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                isMock = location.isMock();
+            } else {
+                isMock = location.isFromMockProvider();
+            }
+        } catch (Exception ignored) {}
+
+        if (isMock) {
+            Log.w(TAG, "⚠️ ALERT: Mock (fake) location detected on child device!");
+        }
+
+        double rawLat = location.getLatitude();
+        double rawLon = location.getLongitude();
         float accuracy = location.getAccuracy();
         int speedKmh = Math.round(location.getSpeed() * 3.6f);
+
+        // Apply Kalman filter for centimeter-smooth trajectory without stationary drift
+        double[] filtered = filterKalman(rawLat, rawLon, accuracy);
+        double lat = filtered[0];
+        double lon = filtered[1];
 
         lastLat = lat;
         lastLon = lon;
@@ -243,11 +284,77 @@ public class ChildTrackingService extends Service implements LocationListener {
 
             if (success) {
                 lastSentTime = System.currentTimeMillis();
-                Log.d(TAG, "Sent background GPS telemetry (" + lat + ", " + lon + ") SUCCESS");
+                Log.d(TAG, "Sent live GPS telemetry (" + lat + ", " + lon + ") SUCCESS");
+                // Flush any previously stored offline locations
+                flushOfflineBatch(primaryBase, childId);
+            } else {
+                // OFFLINE-FIRST: Log GPS to local SQLite cache
+                if (lat != 0.0 && lon != 0.0) {
+                    OfflineDbHelper.getInstance(this).insertLocation(
+                            childId, lat, lon, accuracy, speedKmh, batteryLevel, isCharging, soundMode, false, System.currentTimeMillis()
+                    );
+                    Log.d(TAG, "Offline GPS logged to SQLite cache. Total unsynced: " + OfflineDbHelper.getInstance(this).getUnsyncedCount());
+                }
             }
         } catch (Exception e) {
             Log.w(TAG, "Failed to send background GPS telemetry: " + e.getMessage());
         }
+    }
+
+    private void flushOfflineBatch(String baseUrl, String childId) {
+        final OfflineDbHelper db = OfflineDbHelper.getInstance(this);
+        int unsynced = db.getUnsyncedCount();
+        if (unsynced == 0) return;
+
+        scheduler.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    org.json.JSONArray batch = db.getUnsyncedBatch(100);
+                    if (batch.length() == 0) return;
+
+                    long maxId = -1;
+                    for (int i = 0; i < batch.length(); i++) {
+                        long dbId = batch.getJSONObject(i).optLong("db_id", -1);
+                        if (dbId > maxId) maxId = dbId;
+                    }
+
+                    JSONObject req = new JSONObject();
+                    req.put("child_id", childId);
+                    req.put("points", batch);
+
+                    byte[] batchData = req.toString().getBytes(StandardCharsets.UTF_8);
+                    String cleanBase = (baseUrl != null && !baseUrl.trim().isEmpty()) ? baseUrl.trim() : DEFAULT_SERVER_URL;
+                    cleanBase = cleanBase.replaceAll("/+$", "");
+                    String endpoint = cleanBase + "/api/v1/webapp/child/" + childId.trim() + "/location/batch";
+
+                    URL url = new URL(endpoint);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                    conn.setRequestProperty("Accept", "application/json");
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(15000);
+                    conn.setDoOutput(true);
+
+                    try (OutputStream os = conn.getOutputStream()) {
+                        os.write(batchData);
+                        os.flush();
+                    }
+
+                    int code = conn.getResponseCode();
+                    if (code >= 200 && code < 300) {
+                        if (maxId > 0) {
+                            db.deleteSyncedRecords(maxId);
+                            Log.i(TAG, "Successfully synced " + batch.length() + " offline GPS points to server!");
+                        }
+                    }
+                    conn.disconnect();
+                } catch (Exception e) {
+                    Log.w(TAG, "Batch flush note: " + e.getMessage());
+                }
+            }
+        });
     }
 
     private boolean postTelemetry(String baseUrl, String childId, byte[] postData) {
@@ -297,6 +404,15 @@ public class ChildTrackingService extends Service implements LocationListener {
                         }
                         if (pol.has("anti_uninstall_enabled")) {
                             ed.putBoolean("anti_uninstall_enabled", pol.getBoolean("anti_uninstall_enabled"));
+                        }
+                        if (pol.has("is_network_restricted")) {
+                            boolean netRestricted = pol.getBoolean("is_network_restricted");
+                            ed.putBoolean("is_network_restricted", netRestricted);
+                            if (netRestricted) {
+                                LocalVpnService.startLockdown(ChildTrackingService.this);
+                            } else {
+                                LocalVpnService.stopLockdown(ChildTrackingService.this);
+                            }
                         }
                         ed.apply();
                     }
