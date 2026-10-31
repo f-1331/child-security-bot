@@ -347,7 +347,9 @@ let parentUsername = null;
 let lastSosAlertState = false;
 
 // High-accuracy device GPS acquisition with cache suppression to avoid repeated prompts
-let cachedDeviceLocation = null;
+let cachedDeviceLocation = (() => {
+  try { return JSON.parse(localStorage.getItem("last_known_device_location") || "null"); } catch(e) { return null; }
+})();
 let lastLocationFetchTime = 0;
 
 async function getDeviceLocation() {
@@ -408,6 +410,7 @@ async function getDeviceLocation() {
       resolved = true;
       if (loc && typeof loc.latitude === "number") {
         cachedDeviceLocation = loc;
+        try { localStorage.setItem("last_known_device_location", JSON.stringify(loc)); } catch(e){}
         lastLocationFetchTime = Date.now();
         resolve(cachedDeviceLocation);
       } else {

@@ -1,6 +1,7 @@
 // Child Security Service Worker (PWA 100% Offline Resilience & Background Sync)
 const CACHE_NAME = "child-security-v17";
 const API_CACHE_NAME = "child-security-api-v17";
+const TILES_CACHE_NAME = "child-security-tiles-v17";
 
 const STATIC_ASSETS = [
   "/",
@@ -42,7 +43,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME && key !== API_CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== API_CACHE_NAME && key !== TILES_CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -105,6 +106,40 @@ self.addEventListener("fetch", (event) => {
               return res;
             })
             .catch(() => cached || new Response("", { status: 200 }));
+        })
+      );
+      return;
+    }
+
+    // 2.5 Handle Map Tiles (OpenStreetMap, ArcGIS Satellite, Carto) - 100% Offline Map Support
+    if (
+      url.hostname.includes("tile.openstreetmap.org") ||
+      url.hostname.includes("arcgisonline.com") ||
+      url.hostname.includes("cartocdn.com") ||
+      url.pathname.includes("/tile/")
+    ) {
+      event.respondWith(
+        caches.open(TILES_CACHE_NAME).then(async (tilesCache) => {
+          const cachedTile = await tilesCache.match(req);
+          if (cachedTile) return cachedTile;
+
+          try {
+            const networkTile = await fetch(req);
+            if (networkTile && networkTile.status === 200) {
+              tilesCache.put(req, networkTile.clone());
+            }
+            return networkTile;
+          } catch (err) {
+            if (cachedTile) return cachedTile;
+            // High-tech dark tactical grid tile fallback with coordinates grid
+            const offlineSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect width="256" height="256" fill="#0f172a"/><path d="M0 64H256M0 128H256M0 192H256M64 0V256M128 0V256M192 0V256" stroke="#1e293b" stroke-width="1"/><circle cx="128" cy="128" r="3" fill="#38bdf8" opacity="0.4"/><text x="128" y="138" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="9" fill="#475569" font-weight="bold" text-anchor="middle">📡 Oflayn Xarita</text></svg>`;
+            return new Response(offlineSvg, {
+              headers: {
+                "Content-Type": "image/svg+xml",
+                "Cache-Control": "public, max-age=604800"
+              }
+            });
+          }
         })
       );
       return;
