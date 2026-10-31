@@ -3256,7 +3256,7 @@ function renderFencesToMapAndList(fences) {
         radius: fence.radius_meters,
       }).addTo(map);
 
-      circle.bindTooltip(`📍 ${fence.name} (${Math.round(fence.radius_meters)}m)`, {
+      circle.bindTooltip(`📍 ${escapeHtml(fence.name)} (${Math.round(fence.radius_meters)}m)`, {
         permanent: true,
         direction: "top",
         className: "geofence-tooltip",
@@ -3277,13 +3277,13 @@ function renderFencesToMapAndList(fences) {
             <i data-lucide="map-pin" class="w-4 h-4"></i>
           </div>
           <div>
-            <h4 class="text-xs font-bold text-white">${f.name}</h4>
+            <h4 class="text-xs font-bold text-white">${escapeHtml(f.name)}</h4>
             <span class="text-[11px] text-slate-400">Radiusi: ${Math.round(f.radius_meters)} metr</span>
           </div>
         </div>
         ${
           isChild
-            ? `<button onclick="openChildZoneOnMap('${f.id}', ${f.latitude || 0}, ${f.longitude || 0}, '${(f.name || '').replace(/'/g, "\\'")}', ${f.radius_meters || 100})" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>Xaritada</span> 🗺️</button>`
+            ? `<button onclick="openChildZoneOnMap('${f.id}', ${f.latitude || 0}, ${f.longitude || 0}, '${escapeHtml(f.name || '').replace(/'/g, "\\'")}', ${f.radius_meters || 100})" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>Xaritada</span> 🗺️</button>`
             : `<button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>`
@@ -5008,7 +5008,7 @@ function renderChildDashboardQuests() {
       <div class="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center justify-between gap-2 hover:border-slate-700 transition">
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
-            <span class="text-xs font-bold text-white truncate">${t.title || 'Missiya'}</span>
+            <span class="text-xs font-bold text-white truncate">${escapeHtml(t.title) || 'Missiya'}</span>
             <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${statusClass}">${statusText}</span>
           </div>
           <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -5819,13 +5819,13 @@ function renderTasksList() {
       <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3.5 shadow-md flex flex-col justify-between transition hover:border-slate-600">
         <div>
           <div class="flex items-start justify-between gap-2">
-            <h3 class="text-xs font-bold text-white">${t.title}</h3>
+            <h3 class="text-xs font-bold text-white">${escapeHtml(t.title)}</h3>
             <div class="flex items-center gap-1.5 shrink-0">
               ${statusBadge}
               ${!isChild ? `<button onclick="deleteTask(${t.id})" class="p-1 text-slate-400 hover:text-red-400 active:scale-90 transition rounded-lg hover:bg-red-500/10" title="Vazifani o'chirish"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>` : ''}
             </div>
           </div>
-          ${t.description ? `<p class="text-[11px] text-slate-300 mt-1">${t.description}</p>` : ''}
+          ${t.description ? `<p class="text-[11px] text-slate-300 mt-1">${escapeHtml(t.description)}</p>` : ''}
           <div class="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-700/60">
             <div class="flex items-center gap-1.5 text-xs font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl shadow-sm">
               <i data-lucide="coins" class="w-3.5 h-3.5 text-amber-400"></i>
@@ -5859,7 +5859,8 @@ async function deleteTask(taskId) {
   }
 
   try {
-    const res = await fetch(`/api/v1/webapp/task/${taskId}?parent_id=${parentId}`, { method: "DELETE" });
+    const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
+    const res = await fetch(`/api/v1/webapp/task/${taskId}?parent_id=${effectiveParentId || ''}`, { method: "DELETE" });
     const data = await res.json();
     if (data.status === "success") {
       tasksList = tasksList.filter(t => t.id != taskId);
@@ -6388,7 +6389,8 @@ async function approveTask(taskId) {
       return;
     }
 
-    const approveUrl = parentId ? `/api/v1/webapp/task/${taskId}/approve?parent_id=${parentId}` : `/api/v1/webapp/task/${taskId}/approve`;
+    const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
+    const approveUrl = `/api/v1/webapp/task/${taskId}/approve?parent_id=${effectiveParentId || ''}`;
     const res = await fetch(approveUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
@@ -6413,7 +6415,8 @@ async function rejectTask(taskId) {
       return;
     }
 
-    const rejectUrl = parentId ? `/api/v1/webapp/task/${taskId}/reject?parent_id=${parentId}` : `/api/v1/webapp/task/${taskId}/reject`;
+    const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
+    const rejectUrl = `/api/v1/webapp/task/${taskId}/reject?parent_id=${effectiveParentId || ''}`;
     const res = await fetch(rejectUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {

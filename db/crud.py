@@ -1,10 +1,15 @@
 import math
 import random
+import secrets
 import string
+import hmac
+import hashlib
+import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple
 from sqlalchemy import desc, select, and_, or_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from config import settings
 from db.models import (
     User,
     ParentChildLink,
@@ -17,8 +22,6 @@ from db.models import (
     ChildDevicePolicy,
     AppUsageReport,
 )
-import json
-import hashlib
 
 
 async def get_user(session: AsyncSession, user_id: int) -> Optional[User]:
@@ -87,8 +90,8 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
         await session.commit()
         return user.web_access_code
 
-    # Generate permanent 6-digit numeric code
-    code = "".join(random.choices(string.digits, k=6))
+    # Generate permanent 6-digit numeric code with cryptographically secure PRNG
+    code = "".join(secrets.choice(string.digits) for _ in range(6))
     user.pairing_code = code
     user.web_access_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
@@ -129,9 +132,9 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
         if user.web_access_code not in parent_codes:
             return user.web_access_code
 
-    # Generate unique 6-digit code specifically for this child
+    # Generate unique 6-digit code specifically for this child with secure PRNG
     for _ in range(20):
-        code = "".join(random.choices(string.digits, k=6))
+        code = "".join(secrets.choice(string.digits) for _ in range(6))
         existing = await session.execute(
             select(User).where((User.web_access_code == code) | (User.pairing_code == code))
         )
@@ -1343,7 +1346,7 @@ async def force_regenerate_user_code(session: AsyncSession, user_id: int) -> Opt
     if user.role == "parent":
         for _ in range(30):
             chars = string.ascii_uppercase + string.digits
-            new_code = "".join(random.choices(chars, k=6))
+            new_code = "".join(secrets.choice(chars) for _ in range(6))
             existing = await session.execute(
                 select(User).where((User.pairing_code == new_code) | (User.web_access_code == new_code))
             )
@@ -1354,7 +1357,7 @@ async def force_regenerate_user_code(session: AsyncSession, user_id: int) -> Opt
                 return new_code
     else:
         for _ in range(30):
-            new_code = "".join(random.choices(string.digits, k=6))
+            new_code = "".join(secrets.choice(string.digits) for _ in range(6))
             existing = await session.execute(
                 select(User).where((User.web_access_code == new_code) | (User.pairing_code == new_code))
             )
@@ -1400,8 +1403,9 @@ async def get_all_user_ids_by_role(session: AsyncSession, role: Optional[str] = 
 # ==============================================================================
 
 def hash_parent_pin(pin: str) -> str:
-    """Hash 4-digit parent PIN using SHA-256."""
-    return hashlib.sha256(str(pin).strip().encode()).hexdigest()
+    """Hash 4-digit parent PIN using HMAC-SHA256 with server-side secret salt."""
+    salt = (getattr(settings, "BOT_TOKEN", None) or "child_sec_pin_salt_2026")[:32].encode("utf-8")
+    return hmac.new(salt, str(pin).strip().encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 DEFAULT_POPULAR_APPS = [
@@ -1502,11 +1506,24 @@ async def update_device_policy(
 
 
 async def verify_parent_pin(session: AsyncSession, child_id: int, pin: str) -> bool:
-    """Verify 4-digit parent PIN for sensitive device settings and app unlocking."""
+    """Verify 4-digit parent PIN for sensitive device settings and app unlocking using timing-safe comparison."""
     policy = await get_or_create_device_policy(session, child_id)
-    if not policy.parent_pin_hash:
+    if not policy or not policy.parent_pin_hash:
         return True
-    return policy.parent_pin_hash == hash_parent_pin(pin)
+
+    clean_pin = str(pin).strip()
+    expected_salted = hash_parent_pin(clean_pin)
+    if hmac.compare_digest(policy.parent_pin_hash, expected_salted):
+        return True
+
+    # Backward compatibility with legacy unsalted SHA-256 with auto-upgrade
+    legacy_hash = hashlib.sha256(clean_pin.encode("utf-8")).hexdigest()
+    if hmac.compare_digest(policy.parent_pin_hash, legacy_hash):
+        policy.parent_pin_hash = expected_salted
+        await session.commit()
+        return True
+
+    return False
 
 
 async def set_parent_pin(session: AsyncSession, child_id: int, pin: str) -> bool:

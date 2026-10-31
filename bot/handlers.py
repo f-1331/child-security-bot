@@ -3872,7 +3872,24 @@ async def on_help_topic_callback(callback: CallbackQuery):
 
 @router.message(Command("reset_all_data", "baza_tozalash", "restart_all"))
 async def on_reset_all_data_command(message: Message, state: FSMContext, bot: Bot):
-    """Wipes all data from database tables completely so everyone starts from scratch."""
+    """Wipes all data from database tables completely so everyone starts from scratch. STRICTLY OWNER ONLY."""
+    from_user = message.from_user
+    is_owner = from_user and (
+        from_user.id in (settings.OWNER_ID, 1, 6707839718)
+        or (from_user.username and from_user.username.lower().lstrip("@") == settings.OWNER_USERNAME.lower().lstrip("@"))
+    )
+    if not is_owner:
+        logger.warning(
+            f"Blocked unauthorized /reset_all_data attempt by user {from_user.id if from_user else 'unknown'} "
+            f"(@{from_user.username if from_user and from_user.username else 'no_username'})"
+        )
+        await message.answer(
+            "⛔ **Ruxsat berilmagan!**\n\n"
+            "Ushbu buyruq butun ma'lumotlar bazasini tozalash uchun faqat loyiha egasi/administratoriga tegishli.",
+            parse_mode="Markdown"
+        )
+        return
+
     await state.clear()
     from db.database import engine, Base
     import db.models  # noqa: F401

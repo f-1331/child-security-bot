@@ -44,12 +44,39 @@ def format_utc_iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat()
 
 
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP safely behind reverse proxies (Cloudflare, Render, etc.)."""
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+    x_forwarded_for = request.headers.get("X-Forwarded-For")
+    if x_forwarded_for:
+        return x_forwarded_for.split(",")[0].strip()
+    x_real_ip = request.headers.get("X-Real-IP")
+    if x_real_ip:
+        return x_real_ip.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
 class ConnectionManager:
     """Manages real-time WebSocket connections between parents and children."""
+    MAX_CONCURRENT_PER_USER = 5
+
     def __init__(self):
         self.active_connections: dict[int, set[WebSocket]] = defaultdict(set)
 
     async def connect(self, user_id: int, websocket: WebSocket):
+        if len(self.active_connections[user_id]) >= self.MAX_CONCURRENT_PER_USER:
+            # Drop oldest connection to mitigate connection exhaustion DoS
+            oldest = next(iter(self.active_connections[user_id]))
+            try:
+                await oldest.close(code=1008, reason="Too many concurrent connections")
+            except Exception:
+                pass
+            self.active_connections[user_id].discard(oldest)
+
         await websocket.accept()
         self.active_connections[user_id].add(websocket)
 
@@ -228,19 +255,19 @@ class TelegramAuthRequest(BaseModel):
 
 class ChildSOSRequest(BaseModel):
     is_sos_active: bool = True
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    accuracy: Optional[float] = None
-    battery_level: Optional[int] = None
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    accuracy: Optional[float] = Field(None, ge=0.0, le=100000.0)
+    battery_level: Optional[int] = Field(None, ge=0, le=100)
 
 
 class TamperAlertRequest(BaseModel):
-    event_type: str = Field(..., description="Tamper type: INTRUDER_PIN_BRUTE_FORCE, CLOCK_MANIPULATION, ACCESSIBILITY_DISABLED, ADMIN_DISABLED, MOCK_LOCATION")
-    details: Optional[str] = "Xavfsizlik qoidabuzarligi aniqlandi"
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    battery_level: Optional[int] = None
-    device_model: Optional[str] = None
+    event_type: str = Field(..., max_length=100, description="Tamper type: INTRUDER_PIN_BRUTE_FORCE, CLOCK_MANIPULATION, ACCESSIBILITY_DISABLED, ADMIN_DISABLED, MOCK_LOCATION")
+    details: Optional[str] = Field("Xavfsizlik qoidabuzarligi aniqlandi", max_length=500)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    battery_level: Optional[int] = Field(None, ge=0, le=100)
+    device_model: Optional[str] = Field(None, max_length=100)
 
 
 class DevicePolicyUpdateRequest(BaseModel):
@@ -382,7 +409,7 @@ async def verify_auth_code_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Verify web access code or pairing code with rate limiting."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     allowed, retry_after = rate_limiter.check_auth_rate_limit(client_ip)
     if not allowed:
         raise HTTPException(
@@ -413,7 +440,7 @@ async def generate_web_code_endpoint(
     Generate a new 6-digit access code directly from the website.
     Still actively suggests connecting via Telegram bot for full push notifications & SOS features.
     """
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     allowed, retry_after = rate_limiter.check_code_gen_rate_limit(client_ip)
     if not allowed:
         raise HTTPException(
@@ -525,7 +552,14 @@ async def get_coin_rate_endpoint(user_id: int, session: AsyncSession = Depends(g
 
 @router.post("/coin-rate")
 async def update_coin_rate_endpoint(payload: UpdateCoinRateRequest, session: AsyncSession = Depends(get_db)):
-    """Update coin rate settings and notify linked children."""
+    """Update coin rate settings and notify linked children (Restricted to verified parents)."""
+    parent = await crud.get_user(session, payload.parent_id)
+    if not parent or parent.role != "parent":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan: Faqat ota-ona hisobi tangalar kursini o'zgartira oladi."
+        )
+
     user = await crud.update_coin_rate(session, payload.parent_id, payload.coins, payload.som)
     if not user:
         raise HTTPException(status_code=404, detail="Parent not found")
@@ -766,7 +800,7 @@ async def delete_geofence_endpoint(
 @router.post("/upload")
 async def upload_file_endpoint(request: Request, file: UploadFile = File(...)):
     """Upload media file (photo or video) for task assignment or proof with rate limiting."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not rate_limiter.check_upload_rate_limit(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -863,10 +897,10 @@ class CreateTaskRequest(BaseModel):
     parent_id: int
     child_id: int
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, max_length=2000)
     reward_coins: int = Field(1000, ge=100, le=1000000)
-    media_type: Optional[str] = None
-    media_url: Optional[str] = None
+    media_type: Optional[str] = Field(None, max_length=50)
+    media_url: Optional[str] = Field(None, max_length=1000)
 
 
 @router.post("/task")
@@ -1096,14 +1130,14 @@ async def complete_task_endpoint(
 @router.post("/task/{task_id}/approve")
 async def approve_task_endpoint(
     task_id: int,
-    parent_id: Optional[int] = Query(None),
+    parent_id: int = Query(..., description="ID of the parent approving the task"),
     session: AsyncSession = Depends(get_db)
 ):
     """Approve a task directly from WebApp and notify child with IDOR parent validation."""
     existing_task = await crud.get_task_by_id(session, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if parent_id and existing_task.parent_id != parent_id:
+    if existing_task.parent_id != parent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
 
     task = await crud.approve_task(session, task_id)
@@ -1147,14 +1181,14 @@ async def approve_task_endpoint(
 @router.post("/task/{task_id}/reject")
 async def reject_task_endpoint(
     task_id: int,
-    parent_id: Optional[int] = Query(None),
+    parent_id: int = Query(..., description="ID of the parent rejecting the task"),
     session: AsyncSession = Depends(get_db)
 ):
     """Reject a task directly from WebApp and notify child with IDOR parent validation."""
     existing_task = await crud.get_task_by_id(session, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if parent_id and existing_task.parent_id != parent_id:
+    if existing_task.parent_id != parent_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
 
     task = await crud.reject_task(session, task_id)
@@ -1188,10 +1222,15 @@ async def reject_task_endpoint(
 @router.delete("/task/{task_id}")
 async def delete_task_endpoint(
     task_id: int,
-    parent_id: Optional[int] = Query(None),
+    parent_id: int = Query(..., description="ID of the parent deleting the task"),
     session: AsyncSession = Depends(get_db)
 ):
-    """Delete a task."""
+    """Delete a task with strict IDOR verification."""
+    existing_task = await crud.get_task_by_id(session, task_id)
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Vazifa topilmadi")
+    if existing_task.parent_id != parent_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
     success = await crud.delete_task(session, task_id, parent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Vazifa topilmadi yoki o'chirishga ruxsat yo'q")
@@ -1920,7 +1959,7 @@ async def upload_sos_snapshot_media(
     Accepts 5-second ambient audio recording or camera snapshot triggered on SOS.
     Dispatches directly to linked parents via Telegram voice memo or photo with rate limiting and validation.
     """
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = get_client_ip(request)
     if not rate_limiter.check_upload_rate_limit(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -2405,19 +2444,30 @@ async def update_child_device_policy_endpoint(
         effective_parent_id = parent_ids[0]
 
     if parent_ids:
-        if effective_parent_id and effective_parent_id not in parent_ids:
+        if not effective_parent_id or effective_parent_id not in parent_ids:
             logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {effective_parent_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz yoki ota-ona identifikatori berilmagan."
             )
     elif effective_parent_id:
+        parent_user = await crud.get_user(session, effective_parent_id)
+        if not parent_user or parent_user.role != "parent":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Noto'g'ri ota-ona identifikatori."
+            )
         try:
             await crud.link_parent_child(session, effective_parent_id, child_id)
             parents = await crud.get_parents_for_child(session, child_id)
             parent_ids = [effective_parent_id]
         except Exception as e:
             logger.warning(f"Auto-link parent error on policy update: {e}")
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ota-ona identifikatori (parent_id) ko'rsatilishi shart."
+        )
 
     policy = await crud.update_device_policy(
         session=session,

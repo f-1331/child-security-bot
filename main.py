@@ -1,12 +1,14 @@
 import asyncio
+import hmac
 import logging
 import os
 import platform
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Header, Query
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -161,6 +163,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Content-Security-Policy"] = (
             "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app;"
         )
@@ -192,7 +195,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"^https://child-security-bot(-[a-zA-Z0-9_-]+)?\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
@@ -236,8 +239,24 @@ async def trigger_sentry_debug_error():
 
 
 @app.get("/api/system/logs", tags=["System"], include_in_schema=False)
-async def get_system_logs():
-    """Retrieve recent server execution logs for remote diagnosis."""
+async def get_system_logs(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    admin_key: Optional[str] = Query(None)
+):
+    """Retrieve recent server execution logs for remote diagnosis (Strictly authenticated)."""
+    expected_token = (settings.BOT_TOKEN or "")[:32]
+    expected_owner_token = (settings.OWNER_BOT_TOKEN or "")[:32]
+    key = x_admin_key or admin_key or ""
+
+    is_valid = False
+    if key and expected_token and hmac.compare_digest(key, expected_token):
+        is_valid = True
+    elif key and expected_owner_token and hmac.compare_digest(key, expected_owner_token):
+        is_valid = True
+
+    if not is_valid:
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan: Noto'g'ri administrator kaliti")
+
     from owner_bot.logger_buffer import get_recent_logs
     return {"logs": get_recent_logs(50)}
 
