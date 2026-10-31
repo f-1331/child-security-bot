@@ -218,113 +218,121 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 22:00 Nightly Safety Report (Dispatched at 22:00 Tashkent time, exactly once per day)
-            if now_tz.hour >= 22 and last_sent_date != today_str:
-                logger.info(f"Triggering nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
-                async with AsyncSessionLocal() as session:
-                    from sqlalchemy import select
-                    from db.models import User
-                    parents_res = await session.execute(
-                        select(User).where(User.role == "parent")
-                    )
-                    parents = list(parents_res.scalars().all())
+            # 1. 00:00 Midnight Safety Report (Dispatched at EXACTLY 00:00 Tashkent time, exactly once per day at midnight)
+            if now_tz.hour == 0:
+                if now_tz.minute == 0:
+                    if last_sent_date != today_str:
+                        logger.info(f"Triggering midnight safety reports for {today_str} (Local Tashkent time: 00:00:00)...")
+                        async with AsyncSessionLocal() as session:
+                            from sqlalchemy import select
+                            from db.models import User
+                            parents_res = await session.execute(
+                                select(User).where(User.role == "parent")
+                            )
+                            parents = list(parents_res.scalars().all())
 
-                    for p in parents:
-                        children = await crud.get_children_for_parent(session, p.id)
-                        if not children:
-                            continue
-                        for ch in children:
-                            try:
-                                rep = await crud.generate_daily_safety_report(session, ch.id)
-                                c_name = html.escape(rep["child_name"])
-                                zones_list = rep["visited_zones"]
-                                if zones_list:
-                                    zones_str = " ➔ ".join([
-                                        f"{html.escape(z['name'])} ({z.get('points_str', z.get('points_inside', 1))} marta)"
-                                        if z.get('points_inside', 0) > 1 else html.escape(z["name"])
-                                        for z in zones_list
-                                    ])
-                                    est_time = sum(z["est_minutes"] for z in zones_list)
-                                    hours = est_time // 60
-                                    mins = est_time % 60
-                                    time_str = f"{hours} soat {mins} daqiqa" if hours > 0 else f"{mins} daqiqa"
-                                else:
-                                    zones_str = "Hali qayd etilmagan"
-                                    time_str = "0 daqiqa"
+                            for p in parents:
+                                children = await crud.get_children_for_parent(session, p.id)
+                                if not children:
+                                    continue
+                                for ch in children:
+                                    try:
+                                        rep = await crud.generate_daily_safety_report(session, ch.id)
+                                        c_name = html.escape(rep["child_name"])
+                                        zones_list = rep["visited_zones"]
+                                        if zones_list:
+                                            zones_str = " ➔ ".join([
+                                                f"{html.escape(z['name'])} ({z.get('points_str', z.get('points_inside', 1))} marta)"
+                                                if z.get('points_inside', 0) > 1 else html.escape(z["name"])
+                                                for z in zones_list
+                                            ])
+                                            est_time = sum(z["est_minutes"] for z in zones_list)
+                                            hours = est_time // 60
+                                            mins = est_time % 60
+                                            time_str = f"{hours} soat {mins} daqiqa" if hours > 0 else f"{mins} daqiqa"
+                                        else:
+                                            zones_str = "Hali qayd etilmagan"
+                                            time_str = "0 daqiqa"
 
-                                # Only include wishlist if configured by parent/child
-                                wishlist = rep.get("wishlist")
-                                if wishlist and wishlist.get("title") and wishlist.get("target_som", 0) > 0:
-                                    w_title = html.escape(wishlist.get("title"))
-                                    w_prog = wishlist.get("progress_percent", 0)
-                                    w_cur = wishlist.get("current_som", 0)
-                                    w_tgt = wishlist.get("target_som", 0)
-                                    wishlist_line = f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
-                                else:
-                                    wishlist_line = ""
+                                        # Only include wishlist if configured by parent/child
+                                        wishlist = rep.get("wishlist")
+                                        if wishlist and wishlist.get("title") and wishlist.get("target_som", 0) > 0:
+                                            w_title = html.escape(wishlist.get("title"))
+                                            w_prog = wishlist.get("progress_percent", 0)
+                                            w_cur = wishlist.get("current_som", 0)
+                                            w_tgt = wishlist.get("target_som", 0)
+                                            wishlist_line = f"🎯 <b>Orzular qutisi ({w_title}):</b> {w_prog}% ({w_cur:,} / {w_tgt:,} so'm)\n"
+                                        else:
+                                            wishlist_line = ""
 
-                                dist_str = rep.get("distance_formatted") or f"{rep.get('total_distance_km', 0)} km"
-                                batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
-                                spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
+                                        dist_str = rep.get("distance_formatted") or f"{rep.get('total_distance_km', 0)} km"
+                                        batt_str = f"{rep['battery_level']}%" if rep['battery_level'] is not None else "Noma'lum"
+                                        spd_str = f"{rep['max_speed_kmh']} km/soat" if rep['max_speed_kmh'] > 0 else "Piyoda"
 
-                                # Discipline Status Check (Demo child gets bonus demo coins; real children are rewarded by parents)
-                                tamper_events = telemetry.child_daily_tamper_log.get(ch.id, [])
-                                today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str)]
+                                        # Discipline Status Check
+                                        tamper_events = telemetry.child_daily_tamper_log.get(ch.id, [])
+                                        yesterday_str = (now_tz - timedelta(days=1)).strftime("%Y-%m-%d")
+                                        today_tamper = [ev for ev in tamper_events if ev.get("time", "").startswith(today_str) or ev.get("time", "").startswith(yesterday_str)]
 
-                                if len(today_tamper) == 0:
-                                    if ch.id == 2002:
-                                        await crud.add_coins_to_user(session, ch.id, 50)
-                                        discipline_line = "🎖️ <b>Kun Qahramoni (Demo):</b> Bugun hech qanday qoidabuzarlik qilinmadi (+50 tanga demo bonusi berildi)! 🌟\n"
-                                    else:
-                                        discipline_line = "🎖️ <b>Kun Qahramoni:</b> Bugun hech qanday qoidabuzarlik qilinmadi! 🌟\n"
-                                else:
-                                    discipline_line = f"⚠️ <b>Intizom holati:</b> Bugun {len(today_tamper)} ta qoidabuzarlik qayd etildi\n"
+                                        if len(today_tamper) == 0:
+                                            if ch.id == 2002:
+                                                await crud.add_coins_to_user(session, ch.id, 50)
+                                                discipline_line = "🎖️ <b>Kun Qahramoni (Demo):</b> Bugun hech qanday qoidabuzarlik qilinmadi (+50 tanga demo bonusi berildi)! 🌟\n"
+                                            else:
+                                                discipline_line = "🎖️ <b>Kun Qahramoni:</b> Bugun hech qanday qoidabuzarlik qilinmadi! 🌟\n"
+                                        else:
+                                            discipline_line = f"⚠️ <b>Intizom holati:</b> Bugun {len(today_tamper)} ta qoidabuzarlik qayd etildi\n"
 
-                                report_msg = (
-                                    f"🌙 <b>KUNLIK XAVFSIZLIK HISOBOTI (Soat {now_tz.strftime('%H:%M')})</b>\n"
-                                    f"━━━━━━━━━━━━━━━━━━━\n"
-                                    f"👤 <b>Farzand:</b> {c_name}\n\n"
-                                    f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
-                                    f"   └ {zones_str}\n\n"
-                                    f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
-                                    f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {dist_str} ({rep['points_count']} ta signal)\n"
-                                    f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
-                                    f"🔋 <b>Batareya quvvati:</b> {batt_str}\n\n"
-                                    f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
-                                    f"{wishlist_line}"
-                                    f"{discipline_line}"
-                                    f"━━━━━━━━━━━━━━━━━━━\n"
-                                    f"✨ <i>Farzandingiz xavfsizligi va kunlik intizomi to'liq nazoratda! Xayrli tun!</i>"
-                                )
-                                report_kb = InlineKeyboardMarkup(inline_keyboard=[
-                                    [
-                                        InlineKeyboardButton(
-                                            text="🗺 Xaritada marshrutni ko'rish",
-                                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                                        report_msg = (
+                                            f"🌙 <b>KUNLIK XAVFSIZLIK HISOBOTI (Soat 00:00)</b>\n"
+                                            f"━━━━━━━━━━━━━━━━━━━\n"
+                                            f"👤 <b>Farzand:</b> {c_name}\n\n"
+                                            f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
+                                            f"   └ {zones_str}\n\n"
+                                            f"⏱ <b>Xavfsiz joylarda bo'lgan vaqti:</b> {time_str}\n"
+                                            f"🚶‍♂️ <b>Kuzatilgan masofa:</b> {dist_str} ({rep['points_count']} ta signal)\n"
+                                            f"🚀 <b>Maksimal tezlik:</b> {spd_str}\n"
+                                            f"🔋 <b>Batareya quvvati:</b> {batt_str}\n\n"
+                                            f"✅ <b>Bajarilgan topshiriqlar:</b> {rep['completed_tasks_count']} ta (+{rep['earned_som']:,} so'm)\n"
+                                            f"{wishlist_line}"
+                                            f"{discipline_line}"
+                                            f"━━━━━━━━━━━━━━━━━━━\n"
+                                            f"✨ <i>Farzandingiz xavfsizligi va kunlik intizomi to'liq nazoratda! Xayrli tun!</i>"
                                         )
-                                    ],
-                                    [
-                                        InlineKeyboardButton(text="🔔 Baland signal chalish", callback_data=f"siren_child_{ch.id}"),
-                                        InlineKeyboardButton(text="🎁 +100 Tanga mukofot", callback_data=f"night_reward_{ch.id}_100")
-                                    ],
-                                    [
-                                        InlineKeyboardButton(text="🛌 Tungi uyqu rejimiga olish", callback_data=f"night_bedtime_{ch.id}")
-                                    ]
-                                ])
-                                await bot.send_message(chat_id=p.id, text=report_msg, reply_markup=report_kb, parse_mode="HTML")
-                            except Exception as ch_err:
-                                logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {p.id}: {ch_err}")
+                                        report_kb = InlineKeyboardMarkup(inline_keyboard=[
+                                            [
+                                                InlineKeyboardButton(
+                                                    text="🗺 Xaritada marshrutni ko'rish",
+                                                    web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                                                )
+                                            ],
+                                            [
+                                                InlineKeyboardButton(text="🔔 Baland signal chalish", callback_data=f"siren_child_{ch.id}"),
+                                                InlineKeyboardButton(text="🎁 +100 Tanga mukofot", callback_data=f"night_reward_{ch.id}_100")
+                                            ],
+                                            [
+                                                InlineKeyboardButton(text="🛌 Tungi uyqu rejimiga olish", callback_data=f"night_bedtime_{ch.id}")
+                                            ]
+                                        ])
+                                        await bot.send_message(chat_id=p.id, text=report_msg, reply_markup=report_kb, parse_mode="HTML")
+                                    except Exception as ch_err:
+                                        logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {p.id}: {ch_err}")
 
-                    await session.commit()
+                            await session.commit()
 
-                last_sent_date = today_str
-                _save_last_nightly_sent_date(today_str)
-                logger.info(f"Nightly safety reports dispatched for {today_str}.")
+                        last_sent_date = today_str
+                        _save_last_nightly_sent_date(today_str)
+                        logger.info(f"Nightly safety reports dispatched for {today_str} at 00:00.")
+                else:
+                    # If not minute 0, mark today handled so it never fires late if server boots at :15 or :44
+                    if last_sent_date != today_str:
+                        last_sent_date = today_str
+                        _save_last_nightly_sent_date(today_str)
 
-            # 1.5 Hourly Child Location Updates (Sent every 1 hour at EXACTLY :00 between 07:00 and 23:00 Tashkent time, skipping 22:00 which has nightly report)
+            # 1.5 Hourly Child Location Updates (Sent every 1 hour at EXACTLY :00 between 07:00 and 23:00 Tashkent time)
             current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
-            if 7 <= now_tz.hour <= 23 and now_tz.hour != 22:
-                # User requirement: If SOS is NOT active, only send at exact minute :00!
+            if 7 <= now_tz.hour <= 23:
+                # User requirement: ONLY send at EXACT minute :00!
                 if now_tz.minute == 0:
                     if last_hourly_slot != current_hour_slot:
                         logger.info(f"Triggering hourly location updates for {current_hour_slot} (Exact time: {now_tz.hour}:00)...")
