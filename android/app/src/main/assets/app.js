@@ -8350,6 +8350,7 @@ function handleTelegramBackPress() {
     { id: "modal-settings", close: closeSettingsModal },
     { id: "modalScreenTimeControl", close: closeScreenTimeControlModal },
     { id: "modalParentPinSetup", close: closeParentPinSetupModal },
+    { id: "modal-download-guide", close: closeDownloadSecurityModal },
     { id: "modalHelp", close: closeHelpModal },
     { id: "modalInstallApp", close: closeInstallAppModal },
     { id: "modalCallParent", close: closeCallParentModal },
@@ -9279,6 +9280,56 @@ async function triggerPwaInstall() {
       showToast("ℹ️ Brauzeringiz menyusidan 'Asosiy ekranga qo'shish'ni tanlang");
     }
   }
+}
+
+// Smart App Downloader with Telegram WebApp & Security Guidance
+function handleAppDownload(event, targetPath, platformName = "Android") {
+  if (event) {
+    try { event.preventDefault(); } catch (e) {}
+  }
+  haptic("heavy");
+
+  const fullUrl = targetPath.startsWith("http")
+    ? targetPath
+    : `https://child-security-bot.vercel.app${targetPath.startsWith('/') ? '' : '/'}${targetPath}`;
+
+  // 1. If inside Telegram WebApp, Telegram's in-app webview intercepts and blocks .apk downloads!
+  // We MUST use Telegram.WebApp.openLink so Chrome/external browser downloads it!
+  if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === "function") {
+    showToast("📥 Yuklab olish tashqi brauzerda ochilmoqda...");
+    try {
+      window.Telegram.WebApp.openLink(fullUrl);
+    } catch (e) {
+      window.open(fullUrl, "_blank");
+    }
+    showDownloadSecurityModal(platformName);
+    return false;
+  }
+
+  // 2. If running inside native Android bridge
+  if (window.AndroidBridge && typeof window.AndroidBridge.openExternalBrowser === "function") {
+    window.AndroidBridge.openExternalBrowser(fullUrl);
+    showDownloadSecurityModal(platformName);
+    return false;
+  }
+
+  // 3. Regular browser window
+  window.open(fullUrl, "_blank");
+  showDownloadSecurityModal(platformName);
+  return false;
+}
+
+function showDownloadSecurityModal(platformName = "Android") {
+  const modal = document.getElementById("modal-download-guide");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeDownloadSecurityModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-download-guide");
+  if (modal) modal.classList.add("hidden");
 }
 
 // =========================================================
