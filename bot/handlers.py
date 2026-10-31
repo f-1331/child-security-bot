@@ -97,6 +97,7 @@ from bot.keyboards import (
     get_logout_step1_keyboard,
     get_logout_step2_keyboard,
     get_coin_rate_preset_keyboard,
+    get_empty_children_kb,
 )
 
 logger = logging.getLogger(__name__)
@@ -341,8 +342,10 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     if parent.id == user_id:
                         await message.answer(
                             "ℹ️ **Bu sizning shaxsiy oilaviy kodingiz!**\n\n"
-                            "Ushbu kodni farzandingiz telefonida kiritishingiz kerak, shunda u hisobingizga ulanadi.",
-                            reply_markup=get_parent_main_keyboard(user_id),
+                            "Ushbu kodni farzandingiz telefonida botga kiritishingiz kerak.\n\n"
+                            "💡 Agar hozircha ikkinchi telefoningiz bo'lmasa yoki tizim imkoniyatlarini darhol sinab ko'rmoqchi bo'lsangiz, "
+                            "pastdagi **«🧪 Namuna farzand bilan sinash»** tugmasini bosing:",
+                            reply_markup=get_empty_children_kb(),
                             parse_mode="Markdown"
                         )
                         return
@@ -453,30 +456,50 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     "pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni ulab qo'yishingiz mumkin."
                 )
 
-            start_inline_kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="👨‍👩‍👧 Ota-ona (.apk)",
-                            callback_data="download_parent_apk"
-                        ),
-                        InlineKeyboardButton(
-                            text="👦 Farzand (.apk)",
-                            callback_data="download_child_apk"
-                        ),
-                        InlineKeyboardButton(
-                            text="💻 Noutbuk",
-                            callback_data="download_desktop"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text="🌐 Web App (Sayt)ni ochish",
-                            web_app=WebAppInfo(url=settings.MINI_APP_URL)
-                        )
-                    ]
+            start_buttons = []
+            demo_hint = ""
+            if len(children) == 0:
+                demo_hint = (
+                    "\n\n💡 **Tezkor sinov:** Sizda hali ulangan farzand hisobi yo'q. "
+                    "Tizimning barcha imkoniyatlarini (jonli xarita, ilovalar tahlili, batareya, topshiriqlar) "
+                    "darhol sinab ko'rish uchun **«🧪 Namuna farzand bilan sinash»** tugmasini bosing!"
+                )
+                start_buttons.append([
+                    InlineKeyboardButton(
+                        text="🧪 Namuna farzand bilan sinash (1-bosish)",
+                        callback_data="link_demo_child"
+                    )
+                ])
+                start_buttons.append([
+                    InlineKeyboardButton(
+                        text="➕ Haqiqiy farzandni ulash (Kodi)",
+                        callback_data="show_pairing_code_callback"
+                    )
+                ])
+
+            start_buttons.extend([
+                [
+                    InlineKeyboardButton(
+                        text="👨‍👩‍👧 Ota-ona (.apk)",
+                        callback_data="download_parent_apk"
+                    ),
+                    InlineKeyboardButton(
+                        text="👦 Farzand (.apk)",
+                        callback_data="download_child_apk"
+                    ),
+                    InlineKeyboardButton(
+                        text="💻 Noutbuk",
+                        callback_data="download_desktop"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🌐 Web App (Sayt)ni ochish",
+                        web_app=WebAppInfo(url=settings.MINI_APP_URL)
+                    )
                 ]
-            )
+            ])
+            start_inline_kb = InlineKeyboardMarkup(inline_keyboard=start_buttons)
             await message.answer(
                 f"Assalomu alaykum, **{clean_md(full_name)}**!\n\n"
                 f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
@@ -484,7 +507,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n\n"
                 f"📲 **Mobil ilovalar:**\n"
                 f"• **👨‍👩‍👧 Ota-ona ilovasi:** O'z telefoningizdan farzandlarni jonli xaritada kuzatish, topshiriq berish va hisobotlarni ko'rish uchun.\n"
-                f"• **👦 Farzand ilovasi:** Farzand telefonida ekran o'chiq bo'lsa ham 24/7 foniy GPS va SOS ishlashi uchun.{phone_prompt}",
+                f"• **👦 Farzand ilovasi:** Farzand telefonida ekran o'chiq bo'lsa ham 24/7 foniy GPS va SOS ishlashi uchun.{phone_prompt}{demo_hint}",
                 reply_markup=get_parent_main_keyboard(user.id),
                 parse_mode="Markdown"
             )
@@ -756,8 +779,10 @@ async def on_request_current_location(message: Message, bot: Bot):
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
             await message.answer(
+                "📍 **Farzandning hozirgi joylashuvi:**\n\n"
                 "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
-                "Farzand ulash uchun **'➕ Farzand ulash (Kodi)'** tugmasini bosing.",
+                "Jonli xarita va GPS kuzatuvini darhol sinab ko'rish uchun **Namuna farzand**ni ulang yoki haqiqiy farzand kodingizni oling:",
+                reply_markup=get_empty_children_kb(),
                 parse_mode="Markdown"
             )
             return
@@ -1173,7 +1198,13 @@ async def on_battery_status_pressed(message: Message):
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
-            await message.answer("Sizga hali farzand ulanmagan.")
+            await message.answer(
+                "🔋 **Batareya va Telefon holati:**\n\n"
+                "⚠️ Sizga hali hech qanday farzand ulanmagan.\n"
+                "Telefon quvvati, quvvatlanish holati va ovoz profilini sinab ko'rish uchun **Namuna farzand**ni ulashingiz mumkin:",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="Markdown"
+            )
             return
 
         # Ping online children devices over WebSocket to push freshest telemetry immediately
@@ -1304,7 +1335,13 @@ async def on_daily_summary_pressed(message: Message):
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
-            await message.answer("Sizga hali farzand ulanmagan.")
+            await message.answer(
+                "📊 **Bugungi harakat va xavfsizlik hisoboti:**\n\n"
+                "⚠️ Sizga hali hech qanday farzand ulanmagan.\n"
+                "Kunlik bosib o'tilgan masofa, tashrif buyurilgan hududlar va xavfsizlik hisobotini sinash uchun **Namuna farzand**ni ulashingiz mumkin:",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="Markdown"
+            )
             return
 
         for ch in children:
@@ -2677,7 +2714,13 @@ async def on_parent_tasks_menu(message: Message):
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
-            await message.answer("Sizga hali hech qanday farzand ulanmagan.")
+            await message.answer(
+                "📋 **Vazifalar va Tangalar (Yosh Qahramon):**\n\n"
+                "⚠️ Sizga hali hech qanday farzand ulanmagan.\n"
+                "Topshiriq berish, tangalar mukofoti va bajarilgan ishlarni tasdiqlash tizimini sinash uchun **Namuna farzand**ni ulashingiz mumkin:",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="Markdown"
+            )
             return
 
         tasks = await crud.get_tasks_for_parent(session, parent_id)
@@ -2910,9 +2953,9 @@ async def _build_children_list_message(parent_id: int):
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
             return (
-                "Sizga hali hech qanday farzand hisobi ulanmagan.\n"
-                "Farzand ulash uchun **'➕ Farzand ulash (Kodi)'** tugmasini bosing.",
-                None
+                "⚠️ <b>Sizga hali hech qanday farzand hisobi ulanmagan.</b>\n\n"
+                "Tizim imkoniyatlarini darhol sinab ko'rish uchun <b>Namuna farzand</b>ni ulang yoki yangi farzand qo'shing:",
+                get_empty_children_kb()
             )
 
         text = f"👶 <b>Ulangan farzandlar ro'yxati ({len(children)} nafar):</b>\n\n"
@@ -2927,20 +2970,38 @@ async def _build_children_list_message(parent_id: int):
             safe_name = html.escape(ch.full_name or "Farzand")
             safe_user = f"@{html.escape(ch.username)}" if ch.username else "yo'q"
 
+            is_demo = (ch.username == "azizbek_demo" or str(ch.id).startswith("900"))
+            demo_badge = " <i>[Namuna]</i>" if is_demo else ""
+
             text += (
-                f"👤 <b>{safe_name}</b> ({safe_user})\n"
+                f"👤 <b>{safe_name}</b>{demo_badge} ({safe_user})\n"
                 f"• Holat: <b>{status}</b>\n"
                 f"• Batareya: <b>{battery}</b> {charging}\n"
                 f"• Balans: <b>{ch.virtual_balance:,} tanga</b>\n\n"
             )
 
             btn_title = (ch.full_name or "Farzand")[:24]
-            buttons.append([
+            row = [
                 InlineKeyboardButton(
                     text=f"🔍 {btn_title} boshqaruvi",
                     callback_data=f"child_view:{ch.id}"
                 )
-            ])
+            ]
+            if is_demo:
+                row.append(
+                    InlineKeyboardButton(
+                        text="🗑 Namunani o'chirish",
+                        callback_data=f"unlink_demo_child:{ch.id}"
+                    )
+                )
+            buttons.append(row)
+
+        buttons.append([
+            InlineKeyboardButton(
+                text="➕ Yangi farzand ulash (Kodi)",
+                callback_data="show_pairing_code_callback"
+            )
+        ])
 
         return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -3085,16 +3146,41 @@ async def on_show_pairing_code(message: Message, bot: Bot):
         await session.commit()
 
         bot_info = await bot.get_me()
+        deep_link = f"https://t.me/{bot_info.username}?start=pair_{code}"
+        share_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📲 Farzandga yuborish (Telegram)",
+                        url=f"https://t.me/share/url?url={deep_link}&text=Salom!+Ushbu+havola+orqali+Parental+Tracker+botiga+ulanishingiz+mumkin."
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🧪 Namuna farzand bilan sinash",
+                        callback_data="link_demo_child"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Yangi kod yaratish",
+                        callback_data="refresh_pairing_code"
+                    )
+                ]
+            ]
+        )
         await message.answer(
             f"🔑 **YAGONA OILA VA SAYT KODINGIZ:** ` {code} `\n\n"
+            f"🔗 **1-bosishda ulash havolasi:**\n"
+            f"{deep_link}\n\n"
             f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
             f"1️⃣ **Farzandlarni ulash:**\n"
-            f"Har bir farzandingiz telefonida botga kirib, '👶 Farzandman'ni tanlaydi va ushbu ` {code} ` kodini kiritadi. 1-bola, 2-bola, 3-bola... barchasi shu bitta kod bilan sizga ulanadi.\n\n"
+            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib ` {code} ` kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
             f"2️⃣ **Saytga (Web App) kirish:**\n"
             f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
-            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda ularning barchasini kuzatib, boshqara olasiz!\n\n"
-            f"Ulashish uchun quyidagi tugmani bosing:",
-            reply_markup=get_pairing_share_keyboard(bot_info.username, code),
+            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
+            f"💡 _Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:_",
+            reply_markup=share_kb,
             parse_mode="Markdown"
         )
 
@@ -3130,6 +3216,298 @@ async def on_refresh_pairing_code(callback: CallbackQuery, bot: Bot):
                 parse_mode="Markdown"
             )
     await callback.answer("✅ Yangi ulanish kodi yaratildi!")
+
+
+@router.callback_query(F.data == "link_demo_child")
+async def on_link_demo_child(callback: CallbackQuery, bot: Bot):
+    """Link a fully-featured Demo child (Azizbek) for instant parent trial."""
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        parent = await crud.get_user(session, parent_id)
+        if not parent or parent.role != "parent":
+            await crud.update_user_role(session, parent_id, "parent")
+
+        children = await crud.get_children_for_parent(session, parent_id)
+        demo_id = 900000000 + (parent_id % 90000000)
+        demo_child = next((c for c in children if c.id == demo_id or c.username == "azizbek_demo"), None)
+
+        if not demo_child:
+            demo_user, _ = await crud.get_or_create_user(
+                session,
+                user_id=demo_id,
+                role="child",
+                full_name="Azizbek (Namuna farzand)",
+                username="azizbek_demo"
+            )
+            demo_user.virtual_balance = 1500
+
+            await crud.link_parent_child(session, parent_id, demo_id, nickname="Azizbek (Namuna)")
+
+            now_utc = datetime.now(timezone.utc)
+            t_morning1 = now_utc - timedelta(hours=3, minutes=30)
+            t_morning2 = now_utc - timedelta(hours=2, minutes=45)
+            t_school = now_utc - timedelta(hours=1, minutes=15)
+            t_current = now_utc
+
+            # Uy
+            await crud.log_location(
+                session,
+                child_id=demo_id,
+                latitude=41.311500,
+                longitude=69.279000,
+                accuracy=4.0,
+                battery_level=95,
+                is_charging=False,
+                sound_mode="normal",
+                speed=0.0,
+                network_type="Wi-Fi",
+                is_screen_on=False,
+                address="Amir Temur shoh ko'chasi, Toshkent",
+                recorded_at=t_morning1
+            )
+
+            # Yo'lda
+            await crud.log_location(
+                session,
+                child_id=demo_id,
+                latitude=41.308200,
+                longitude=69.280500,
+                accuracy=6.0,
+                battery_level=92,
+                is_charging=False,
+                sound_mode="normal",
+                speed=18.5,
+                network_type="4G",
+                is_screen_on=True,
+                address="Shahrisabz ko'chasi, Toshkent",
+                recorded_at=t_morning2
+            )
+
+            # 110-Maktab
+            await crud.log_location(
+                session,
+                child_id=demo_id,
+                latitude=41.305000,
+                longitude=69.282000,
+                accuracy=5.0,
+                battery_level=89,
+                is_charging=False,
+                sound_mode="silent",
+                speed=0.0,
+                network_type="Wi-Fi",
+                is_screen_on=False,
+                address="Taras Shevchenko ko'chasi, 110-maktab, Toshkent",
+                recorded_at=t_school
+            )
+
+            # Hozirgi joy (Amir Temur xiyoboni)
+            await crud.log_location(
+                session,
+                child_id=demo_id,
+                latitude=41.311151,
+                longitude=69.279737,
+                accuracy=4.5,
+                battery_level=84,
+                is_charging=False,
+                sound_mode="normal",
+                speed=0.0,
+                network_type="4G",
+                is_screen_on=True,
+                address="Amir Temur xiyoboni, Toshkent",
+                recorded_at=t_current
+            )
+
+            parent_fences = await crud.get_geofences_for_parent(session, parent_id)
+            if not parent_fences:
+                await crud.create_geofence(
+                    session,
+                    parent_id=parent_id,
+                    name="Uy",
+                    latitude=41.311500,
+                    longitude=69.279000,
+                    radius=200.0,
+                    child_id=demo_id
+                )
+                await crud.create_geofence(
+                    session,
+                    parent_id=parent_id,
+                    name="110-Maktab",
+                    latitude=41.305000,
+                    longitude=69.282000,
+                    radius=250.0,
+                    child_id=demo_id
+                )
+
+            await crud.create_task(
+                session,
+                parent_id=parent_id,
+                child_id=demo_id,
+                title="Matematika darslarini bajarish (5 ta misol)",
+                reward_coins=500
+            )
+            t2 = await crud.create_task(
+                session,
+                parent_id=parent_id,
+                child_id=demo_id,
+                title="Ingliz tili lug'atini takrorlash",
+                reward_coins=300
+            )
+            await crud.submit_task_completed(session, t2.id, note="Lug'at yodlandi!")
+
+            await crud.update_child_wishlist(
+                session,
+                child_id=demo_id,
+                title="Yangi velosiped",
+                target_som=100000
+            )
+
+            sample_apps = [
+                {"package": "com.google.android.youtube", "app_name": "YouTube", "seconds": 45 * 60, "category": "media"},
+                {"package": "org.telegram.messenger", "app_name": "Telegram", "seconds": 35 * 60, "category": "social"},
+                {"package": "com.duolingo", "app_name": "Duolingo", "seconds": 25 * 60, "category": "education"},
+                {"package": "com.tencent.ig", "app_name": "PUBG Mobile", "seconds": 20 * 60, "category": "game"},
+                {"package": "com.sec.android.app.popupcalculator", "app_name": "Kalkulyator", "seconds": 10 * 60, "category": "tools"},
+            ]
+            await crud.save_app_usage_report(
+                session,
+                child_id=demo_id,
+                total_screen_time_seconds=135 * 60,
+                unlock_count=24,
+                apps=sample_apps
+            )
+
+            await crud.get_or_create_device_policy(session, demo_id)
+
+            await session.commit()
+
+        success_text = (
+            "🎉 **Namuna farzand (Azizbek) muvaffaqiyatli ulandi!**\n\n"
+            "Endi bot va saytning barcha imkoniyatlarini darhol sinab ko'rishingiz mumkin:\n"
+            "• **📍 Farzandning hozirgi joylashuvi** — xarita nuqtasi va batareya (84%)\n"
+            "• **📱 Ilovalar & Ekran tahlili** — qaysi dasturda qancha vaqt o'tirgani, bloklash\n"
+            "• **🔋 Batareya va Holat** — telefon holati (84%, ovoz rejimi, 4G)\n"
+            "• **📋 Vazifalar va Tangalar** — topshiriqlarni ko'rish va tasdiqlash\n"
+            "• **📊 Bugungi hisobot** — bosib o'tilgan yo'l, hududlar va orzular qutisi\n"
+            "• **👶 Farzandlarim** — profil boshqaruvi\n"
+            "• **🗺️ Jonli Xarita (Web App)** — interaktiv veb-xaritada jonli kuzatuv!\n\n"
+            "💡 _Haqiqiy farzandingizni ulaganingizda, ushbu namunani «Farzandlarim» bo'limidan bir bosishda o'chirib yuborishingiz mumkin._"
+        )
+        unlink_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📍 Azizbekning joylashuvini ko'rish",
+                        callback_data=f"locate_child:{demo_id}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📱 Ekran tahlili & Ilovalar",
+                        callback_data=f"st_child:{demo_id}"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🗑 Namuna farzandni o'chirish",
+                        callback_data=f"unlink_demo_child:{demo_id}"
+                    )
+                ]
+            ]
+        )
+        try:
+            await callback.message.edit_text(success_text, reply_markup=unlink_kb, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(success_text, reply_markup=unlink_kb, parse_mode="Markdown")
+        await callback.answer("✅ Namuna farzand ulandi!")
+
+
+@router.callback_query(F.data.startswith("unlink_demo_child:"))
+async def on_unlink_demo_child(callback: CallbackQuery):
+    """Unlink and clean up demo child."""
+    demo_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        await crud.delete_child_profile(session, parent_id, demo_id)
+        await session.commit()
+
+    await callback.answer("🗑 Namuna farzand o'chirildi", show_alert=True)
+    if callback.message:
+        try:
+            await callback.message.edit_text(
+                "✅ **Namuna farzand hisobi tozalandi.**\n\n"
+                "Haqiqiy farzandingizni ulash uchun quyidagi tugmani bosing:",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="➕ Haqiqiy farzandni ulash (Kodi)",
+                                callback_data="show_pairing_code_callback"
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="🧪 Qayta namuna ulash",
+                                callback_data="link_demo_child"
+                            )
+                        ]
+                    ]
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data == "show_pairing_code_callback")
+async def on_show_pairing_code_callback(callback: CallbackQuery, bot: Bot):
+    """Show pairing code from inline button."""
+    parent_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        code = await crud.generate_pairing_code(session, parent_id)
+        await session.commit()
+
+        bot_info = await bot.get_me()
+        deep_link = f"https://t.me/{bot_info.username}?start=pair_{code}"
+        share_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📲 Farzandga yuborish (Telegram)",
+                        url=f"https://t.me/share/url?url={deep_link}&text=Salom!+Ushbu+havola+orqali+Parental+Tracker+botiga+ulanishingiz+mumkin."
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🧪 Namuna farzand bilan sinash",
+                        callback_data="link_demo_child"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🔄 Yangi kod yaratish",
+                        callback_data="refresh_pairing_code"
+                    )
+                ]
+            ]
+        )
+        msg_text = (
+            f"🔑 **YAGONA OILA VA SAYT KODINGIZ:** ` {code} `\n\n"
+            f"🔗 **1-bosishda ulash havolasi:**\n"
+            f"{deep_link}\n\n"
+            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
+            f"1️⃣ **Farzandlarni ulash:**\n"
+            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib ` {code} ` kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
+            f"2️⃣ **Saytga (Web App) kirish:**\n"
+            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
+            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
+            f"💡 _Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:_"
+        )
+        try:
+            await callback.message.edit_text(msg_text, reply_markup=share_kb, parse_mode="Markdown")
+        except Exception:
+            await callback.message.answer(msg_text, reply_markup=share_kb, parse_mode="Markdown")
+    await callback.answer()
+
 
 
 @router.callback_query(F.data == "cancel_action")
@@ -5286,9 +5664,11 @@ async def parent_screen_time_handler(message: Message):
         children = await crud.get_children_for_parent(session, user_id)
         if not children:
             await message.answer(
-                "👶 Sizga hali farzand ulanmagan.\n"
-                "Iltimos, avval farzandingiz telefonida botga ulanish kodini kiriting.",
-                reply_markup=get_parent_main_keyboard(user_id)
+                "📱 **Ilovalar va Ekran vaqti tahlili:**\n\n"
+                "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
+                "Ilovalar sarfi, ekran vaqti, ilovalarni masofadan bloklash va uxlash rejimi sozlamalarini darhol sinab ko'rish uchun **Namuna farzand**ni ulashingiz mumkin:",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="Markdown"
             )
             return
 

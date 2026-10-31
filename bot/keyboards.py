@@ -609,3 +609,24 @@ def get_radius_selection_keyboard() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def get_empty_children_kb() -> InlineKeyboardMarkup:
+    """Inline keyboard offered when parent has 0 paired children."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🧪 Namuna farzand bilan sinash (1-bosish)",
+                    callback_data="link_demo_child"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="➕ Farzand ulash (Kodi)",
+                    callback_data="show_pairing_code_callback"
+                )
+            ]
+        ]
+    )
+

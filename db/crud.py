@@ -354,6 +354,8 @@ async def delete_child_profile(session: AsyncSession, parent_id: int, child_id: 
             await session.execute(delete(BatteryAlertLog).where(BatteryAlertLog.child_id == child_id))
             await session.execute(delete(GeofenceState).where(GeofenceState.child_id == child_id))
             await session.execute(delete(Geofence).where(Geofence.child_id == child_id))
+            await session.execute(delete(ChildDevicePolicy).where(ChildDevicePolicy.child_id == child_id))
+            await session.execute(delete(AppUsageReport).where(AppUsageReport.child_id == child_id))
             await session.delete(child_user)
             await session.flush()
 
@@ -734,6 +736,10 @@ async def create_task(
     media_url: Optional[str] = None
 ) -> Task:
     """Create a task with gamified reward and optional photo/video attachment."""
+    if isinstance(description, int):
+        reward_coins = description
+        description = None
+
     task = Task(
         parent_id=parent_id,
         child_id=child_id,
