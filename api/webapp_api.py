@@ -2761,6 +2761,38 @@ async def router_download_desktop_mac():
     return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
 
 
+@router.get("/download/desktop-webloc", tags=["App"])
+@router.get("/download/mac-shortcut", tags=["App"])
+async def router_download_desktop_webloc():
+    """Download Apple Mac native WebLoc bookmark that never triggers Gatekeeper quarantine."""
+    import os
+    from fastapi.responses import FileResponse, Response
+    from config import settings
+    webloc_file = os.path.join(settings.BASE_DIR, "downloads", "Child Security.webloc")
+    if os.path.exists(webloc_file):
+        return FileResponse(
+            webloc_file,
+            filename="Child Security.webloc",
+            media_type="application/xml",
+            headers={"Content-Disposition": 'attachment; filename="Child Security.webloc"'}
+        )
+    content = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0">\n'
+        '<dict>\n'
+        '\t<key>URL</key>\n'
+        '\t<string>https://child-security-bot.vercel.app</string>\n'
+        '</dict>\n'
+        '</plist>\n'
+    )
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="application/xml",
+        headers={"Content-Disposition": 'attachment; filename="Child Security.webloc"'}
+    )
+
+
 @router.get("/download/desktop-linux", tags=["App"])
 @router.get("/download/linux", tags=["App"])
 async def router_download_desktop_linux():

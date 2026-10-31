@@ -3752,6 +3752,7 @@ async def on_download_ios(event, bot: Bot, state: FSMContext = None):
         "✨ <b>NATIJA:</b> iPhone ish stolingizda xuddi App Store'dan yuklangandek rasmiy <b>Child Security</b> ilovasi paydo bo'ladi va brauzer satrisiz to'liq ekranda ishga tushadi! 🚀\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "⚡ <b>2-USUL: Apple Konfiguratsiya Profili (.mobileconfig):</b>\n\n"
+        "<i>(⚠️ Eslatma: Apple xavfsizlik qoidasiga ko'ra, profil faqat <b>Safari</b> brauzeri orqali yuklanadi!)</i>\n"
         "1️⃣ Pastdagi <code>ChildSecurity.mobileconfig</code> faylini bosing yoki quyidagi tugmani bosing.\n"
         "2️⃣ Safari <i>«Konfiguratsiya profilini yuklamoqchi, ruxsat berasizmi?»</i> desa:\n"
         "👉 <b>«Ruxsat berish» (Разрешить / Allow)</b> ni bosing.\n"
@@ -4054,25 +4055,38 @@ async def on_download_mac(event, bot: Bot, state: FSMContext = None):
 
     webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
     desktop_mac_url = f"{webapp_url}/download/desktop-mac"
+    desktop_webloc_url = f"{webapp_url}/download/desktop-webloc"
 
     text = (
         "🍏 <b>Child Security — Apple Mac (macOS / MacBook) Rasmiy Ilovasi</b>\n\n"
-        "Apple kompyuterlarida (MacBook Air/Pro, iMac, Mac mini) Child Security'ni to'laqonli desktop dastur sifatida ishlatishingiz mumkin:\n\n"
+        "Apple kompyuterlarida (MacBook Air/Pro, iMac, Mac mini) Child Security'ni to'laqonli desktop dastur sifatida ishlatish yo'llari:\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ <b>1-USUL: Avtomatik O'rnatuvchi Paket (.zip)</b>\n"
-        "1. Quyidagi <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching.\n"
-        "2. Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga 2 marta bosing.\n"
-        "3. Ish stolingizda (Desktop) <b>Child Security</b> paydo bo'ladi va mustaqil dastur bo'lib ishga tushadi!\n\n"
+        "⚡ <b>1-USUL (Tavsiya etiladi): Bloklanmaydigan Mac Yorlig'i (.webloc)</b>\n"
+        "Quyidagi <b>«Child Security.webloc»</b> yorlig'ini yuklab oling va bosing. "
+        "U macOS'ning rasmiy yorlig'i bo'lib, Apple Gatekeeper uni <b>hech qachon bloklamaydi</b>!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🌐 <b>2-USUL: Safari / Chrome orqali to'g'ridan-to'g'ri o'rnatish</b>\n"
-        "1. Brauzerda oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
+        "🌐 <b>2-USUL: Safari / Chrome orqali Dock-ga qo'shish (PWA)</b>\n"
+        "1. Saytni oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
         "2. <b>Safari'da:</b> Yuqori menyudan <i>«Fayl» (File)</i> ➔ <b>«Dock-ga qo'shish» (Add to Dock)</b> ni bosing.\n"
         "3. <b>Chrome / Edge'da:</b> Manzil satrining o'ng tomonidagi ⬇️ <b>«O'rnatish» (Install)</b> belgisini bosing!\n\n"
-        "✨ <b>Natija:</b> Ilova Mac ilovalar ro'yxatiga (Launchpad) va Dock-ga alohida dastur bo'lib qo'shiladi! 🚀"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "📦 <b>3-USUL: Avtomatik O'rnatuvchi Paket (.zip)</b>\n"
+        "1. <code>ChildSecurity_Mac_Setup.zip</code> arxivini yuklab oling va oching.\n"
+        "2. Ichidagi <code>ChildSecurity_Mac_Setup.command</code> fayli ustiga bosing.\n\n"
+        "🛡️ <b>macOS GATEKEEPER BLOKIROVKASINI YECHISH:</b>\n"
+        "Agar Mac tizimi <i>«Unidentified developer / Dasturchi tasdiqlanmagan»</i> desa:\n"
+        "👉 Fayl ustiga <b>Control tugmasini bosib turib</b> bosing (yoki sichqonchaning o'ng tugmasi) ➔ <b>«Открыть» (Open)</b> ➔ yana <b>«Открыть» (Open)</b> bosing!\n"
+        "Shundan so'ng Mac dasturni ishonchli deb qabul qiladi."
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Child Security.webloc (Bloklanmaydigan yorliq)",
+                    url=desktop_webloc_url
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="🍏 Mac o'rnatgichini yuklab olish (.zip)",

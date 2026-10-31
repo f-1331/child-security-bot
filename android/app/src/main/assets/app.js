@@ -3975,14 +3975,16 @@ function updateBatteryUI(level, isCharging) {
   if (text) text.textContent = `${effectiveLevel}%`;
   if (dynBatText) dynBatText.textContent = `${effectiveLevel}%`;
 
-  if (effectiveCharging) {
-    pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
-  } else if (effectiveLevel <= 15) {
-    pill.className = "flex items-center gap-1 bg-red-900/60 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/60 animate-pulse";
-  } else if (effectiveLevel <= 30) {
-    pill.className = "flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/50";
-  } else {
-    pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/40";
+  if (pill) {
+    if (effectiveCharging) {
+      pill.className = "flex items-center gap-1 bg-blue-900/50 px-2 py-1 rounded-full text-xs font-bold text-blue-400 border border-blue-500/50";
+    } else if (effectiveLevel <= 15) {
+      pill.className = "flex items-center gap-1 bg-red-900/60 px-2 py-1 rounded-full text-xs font-bold text-red-400 border border-red-500/60 animate-pulse";
+    } else if (effectiveLevel <= 30) {
+      pill.className = "flex items-center gap-1 bg-amber-900/50 px-2 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/50";
+    } else {
+      pill.className = "flex items-center gap-1 bg-emerald-900/40 px-2 py-1 rounded-full text-xs font-semibold text-emerald-400 border border-emerald-500/40";
+    }
   }
 }
 

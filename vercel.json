@@ -64,6 +64,30 @@
       }
     },
     {
+      "src": "/downloads/Child%20Security.webloc",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
+      "src": "/download/desktop-webloc",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
+      "src": "/download/mac-shortcut",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
       "src": "/download/desktop-mac",
       "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
       "headers": {

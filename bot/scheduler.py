@@ -21,7 +21,7 @@ logger = logging.getLogger("scheduler")
 # Robust local Tashkent timezone (UTC+5) that never fails even on systems without tzdata
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
-NIGHTLY_STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "nightly_report_state.txt"))
+NIGHTLY_STATE_FILE = os.path.join(settings.BASE_DIR, "nightly_report_state.txt")
 
 
 def _get_last_nightly_sent_date() -> Optional[str]:
@@ -65,8 +65,8 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 22:00 Nightly Safety Report (Strictly at 22:00 Tashkent time, exactly once per day)
-            if now_tz.hour == 22 and now_tz.minute == 0 and last_sent_date != today_str:
+            # 1. 22:00 Nightly Safety Report (Guaranteed at 22:00+ Tashkent time, exactly once per day)
+            if now_tz.hour >= 22 and last_sent_date != today_str:
                 logger.info(f"Triggering 22:00 nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select

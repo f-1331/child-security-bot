@@ -3124,21 +3124,32 @@
           </div>
         </div>
 
-        <!-- Option 3: Apple Mac Standalone Desktop Launcher (.zip / .command) -->
-        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
+        <!-- Option 3: Apple Mac Standalone Desktop Launcher (.webloc, .zip / .command) -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2.5">
           <h5 class="text-xs font-black text-white flex items-center gap-1.5">
-            <span>🍏</span> <span>Apple Mac (macOS / MacBook) O'rnatgichi (.zip)</span>
+            <span>🍏</span> <span>Apple Mac (macOS / MacBook) Dasturi</span>
           </h5>
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            MacBook va iMac foydalanuvchilari uchun ish stoliga avtomatik yorliq va alohida dastur o'rnatuvchi paket:
+            MacBook va iMac foydalanuvchilari uchun qulay ishga tushirish variantlari:
           </p>
-          <a href="/downloads/ChildSecurity_Mac_Setup.zip" download="ChildSecurity_Mac_Setup.zip" class="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-2 transition">
-            <i data-lucide="archive" class="w-4 h-4 text-emerald-400"></i>
-            <span>Mac O'rnatgichini Yuklab Olish (.zip)</span>
-          </a>
-          <p class="text-[10px] text-slate-400 leading-snug">
-            💡 <i>Yuklab oling, arxivni oching va <b>ChildSecurity_Mac_Setup.command</b> ustiga 2 marta bosing.</i>
-          </p>
+          <div class="flex flex-col gap-1.5">
+            <a href="/download/desktop-webloc" download="Child Security.webloc" class="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl border border-emerald-400/30 shadow-lg flex items-center justify-center gap-2 transition">
+              <i data-lucide="external-link" class="w-4 h-4 text-emerald-200"></i>
+              <span>⚡ Bloklanmaydigan Mac Yorlig'i (.webloc) — Tavsiya etiladi</span>
+            </a>
+            <a href="/downloads/ChildSecurity_Mac_Setup.zip" download="ChildSecurity_Mac_Setup.zip" class="w-full py-2.5 px-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-2 transition">
+              <i data-lucide="archive" class="w-4 h-4 text-emerald-400"></i>
+              <span>To'liq Mac O'rnatgich Arxiv (.zip)</span>
+            </a>
+          </div>
+          <div class="p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-[10.5px] text-blue-200 leading-relaxed">
+            <p class="font-bold text-blue-300 mb-1 flex items-center gap-1">
+              <span>🛡️</span> <span>macOS Gatekeeper ogohlantirishini yechish:</span>
+            </p>
+            <p>
+              Agar Mac tizimi <i>«Unidentified developer»</i> desa: fayl ustiga <b>Control tugmasini bosib</b> bosing (o'ng tugma) ➔ <b>«Открыть» (Open)</b> ➔ yana <b>«Открыть»</b> bosing!
+            </p>
+          </div>
         </div>
 
         <!-- Option 4: Linux Desktop Launcher (.zip / .sh) -->
@@ -3153,9 +3164,14 @@
             <i data-lucide="terminal" class="w-4 h-4 text-amber-400"></i>
             <span>Linux O'rnatgichini Yuklab Olish (.zip)</span>
           </a>
-          <p class="text-[10px] text-slate-400 leading-snug">
-            💡 <i>Arxivni oching va terminalda <b>./ChildSecurity_Linux_Setup.sh</b> skriptini ishga tushiring.</i>
-          </p>
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-700/60 text-[10.5px] text-slate-300 leading-relaxed">
+            <p class="font-bold text-amber-300 mb-1 flex items-center gap-1">
+              <span>💡</span> <span>Linux ishga tushirish:</span>
+            </p>
+            <p>
+              Arxivni oching va terminalda kiriting: <code>chmod +x ChildSecurity_Linux_Setup.sh && ./ChildSecurity_Linux_Setup.sh</code> (yoki fayl ustiga o'ng tugma ➔ <b>Свойства</b> ➔ <b>Разрешить выполнение</b>).
+            </p>
+          </div>
         </div>
 
         <!-- 3 Step Quick Laptop Guide -->

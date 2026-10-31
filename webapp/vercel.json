@@ -17,6 +17,14 @@
       "destination": "/downloads/ChildSecurity.mobileconfig"
     },
     {
+      "source": "/download/desktop-webloc",
+      "destination": "/downloads/Child Security.webloc"
+    },
+    {
+      "source": "/download/mac-shortcut",
+      "destination": "/downloads/Child Security.webloc"
+    },
+    {
       "source": "/download/desktop-mac",
       "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
     },

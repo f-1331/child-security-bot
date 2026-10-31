@@ -43,5 +43,6 @@ downloads/*
 !downloads/*.sh
 !downloads/*.desktop
 !downloads/*.url
+!downloads/*.webloc
 .neon
 node_modules/
