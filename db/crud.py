@@ -487,6 +487,16 @@ async def get_location_history_today(
         .limit(limit)
     )
     logs = list(result.scalars().all())
+    if not logs:
+        # Fallback to the latest available trail if child has logs in database
+        fallback_res = await session.execute(
+            select(LocationLog)
+            .where(LocationLog.child_id == child_id)
+            .order_by(LocationLog.recorded_at.desc(), LocationLog.id.desc())
+            .limit(limit)
+        )
+        logs = list(fallback_res.scalars().all())
+
     logs.reverse()
     return logs
 

@@ -3270,14 +3270,22 @@ function renderDemoGeofences() {
   renderFencesToMapAndList([]);
 }
 
-// Focus a specific route checkpoint on map in Fullscreen mode
+// Focus a specific route checkpoint on map
 function focusRoutePoint(lat, lon) {
   haptic("light");
   closeModal("history");
   if (currentRole === "parent" && currentTab !== "map") {
     switchTab("map");
   }
-  toggleMapUiVisibility(true);
+  isRouteVisible = true;
+  const btn = document.getElementById("btnToggleRoute");
+  if (btn) {
+    btn.classList.add("text-amber-400");
+    btn.classList.remove("text-slate-500");
+  }
+  if (routeLayerGroup && map && !map.hasLayer(routeLayerGroup)) {
+    routeLayerGroup.addTo(map);
+  }
   if (map) {
     map.flyTo([lat, lon], 17, { animate: true, duration: 0.8 });
   }
@@ -3298,10 +3306,52 @@ async function loadRouteHistory(childId, isSilent = false) {
     const data = await res.json();
     if (data.status !== "success") throw new Error("API returned non-success");
 
-    const points = data.points || [];
+    let points = data.points || [];
+
+    // Fallback: Check local offline storage & queued GPS if server returned 0 points
+    if (points.length === 0) {
+      try {
+        const cachedHist = JSON.parse(localStorage.getItem(`_cached_route_history_${targetId}`) || "[]");
+        const queuedGps = JSON.parse(localStorage.getItem(`_offline_gps_queue_${targetId}`) || "[]");
+        if (cachedHist.length > 0 || queuedGps.length > 0) {
+          points = [...cachedHist, ...queuedGps];
+        }
+      } catch (e) {}
+    }
+
+    // Single-point fallback: If child has not moved or only 1 signal exists, ensure today's location is shown
+    if (points.length === 0) {
+      let curLat = null;
+      let curLon = null;
+      if (childMarker && typeof childMarker.getLatLng === "function") {
+        const pos = childMarker.getLatLng();
+        curLat = pos.lat;
+        curLon = pos.lng;
+      } else {
+        try {
+          const cachedLoc = JSON.parse(localStorage.getItem(`_cached_device_location_${targetId}`) || "null");
+          if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
+            curLat = cachedLoc.latitude;
+            curLon = cachedLoc.longitude;
+          }
+        } catch (e) {}
+      }
+      if (curLat && curLon) {
+        points = [{
+          latitude: curLat,
+          longitude: curLon,
+          battery_level: lastKnownBatteryLevel || 85,
+          speed: 0,
+          recorded_at: new Date().toISOString()
+        }];
+      }
+    }
+
     // Cache points locally for 100% offline viewing
     try {
-      localStorage.setItem(`_cached_route_history_${targetId}`, JSON.stringify(points));
+      if (points.length > 0) {
+        localStorage.setItem(`_cached_route_history_${targetId}`, JSON.stringify(points));
+      }
     } catch (e) {}
     renderHistoryToMapAndList(points);
   } catch (err) {
@@ -3310,7 +3360,19 @@ async function loadRouteHistory(childId, isSilent = false) {
     try {
       const cachedHist = JSON.parse(localStorage.getItem(`_cached_route_history_${targetId}`) || "[]");
       const queuedGps = JSON.parse(localStorage.getItem(`_offline_gps_queue_${targetId}`) || "[]");
-      const offlineCombined = [...cachedHist, ...queuedGps];
+      let offlineCombined = [...cachedHist, ...queuedGps];
+      if (offlineCombined.length === 0) {
+        const cachedLoc = JSON.parse(localStorage.getItem(`_cached_device_location_${targetId}`) || "null");
+        if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
+          offlineCombined = [{
+            latitude: cachedLoc.latitude,
+            longitude: cachedLoc.longitude,
+            battery_level: lastKnownBatteryLevel || 85,
+            speed: 0,
+            recorded_at: new Date().toISOString()
+          }];
+        }
+      }
       if (offlineCombined.length > 0) {
         renderHistoryToMapAndList(offlineCombined);
       }
@@ -3321,10 +3383,10 @@ async function loadRouteHistory(childId, isSilent = false) {
 function renderHistoryToMapAndList(points) {
   if (!points || !Array.isArray(points)) return;
 
-  // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed!
+  // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed and layer is on map!
   const lastPt = points[points.length - 1];
   const lastSig = `${points.length}_${lastPt ? (lastPt.latitude + '_' + lastPt.longitude) : ''}`;
-  if (window._lastRenderedRouteSig === lastSig && routePolyline) {
+  if (window._lastRenderedRouteSig === lastSig && routePolyline && map && routeLayerGroup && map.hasLayer(routeLayerGroup)) {
     return;
   }
   window._lastRenderedRouteSig = lastSig;
@@ -4125,28 +4187,48 @@ function exitRouteView() {
   toggleRouteHistory(false);
 }
 
-// Render Demo History
+// Render Demo History (dynamically anchored around current location)
 function renderDemoHistory() {
+  let baseLat = DEFAULT_LAT;
+  let baseLon = DEFAULT_LON;
+  if (childMarker && typeof childMarker.getLatLng === "function") {
+    const pos = childMarker.getLatLng();
+    baseLat = pos.lat;
+    baseLon = pos.lng;
+  } else {
+    try {
+      const cachedLoc = JSON.parse(localStorage.getItem(`_cached_device_location_${currentChildId}`) || "null");
+      if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
+        baseLat = cachedLoc.latitude;
+        baseLon = cachedLoc.longitude;
+      }
+    } catch (e) {}
+  }
+
+  const nowMs = Date.now();
   const demoPoints = [
-    { latitude: 41.285800, longitude: 69.203500, battery_level: 85, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:00:00" },
-    { latitude: 41.287000, longitude: 69.206000, battery_level: 84, is_charging: false, speed: 5, recorded_at: "2026-10-25T08:10:00" },
-    { latitude: 41.289000, longitude: 69.209000, battery_level: 83, is_charging: false, speed: 4, recorded_at: "2026-10-25T08:20:00" },
-    { latitude: 41.291500, longitude: 69.212000, battery_level: 82, is_charging: false, speed: 3, recorded_at: "2026-10-25T08:30:00" },
+    { latitude: baseLat, longitude: baseLon, battery_level: 85, is_charging: false, speed: 4, recorded_at: new Date(nowMs - 3600000 * 4).toISOString() },
+    { latitude: baseLat + 0.0012, longitude: baseLon + 0.0025, battery_level: 84, is_charging: false, speed: 5, recorded_at: new Date(nowMs - 3600000 * 3.5).toISOString() },
+    { latitude: baseLat + 0.0032, longitude: baseLon + 0.0055, battery_level: 83, is_charging: false, speed: 4, recorded_at: new Date(nowMs - 3600000 * 3).toISOString() },
+    { latitude: baseLat + 0.0057, longitude: baseLon + 0.0085, battery_level: 82, is_charging: false, speed: 3, recorded_at: new Date(nowMs - 3600000 * 2.5).toISOString() },
     // Return trip through same coordinate (Repeated pass demonstration!)
-    { latitude: 41.287000, longitude: 69.206000, battery_level: 75, is_charging: false, speed: 4, recorded_at: "2026-10-25T13:40:00" },
-    { latitude: 41.285800, longitude: 69.203500, battery_level: 70, is_charging: false, speed: 3, recorded_at: "2026-10-25T14:00:00" },
+    { latitude: baseLat + 0.0012, longitude: baseLon + 0.0025, battery_level: 75, is_charging: false, speed: 4, recorded_at: new Date(nowMs - 3600000 * 1.5).toISOString() },
+    { latitude: baseLat, longitude: baseLon, battery_level: 70, is_charging: false, speed: 3, recorded_at: new Date(nowMs - 3600000 * 1).toISOString() },
     // 3rd pass in evening!
-    { latitude: 41.287000, longitude: 69.206000, battery_level: 60, is_charging: false, speed: 5, recorded_at: "2026-10-25T17:15:00" },
-    { latitude: 41.300000, longitude: 69.225000, battery_level: 55, is_charging: false, speed: 6, recorded_at: "2026-10-25T17:45:00" },
+    { latitude: baseLat + 0.0012, longitude: baseLon + 0.0025, battery_level: 60, is_charging: false, speed: 5, recorded_at: new Date(nowMs - 1800000).toISOString() },
+    { latitude: baseLat + 0.0070, longitude: baseLon + 0.0120, battery_level: 55, is_charging: false, speed: 6, recorded_at: new Date().toISOString() },
   ];
   renderHistoryToMapAndList(demoPoints);
 }
 
 // Smooth Route Playback Animation Entrypoint
-function startRoutePlayback() {
+async function startRoutePlayback() {
   haptic("medium");
   if (!routePointsCache || routePointsCache.length < 2) {
-    showToast("Harakat nuqtalari yetarli emas");
+    await loadRouteHistory(currentChildId);
+  }
+  if (!routePointsCache || routePointsCache.length < 2) {
+    showToast("Harakat nuqtalari yetarli emas (kamida 2 ta nuqta kerak)");
     return;
   }
 
@@ -4154,7 +4236,16 @@ function startRoutePlayback() {
   if (currentRole === "parent" && currentTab !== "map") {
     switchTab("map");
   }
-  toggleMapUiVisibility(true); // Automatically switch to fullscreen mode!
+
+  isRouteVisible = true;
+  const btn = document.getElementById("btnToggleRoute");
+  if (btn) {
+    btn.classList.add("text-amber-400");
+    btn.classList.remove("text-slate-500");
+  }
+  if (routeLayerGroup && map && !map.hasLayer(routeLayerGroup)) {
+    routeLayerGroup.addTo(map);
+  }
 
   // Reveal the interactive Scrubber HUD
   showRoutePlaybackHud();
@@ -4177,7 +4268,6 @@ async function toggleRouteHistory(forceState) {
   const btn = document.getElementById("btnToggleRoute");
 
   if (isRouteVisible) {
-    toggleMapUiVisibility(true);
     if (btn) {
       btn.classList.add("text-amber-400");
       btn.classList.remove("text-slate-500");
@@ -4195,12 +4285,18 @@ async function toggleRouteHistory(forceState) {
         }
       } catch (e) {}
     }
-    showRoutePlaybackHud();
-    showToast("🗺️ Marshrut to'liq xaritada ochildi");
+    if (routePointsCache && routePointsCache.length >= 2) {
+      showRoutePlaybackHud();
+      showToast("🗺️ Marshrut to'liq xaritada ochildi");
+    } else {
+      hideRoutePlaybackHud();
+      showToast("ℹ️ Bugun hali yangi harakat yo'li qayd etilmagan");
+    }
   } else {
     if (routeLayerGroup && map) {
       try { map.removeLayer(routeLayerGroup); } catch (e) {}
     }
+    window._lastRenderedRouteSig = null;
     if (btn) {
       btn.classList.remove("text-amber-400");
       btn.classList.add("text-slate-500");
