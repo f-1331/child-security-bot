@@ -22,6 +22,7 @@ logger = logging.getLogger("scheduler")
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
 NIGHTLY_STATE_FILE = os.path.join(settings.BASE_DIR, "nightly_report_state.txt")
+HOURLY_STATE_FILE = os.path.join(settings.BASE_DIR, "hourly_report_state.txt")
 
 
 def _get_last_nightly_sent_date() -> Optional[str]:
@@ -38,6 +39,24 @@ def _save_last_nightly_sent_date(date_str: str) -> None:
     try:
         with open(NIGHTLY_STATE_FILE, "w", encoding="utf-8") as f:
             f.write(date_str)
+    except Exception:
+        pass
+
+
+def _get_last_hourly_sent_slot() -> Optional[str]:
+    try:
+        if os.path.exists(HOURLY_STATE_FILE):
+            with open(HOURLY_STATE_FILE, "r", encoding="utf-8") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return None
+
+
+def _save_last_hourly_sent_slot(slot_str: str) -> None:
+    try:
+        with open(HOURLY_STATE_FILE, "w", encoding="utf-8") as f:
+            f.write(slot_str)
     except Exception:
         pass
 
@@ -142,7 +161,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
     """
     logger.info("Nightly report, hourly location, and Walk Safe background scheduler activated.")
     last_sent_date = _get_last_nightly_sent_date()
-    last_hourly_slot = None
+    last_hourly_slot = _get_last_hourly_sent_slot()
     alerted_expired_walk_safes = set()
 
     # Determine timezone with absolute priority to Tashkent UTC+5
@@ -263,12 +282,21 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
 
             # 1.5 Hourly Child Location Updates (Sent every 1 hour between 07:00 and 21:00 Tashkent time)
             current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
-            if (7 <= now_tz.hour <= 21) and (last_hourly_slot != current_hour_slot):
-                logger.info(f"Triggering hourly location updates for {current_hour_slot} (Hour: {now_tz.hour}:00)...")
-                async with AsyncSessionLocal() as session:
-                    await dispatch_hourly_location_reports(bot, session, f"{now_tz.hour:02d}")
-                    await session.commit()
-                last_hourly_slot = current_hour_slot
+            if 7 <= now_tz.hour <= 21:
+                if last_hourly_slot != current_hour_slot:
+                    if now_tz.minute <= 10:
+                        logger.info(f"Triggering hourly location updates for {current_hour_slot} (Hour: {now_tz.hour}:00)...")
+                        async with AsyncSessionLocal() as session:
+                            await dispatch_hourly_location_reports(bot, session, f"{now_tz.hour:02d}")
+                            await session.commit()
+                        last_hourly_slot = current_hour_slot
+                        _save_last_hourly_sent_slot(current_hour_slot)
+                    else:
+                        # Server restarted mid-hour (e.g. at :25, :45, or :55).
+                        # Mark this hour slot as processed to prevent late/out-of-schedule duplicate spam,
+                        # and cleanly wait for the top of the next hour!
+                        last_hourly_slot = current_hour_slot
+                        _save_last_hourly_sent_slot(current_hour_slot)
 
             # 2. Walk Safe Deadline Monitoring
             async with AsyncSessionLocal() as session:
