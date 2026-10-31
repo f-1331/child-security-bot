@@ -1825,7 +1825,10 @@ function applyChildUI(user) {
   if (user.parent_name) parentName = user.parent_name;
   if (user.is_sos_active) {
     const sosModal = document.getElementById("modal-sos-active");
-    if (sosModal) sosModal.classList.remove("hidden");
+    if (sosModal) {
+      sosModal.classList.remove("hidden");
+      startSosRecurringBroadcast();
+    }
   }
 
   if (window.lucide) lucide.createIcons();
@@ -6211,7 +6214,10 @@ async function triggerChildSOS() {
         sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
       }
     }
-    } finally {
+
+    // Start repeating emergency broadcast every 30 seconds (har yarim minutda qayta-qayta yuborish)
+    startSosRecurringBroadcast();
+  } finally {
     setTimeout(() => {
       isSosTriggering = false;
       const btn = document.getElementById("btnChildBigSOS");
@@ -6224,6 +6230,7 @@ async function triggerChildSOS() {
 
 async function cancelChildSOS() {
   haptic("medium");
+  stopSosRecurringBroadcast();
   isSosTriggering = false;
   lastSosTriggerTimestamp = 0;
   const btnBig = document.getElementById("btnChildBigSOS");
@@ -6342,7 +6349,94 @@ function copyParentPhoneNumber() {
 // 100% OFFLINE GSM SMS & COORDINATE DECODER
 // ==========================================
 
-function sendEmergencyOfflineSms(lat, lon, childName, battery) {
+let _sosRecurringTimer = null;
+let _sosRecurringCount = 0;
+
+function startSosRecurringBroadcast() {
+  if (_sosRecurringTimer) {
+    clearInterval(_sosRecurringTimer);
+    _sosRecurringTimer = null;
+  }
+  _sosRecurringCount = 1;
+  const statusEl = document.getElementById("sosBroadcastStatusText");
+  if (statusEl) statusEl.textContent = "1-xabar jo'natildi (har 30s)";
+
+  // Har yarim minutda (har 30 soniyada) avtomatik qayta-qayta jo'natish
+  _sosRecurringTimer = setInterval(async () => {
+    const modal = document.getElementById("modal-sos-active");
+    if (!modal || modal.classList.contains("hidden")) {
+      stopSosRecurringBroadcast();
+      return;
+    }
+
+    _sosRecurringCount++;
+    if (statusEl) statusEl.textContent = `${_sosRecurringCount}-xabar jo'natilmoqda...`;
+
+    try {
+      let curLat = (childMarker && childMarker.getLatLng()) ? childMarker.getLatLng().lat : DEFAULT_LAT;
+      let curLon = (childMarker && childMarker.getLatLng()) ? childMarker.getLatLng().lng : DEFAULT_LON;
+      let curAcc = null;
+      let curBatt = 84;
+
+      try {
+        const [geo, batt] = await Promise.all([
+          getDeviceLocation(),
+          getDeviceBattery()
+        ]);
+        if (geo && typeof geo.latitude === "number") {
+          curLat = geo.latitude;
+          curLon = geo.longitude;
+          curAcc = geo.accuracy;
+        }
+        if (batt !== null && batt !== undefined) {
+          curBatt = batt;
+        }
+      } catch (locErr) {
+        console.warn("Recurring SOS location fetch:", locErr);
+      }
+
+      const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
+      const cName = cObj.full_name || "Farzand";
+
+      // 1. GSM SMS orqali ota-onaga to'g'ridan-to'g'ri jo'natish (internetsiz)
+      sendEmergencyOfflineSms(curLat, curLon, cName, curBatt, true);
+
+      // 2. Agar internet bo'lsa, server va Telegram bot orqali ota-onaga uzatish
+      if (navigator.onLine && !isDemoMode && currentChildId) {
+        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_sos_active: true,
+            latitude: curLat,
+            longitude: curLon,
+            accuracy: curAcc,
+            battery_level: curBatt
+          })
+        }).catch(console.warn);
+      }
+
+      if (statusEl) {
+        statusEl.textContent = `${_sosRecurringCount}-xabar jo'natildi (${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`;
+      }
+      console.log(`[Recurring SOS 30s] Sent #${_sosRecurringCount}: ${curLat}, ${curLon} (${curBatt}%)`);
+    } catch (err) {
+      console.warn("Recurring SOS broadcast error:", err);
+    }
+  }, 30000); // 30 soniya (har yarim minutda)
+}
+
+function stopSosRecurringBroadcast() {
+  if (_sosRecurringTimer) {
+    clearInterval(_sosRecurringTimer);
+    _sosRecurringTimer = null;
+  }
+  _sosRecurringCount = 0;
+  const statusEl = document.getElementById("sosBroadcastStatusText");
+  if (statusEl) statusEl.textContent = "To'xtatilgan";
+}
+
+function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrence = false) {
   try {
     const pPhone = parentPhone || localStorage.getItem("cached_parent_phone") || "";
     const cName = childName || (childrenList.find(c => c.id == currentChildId) || {}).full_name || "Farzand";
@@ -6357,28 +6451,34 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery) {
     if (window.AndroidBridge && typeof window.AndroidBridge.sendEmergencySms === "function") {
       if (pPhone) {
         window.AndroidBridge.sendEmergencySms(pPhone, smsMessage);
-        showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+        if (!isSilentRecurrence) {
+          showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+        }
         return;
       }
     }
 
     // 2. Web browser / PWA fallback
     if (pPhone) {
-      const cleanPhone = pPhone.replace(/[\s\-]/g, "");
-      const smsUri = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
-      const link = document.createElement("a");
-      link.href = smsUri;
-      link.target = "_blank";
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => link.remove(), 500);
-      showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
+      if (!isSilentRecurrence) {
+        const cleanPhone = pPhone.replace(/[\s\-]/g, "");
+        const smsUri = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
+        const link = document.createElement("a");
+        link.href = smsUri;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => link.remove(), 500);
+        showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
+      }
     } else {
-      const enteredPhone = prompt("Ota-onangiz telefon raqamini kiriting (+998901234567):");
-      if (enteredPhone && enteredPhone.trim()) {
-        parentPhone = enteredPhone.trim();
-        try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
-        sendEmergencyOfflineSms(curLat, curLon, cName, battery);
+      if (!isSilentRecurrence) {
+        const enteredPhone = prompt("Ota-onangiz telefon raqamini kiriting (+998901234567):");
+        if (enteredPhone && enteredPhone.trim()) {
+          parentPhone = enteredPhone.trim();
+          try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+          sendEmergencyOfflineSms(curLat, curLon, cName, battery, false);
+        }
       }
     }
   } catch (err) {
