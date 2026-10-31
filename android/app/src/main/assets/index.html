@@ -140,6 +140,15 @@
       </div>
     </div>
 
+    <!-- 0. OFFLINE STATUS BANNER (Automatic 100% Offline Resilience Indicator) -->
+    <div id="offlineStatusBar" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40 mb-2 transition-all duration-300">
+      <div class="flex items-center gap-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+        <span id="offlineStatusText" class="text-[11px] font-extrabold">📡 Oflayn rejim (GPS, topshiriqlar va xarita lokal faol)</span>
+      </div>
+      <span class="text-[9px] bg-black/30 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">100% Oflayn</span>
+    </div>
+
     <!-- 1. DEMO MODE NOTICE BANNER & INSTANT ROLE SWITCHER -->
     <div id="demoNoticeBanner" class="hidden bg-gradient-to-r from-amber-500/90 via-orange-500/90 to-amber-600/90 backdrop-blur-xl text-slate-950 px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40">
       <div class="flex items-center gap-1.5 min-w-0">

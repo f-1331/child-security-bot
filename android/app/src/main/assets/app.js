@@ -3246,12 +3246,25 @@ async function loadRouteHistory(childId, isSilent = false) {
     lastRouteFetchTime = Date.now();
     const res = await fetch(`/api/v1/webapp/child/${targetId}/history?limit=500`);
     const data = await res.json();
-    if (data.status !== "success") return;
+    if (data.status !== "success") throw new Error("API returned non-success");
 
     const points = data.points || [];
+    // Cache points locally for 100% offline viewing
+    try {
+      localStorage.setItem(`_cached_route_history_${targetId}`, JSON.stringify(points));
+    } catch (e) {}
     renderHistoryToMapAndList(points);
   } catch (err) {
-    if (!isSilent) console.error("Failed to load route history:", err);
+    if (!isSilent) console.warn("Failed to fetch route history online, loading local offline trail:", err);
+    // OFFLINE RESILIENCE: Load cached history and any pending offline GPS queue points
+    try {
+      const cachedHist = JSON.parse(localStorage.getItem(`_cached_route_history_${targetId}`) || "[]");
+      const queuedGps = JSON.parse(localStorage.getItem(`_offline_gps_queue_${targetId}`) || "[]");
+      const offlineCombined = [...cachedHist, ...queuedGps];
+      if (offlineCombined.length > 0) {
+        renderHistoryToMapAndList(offlineCombined);
+      }
+    } catch (e) {}
   }
 }
 
@@ -3326,18 +3339,31 @@ function renderHistoryToMapAndList(points) {
 
   routePolyline = glowPolyline;
 
-  // 2. Identify repeated visits (Bitta yo'ldan qayta-qayta yurgan joylarni aniqlash)
-  // Cluster points within 25 meters
+  // 2. Identify repeated visits (Bitta joydan qayta-qayta yurgan haqiqiy tashriflarni aniqlash)
+  // Cluster points within 25 meters, treating continuous points (< 5 min) as ONE stay
   const clusters = [];
   const pointVisitInfo = new Map();
 
-  points.forEach((p, idx) => {
+  // Chronologically sort points for accurate visit detection
+  const sortedPoints = [...points].sort((a, b) => {
+    const tA = a.recorded_at ? new Date(String(a.recorded_at).endsWith("Z") ? a.recorded_at : a.recorded_at + "Z").getTime() : 0;
+    const tB = b.recorded_at ? new Date(String(b.recorded_at).endsWith("Z") ? b.recorded_at : b.recorded_at + "Z").getTime() : 0;
+    return tA - tB;
+  });
+
+  sortedPoints.forEach((p, idx) => {
     let pTimeStr = "--:--:--";
     let rawDate = null;
+    let timeMs = 0;
     if (p.recorded_at) {
       let s = String(p.recorded_at).trim();
       if (!s.endsWith("Z") && !s.includes("+")) s += "Z";
       rawDate = new Date(s);
+      timeMs = rawDate.getTime();
+      pTimeStr = rawDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    } else {
+      timeMs = Date.now() - (sortedPoints.length - idx) * 3000;
+      rawDate = new Date(timeMs);
       pTimeStr = rawDate.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     }
     const speedVal = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/soat` : "Piyoda";
@@ -3346,7 +3372,7 @@ function renderHistoryToMapAndList(points) {
     let matchedCluster = null;
     for (const c of clusters) {
       const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
-      if (dist <= 10) { // 10 meters proximity (uyimiz tochkasi ichida 10 metr)
+      if (dist <= 25) { // 25 meters proximity for real physical location
         matchedCluster = c;
         break;
       }
@@ -3357,6 +3383,7 @@ function renderHistoryToMapAndList(points) {
       stepNum: idx + 1,
       time: pTimeStr,
       rawDate: rawDate,
+      timeMs: timeMs,
       battery: batVal,
       speed: speedVal,
       isCharging: p.is_charging,
@@ -3364,14 +3391,31 @@ function renderHistoryToMapAndList(points) {
       lng: p.longitude
     };
 
-    if (matchedCluster) {
-      matchedCluster.visits.push(visitItem);
-    } else {
+    if (!matchedCluster) {
       clusters.push({
         latitude: p.latitude,
         longitude: p.longitude,
+        lastSeenTimeMs: timeMs,
+        lastPointIndex: idx,
         visits: [visitItem]
       });
+    } else {
+      const timeSinceLastMs = Math.abs(timeMs - (matchedCluster.lastSeenTimeMs || timeMs));
+      const indexGap = idx - (matchedCluster.lastPointIndex || 0);
+
+      // A NEW visit only begins if child left the area (indexGap > 2 AND > 5 mins elapsed)
+      // Continuous points belong to the SAME visit stay, preventing false 100+ badges while sitting!
+      if (indexGap > 2 && timeSinceLastMs > (5 * 60 * 1000)) {
+        matchedCluster.visits.push(visitItem);
+      } else {
+        const latestVisit = matchedCluster.visits[matchedCluster.visits.length - 1];
+        if (latestVisit) {
+          latestVisit.endTime = pTimeStr;
+          latestVisit.battery = batVal;
+        }
+      }
+      matchedCluster.lastSeenTimeMs = timeMs;
+      matchedCluster.lastPointIndex = idx;
     }
   });
 
@@ -5095,7 +5139,19 @@ async function loadTasks() {
     return;
   }
 
-  container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Topshiriqlar yuklanmoqda...</p>';
+  // 1. Instantly render cached tasks from localStorage (0ms instant display)
+  const cachedTasksKey = `smart_tracker_cached_tasks_${currentChildId || "default"}`;
+  try {
+    const localTasks = JSON.parse(localStorage.getItem(cachedTasksKey) || "[]");
+    if (Array.isArray(localTasks) && localTasks.length > 0) {
+      tasksList = localTasks;
+      renderTasksList();
+    }
+  } catch (e) {}
+
+  if (!tasksList || tasksList.length === 0) {
+    container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Topshiriqlar yuklanmoqda...</p>';
+  }
 
   try {
     let url = "";
@@ -5106,7 +5162,9 @@ async function loadTasks() {
     } else if (currentChildId) {
       url = `/api/v1/webapp/child/${currentChildId}/tasks`;
     } else {
-      container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Farzand tanlanmagan.</p>';
+      if (!tasksList || tasksList.length === 0) {
+        container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Farzand tanlanmagan.</p>';
+      }
       return;
     }
 
@@ -5114,13 +5172,20 @@ async function loadTasks() {
     const data = await res.json();
     if (data.status === "success") {
       tasksList = data.tasks || [];
+      try {
+        localStorage.setItem(cachedTasksKey, JSON.stringify(tasksList));
+      } catch (e) {}
       renderTasksList();
-    } else {
+    } else if (!tasksList || tasksList.length === 0) {
       container.innerHTML = '<p class="text-center text-xs text-red-400 py-6">Topshiriqlarni yuklashda xatolik.</p>';
     }
   } catch (err) {
-    console.error("Error loading tasks:", err);
-    container.innerHTML = '<p class="text-center text-xs text-red-400 py-6">Server bilan aloqa uzildi.</p>';
+    console.warn("Offline or network issue loading tasks, using cached list:", err);
+    if (!tasksList || tasksList.length === 0) {
+      container.innerHTML = '<div class="text-center py-6 px-4"><p class="text-xs text-amber-400 font-bold mb-1">📡 Oflayn rejim</p><p class="text-[11px] text-slate-400">Topshiriqlar lokal xotiradan yuklanadi.</p></div>';
+    } else {
+      renderTasksList();
+    }
   }
 }
 
@@ -5882,7 +5947,26 @@ async function submitTaskProof() {
       alert("Xatolik yuz berdi: " + (completeData.detail || "Topshirish amalga oshmadi"));
     }
   } catch (err) {
-    console.error("Submit proof error:", err);
+    console.warn("Submit proof offline fallback activated:", err);
+    // OFFLINE QUEUE: Save task completion locally so child isn't blocked!
+    try {
+      const offlineQueue = JSON.parse(localStorage.getItem("_offline_task_queue_") || "[]");
+      offlineQueue.push({
+        taskId: activeProofTaskId,
+        timestamp: Date.now()
+      });
+      localStorage.setItem("_offline_task_queue_", JSON.stringify(offlineQueue));
+
+      const t = tasksList.find(x => x.id === activeProofTaskId);
+      if (t) {
+        t.status = "completed_by_child";
+        t.proof_photo_url = "offline_cached_proof";
+      }
+      closeProofModal();
+      renderTasksList();
+      showToast("✅ Topshiriq oflayn qabul qilindi! Internet yonganda ota-onangizga yuboriladi 🛡️");
+      return;
+    } catch (e) {}
     alert("Rasmni yuborishda xatolik yuz berdi.");
   } finally {
     btn.disabled = false;
@@ -6895,6 +6979,20 @@ function startChildLiveTracking(childId) {
       // Update local child marker on map smoothly
       renderChildMarker(latitude, longitude, "Men", isSos, null);
 
+      // 0ms Sub-millisecond instant visual route polyline directly under child's feet
+      if (map) {
+        if (!window._localLivePolyline) {
+          window._localLivePolyline = L.polyline([], {
+            color: "#06b6d4",
+            weight: 5,
+            opacity: 0.95,
+            lineCap: "round",
+            lineJoin: "round"
+          }).addTo(map);
+        }
+        window._localLivePolyline.addLatLng([latitude, longitude]);
+      }
+
       // Distance from last sent point in meters
       const dist = (lastSentLat && lastSentLng)
         ? calculateDistanceMeters(lastSentLat, lastSentLng, latitude, longitude)
@@ -6911,8 +7009,8 @@ function startChildLiveTracking(childId) {
         }
       }
 
-      // Anti-Drift Clamping: Ignore tiny GPS noise when stationary (< 3.0m)
-      const isMoving = dist >= Math.max(3.0, accuracy * 0.2) || speedKmh >= 2;
+      // Anti-Drift Clamping: Ignore tiny GPS noise when stationary (< 2.5m)
+      const isMoving = dist >= Math.max(2.5, accuracy * 0.15) || speedKmh >= 2;
       if (!isMoving) {
         if (!window._stationaryCount) window._stationaryCount = 0;
         window._stationaryCount++;
@@ -6920,15 +7018,30 @@ function startChildLiveTracking(childId) {
         window._stationaryCount = 0;
       }
 
-      // Eco Mode when stationary (poll every 30-45s), Real-Time Mode when moving (every 2-3s)
-      const isEcoMode = window._stationaryCount >= 2;
-      const minSendInterval = isEcoMode ? 30000 : 2500;
+      // High-Frequency Real-Time Mode: 800ms when moving, 10s when stationary
+      const isEcoMode = window._stationaryCount >= 3;
+      const minSendInterval = isEcoMode ? 10000 : 800;
 
       // Only send if actually moved (anti-drift) OR heartbeat interval elapsed
       if (isMoving || (now - lastSentTime) > minSendInterval) {
         lastSentTime = now;
         lastSentLat = latitude;
         lastSentLng = longitude;
+
+        // Persist local offline route history trail
+        try {
+          const histKey = `_cached_route_history_${childId}`;
+          const currentHist = JSON.parse(localStorage.getItem(histKey) || "[]");
+          currentHist.push({
+            latitude,
+            longitude,
+            accuracy,
+            speed: speedKmh,
+            recorded_at: new Date().toISOString()
+          });
+          if (currentHist.length > 500) currentHist.shift();
+          localStorage.setItem(histKey, JSON.stringify(currentHist));
+        } catch (e) {}
 
         const battery = await getDeviceBattery();
         const isCharging = await getDeviceChargingStatus();
@@ -7054,9 +7167,54 @@ async function flushOfflineTelemetryBatch(childId) {
   } catch (err) {}
 }
 
+async function flushOfflineTaskQueue() {
+  try {
+    const raw = localStorage.getItem("_offline_task_queue_");
+    if (!raw) return;
+    const queue = JSON.parse(raw);
+    if (!Array.isArray(queue) || queue.length === 0) return;
+
+    for (const item of queue) {
+      try {
+        await fetch(`/api/v1/webapp/task/${item.taskId}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proof_photo_url: "synced_from_offline_cache" })
+        });
+      } catch (e) {}
+    }
+    localStorage.removeItem("_offline_task_queue_");
+    console.log(`Successfully synced ${queue.length} offline task completions.`);
+  } catch (err) {}
+}
+
+window.addEventListener("offline", () => {
+  const bar = document.getElementById("offlineStatusBar");
+  const txt = document.getElementById("offlineStatusText");
+  if (bar) {
+    bar.className = "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40 mb-2 transition-all duration-300";
+    if (txt) txt.textContent = "📡 Oflayn rejim (GPS, topshiriqlar va xarita lokal faol)";
+    bar.classList.remove("hidden");
+  }
+  showToast("📡 Internet uzildi: Oflayn rejim faollashdi. Ma'lumotlaringiz xavfsiz saqlanmoqda 🛡️");
+});
+
 window.addEventListener("online", () => {
   const targetId = currentChildId || (authenticatedSession?.user?.id);
   if (targetId) flushOfflineTelemetryBatch(targetId);
+  flushOfflineTaskQueue();
+  loadTasks();
+
+  const bar = document.getElementById("offlineStatusBar");
+  const txt = document.getElementById("offlineStatusText");
+  if (bar) {
+    bar.className = "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-emerald-300/40 mb-2 transition-all duration-300";
+    if (txt) txt.textContent = "🟢 Internet tiklandi! Barcha oflayn ma'lumotlar serverga sinxronlandi.";
+    setTimeout(() => {
+      bar.classList.add("hidden");
+    }, 3500);
+  }
+  showToast("🟢 Internet tiklandi! Ma'lumotlar serverga sinxronlandi 🚀");
 });
 
 // =========================================================

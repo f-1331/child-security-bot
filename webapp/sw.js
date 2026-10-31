@@ -1,5 +1,7 @@
-// Child Security Service Worker (PWA Offline & Background Resilience)
-const CACHE_NAME = "child-security-v15";
+// Child Security Service Worker (PWA 100% Offline Resilience & Background Sync)
+const CACHE_NAME = "child-security-v16";
+const API_CACHE_NAME = "child-security-api-v16";
+
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -10,16 +12,25 @@ const STATIC_ASSETS = [
   "/logo.png?v=17",
   "/icon-192.png",
   "/icon-512.png",
-  "/apple-touch-icon.png"
+  "/apple-touch-icon.png",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+  "https://cdn.tailwindcss.com",
+  "https://unpkg.com/lucide@latest",
+  "https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"
 ];
 
-// Install: pre-cache static assets
+// Install: pre-cache static assets and external libraries
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn("PWA pre-cache error:", err);
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      for (const asset of STATIC_ASSETS) {
+        try {
+          await cache.add(asset);
+        } catch (err) {
+          console.warn("PWA pre-cache warning for asset:", asset, err);
+        }
+      }
     })
   );
   self.skipWaiting();
@@ -31,7 +42,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key !== CACHE_NAME && key !== API_CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -41,25 +52,72 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Fetch: network first with cache fallback
+// Fetch: Smart network-first with automatic offline fallback
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Skip non-GET and API calls (API must always be fresh from network)
-  if (req.method !== "GET" || url.pathname.startsWith("/api/")) {
+  // 1. Handle API GET requests (Tasks, Geofences, Status, Telemetry)
+  if (req.method === "GET" && url.pathname.startsWith("/api/")) {
+    event.respondWith(
+      fetch(req)
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const resClone = networkRes.clone();
+            caches.open(API_CACHE_NAME).then((cache) => cache.put(req, resClone));
+          }
+          return networkRes;
+        })
+        .catch(async () => {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          return new Response(JSON.stringify({ status: "offline", offline: true }), {
+            headers: { "Content-Type": "application/json" }
+          });
+        })
+    );
     return;
   }
 
+  // Skip non-GET requests (POST/PUT/DELETE handled via local offline queue in app.js)
+  if (req.method !== "GET") {
+    return;
+  }
+
+  // 2. Handle CDN Scripts & CSS (Leaflet, Tailwind, Lucide, Fonts)
+  if (url.origin !== self.location.origin) {
+    if (
+      url.hostname.includes("unpkg.com") ||
+      url.hostname.includes("tailwindcss.com") ||
+      url.hostname.includes("jsdelivr.net") ||
+      url.hostname.includes("googleapis.com") ||
+      url.hostname.includes("gstatic.com")
+    ) {
+      event.respondWith(
+        caches.match(req).then((cached) => {
+          if (cached) return cached;
+          return fetch(req)
+            .then((res) => {
+              if (res && res.status === 200) {
+                const clone = res.clone();
+                caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+              }
+              return res;
+            })
+            .catch(() => cached || new Response("", { status: 200 }));
+        })
+      );
+      return;
+    }
+  }
+
+  // 3. Handle App Shell Navigation & Static Assets
   event.respondWith(
     fetch(req)
       .then((networkRes) => {
-        // Cache valid responses for static assets
         if (networkRes && networkRes.status === 200) {
           const resClone = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(req, resClone);
-          });
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
         }
         return networkRes;
       })
@@ -67,7 +125,7 @@ self.addEventListener("fetch", (event) => {
         const cachedRes = await caches.match(req);
         if (cachedRes) return cachedRes;
         if (req.mode === "navigate") {
-          return caches.match("/index.html");
+          return caches.match("/index.html") || caches.match("/");
         }
         return new Response("Offline", { status: 503, statusText: "Offline" });
       })
