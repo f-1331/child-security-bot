@@ -2323,6 +2323,13 @@ function initMap() {
     touchZoom: true,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
 
+  // Instantly acquire real device location to center map on user's real city/street
+  getDeviceLocation().then((loc) => {
+    if (loc && typeof loc.latitude === "number" && map && !map._hasAutoCenteredChild) {
+      map.setView([loc.latitude, loc.longitude], 15);
+    }
+  }).catch(() => {});
+
   // Expose map to global window for external triggers and UI controls
   window.map = map;
 
@@ -6758,9 +6765,42 @@ function startChildLiveTracking(childId) {
     maximumAge: 0 // Fresh GPS fix always with centimeter resolution, no cached data!
   };
 
+  // Live Kalman filter state for real-time drift elimination
+  if (!window._liveKalmanState) {
+    window._liveKalmanState = { lat: 0, lon: 0, variance: -1 };
+  }
+  function filterLiveKalman(rawLat, rawLon, rawAcc) {
+    const acc = (typeof rawAcc === "number" && rawAcc > 0) ? rawAcc : 15;
+    const s = window._liveKalmanState;
+    if (s.variance < 0) {
+      s.lat = rawLat;
+      s.lon = rawLon;
+      s.variance = acc * acc;
+    } else {
+      const q = 3.0;
+      const r = acc * acc;
+      s.variance += q;
+      const k = s.variance / (s.variance + r);
+      s.lat += k * (rawLat - s.lat);
+      s.lon += k * (rawLon - s.lon);
+      s.variance = (1 - k) * s.variance;
+    }
+    return { lat: s.lat, lon: s.lon };
+  }
+
   childWatchId = navigator.geolocation.watchPosition(
     async (pos) => {
-      const { latitude, longitude, accuracy, speed } = pos.coords;
+      const rawLat = pos.coords.latitude;
+      const rawLon = pos.coords.longitude;
+      const rawAccuracy = pos.coords.accuracy || 15;
+      const speed = pos.coords.speed;
+
+      // Apply Kalman filter smoothing
+      const kFiltered = filterLiveKalman(rawLat, rawLon, rawAccuracy);
+      const latitude = kFiltered.lat;
+      const longitude = kFiltered.lon;
+      const accuracy = rawAccuracy;
+
       cachedDeviceLocation = { latitude, longitude, accuracy };
       lastLocationFetchTime = Date.now();
       const now = Date.now();
@@ -6768,7 +6808,7 @@ function startChildLiveTracking(childId) {
       // Check if child currently has active SOS
       const isSos = (authenticatedSession?.user?.is_sos_active) || (document.getElementById("modal-sos-active") && !document.getElementById("modal-sos-active").classList.contains("hidden")) || false;
 
-      // Update local child marker on map
+      // Update local child marker on map smoothly
       renderChildMarker(latitude, longitude, "Men", isSos, null);
 
       // Distance from last sent point in meters
@@ -6776,30 +6816,32 @@ function startChildLiveTracking(childId) {
         ? calculateDistanceMeters(lastSentLat, lastSentLng, latitude, longitude)
         : 999;
 
-      // Feature 3: Speed tracking & conversion to km/h
+      // Speed tracking & conversion to km/h
       let speedKmh = 0;
       if (typeof speed === "number" && !isNaN(speed) && speed > 0) {
         speedKmh = Math.round(speed * 3.6);
       } else if (lastSentLat && lastSentLng && lastSentTime && (now - lastSentTime) > 0) {
         const timeDeltaSec = (now - lastSentTime) / 1000;
-        if (timeDeltaSec >= 3 && dist >= 5) {
+        if (timeDeltaSec >= 3 && dist >= 4) {
           speedKmh = Math.round((dist / timeDeltaSec) * 3.6);
         }
       }
 
-      // Adaptive GPS Polling: stationary vs active movement
-      if (!window._stationaryCount) window._stationaryCount = 0;
-      if (dist < 3.0 && speedKmh <= 1) {
+      // Anti-Drift Clamping: Ignore tiny GPS noise when stationary (< 3.0m)
+      const isMoving = dist >= Math.max(3.0, accuracy * 0.2) || speedKmh >= 2;
+      if (!isMoving) {
+        if (!window._stationaryCount) window._stationaryCount = 0;
         window._stationaryCount++;
-      } else if (dist >= 5.0 || speedKmh >= 2) {
+      } else {
         window._stationaryCount = 0;
       }
 
-      // Eco Mode when stationary >= 3 pings (poll every 30-45s), Real-Time Mode when moving (every 2-3s)
-      const isEcoMode = window._stationaryCount >= 3;
-      const minSendInterval = isEcoMode ? 35000 : 2500;
+      // Eco Mode when stationary (poll every 30-45s), Real-Time Mode when moving (every 2-3s)
+      const isEcoMode = window._stationaryCount >= 2;
+      const minSendInterval = isEcoMode ? 30000 : 2500;
 
-      if (dist >= 0.5 || (now - lastSentTime) > minSendInterval) {
+      // Only send if actually moved (anti-drift) OR heartbeat interval elapsed
+      if (isMoving || (now - lastSentTime) > minSendInterval) {
         lastSentTime = now;
         lastSentLat = latitude;
         lastSentLng = longitude;
