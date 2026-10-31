@@ -880,13 +880,28 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
     charging_icon = "⚡ (Quvvatlanmoqda)" if latest_loc.is_charging else ""
     time_str = format_tashkent_time(latest_loc.recorded_at) if latest_loc and latest_loc.recorded_at else "Hozirgina"
 
-    # 1. Send native Telegram Map Location Pin!
+    # 1. Send native Telegram Map Location Pin (Live Radar if fresh < 5 min)!
     try:
-        await bot.send_location(
-            chat_id=chat_id,
-            latitude=latest_loc.latitude,
-            longitude=latest_loc.longitude
-        )
+        if not is_offline:
+            try:
+                await bot.send_location(
+                    chat_id=chat_id,
+                    latitude=latest_loc.latitude,
+                    longitude=latest_loc.longitude,
+                    live_period=1800
+                )
+            except Exception:
+                await bot.send_location(
+                    chat_id=chat_id,
+                    latitude=latest_loc.latitude,
+                    longitude=latest_loc.longitude
+                )
+        else:
+            await bot.send_location(
+                chat_id=chat_id,
+                latitude=latest_loc.latitude,
+                longitude=latest_loc.longitude
+            )
     except Exception as e:
         logger.error(f"Failed to send native location pin: {e}")
 
@@ -1933,10 +1948,19 @@ async def on_phone_invalid_media(message: Message):
     "jonli joylashuvni yuborish",
     "Jonli joylashuv",
     "jonli joylashuv",
-    "Joylashuvni yuborish"
+    "Joylashuvni yuborish",
+    "📍 Jonli joylashuv",
+    "Jonli lokatsiya",
+    "jonli lokatsiya"
 ]))
-async def on_send_location_text_hint(message: Message):
-    """Guide user on how to share native location if sent as text."""
+async def on_send_location_text_hint(message: Message, bot: Bot):
+    """Guide child on how to share native location, or immediately dispatch child location if user is parent."""
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, message.from_user.id)
+        if user and user.role == "parent":
+            await on_request_current_location(message, bot)
+            return
+
     await message.answer(
         "📍 **Jonli joylashuvni yuborish uchun:**\n\n"
         "1️⃣ Pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasini bosing va 'Ulashish / Share' ni tasdiqlang.\n"

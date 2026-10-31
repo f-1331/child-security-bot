@@ -354,67 +354,113 @@ async function getDeviceLocation() {
     return { latitude: 41.2916, longitude: 69.2121, accuracy: 10 };
   }
 
-  // Use cached location if available (< 5 minutes) to avoid repeated browser prompts
-  if (cachedDeviceLocation && (Date.now() - lastLocationFetchTime < 300000)) {
-    return cachedDeviceLocation;
-  }
-  if (lastSentLat && lastSentLng) {
-    return { latitude: lastSentLat, longitude: lastSentLng, accuracy: 20 };
+  // 1. Android Native Bridge (instant sub-millisecond fix from native service)
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getLastKnownLocation === "function") {
+      const raw = window.AndroidBridge.getLastKnownLocation();
+      if (raw) {
+        const parsed = (typeof raw === "string") ? JSON.parse(raw) : raw;
+        if (parsed && typeof parsed.latitude === "number") {
+          cachedDeviceLocation = {
+            latitude: parsed.latitude,
+            longitude: parsed.longitude,
+            accuracy: parsed.accuracy || 10
+          };
+          lastLocationFetchTime = Date.now();
+          return cachedDeviceLocation;
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Telegram WebApp LocationManager (if permission is granted)
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.LocationManager) {
+    try {
+      if (tg.LocationManager.isAccessGranted) {
+        const tgLoc = await new Promise((resolve) => {
+          tg.LocationManager.getLocation((loc) => resolve(loc || null));
+        });
+        if (tgLoc && tgLoc.latitude && tgLoc.longitude) {
+          cachedDeviceLocation = {
+            latitude: tgLoc.latitude,
+            longitude: tgLoc.longitude,
+            accuracy: tgLoc.accuracy || 15
+          };
+          lastLocationFetchTime = Date.now();
+          return cachedDeviceLocation;
+        }
+      }
+    } catch (e) {}
   }
 
-  // Check Telegram LocationManager first (permanent permission)
-  const tg = window.Telegram?.WebApp;
-  if (tg && tg.LocationManager && tg.LocationManager.isAccessGranted) {
-    return new Promise((resolve) => {
-      try {
-        tg.LocationManager.getLocation((loc) => {
-          if (loc && loc.latitude && loc.longitude) {
-            cachedDeviceLocation = {
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-              accuracy: loc.accuracy || 10
-            };
-            lastLocationFetchTime = Date.now();
-            resolve(cachedDeviceLocation);
-          } else {
-            resolve(cachedDeviceLocation || null);
-          }
-        });
-      } catch (e) {
-        resolve(cachedDeviceLocation || null);
-      }
-    });
+  // 3. Browser Navigator Geolocation with 2-Tier Adaptive Indoor/Outdoor Engine
+  if (!navigator.geolocation) {
+    return cachedDeviceLocation || null;
+  }
+
+  // Use fresh cache if under 15 seconds to avoid flooding browser GPS
+  if (cachedDeviceLocation && (Date.now() - lastLocationFetchTime < 15000)) {
+    return cachedDeviceLocation;
   }
 
   return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(cachedDeviceLocation || null);
-      return;
-    }
-    const timer = setTimeout(() => {
-      resolve(cachedDeviceLocation || null);
-    }, 3000);
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(timer);
-        cachedDeviceLocation = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        };
+    let resolved = false;
+    const finish = (loc) => {
+      if (resolved) return;
+      resolved = true;
+      if (loc && typeof loc.latitude === "number") {
+        cachedDeviceLocation = loc;
         lastLocationFetchTime = Date.now();
         resolve(cachedDeviceLocation);
-      },
-      (err) => {
-        clearTimeout(timer);
-        console.warn("Geolocation query note:", err);
+      } else {
         resolve(cachedDeviceLocation || null);
+      }
+    };
+
+    // Safety watchdog timer (15 seconds total)
+    const watchdog = setTimeout(() => {
+      finish(null);
+    }, 15000);
+
+    // Tier 1: High Accuracy GPS (ideal for outdoors & moving vehicles)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(watchdog);
+        finish({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy || 10
+        });
+      },
+      (err1) => {
+        console.warn("High-accuracy GPS note, falling back to network fix:", err1?.message || err1);
+        // Tier 2: Low Accuracy / Network Geolocation fallback (works 100% indoors, Wi-Fi & cell tower)
+        navigator.geolocation.getCurrentPosition(
+          (pos2) => {
+            clearTimeout(watchdog);
+            finish({
+              latitude: pos2.coords.latitude,
+              longitude: pos2.coords.longitude,
+              accuracy: pos2.coords.accuracy || 35
+            });
+          },
+          (err2) => {
+            clearTimeout(watchdog);
+            console.warn("Network geolocation fallback note:", err2?.message || err2);
+            finish(null);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 6000,
+            maximumAge: 30000
+          }
+        );
       },
       {
         enableHighAccuracy: true,
-        timeout: 3000,
-        maximumAge: 300000,
+        timeout: 8000,
+        maximumAge: 10000
       }
     );
   });
@@ -485,8 +531,30 @@ let isReplaying = false;
 let replayTimer = null;
 let pollInterval = null;
 
-// Address cache to avoid spamming Nominatim
+// Address cache to avoid spamming Nominatim and provide 0ms instant display
 const addressCache = new Map();
+try {
+  const savedCache = sessionStorage.getItem("smart_tracker_addr_cache");
+  if (savedCache) {
+    const parsed = JSON.parse(savedCache);
+    for (const [k, v] of Object.entries(parsed)) {
+      addressCache.set(k, v);
+    }
+  }
+} catch (e) {}
+
+function saveAddressCache(key, val) {
+  try {
+    addressCache.set(key, val);
+    if (addressCache.size > 200) {
+      const first = addressCache.keys().next().value;
+      addressCache.delete(first);
+    }
+    const obj = {};
+    addressCache.forEach((v, k) => { obj[k] = v; });
+    sessionStorage.setItem("smart_tracker_addr_cache", JSON.stringify(obj));
+  } catch (e) {}
+}
 
 // Default initial coordinates (Tashkent, Uzbekistan)
 const DEFAULT_LAT = 41.2995;
@@ -2766,7 +2834,7 @@ async function resolveAddress(lat, lon) {
       } else {
         fullText = data.display_name.split(",").slice(0, 2).join(",");
       }
-      addressCache.set(key, fullText);
+      saveAddressCache(key, fullText);
       if (el) el.textContent = fullText;
       return;
     }
@@ -4721,7 +4789,7 @@ async function reverseGeocodePickerLocation(lat, lon) {
       if (data && data.display_name) {
         const parts = data.display_name.split(",");
         const clean = parts.slice(0, 3).join(",").trim();
-        addressCache.set(key, clean);
+        saveAddressCache(key, clean);
         addrText.textContent = clean;
         return;
       }

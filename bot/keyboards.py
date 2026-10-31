@@ -65,11 +65,11 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
-            KeyboardButton(text="📍 Jonli joylashuvimni yuborish", request_location=True)
+            KeyboardButton(text="🗺️ Jonli Xarita (Web App)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
         ],
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
-            KeyboardButton(text="📱 Ilovalar & Ekran tahlili")
+            KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
+            KeyboardButton(text="🔋 Batareya va Holat")
         ],
         [
             KeyboardButton(text="📍 Kerakli joylar"),
