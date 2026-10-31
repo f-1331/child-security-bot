@@ -3090,27 +3090,38 @@
           </button>
         </div>
 
-        <!-- Option 2: Windows Standalone Desktop Launcher (.bat & .zip) -->
-        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2">
+        <!-- Option 2: Windows Standalone Desktop Launcher (.url, .bat & .zip) -->
+        <div class="p-3.5 rounded-2xl bg-slate-800/90 border border-white/10 space-y-2.5">
           <h5 class="text-xs font-black text-white flex items-center gap-1.5">
-            <span>🪟</span> <span>Windows uchun Tezkor O'rnatgich (11 / 10 / 8 / 7)</span>
+            <span>🪟</span> <span>Windows uchun Desktop Dastur (11 / 10 / 8 / 7)</span>
           </h5>
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            Windows foydalanuvchilari uchun ish stoliga avtomatik yorliq yaratuvchi mustaqil dastur:
+            Windows noutbuklarida dasturni 100% xatosiz ishga tushirish uchun qulay variantlar:
           </p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            <a href="/downloads/ChildSecurity_Desktop_Setup.bat" download="ChildSecurity_Desktop_Setup.bat" class="py-2.5 px-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-1.5 transition">
-              <i data-lucide="hard-drive-download" class="w-4 h-4 text-cyan-400"></i>
-              <span>Tezkor .bat O'rnatgich</span>
+          <div class="flex flex-col gap-1.5">
+            <a href="/download/desktop-url" download="Child Security.url" class="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 active:scale-95 text-white font-black text-xs rounded-xl border border-emerald-400/30 shadow-lg flex items-center justify-center gap-2 transition">
+              <i data-lucide="external-link" class="w-4 h-4 text-emerald-200"></i>
+              <span>⚡ Bloklanmaydigan Yorliq (.url) — Tavsiya etiladi</span>
             </a>
-            <a href="/downloads/ChildSecurity_Windows_Setup.zip" download="ChildSecurity_Windows_Setup.zip" class="py-2.5 px-2 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-1.5 transition">
-              <i data-lucide="archive" class="w-4 h-4 text-emerald-400"></i>
-              <span>To'liq .zip Arxiv</span>
-            </a>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              <a href="/downloads/ChildSecurity_Desktop_Setup.bat" download="ChildSecurity_Desktop_Setup.bat" class="py-2.5 px-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-1.5 transition">
+                <i data-lucide="hard-drive-download" class="w-4 h-4 text-cyan-400"></i>
+                <span>Tezkor .bat O'rnatgich</span>
+              </a>
+              <a href="/downloads/ChildSecurity_Windows_Setup.zip" download="ChildSecurity_Windows_Setup.zip" class="py-2.5 px-2 bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 active:scale-95 text-white font-black text-xs rounded-xl border border-white/10 shadow-lg flex items-center justify-center gap-1.5 transition">
+                <i data-lucide="archive" class="w-4 h-4 text-emerald-400"></i>
+                <span>To'liq .zip Arxiv</span>
+              </a>
+            </div>
           </div>
-          <p class="text-[10px] text-amber-200/80 leading-snug">
-            ⚠️ <i>Agar SmartScreen ko'k oynasi chiqsa: <b>«Подробнее» (Batafsil)</b> ➔ <b>«Выполнить в любом случае»</b> ni bosing.</i>
-          </p>
+          <div class="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[10.5px] text-amber-200 leading-relaxed">
+            <p class="font-bold text-amber-300 mb-1 flex items-center gap-1">
+              <span>🛡️</span> <span>Windows 11 Smart App Control blokirovkasini yechish:</span>
+            </p>
+            <p>
+              Agar <i>«Интеллектуальное управление приложениями заблокировало файл»</i> chiqsa: fayl ustiga sichqonchaning o'ng tugmasi ➔ <b>«Свойства» (Properties)</b> ➔ pastdagi <b>«Разблокировать» (Unblock)</b> katagiga galochka qo'ying ➔ <b>OK</b> bosing!
+            </p>
+          </div>
         </div>
 
         <!-- Option 3: Apple Mac Standalone Desktop Launcher (.zip / .command) -->

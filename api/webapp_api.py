@@ -2697,6 +2697,88 @@ async def router_download_desktop():
     )
 
 
+@router.get("/download/desktop-url", tags=["App"])
+@router.get("/download/desktop-shortcut", tags=["App"])
+async def router_download_desktop_url():
+    """Download clean Windows Internet Shortcut (.url) that never triggers Smart App Control."""
+    import os
+    from fastapi.responses import FileResponse, Response
+    from config import settings
+    url_file = os.path.join(settings.BASE_DIR, "downloads", "Child Security.url")
+    if os.path.exists(url_file):
+        return FileResponse(
+            url_file,
+            filename="Child Security.url",
+            media_type="application/internet-shortcut",
+            headers={"Content-Disposition": 'attachment; filename="Child Security.url"'}
+        )
+    content = (
+        "[InternetShortcut]\r\n"
+        "URL=https://child-security-bot.vercel.app\r\n"
+        "IconIndex=0\r\n"
+        "IconFile=C:\\Windows\\System32\\imageres.dll\r\n"
+    )
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="application/internet-shortcut",
+        headers={"Content-Disposition": 'attachment; filename="Child Security.url"'}
+    )
+
+
+@router.get("/download/desktop-windows-zip", tags=["App"])
+@router.get("/download/windows-zip", tags=["App"])
+async def router_download_desktop_windows_zip():
+    """Download Windows Desktop ZIP package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    win_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Windows_Setup.zip")
+    if os.path.exists(win_zip):
+        return FileResponse(
+            win_zip,
+            filename="ChildSecurity_Windows_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Windows_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
+@router.get("/download/desktop-mac", tags=["App"])
+@router.get("/download/mac", tags=["App"])
+async def router_download_desktop_mac():
+    """Download Apple macOS Desktop standalone setup package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    mac_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Mac_Setup.zip")
+    if os.path.exists(mac_zip):
+        return FileResponse(
+            mac_zip,
+            filename="ChildSecurity_Mac_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Mac_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
+@router.get("/download/desktop-linux", tags=["App"])
+@router.get("/download/linux", tags=["App"])
+async def router_download_desktop_linux():
+    """Download Linux Desktop standalone setup package."""
+    import os
+    from fastapi.responses import FileResponse, RedirectResponse
+    from config import settings
+    lin_zip = os.path.join(settings.BASE_DIR, "downloads", "ChildSecurity_Linux_Setup.zip")
+    if os.path.exists(lin_zip):
+        return FileResponse(
+            lin_zip,
+            filename="ChildSecurity_Linux_Setup.zip",
+            media_type="application/zip",
+            headers={"Content-Disposition": 'attachment; filename="ChildSecurity_Linux_Setup.zip"'}
+        )
+    return RedirectResponse(url="https://child-security-bot.vercel.app/#install-desktop", status_code=302)
+
+
 @router.post("/child/{child_id}/tamper-alert")
 async def report_tamper_alert_endpoint(
     child_id: int,

@@ -41,6 +41,14 @@
       "destination": "/downloads/ChildSecurity_Windows_Setup.zip"
     },
     {
+      "source": "/download/desktop-url",
+      "destination": "/downloads/Child Security.url"
+    },
+    {
+      "source": "/download/desktop-shortcut",
+      "destination": "/downloads/Child Security.url"
+    },
+    {
       "source": "/download/desktop-windows",
       "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
     },

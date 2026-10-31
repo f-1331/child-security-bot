@@ -40,6 +40,30 @@
       }
     },
     {
+      "src": "/downloads/Child%20Security.url",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
+      "src": "/download/desktop-url",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
+      "src": "/download/desktop-shortcut",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
       "src": "/download/desktop-mac",
       "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
       "headers": {

@@ -549,6 +549,33 @@ async def download_desktop_windows():
     )
 
 
+@app.get("/download/desktop-url", tags=["App"])
+@app.get("/download/desktop-shortcut", tags=["App"])
+async def download_desktop_url():
+    """Download clean Windows Internet Shortcut (.url) that never triggers Smart App Control."""
+    import os
+    from fastapi.responses import FileResponse, Response
+    url_file = os.path.join(settings.BASE_DIR, "downloads", "Child Security.url")
+    if os.path.exists(url_file):
+        return FileResponse(
+            url_file,
+            filename="Child Security.url",
+            media_type="application/internet-shortcut",
+            headers={"Content-Disposition": 'attachment; filename="Child Security.url"'}
+        )
+    content = (
+        "[InternetShortcut]\r\n"
+        "URL=https://child-security-bot.vercel.app\r\n"
+        "IconIndex=0\r\n"
+        "IconFile=C:\\Windows\\System32\\imageres.dll\r\n"
+    )
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="application/internet-shortcut",
+        headers={"Content-Disposition": 'attachment; filename="Child Security.url"'}
+    )
+
+
 @app.get("/download/desktop-mac", tags=["App"])
 @app.get("/download/mac", tags=["App"])
 async def download_desktop_mac():

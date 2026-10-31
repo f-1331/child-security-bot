@@ -42,5 +42,6 @@ downloads/*
 !downloads/*.zip
 !downloads/*.sh
 !downloads/*.desktop
+!downloads/*.url
 .neon
 node_modules/

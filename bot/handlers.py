@@ -3925,26 +3925,42 @@ async def on_download_windows(event, bot: Bot, state: FSMContext = None):
     webapp_url = settings.MINI_APP_URL or "https://child-security-bot.vercel.app"
     desktop_bat_url = f"{webapp_url}/download/desktop-windows"
     desktop_zip_url = f"{webapp_url}/download/desktop-windows-zip"
+    desktop_url_link = f"{webapp_url}/download/desktop-url"
 
     text = (
         "🪟 <b>Child Security — Windows uchun Desktop Dasturi (Windows 11 / 10 / 8 / 7)</b>\n\n"
-        "Windows tizimida dasturni 100% xatosiz ishga tushirishning qulay yo'llari:\n\n"
+        "Windows noutbuk va kompyuterlarda dasturni 100% xatosiz ishga tushirish yo'llari:\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚡ <b>1-USUL: To'g'ridan-to'g'ri Saytni Ochish (100% Kafolatli)</b>\n"
-        "Quyidagi <b>«Child Security.url»</b> fayli yoki sayt havolasi orqali dastur bir zumda ochiladi:\n"
-        "👉 <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n\n"
+        "⚡ <b>1-USUL (Tavsiya etiladi): Bloklanmaydigan Toza Yorliq (.url)</b>\n"
+        "Quyidagi <b>«Child Security.url»</b> faylini yuklab oling va bosing. "
+        "U hech qanday skript emas, toza yorliq bo'lgani sababli Windows Smart App Control yoki antivirus uni <b>hech qachon bloklamaydi</b>!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "📦 <b>2-USUL: Windows O'rnatgich Arxiv (.zip)</b>\n"
-        "Quyidagi <code>ChildSecurity_Windows_Setup.zip</code> faylini yuklab oling va oching. "
-        "Ichidagi <b>«Child Security.url»</b> yorlig'ini bosing — dastur darhol ishga tushadi!\n\n"
+        "🌐 <b>2-USUL: Brauzer orqali Mustaqil Ilova (PWA) O'rnatish</b>\n"
+        "Chrome yoki Edge brauzerida saytni oching: <a href=\"https://child-security-bot.vercel.app\">child-security-bot.vercel.app</a>\n"
+        "Manzil satrining o'ng tomonidagi <b>«Установить приложение» (O'rnatish)</b> tugmasini bosing — u ish stoli va vazifalar paneliga rasmiy ilova bo'lib o'rnatiladi!\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "⚙️ <b>3-USUL: Avtomatik Ish Stoli O'rnatgichi (.bat)</b>\n"
-        "<code>ChildSecurity_Desktop_Setup.bat</code> faylini ishga tushirsangiz, ish stolingizga avtomatik doimiy yorliq yaratiladi.\n"
-        "⚠️ <i>Agar SmartScreen (ko'k oyna) chiqsa: «Подробнее» ➔ «Выполнить в любом случае» bosing!</i>"
+        "📦 <b>3-USUL: Windows O'rnatgich Arxiv (.zip)</b>\n"
+        "<code>ChildSecurity_Windows_Setup.zip</code> faylini yuklab oling va arxivdan chiqaring. "
+        "Ichidagi <b>«Child Security.url»</b> yorlig'ini bosing — dastur darhol toza oynada ochiladi!\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚙️ <b>4-USUL: Avtomatik Ish Stoli O'rnatgichi (.bat)</b>\n"
+        "<code>ChildSecurity_Desktop_Setup.bat</code> ish stoliga avtomatik yorliq yaratadi.\n\n"
+        "🛡️ <b>WINDOWS 11 BLOKIROVKASINI YECHISH (1 soniyada):</b>\n"
+        "Agar Windows 11 <i>«Интеллектуальное управление приложениями заблокировало файл»</i> (Smart App Control) deb chiqarsa:\n"
+        "1️⃣ Yuklab olingan fayl ustiga <b>sichqonchaning o'ng tugmasini</b> bosing.\n"
+        "2️⃣ <b>«Свойства» (Xususiyatlar / Properties)</b> menyusini oching.\n"
+        "3️⃣ Eng pastida <b>«Разблокировать» (Unblock)</b> katagiga galochka (✅) qo'ying va <b>OK</b> bosing.\n"
+        "Shundan so'ng dastur bir zumda ishga tushadi!"
     )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔗 Child Security.url (Bloklanmaydigan yorliq)",
+                    url=desktop_url_link
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text="📦 Windows O'rnatgich (.zip)",
@@ -3959,7 +3975,7 @@ async def on_download_windows(event, bot: Bot, state: FSMContext = None):
             ],
             [
                 InlineKeyboardButton(
-                    text="🌐 Dasturni brauzerda ochish",
+                    text="🌐 Dasturni brauzerda ochish (PWA)",
                     url=webapp_url
                 )
             ],
