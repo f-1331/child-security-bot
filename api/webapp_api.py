@@ -1246,6 +1246,7 @@ async def child_sos_endpoint(
     is_duplicate_sos = bool(last_sos and (now_utc - last_sos) < timedelta(seconds=15))
 
     if telemetry.telegram_bot and parents and not is_duplicate_sos:
+        is_recurring = bool(last_sos)
         telemetry.last_sos_alert_map[child_id] = now_utc
         now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y, %H:%M:%S")
         battery_info = f"{battery_lvl}%" if battery_lvl is not None else "Noma'lum"
@@ -1256,9 +1257,12 @@ async def child_sos_endpoint(
         )
         safe_cname = html.escape(child_name)
 
+        title_prefix = "🔄 <b>SOS YANGILANISHI (Har 30s)</b> 🚨" if is_recurring else "🚨🚨🚨 <b>FAVQULODDA VAZIYAT (SOS)!</b> 🚨🚨🚨"
+        action_desc = f"Farzandingiz <b>{safe_cname}</b> xavfda! Jonli yangilanish kelmoqda:\n\n" if is_recurring else f"Farzandingiz <b>{safe_cname}</b> WebApp orqali xavf signalini yoqdi!\n\n"
+
         parent_alert = (
-            f"🚨🚨🚨 <b>FAVQULODDA VAZIYAT (SOS)!</b> 🚨🚨🚨\n\n"
-            f"Farzandingiz <b>{safe_cname}</b> WebApp orqali xavf signalini yoqdi!\n\n"
+            f"{title_prefix}\n\n"
+            f"{action_desc}"
             f"🕒 Vaqt: <b>{html.escape(now_str)}</b>\n"
             f"🔋 Batareya: <b>{html.escape(battery_info)}</b>\n"
             + (f"📍 Koordinata: <code>{loc_coords}</code>\n🗺 Xaritada: <a href=\"{maps_link}\">Google Maps orqali ochish</a>\n\n" if maps_link else "\n")

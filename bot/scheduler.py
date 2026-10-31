@@ -42,14 +42,107 @@ def _save_last_nightly_sent_date(date_str: str) -> None:
         pass
 
 
+async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
+    """
+    Every 1 hour (during daytime 07:00 - 21:00), sends an update to all parents
+    with their child's current location, safe zone status, and battery level.
+    """
+    from sqlalchemy import select
+    from db.models import User
+    parents_res = await session.execute(
+        select(User).where(User.role == "parent")
+    )
+    parents = list(parents_res.scalars().all())
+    if not parents:
+        return
+
+    for p in parents:
+        children = await crud.get_children_for_parent(session, p.id)
+        if not children:
+            continue
+
+        for ch in children:
+            try:
+                latest_loc = await crud.get_latest_location(session, ch.id)
+                c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
+
+                if not latest_loc:
+                    continue
+
+                lat = latest_loc.latitude
+                lon = latest_loc.longitude
+                maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+                batt_level = latest_loc.battery_level if latest_loc.battery_level is not None else "Noma'lum"
+                charging_icon = "⚡" if latest_loc.is_charging else ""
+                speed_str = f"{latest_loc.speed:.0f} km/soat" if (latest_loc.speed and latest_loc.speed > 3) else "Piyoda / Tinch"
+
+                # Check if currently inside any active geofence
+                current_zone_name = None
+                geofences = await crud.get_geofences_for_child(session, ch.id)
+                for gf in geofences:
+                    if gf.is_active:
+                        dist = crud.haversine_distance(lat, lon, gf.latitude, gf.longitude)
+                        if dist <= gf.radius_meters:
+                            current_zone_name = gf.name
+                            break
+
+                if current_zone_name:
+                    loc_desc = f"🏰 <b>{html.escape(current_zone_name)}</b> hududida"
+                else:
+                    loc_desc = f"<code>{lat:.5f}, {lon:.5f}</code>"
+
+                # Calculate last seen text
+                rec_dt = latest_loc.recorded_at
+                if rec_dt.tzinfo is None:
+                    rec_dt = rec_dt.replace(tzinfo=timezone.utc)
+                now_utc = datetime.now(timezone.utc)
+                diff_sec = max(0, int((now_utc - rec_dt).total_seconds()))
+                if diff_sec < 180:
+                    time_ago = "🟢 Jonli / Hozirgina"
+                elif diff_sec < 3600:
+                    time_ago = f"🟡 {diff_sec // 60} daqiqa oldin"
+                else:
+                    time_ago = f"⚪ {diff_sec // 3600} soat oldin"
+
+                msg = (
+                    f"⏰ <b>SOATLIK XAVFSIZLIK XABARNOMASI ({hour_str}:00)</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 <b>Farzand:</b> {c_name}\n"
+                    f"📍 <b>Joylashuv:</b> {loc_desc}\n"
+                    f"🔋 <b>Batareya:</b> {batt_level}% {charging_icon}\n"
+                    f"🕒 <b>Oxirgi signal:</b> {time_ago}\n"
+                    f"🚶‍♂️ <b>Harakat:</b> {speed_str}\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"🗺 <a href=\"{maps_url}\">Xaritada ochish (Google Maps)</a>"
+                )
+
+                kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🗺 Jonli xaritada ko'rish",
+                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(text="🔔 Signal chalish", callback_data=f"siren_child_{ch.id}")
+                    ]
+                ])
+
+                await bot.send_message(chat_id=p.id, text=msg, reply_markup=kb, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Failed to send hourly location for child {ch.id} to parent {p.id}: {e}")
+
+
 async def run_nightly_and_walksafe_worker(bot: Bot):
     """
     Background worker loop:
     1. At 22:00 every night (Tashkent time), sends daily safety report to all parents.
-    2. Checks active Walk Safe sessions and alerts parents if deadline expired without completion.
+    2. Every 1 hour (07:00 - 21:00), sends hourly child location updates to parents.
+    3. Checks active Walk Safe sessions and alerts parents if deadline expired without completion.
     """
-    logger.info("Nightly report and Walk Safe background scheduler activated.")
+    logger.info("Nightly report, hourly location, and Walk Safe background scheduler activated.")
     last_sent_date = _get_last_nightly_sent_date()
+    last_hourly_slot = None
     alerted_expired_walk_safes = set()
 
     # Determine timezone with absolute priority to Tashkent UTC+5
@@ -167,6 +260,15 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                 last_sent_date = today_str
                 _save_last_nightly_sent_date(today_str)
                 logger.info(f"Nightly safety reports dispatched for {today_str}.")
+
+            # 1.5 Hourly Child Location Updates (Sent every 1 hour between 07:00 and 21:00 Tashkent time)
+            current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
+            if (7 <= now_tz.hour <= 21) and (last_hourly_slot != current_hour_slot):
+                logger.info(f"Triggering hourly location updates for {current_hour_slot} (Hour: {now_tz.hour}:00)...")
+                async with AsyncSessionLocal() as session:
+                    await dispatch_hourly_location_reports(bot, session, f"{now_tz.hour:02d}")
+                    await session.commit()
+                last_hourly_slot = current_hour_slot
 
             # 2. Walk Safe Deadline Monitoring
             async with AsyncSessionLocal() as session:
