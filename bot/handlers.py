@@ -857,6 +857,20 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
             reply_markup=InlineKeyboardMarkup(inline_keyboard=sms_rows),
             parse_mode="HTML"
         )
+
+        # Alert the child via Telegram to share their live location
+        try:
+            await bot.send_message(
+                chat_id=child.id,
+                text=(
+                    f"🔔 <b>Ota-onangiz joylashuvingizni so'ramoqda!</b>\n\n"
+                    f"Iltimos, pastdagi <b>«📍 Jonli joylashuvimni yuborish»</b> tugmasini bosing yoki xaritani oching."
+                ),
+                reply_markup=get_child_main_keyboard(),
+                parse_mode="HTML"
+            )
+        except Exception as alert_err:
+            logger.debug(f"Could not alert child via telegram: {alert_err}")
         return
 
     # Check which Kerakli joy the child is currently inside
@@ -2057,13 +2071,55 @@ async def on_location_received(message: Message, bot: Bot):
             lon=lon
         )
 
-        # If child in SOS, forward to parents with 60s cooldown to prevent duplicate balloons
+        # Forward location pin or live radar to parents in Telegram
+        parents = await crud.get_parents_for_child(session, user_id)
+        safe_child_name = html.escape(user.full_name or "Farzand")
+        time_str = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+
+        # Debounce regular pin alerts to parents (every 20s per child) to avoid spamming on edits
+        now_utc = datetime.now(timezone.utc)
+        last_fwd = getattr(telemetry, "last_loc_forward_map", {}).get(user_id)
+        should_forward_pin = (not last_fwd) or (now_utc - last_fwd) > timedelta(seconds=20) or live_period or user.is_sos_active
+
+        if should_forward_pin and parents:
+            if hasattr(telemetry, "last_loc_forward_map"):
+                telemetry.last_loc_forward_map[user_id] = now_utc
+
+            for p in parents:
+                try:
+                    if live_period:
+                        await bot.send_location(
+                            chat_id=p.id,
+                            latitude=lat,
+                            longitude=lon,
+                            live_period=live_period
+                        )
+                    else:
+                        await bot.send_location(
+                            chat_id=p.id,
+                            latitude=lat,
+                            longitude=lon
+                        )
+                        card_text = (
+                            f"📍 <b>{safe_child_name}</b> jonli joylashuvini ulashdi!\n\n"
+                            f"🕒 Vaqt: <b>{time_str}</b>\n"
+                            f"📌 Koordinata: <code>{lat:.5f}, {lon:.5f}</code>\n\n"
+                            f"🗺 Harakatni xaritada kuzatish uchun quyidagi tugmalardan foydalaning:"
+                        )
+                        await bot.send_message(
+                            chat_id=p.id,
+                            text=card_text,
+                            reply_markup=get_location_actions_keyboard(lat, lon, user_id, is_offline=False, child_phone=user.phone_number),
+                            parse_mode="HTML"
+                        )
+                except Exception as fwd_err:
+                    logger.warning(f"Could not forward location to parent {p.id}: {fwd_err}")
+
+        # If child in SOS, forward emergency location to parents with 60s cooldown
         if user.is_sos_active:
-            now_utc = datetime.now(timezone.utc)
             last_loc_sent = telemetry.last_sos_alert_map.get(user_id)
             if not last_loc_sent or (now_utc - last_loc_sent) > timedelta(seconds=60):
                 telemetry.last_sos_alert_map[user_id] = now_utc
-                parents = await crud.get_parents_for_child(session, user_id)
                 for p in parents:
                     try:
                         await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
@@ -2073,7 +2129,6 @@ async def on_location_received(message: Message, bot: Bot):
         # Broadcast live telemetry to connected parents via WebSocket
         try:
             from api.webapp_api import ws_manager
-            parents = await crud.get_parents_for_child(session, user_id)
             for p in parents:
                 await ws_manager.send_to_user(p.id, {
                     "type": "child_location_update",

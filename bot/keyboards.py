@@ -65,7 +65,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📍 Farzandning hozirgi joylashuvi"),
-            KeyboardButton(text="🗺️ Jonli Xarita (Web App)", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+            KeyboardButton(text="🗺️ Jonli Xarita (Web App)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=parent&parent_id={parent_id}"))
         ],
         [
             KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
@@ -123,7 +123,7 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=settings.MINI_APP_URL)),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=child")),
             KeyboardButton(text="✅ Yetib keldim (Check-in)")
         ],
         [
@@ -390,6 +390,9 @@ def get_location_actions_keyboard(lat: float, lon: float, child_id: int, is_offl
         [
             InlineKeyboardButton(text="🗺 Google Maps", url=google_maps_url),
             InlineKeyboardButton(text="🗺 Yandex Maps", url=yandex_maps_url),
+        ],
+        [
+            InlineKeyboardButton(text="🗺️ Xaritada jonli ko'rish (Web App)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?child_id={child_id}")),
         ]
     ]
     if is_offline and child_phone:

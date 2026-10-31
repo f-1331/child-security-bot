@@ -349,11 +349,6 @@ let cachedDeviceLocation = null;
 let lastLocationFetchTime = 0;
 
 async function getDeviceLocation() {
-  // If in demo mode, do not trigger native GPS permission modal
-  if (isDemoMode) {
-    return { latitude: 41.2916, longitude: 69.2121, accuracy: 10 };
-  }
-
   // 1. Android Native Bridge (instant sub-millisecond fix from native service)
   try {
     if (window.AndroidBridge && typeof window.AndroidBridge.getLastKnownLocation === "function") {
@@ -414,7 +409,7 @@ async function getDeviceLocation() {
         lastLocationFetchTime = Date.now();
         resolve(cachedDeviceLocation);
       } else {
-        resolve(cachedDeviceLocation || null);
+        resolve(cachedDeviceLocation || { latitude: DEFAULT_LAT, longitude: DEFAULT_LON, accuracy: 250, fallback: true });
       }
     };
 
@@ -896,6 +891,60 @@ async function checkAuthenticationState() {
     return;
   }
 
+  // 1.1 Direct fast-auth via URL parameters (?role=parent&parent_id=... or ?child_id=...)
+  const qParentId = urlParams.get("parent_id");
+  const qChildId = urlParams.get("child_id");
+
+  if (qParentId && (!qRole || qRole === "parent")) {
+    try {
+      const pRes = await fetch(`/api/v1/webapp/parent/${qParentId}/children`);
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        if (pData && pData.status === "success" && Array.isArray(pData.children)) {
+          const sess = {
+            status: "success",
+            role: "parent",
+            user: { id: parseInt(qParentId, 10), full_name: "Ota-ona", role: "parent" },
+            children: pData.children
+          };
+          localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
+          localStorage.setItem("smart_tracker_cached_children", JSON.stringify(pData.children));
+          localStorage.setItem("smart_tracker_role", "parent");
+          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          hideAuthGateModal();
+          applyAuthenticatedUser(sess);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Fast parent load note:", e);
+    }
+  }
+
+  if (qChildId && qRole === "child") {
+    try {
+      const cRes = await fetch(`/api/v1/webapp/child/${qChildId}/status`);
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        if (cData && cData.status === "success" && cData.child) {
+          const sess = {
+            status: "success",
+            role: "child",
+            user: cData.child
+          };
+          localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
+          localStorage.setItem("smart_tracker_role", "child");
+          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          hideAuthGateModal();
+          applyAuthenticatedUser(sess);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Fast child load note:", e);
+    }
+  }
+
   // 2. Telegram WebApp cryptographic auto-authentication (Primary & foolproof inside Telegram)
   const initData = window.Telegram?.WebApp?.initData;
   if (initData && initData.length > 10) {
@@ -1364,6 +1413,16 @@ function enableChildDemoMode() {
   updateBatteryUI(85, false);
   updateSoundUI("normal");
   resolveAddress(demoLat, demoLon);
+
+  // If real device GPS is available, dynamically center demo on tester's real location
+  getDeviceLocation().then((loc) => {
+    if (loc && typeof loc.latitude === "number" && !loc.fallback) {
+      renderChildMarker(loc.latitude, loc.longitude, "Azizbek Karimov (Demo)", false, 85);
+      resolveAddress(loc.latitude, loc.longitude);
+      if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
+    }
+  }).catch(() => {});
+
   renderDemoGeofences();
   renderDemoHistory();
   renderDemoTasks();
@@ -2546,6 +2605,15 @@ function enableDemoMode() {
   updateSoundUI("normal");
   resolveAddress(demoLat, demoLon);
 
+  // If real device GPS is available, dynamically center demo on tester's real location
+  getDeviceLocation().then((loc) => {
+    if (loc && typeof loc.latitude === "number" && !loc.fallback) {
+      renderChildMarker(loc.latitude, loc.longitude, "Azizbek Karimov (Farzand)", false, 82);
+      resolveAddress(loc.latitude, loc.longitude);
+      if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
+    }
+  }).catch(() => {});
+
   // Load demo geofences
   renderDemoGeofences();
 
@@ -2972,15 +3040,31 @@ function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offl
   `);
 }
 
-// Center view on child
-function centerOnChild() {
+// Center view on child or user's real GPS position
+async function centerOnChild() {
   haptic("light");
+  if (currentRole === "child" || isDemoMode) {
+    const loc = await getDeviceLocation();
+    if (loc && typeof loc.latitude === "number" && !loc.fallback) {
+      renderChildMarker(loc.latitude, loc.longitude, currentRole === "child" ? "Men" : "Farzand (Demo)", false, null);
+      resolveAddress(loc.latitude, loc.longitude);
+      if (map) map.flyTo([loc.latitude, loc.longitude], 17, { animate: true, duration: 0.8 });
+      showToast("📍 Aniq joylashuvingizga yaqinlashtirildi");
+      return;
+    }
+  }
+
   if (childMarker && map) {
-    map.flyTo(childMarker.getLatLng(), 16, { animate: true, duration: 1 });
+    map.flyTo(childMarker.getLatLng(), 17, { animate: true, duration: 0.8 });
   } else if (cachedDeviceLocation && map) {
-    map.flyTo([cachedDeviceLocation.latitude, cachedDeviceLocation.longitude], 16, { animate: true, duration: 1 });
+    map.flyTo([cachedDeviceLocation.latitude, cachedDeviceLocation.longitude], 17, { animate: true, duration: 0.8 });
   } else {
-    showToast("Farzand joylashuvi hali mavjud emas");
+    const loc = await getDeviceLocation();
+    if (loc && typeof loc.latitude === "number" && map) {
+      map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
+    } else {
+      showToast("Joylashuv aniqlanmoqda, kuting...");
+    }
   }
 }
 
@@ -6431,8 +6515,8 @@ async function fetchInstantChildLocation(childId) {
     const battery = await getDeviceBattery();
     const isCharging = await getDeviceChargingStatus();
 
-    // 1. Immediately send cached device location if present so telemetry response is 0ms instant
-    if (cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+    // 1. Immediately send cached device location if present and valid so telemetry response is 0ms instant
+    if (cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number" && !cachedDeviceLocation.fallback) {
       renderChildMarker(cachedDeviceLocation.latitude, cachedDeviceLocation.longitude, "Men", false, battery);
       sendChildLiveTelemetry(childId, {
         latitude: cachedDeviceLocation.latitude,
@@ -6446,42 +6530,20 @@ async function fetchInstantChildLocation(childId) {
       });
     }
 
-    // 2. Query fresh GPS position from device sensors
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude, accuracy, speed } = pos.coords;
-          cachedDeviceLocation = { latitude, longitude, accuracy };
-          lastLocationFetchTime = Date.now();
-          renderChildMarker(latitude, longitude, "Men", false, battery);
-          sendChildLiveTelemetry(childId, {
-            latitude,
-            longitude,
-            accuracy: accuracy || null,
-            speed: (typeof speed === "number" && speed > 0) ? Math.round(speed * 3.6) : 0,
-            battery_level: battery,
-            is_charging: isCharging,
-            sound_mode: "normal",
-            is_sos_active: false
-          });
-        },
-        (err) => {
-          console.warn("fetchInstantChildLocation note:", err);
-          if (!cachedDeviceLocation) {
-            sendChildLiveTelemetry(childId, {
-              latitude: 41.311081,
-              longitude: 69.240562,
-              accuracy: 1000,
-              speed: 0,
-              battery_level: battery,
-              is_charging: isCharging,
-              sound_mode: "normal",
-              is_sos_active: false
-            });
-          }
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
+    // 2. Query fresh GPS position from multi-tier hardware engine (never sends fake coordinates!)
+    const freshLoc = await getDeviceLocation();
+    if (freshLoc && typeof freshLoc.latitude === "number" && !freshLoc.fallback) {
+      renderChildMarker(freshLoc.latitude, freshLoc.longitude, "Men", false, battery);
+      sendChildLiveTelemetry(childId, {
+        latitude: freshLoc.latitude,
+        longitude: freshLoc.longitude,
+        accuracy: freshLoc.accuracy || null,
+        speed: 0,
+        battery_level: battery,
+        is_charging: isCharging,
+        sound_mode: "normal",
+        is_sos_active: false
+      });
     }
   } catch (e) {
     console.warn("fetchInstantChildLocation error:", e);
@@ -6761,30 +6823,52 @@ function startChildLiveTracking(childId) {
 
   const options = {
     enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 0 // Fresh GPS fix always with centimeter resolution, no cached data!
+    timeout: 12000,
+    maximumAge: 3000
   };
 
   // Live Kalman filter state for real-time drift elimination
   if (!window._liveKalmanState) {
-    window._liveKalmanState = { lat: 0, lon: 0, variance: -1 };
+    window._liveKalmanState = { lat: 0, lon: 0, variance: -1, lastTime: 0 };
   }
-  function filterLiveKalman(rawLat, rawLon, rawAcc) {
+  function filterLiveKalman(rawLat, rawLon, rawAcc, speed) {
     const acc = (typeof rawAcc === "number" && rawAcc > 0) ? rawAcc : 15;
+    const now = Date.now();
     const s = window._liveKalmanState;
-    if (s.variance < 0) {
+
+    if (s.variance < 0 || !s.lat || !s.lon) {
       s.lat = rawLat;
       s.lon = rawLon;
       s.variance = acc * acc;
-    } else {
-      const q = 3.0;
-      const r = acc * acc;
-      s.variance += q;
-      const k = s.variance / (s.variance + r);
-      s.lat += k * (rawLat - s.lat);
-      s.lon += k * (rawLon - s.lon);
-      s.variance = (1 - k) * s.variance;
+      s.lastTime = now;
+      return { lat: rawLat, lon: rawLon };
     }
+
+    // Reset if child moved significantly (> 50m jump) or if timer gap > 30s
+    const jumpDist = calculateDistanceMeters(s.lat, s.lon, rawLat, rawLon);
+    if (jumpDist > 50 || (now - s.lastTime) > 30000) {
+      s.lat = rawLat;
+      s.lon = rawLon;
+      s.variance = acc * acc;
+      s.lastTime = now;
+      return { lat: rawLat, lon: rawLon };
+    }
+
+    // Velocity-aware process noise so moving filter never freezes
+    const dt = Math.max(1, (now - s.lastTime) / 1000);
+    const vel = (typeof speed === "number" && speed > 0) ? speed : 2.0;
+    const processNoise = vel * dt;
+    s.variance += processNoise * processNoise;
+
+    // Kalman gain with safety bounds [0.20, 0.95] to prevent coordinate freeze
+    const r = acc * acc;
+    const k = Math.max(0.20, Math.min(0.95, s.variance / (s.variance + r)));
+
+    s.lat += k * (rawLat - s.lat);
+    s.lon += k * (rawLon - s.lon);
+    s.variance = (1 - k) * s.variance;
+    s.lastTime = now;
+
     return { lat: s.lat, lon: s.lon };
   }
 
@@ -6795,8 +6879,8 @@ function startChildLiveTracking(childId) {
       const rawAccuracy = pos.coords.accuracy || 15;
       const speed = pos.coords.speed;
 
-      // Apply Kalman filter smoothing
-      const kFiltered = filterLiveKalman(rawLat, rawLon, rawAccuracy);
+      // Apply Kalman filter smoothing with velocity awareness
+      const kFiltered = filterLiveKalman(rawLat, rawLon, rawAccuracy, speed);
       const latitude = kFiltered.lat;
       const longitude = kFiltered.lon;
       const accuracy = rawAccuracy;

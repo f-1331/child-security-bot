@@ -23,6 +23,9 @@ last_speed_alert_map: dict[int, datetime] = {}
 # SOS alert rate-limiting map: child_id -> datetime of last SOS alert (prevents duplicate triggers)
 last_sos_alert_map: dict[int, datetime] = {}
 
+# Location forward rate-limiting map: child_id -> datetime of last location forwarded to parent
+last_loc_forward_map: dict[int, datetime] = {}
+
 # Telemetry ping throttle map: child_id -> timestamp (prevents GPS flooding)
 last_telemetry_ping_map: dict[int, float] = {}
 

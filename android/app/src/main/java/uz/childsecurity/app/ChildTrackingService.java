@@ -70,16 +70,24 @@ public class ChildTrackingService extends Service implements LocationListener {
     private float kalmanVariance = -1f;
 
     private double[] filterKalman(double lat, double lon, float accuracy) {
-        if (kalmanVariance < 0) {
+        if (kalmanVariance < 0 || kalmanLat == 0.0 || kalmanLon == 0.0) {
             kalmanLat = lat;
             kalmanLon = lon;
             kalmanVariance = accuracy * accuracy;
             return new double[]{lat, lon};
         }
-        float q = 3.0f; // 3 meters movement variance
+        // Jump reset if child moved > 50 meters
+        double jumpDist = RustCoreBridge.haversineDistance(kalmanLat, kalmanLon, lat, lon);
+        if (jumpDist > 50.0) {
+            kalmanLat = lat;
+            kalmanLon = lon;
+            kalmanVariance = accuracy * accuracy;
+            return new double[]{lat, lon};
+        }
+        float q = 4.0f; // Process noise
         kalmanVariance += q;
         float r = Math.max(1.0f, accuracy * accuracy);
-        float k = kalmanVariance / (kalmanVariance + r);
+        float k = Math.max(0.20f, Math.min(0.95f, kalmanVariance / (kalmanVariance + r)));
         kalmanLat += k * (lat - kalmanLat);
         kalmanLon += k * (lon - kalmanLon);
         kalmanVariance = (1 - k) * kalmanVariance;
