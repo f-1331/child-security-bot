@@ -469,6 +469,18 @@
         <button onclick="handleMasterLockToggle(false)" class="ml-1.5 px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white text-[10px] rounded-lg font-black transition active:scale-95 shadow">Yechish</button>
       </div>
 
+      <!-- Route & Repeated Places Quick Action Pills (Top Left Floating) -->
+      <div id="routeQuickPillBar" class="absolute top-3 left-3 z-20 flex items-center gap-1.5 pointer-events-auto">
+        <button id="pillToggleRoute" onclick="toggleRouteHistory()" class="px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Bugungi harakat yo'li (Yoqish / O'chirish)">
+          <i data-lucide="route" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="labelPillRoute">Harakat yo'li</span>
+        </button>
+        <button id="pillToggleRepeated" onclick="toggleRepeatedPlaces()" class="px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Qayta-qayta yurilgan joylar (Yoqish / O'chirish)">
+          <i data-lucide="repeat" class="w-3.5 h-3.5 text-rose-400"></i>
+          <span id="labelPillRepeated">Qayta joylar</span>
+        </button>
+      </div>
+
       <!-- Floating Map Controls (Right Vertical Frosted Glass Dock - Compact & Collapsible) -->
       <div id="floatingMapControls" class="floating-glass-dock absolute right-3 top-3 z-25">
         <!-- 1. Center on Child (Primary) -->
@@ -491,13 +503,18 @@
           <i data-lucide="maximize-2" id="iconFullscreenMap" class="w-4 h-4"></i>
         </button>
 
-        <!-- 5. Secondary Tools: Always shown on desktop (md+), expandable on mobile -->
-        <div id="extraMapTools" class="hidden md:flex flex-col gap-1 transition-all duration-200">
-          <!-- Toggle Route History Polyline -->
-          <button id="btnToggleRoute" onclick="toggleRouteHistory(); closeExtraMapToolsOnMobile();" class="text-amber-400 hover:text-amber-300 active:scale-95 transition" title="Bugungi harakat yo'li">
-            <i data-lucide="route" class="w-4 h-4"></i>
-          </button>
+        <!-- 5. Toggle Route History Polyline (Bugungi harakat yo'li) -->
+        <button id="btnToggleRoute" onclick="toggleRouteHistory();" class="text-slate-400 hover:text-amber-400 active:scale-95 transition" title="Bugungi harakat yo'li (Yoqish / O'chirish)">
+          <i data-lucide="route" class="w-4 h-4"></i>
+        </button>
 
+        <!-- 6. Toggle Repeated Places (Qayta-qayta yurilgan joylar) -->
+        <button id="btnToggleRepeatedPlaces" onclick="toggleRepeatedPlaces();" class="text-slate-400 hover:text-rose-400 active:scale-95 transition" title="Qayta-qayta yurilgan joylar (Yoqish / O'chirish)">
+          <i data-lucide="repeat" class="w-4 h-4"></i>
+        </button>
+
+        <!-- 7. Secondary Tools: Always shown on desktop (md+), expandable on mobile -->
+        <div id="extraMapTools" class="hidden md:flex flex-col gap-1 transition-all duration-200">
           <!-- Refresh Data -->
           <button id="btnRefresh" onclick="refreshAllData(); closeExtraMapToolsOnMobile();" class="text-slate-300 hover:text-white active:scale-95 transition" title="Yangilash">
             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
@@ -665,6 +682,11 @@
           </div>
 
           <div class="flex items-center gap-1.5">
+            <!-- Toggle Repeated Places in HUD -->
+            <button onclick="toggleRepeatedPlaces()" id="btnHudToggleRepeated" class="px-2 py-1 bg-white/10 hover:bg-white/20 text-rose-300 text-xs font-bold rounded-xl border border-rose-400/30 transition active:scale-95 flex items-center gap-1" title="Qayta yurilgan joylarni yoqish / o'chirish">
+              <i data-lucide="repeat" class="w-3 h-3"></i>
+              <span id="labelHudToggleRepeated" class="hidden sm:inline">Qayta joylar</span>
+            </button>
             <!-- Speed toggle: 1x, 2x, 4x, 8x -->
             <button onclick="cycleRouteSpeed()" id="btnRouteSpeed" class="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-amber-300 text-xs font-black rounded-xl border border-amber-400/30 transition active:scale-95">
               1x
@@ -1093,18 +1115,37 @@
         </button>
       </div>
 
-      <!-- Route Playback Control & Daily Report -->
-      <div class="my-3 flex gap-2">
-        <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-md">
-          <i data-lucide="play" class="w-4 h-4"></i>
+      <!-- 2 ta alohida funksiya: Harakat yo'li & Qayta-qayta yurilgan joylar boshqaruvi -->
+      <div class="my-2.5 grid grid-cols-2 gap-2">
+        <!-- 1. Bugungi harakat yo'li tugmasi (Yoqish / O'chirish) -->
+        <button id="btnModalToggleRoute" onclick="toggleRouteHistory();" class="py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-amber-500/40 bg-amber-600/30 text-amber-300 hover:bg-amber-600/50">
+          <i data-lucide="route" class="w-4 h-4 text-amber-400"></i>
+          <span id="labelModalToggleRoute">Yo'l: Yoqish</span>
+        </button>
+
+        <!-- 2. Qayta-qayta yurilgan joylar tugmasi (Yoqish / O'chirish) -->
+        <button id="btnModalToggleRepeated" onclick="toggleRepeatedPlaces();" class="py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-rose-500/40 bg-rose-600/30 text-rose-300 hover:bg-rose-600/50">
+          <i data-lucide="repeat" class="w-4 h-4 text-rose-400"></i>
+          <span id="labelModalToggleRepeated">Qayta joylar: Yoqish</span>
+        </button>
+      </div>
+
+      <!-- Route Playback Control, Fullscreen Map & Clear -->
+      <div class="mb-3 flex gap-2">
+        <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md">
+          <i data-lucide="play" class="w-3.5 h-3.5"></i>
           <span>Harakatni ko'rish</span>
         </button>
         <button onclick="closeModal('history'); toggleRouteHistory(true);" class="py-2.5 px-3 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Xaritani to'liq ko'rish rejimida ochish">
-          <i data-lucide="maximize-2" class="w-4 h-4"></i>
-          <span>To'liq xaritada</span>
+          <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
+          <span>Xaritada</span>
+        </button>
+        <button onclick="clearRouteHistory()" class="py-2.5 px-3 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/30 text-rose-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm active:scale-95 shrink-0" title="Tarixni tozalash">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Tozalash</span>
         </button>
         <button id="btnOpenDailyReportFromHistory" onclick="openDailyReportModal()" class="py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
-          <i data-lucide="bar-chart-2" class="w-4 h-4 text-indigo-400"></i>
+          <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>
           <span>Hisobot</span>
         </button>
       </div>

@@ -520,13 +520,15 @@ let childMarker = null;
 let geofenceLayers = [];
 let routePolyline = null;
 let routeLayerGroup = null;
+let repeatsLayerGroup = null;
 let routePointsCache = [];
 let lastRouteFetchTime = 0;
 let previewCircle = null;
 let zonePickerMarker = null;
 let isZonePickerActive = false;
 let replayMarker = null;
-let isRouteVisible = true;
+let isRouteVisible = false;
+let isRepeatedPlacesVisible = false;
 let isReplaying = false;
 let replayTimer = null;
 let pollInterval = null;
@@ -668,6 +670,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // Mobile phone ergonomics: backdrop dismiss & Telegram native BackButton
   initBackdropDismissListeners();
   setupTelegramBackButton();
+
+  // Support direct deep links to show route or repeated places from Telegram
+  const initialParams = new URLSearchParams(window.location.search);
+  if (initialParams.get("show_route") === "1" || initialParams.get("route") === "1") {
+    setTimeout(() => toggleRouteHistory(true), 800);
+  }
+  if (initialParams.get("show_repeats") === "1" || initialParams.get("repeats") === "1") {
+    setTimeout(() => toggleRepeatedPlaces(true), 900);
+  }
 });
 
 
@@ -3278,11 +3289,7 @@ function focusRoutePoint(lat, lon) {
     switchTab("map");
   }
   isRouteVisible = true;
-  const btn = document.getElementById("btnToggleRoute");
-  if (btn) {
-    btn.classList.add("text-amber-400");
-    btn.classList.remove("text-slate-500");
-  }
+  updateRouteButtonsState();
   if (routeLayerGroup && map && !map.hasLayer(routeLayerGroup)) {
     routeLayerGroup.addTo(map);
   }
@@ -3397,6 +3404,10 @@ function renderHistoryToMapAndList(points) {
     try { map.removeLayer(routeLayerGroup); } catch (e) {}
     routeLayerGroup = null;
   }
+  if (repeatsLayerGroup && map) {
+    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+    repeatsLayerGroup = null;
+  }
   if (routePolyline && map) {
     try { map.removeLayer(routePolyline); } catch (e) {}
     routePolyline = null;
@@ -3411,6 +3422,7 @@ function renderHistoryToMapAndList(points) {
   }
 
   routeLayerGroup = L.featureGroup();
+  repeatsLayerGroup = L.featureGroup();
 
   // Rust Core Kalman smoothing
   const smoothed = (window.RustCore && typeof RustCore.filterTrajectoryKalman === "function")
@@ -3462,16 +3474,19 @@ function renderHistoryToMapAndList(points) {
   routePolyline = glowPolyline;
 
   // 2. Identify repeated visits (Bitta joydan qayta-qayta yurgan haqiqiy tashriflarni aniqlash)
-  // Cluster points within 25 meters, treating continuous points (< 5 min) as ONE stay
+  // Cluster points within 35 meters. A new visit only registers if child departed area (>60m) and returned!
   const clusters = [];
   const pointVisitInfo = new Map();
 
-  // Chronologically sort points for accurate visit detection
   const sortedPoints = [...points].sort((a, b) => {
     const tA = a.recorded_at ? new Date(String(a.recorded_at).endsWith("Z") ? a.recorded_at : a.recorded_at + "Z").getTime() : 0;
     const tB = b.recorded_at ? new Date(String(b.recorded_at).endsWith("Z") ? b.recorded_at : b.recorded_at + "Z").getTime() : 0;
     return tA - tB;
   });
+
+  let activeClusterIndex = -1;
+  const CLUSTER_RADIUS_METERS = 35;
+  const DEPARTURE_DISTANCE_METERS = 60;
 
   sortedPoints.forEach((p, idx) => {
     let pTimeStr = "--:--:--";
@@ -3491,15 +3506,6 @@ function renderHistoryToMapAndList(points) {
     const speedVal = (typeof p.speed === "number" && p.speed > 0) ? `${Math.round(p.speed)} km/soat` : "Piyoda";
     const batVal = (p.battery_level !== null && p.battery_level !== undefined) ? `${p.battery_level}%` : "--";
 
-    let matchedCluster = null;
-    for (const c of clusters) {
-      const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
-      if (dist <= 25) { // 25 meters proximity for real physical location
-        matchedCluster = c;
-        break;
-      }
-    }
-
     const visitItem = {
       pointIndex: idx,
       stepNum: idx + 1,
@@ -3513,22 +3519,34 @@ function renderHistoryToMapAndList(points) {
       lng: p.longitude
     };
 
+    let matchedCluster = null;
+    let matchedClusterIdx = -1;
+    for (let ci = 0; ci < clusters.length; ci++) {
+      const c = clusters[ci];
+      const dist = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
+      if (dist <= CLUSTER_RADIUS_METERS) {
+        matchedCluster = c;
+        matchedClusterIdx = ci;
+        break;
+      }
+    }
+
     if (!matchedCluster) {
-      clusters.push({
+      const newCluster = {
+        id: clusters.length + 1,
         latitude: p.latitude,
         longitude: p.longitude,
         lastSeenTimeMs: timeMs,
         lastPointIndex: idx,
+        isCurrentlyInside: true,
         visits: [visitItem]
-      });
+      };
+      clusters.push(newCluster);
+      activeClusterIndex = clusters.length - 1;
     } else {
-      const timeSinceLastMs = Math.abs(timeMs - (matchedCluster.lastSeenTimeMs || timeMs));
-      const indexGap = idx - (matchedCluster.lastPointIndex || 0);
-
-      // A NEW visit only begins if child left the area (indexGap > 2 AND > 5 mins elapsed)
-      // Continuous points belong to the SAME visit stay, preventing false 100+ badges while sitting!
-      if (indexGap > 2 && timeSinceLastMs > (5 * 60 * 1000)) {
+      if (!matchedCluster.isCurrentlyInside) {
         matchedCluster.visits.push(visitItem);
+        matchedCluster.isCurrentlyInside = true;
       } else {
         const latestVisit = matchedCluster.visits[matchedCluster.visits.length - 1];
         if (latestVisit) {
@@ -3538,6 +3556,17 @@ function renderHistoryToMapAndList(points) {
       }
       matchedCluster.lastSeenTimeMs = timeMs;
       matchedCluster.lastPointIndex = idx;
+      activeClusterIndex = matchedClusterIdx;
+    }
+
+    for (let ci = 0; ci < clusters.length; ci++) {
+      if (ci !== activeClusterIndex) {
+        const c = clusters[ci];
+        const distFromOther = calculateDistanceMeters(c.latitude, c.longitude, p.latitude, p.longitude);
+        if (distFromOther > DEPARTURE_DISTANCE_METERS) {
+          c.isCurrentlyInside = false;
+        }
+      }
     }
   });
 
@@ -3584,10 +3613,9 @@ function renderHistoryToMapAndList(points) {
     L.marker([lastP.latitude, lastP.longitude], { icon: endIcon }).addTo(routeLayerGroup);
   }
 
-  // C. Render repeated visit spots & intermediate step checkpoints
+  // C. Render repeated visit spots (Added to dedicated repeatsLayerGroup!)
   clusters.forEach((c) => {
     if (c.visits.length > 1) {
-      // REPEATED LOCATION: Child walked here 2+ times
       const passCount = c.visits.length;
       const isHundredPlus = passCount >= 100;
       const badgeText = isHundredPlus ? "100+" : `${passCount}x`;
@@ -3608,7 +3636,6 @@ function renderHistoryToMapAndList(points) {
 
       const repeatMarker = L.marker([c.latitude, c.longitude], { icon: repeatIcon });
 
-      // If passCount >= 100, ONLY show the LAST 10 times as specifically demanded!
       const displayedVisits = isHundredPlus ? c.visits.slice(-10) : c.visits;
       const passesHtml = displayedVisits.map((v, i) => {
         const orderNumber = isHundredPlus ? (passCount - displayedVisits.length + i + 1) : (i + 1);
@@ -3642,38 +3669,14 @@ function renderHistoryToMapAndList(points) {
           <div class="space-y-1.5 max-h-56 overflow-y-auto custom-scroll">
             ${passesHtml}
           </div>
-          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} (10m hudud)</p>
+          <p class="text-[9px] text-slate-400 mt-2 font-mono">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}</p>
         </div>
       `);
-      repeatMarker.addTo(routeLayerGroup);
-    } else {
-      // Single pass intermediate point
-      const v = c.visits[0];
-      if (v.stepNum !== 1 && v.stepNum !== points.length) {
-        const stepIcon = L.divIcon({
-          className: "route-step-pin",
-          html: `
-            <div class="w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-slate-950 shadow-md hover:scale-150 transition cursor-pointer transform -translate-x-1/2 -translate-y-1/2" title="Qadam #${v.stepNum}"></div>
-          `,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        });
-        const stepMarker = L.marker([c.latitude, c.longitude], { icon: stepIcon });
-        stepMarker.bindPopup(`
-          <div class="p-1.5 text-xs text-slate-900 font-semibold font-sans">
-            <div class="font-black text-blue-700">Qadam #${v.stepNum}</div>
-            <div class="mt-0.5">🕒 Vaqti: <b>${v.time}</b></div>
-            <div>🔋 Batareya: <b>${v.battery}</b></div>
-            <div>⚡ Tezlik: <b>${v.speed}</b></div>
-            <div class="text-[9px] text-slate-500 font-mono mt-1">${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}</div>
-          </div>
-        `);
-        stepMarker.addTo(routeLayerGroup);
-      }
+      repeatMarker.addTo(repeatsLayerGroup);
     }
   });
 
-  // D. Render Stop Point Markers (To'xtash joylari - 3+ min within 25m)
+  // D. Render Stop Point Markers (To'xtash joylari - 3+ min within 30m, added to repeatsLayerGroup!)
   const stopPoints = [];
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = points[i];
@@ -3688,7 +3691,7 @@ function renderHistoryToMapAndList(points) {
       const durationMs = t2 - t1;
       const dist = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
 
-      if (durationMs >= 180000 && dist <= 25) {
+      if (durationMs >= 180000 && dist <= 30) {
         const stopMinutes = Math.round(durationMs / 60000);
         stopPoints.push({
           lat: p1.latitude,
@@ -3719,12 +3722,21 @@ function renderHistoryToMapAndList(points) {
         <div>🕒 Boshlangan vaqt: <b>${sp.timeStr}</b></div>
       </div>
     `);
-    stopMarker.addTo(routeLayerGroup);
+    stopMarker.addTo(repeatsLayerGroup);
   });
 
-  if (isRouteVisible && map) {
-    routeLayerGroup.addTo(map);
+  // Layer Visibility Control: Independently add route line or repeated places based on user state
+  if (isRouteVisible && map && routeLayerGroup) {
+    if (!map.hasLayer(routeLayerGroup)) {
+      routeLayerGroup.addTo(map);
+    }
   }
+  if (isRepeatedPlacesVisible && map && repeatsLayerGroup) {
+    if (!map.hasLayer(repeatsLayerGroup)) {
+      repeatsLayerGroup.addTo(map);
+    }
+  }
+  updateRouteButtonsState();
 
   // 4. Calculate Route Stats & Populate Summary Cards
   calculateRouteStats(points);
@@ -4259,11 +4271,7 @@ async function startRoutePlayback() {
   }
 
   isRouteVisible = true;
-  const btn = document.getElementById("btnToggleRoute");
-  if (btn) {
-    btn.classList.add("text-amber-400");
-    btn.classList.remove("text-slate-500");
-  }
+  updateRouteButtonsState();
   if (routeLayerGroup && map && !map.hasLayer(routeLayerGroup)) {
     routeLayerGroup.addTo(map);
   }
@@ -4276,7 +4284,93 @@ async function startRoutePlayback() {
   toggleRoutePlayPause();
 }
 
-// Toggle route history polyline on map
+// Centralized visual state updater for Route & Repeated Places buttons across the UI
+function updateRouteButtonsState() {
+  // 1. Bugungi harakat yo'li controls (Dock, Quick pill, Modal)
+  const btnRoute = document.getElementById("btnToggleRoute");
+  const pillRoute = document.getElementById("pillToggleRoute");
+  const labelPillRoute = document.getElementById("labelPillRoute");
+  const modalBtnRoute = document.getElementById("btnModalToggleRoute");
+  const labelModalRoute = document.getElementById("labelModalToggleRoute");
+
+  if (isRouteVisible) {
+    if (btnRoute) {
+      btnRoute.className = "text-amber-400 bg-amber-500/25 border border-amber-400/50 shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center justify-center";
+      btnRoute.title = "Bugungi harakat yo'li (Faol - O'chirish uchun bosing)";
+    }
+    if (pillRoute) {
+      pillRoute.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-amber-400/60 bg-amber-500/30 text-amber-200 active:scale-95";
+    }
+    if (labelPillRoute) labelPillRoute.textContent = "Yo'l: Faol";
+    if (modalBtnRoute) {
+      modalBtnRoute.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-amber-400 bg-amber-600 text-white";
+    }
+    if (labelModalRoute) labelModalRoute.textContent = "Yo'l: O'chirish";
+  } else {
+    if (btnRoute) {
+      btnRoute.className = "text-slate-400 hover:text-amber-400 bg-white/5 border border-white/10 active:scale-95 transition flex items-center justify-center";
+      btnRoute.title = "Bugungi harakat yo'li (O'chiq - Yoqish uchun bosing)";
+    }
+    if (pillRoute) {
+      pillRoute.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
+    }
+    if (labelPillRoute) labelPillRoute.textContent = "Harakat yo'li";
+    if (modalBtnRoute) {
+      modalBtnRoute.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700";
+    }
+    if (labelModalRoute) labelModalRoute.textContent = "Yo'l: Yoqish";
+  }
+
+  // 2. Qayta-qayta yurilgan joylar controls (Dock, Quick pill, Modal, HUD)
+  const btnRepeated = document.getElementById("btnToggleRepeatedPlaces");
+  const pillRepeated = document.getElementById("pillToggleRepeated");
+  const labelPillRepeated = document.getElementById("labelPillRepeated");
+  const modalBtnRepeated = document.getElementById("btnModalToggleRepeated");
+  const labelModalRepeated = document.getElementById("labelModalToggleRepeated");
+  const hudBtnRepeated = document.getElementById("btnHudToggleRepeated");
+  const labelHudRepeated = document.getElementById("labelHudToggleRepeated");
+
+  if (isRepeatedPlacesVisible) {
+    if (btnRepeated) {
+      btnRepeated.className = "text-rose-400 bg-rose-500/25 border border-rose-400/50 shadow-lg shadow-rose-500/20 active:scale-95 transition flex items-center justify-center";
+      btnRepeated.title = "Qayta yurilgan joylar (Faol - O'chirish uchun bosing)";
+    }
+    if (pillRepeated) {
+      pillRepeated.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-rose-400/60 bg-rose-500/30 text-rose-200 active:scale-95";
+    }
+    if (labelPillRepeated) labelPillRepeated.textContent = "Qayta joylar: Faol";
+    if (modalBtnRepeated) {
+      modalBtnRepeated.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-rose-400 bg-rose-600 text-white";
+    }
+    if (labelModalRepeated) labelModalRepeated.textContent = "Qayta joylar: O'chirish";
+    if (hudBtnRepeated) {
+      hudBtnRepeated.className = "px-2 py-1 bg-rose-600 text-white text-xs font-bold rounded-xl border border-rose-400 shadow-md transition active:scale-95 flex items-center gap-1";
+    }
+    if (labelHudRepeated) labelHudRepeated.textContent = "Qayta: Yoqiq";
+  } else {
+    if (btnRepeated) {
+      btnRepeated.className = "text-slate-400 hover:text-rose-400 bg-white/5 border border-white/10 active:scale-95 transition flex items-center justify-center";
+      btnRepeated.title = "Qayta yurilgan joylar (O'chiq - Yoqish uchun bosing)";
+    }
+    if (pillRepeated) {
+      pillRepeated.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
+    }
+    if (labelPillRepeated) labelPillRepeated.textContent = "Qayta joylar";
+    if (modalBtnRepeated) {
+      modalBtnRepeated.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700";
+    }
+    if (labelModalRepeated) labelModalRepeated.textContent = "Qayta joylar: Yoqish";
+    if (hudBtnRepeated) {
+      hudBtnRepeated.className = "px-2 py-1 bg-white/10 hover:bg-white/20 text-rose-300 text-xs font-bold rounded-xl border border-rose-400/30 transition active:scale-95 flex items-center gap-1";
+    }
+    if (labelHudRepeated) labelHudRepeated.textContent = "Qayta joylar";
+  }
+  if (window.lucide) {
+    try { lucide.createIcons(); } catch (e) {}
+  }
+}
+
+// Toggle route history polyline on map (Bugungi harakat yo'li)
 async function toggleRouteHistory(forceState) {
   haptic("light");
   const newState = typeof forceState === "boolean" ? forceState : !isRouteVisible;
@@ -4286,15 +4380,16 @@ async function toggleRouteHistory(forceState) {
     switchTab("map");
   }
 
-  const btn = document.getElementById("btnToggleRoute");
+  updateRouteButtonsState();
 
   if (isRouteVisible) {
-    if (btn) {
-      btn.classList.add("text-amber-400");
-      btn.classList.remove("text-slate-500");
+    showToast("🗺️ Harakat yo'li xaritada ko'rsatilmoqda...");
+    if (!routePointsCache || routePointsCache.length === 0) {
+      await loadRouteHistory(currentChildId);
+    } else {
+      renderHistoryToMapAndList(routePointsCache);
     }
-    showToast("🗺️ Marshrut xaritada ochilmoqda...");
-    await loadRouteHistory(currentChildId);
+
     if (routeLayerGroup && map) {
       if (!map.hasLayer(routeLayerGroup)) {
         routeLayerGroup.addTo(map);
@@ -4306,25 +4401,102 @@ async function toggleRouteHistory(forceState) {
         }
       } catch (e) {}
     }
+
     if (routePointsCache && routePointsCache.length >= 2) {
       showRoutePlaybackHud();
-      showToast("🗺️ Marshrut to'liq xaritada ochildi");
+      showToast("🗺️ Bugungi harakat yo'li to'liq xaritada ochildi");
     } else {
-      hideRoutePlaybackHud();
-      showToast("ℹ️ Bugun hali yangi harakat yo'li qayd etilmagan");
+      showToast("📍 Bugungi joylashuv nuqtasi xaritada ko'rsatildi");
     }
   } else {
     if (routeLayerGroup && map) {
       try { map.removeLayer(routeLayerGroup); } catch (e) {}
     }
     window._lastRenderedRouteSig = null;
-    if (btn) {
-      btn.classList.remove("text-amber-400");
-      btn.classList.add("text-slate-500");
-    }
     hideRoutePlaybackHud();
-    showToast("Marshrut yashirildi");
+    showToast("🗺️ Bugungi harakat yo'li o'chirildi (yashirildi)");
   }
+  updateRouteButtonsState();
+}
+
+// Toggle repeated places on map (Qayta-qayta yurilgan joylar)
+async function toggleRepeatedPlaces(forceState) {
+  haptic("light");
+  const newState = typeof forceState === "boolean" ? forceState : !isRepeatedPlacesVisible;
+  isRepeatedPlacesVisible = newState;
+
+  if (currentRole === "parent" && currentTab !== "map") {
+    switchTab("map");
+  }
+
+  updateRouteButtonsState();
+
+  if (isRepeatedPlacesVisible) {
+    showToast("🔁 Qayta yurilgan joylar tekshirilmoqda...");
+    if (!routePointsCache || routePointsCache.length === 0) {
+      await loadRouteHistory(currentChildId);
+    } else {
+      renderHistoryToMapAndList(routePointsCache);
+    }
+
+    if (repeatsLayerGroup && map) {
+      if (!map.hasLayer(repeatsLayerGroup)) {
+        repeatsLayerGroup.addTo(map);
+      }
+      try {
+        const bounds = repeatsLayerGroup.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds.pad(0.2));
+        }
+      } catch (e) {}
+    }
+
+    const repeatCount = (repeatsLayerGroup && typeof repeatsLayerGroup.getLayers === "function")
+      ? repeatsLayerGroup.getLayers().length
+      : 0;
+
+    if (repeatCount > 0) {
+      showToast(`🔁 Qayta yurilgan joylar ko'rsatildi (${repeatCount} ta nuqta)`);
+    } else {
+      showToast("ℹ️ Bugun hali qayta-qayta yurilgan alohida joylar qayd etilmagan");
+    }
+  } else {
+    if (repeatsLayerGroup && map) {
+      try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+    }
+    showToast("🔁 Qayta-qayta yurilgan joylar o'chirildi (yashirildi)");
+  }
+  updateRouteButtonsState();
+}
+
+// Clear today's route history from map and local cache
+function clearRouteHistory() {
+  haptic("medium");
+  if (!confirm("Bugungi harakat yo'li va qayta yurilgan joylar tarixini tozalashni xohlaysizmi?")) return;
+
+  if (routeLayerGroup && map) {
+    try { map.removeLayer(routeLayerGroup); } catch (e) {}
+  }
+  if (repeatsLayerGroup && map) {
+    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+  }
+  isRouteVisible = false;
+  isRepeatedPlacesVisible = false;
+  routePointsCache = [];
+  window._lastRenderedRouteSig = null;
+  hideRoutePlaybackHud();
+
+  const targetId = currentChildId || 2002;
+  try {
+    localStorage.removeItem(`_cached_route_history_${targetId}`);
+  } catch (e) {}
+
+  const container = document.getElementById("historyListContainer");
+  if (container) {
+    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Harakatlar tarixi tozalandi.</p>`;
+  }
+  updateRouteButtonsState();
+  showToast("🗑 Bugungi harakat yo'li va qayta joylar xaritadan tozalandi");
 }
 
 // Battery UI styling (with anti-flicker persistent level cache)

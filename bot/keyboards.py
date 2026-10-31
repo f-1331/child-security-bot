@@ -392,7 +392,8 @@ def get_location_actions_keyboard(lat: float, lon: float, child_id: int, is_offl
             InlineKeyboardButton(text="🗺 Yandex Maps", url=yandex_maps_url),
         ],
         [
-            InlineKeyboardButton(text="🗺️ Xaritada jonli ko'rish (Web App)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?child_id={child_id}")),
+            InlineKeyboardButton(text="🗺 Harakat marshruti", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?child_id={child_id}&show_route=1")),
+            InlineKeyboardButton(text="🔁 Qayta joylar", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?child_id={child_id}&show_repeats=1")),
         ]
     ]
     if is_offline and child_phone:

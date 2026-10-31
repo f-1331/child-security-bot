@@ -1394,7 +1394,18 @@ async def on_daily_summary_pressed(message: Message):
                     f"✨ <i>Barcha ma'lumotlar real vaqtda GPS telemetriyasi orqali hisoblandi.</i>"
                 )
                 report_kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🗺 Xaritada harakat marshrutini ko'rish", web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={parent_id}&child_id={ch.id}"))],
+                    [
+                        InlineKeyboardButton(
+                            text="🗺 Bugungi harakat marshruti",
+                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={parent_id}&child_id={ch.id}&show_route=1")
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            text="🔁 Qayta yurilgan joylar (Klaster)",
+                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={parent_id}&child_id={ch.id}&show_repeats=1")
+                        )
+                    ],
                     [
                         InlineKeyboardButton(text="🔔 Baland signal", callback_data=f"siren_child_{ch.id}"),
                         InlineKeyboardButton(text="🎁 +100 Tanga", callback_data=f"night_reward_{ch.id}_100")
