@@ -73,7 +73,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📍 Kerakli joylar"),
-            KeyboardButton(text="🔋 Batareya va Holat")
+            KeyboardButton(text="📋 Vazifalar va Tangalar")
         ],
         [
             KeyboardButton(text="👶 Farzandlarim"),
