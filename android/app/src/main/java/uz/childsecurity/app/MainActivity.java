@@ -224,10 +224,111 @@ public class MainActivity extends AppCompatActivity {
                         .setPositiveButton("Tushundim (Ruxsat berish)", (dialog, which) -> {
                             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, PERMISSION_REQUEST_CODE + 1);
                         })
-                        .setNegativeButton("Keyinroq", (dialog, which) -> dialog.dismiss())
+                        .setNegativeButton("Keyinroq", (dialog, which) -> {
+                            dialog.dismiss();
+                            checkUsageAccessPermission();
+                        })
                         .setCancelable(false)
                         .show();
+                return;
             }
+        }
+        checkUsageAccessPermission();
+    }
+
+    public void checkUsageAccessPermission() {
+        if (!UsageStatsHelper.hasUsageAccessPermission(this)) {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("📊 Ilovalar Tahlili va Ekran Vaqti")
+                    .setMessage("Farzandingiz qaysi o'yinlar va ilovalarda (YouTube, TikTok, o'yinlar) qancha vaqt o'tkazayotganini tahlil qilish va ota-onaga ko'rsatish uchun «Foydalanish statistikasi» (Usage Access) ruxsati zarur.\n\nOchilgan sozlamalarda «Child Security» ilovasini topib, ruxsat bering.")
+                    .setPositiveButton("Ruxsat berish", (dialog, which) -> {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+                            startActivity(intent);
+                        } catch (Exception ignored) {}
+                    })
+                    .setNegativeButton("Keyinroq", (dialog, which) -> {
+                        dialog.dismiss();
+                        checkOverlayPermission();
+                    })
+                    .setCancelable(false)
+                    .show();
+        } else {
+            checkOverlayPermission();
+        }
+    }
+
+    public void checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("🔒 Ilovalarni Bloklash Qalqoni (Overlay)")
+                        .setMessage("Ota-ona ilovalarni bloklaganda yoki belgilangan dars/uyqu vaqti bo'lganda, ekranda to'liq qulflash oynasini ko'rsatish uchun «Boshqa ilovalar ustida ko'rinish» (Display over other apps) ruxsati zarur.\n\nIltimos, ruxsat bering.")
+                        .setPositiveButton("Ruxsat berish", (dialog, which) -> {
+                            try {
+                                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                                startActivity(intent);
+                            } catch (Exception e) {
+                                try {
+                                    Intent fallback = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                                    startActivity(fallback);
+                                } catch (Exception ignored) {}
+                            }
+                        })
+                        .setNegativeButton("Keyinroq", (dialog, which) -> {
+                            dialog.dismiss();
+                            checkAccessibilityPermission();
+                        })
+                        .setCancelable(false)
+                        .show();
+                return;
+            }
+        }
+        checkAccessibilityPermission();
+    }
+
+    public boolean isAccessibilityServiceEnabled() {
+        try {
+            int accessibilityEnabled = 0;
+            final String service = getPackageName() + "/" + ChildSecurityAccessibilityService.class.getCanonicalName();
+            accessibilityEnabled = Settings.Secure.getInt(
+                    getContentResolver(),
+                    Settings.Secure.ACCESSIBILITY_ENABLED
+            );
+            if (accessibilityEnabled == 1) {
+                String settingValue = Settings.Secure.getString(
+                        getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                );
+                if (settingValue != null) {
+                    return settingValue.contains(service) || settingValue.contains(ChildSecurityAccessibilityService.class.getSimpleName());
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    public void checkAccessibilityPermission() {
+        if (!isAccessibilityServiceEnabled()) {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("🛡 Ilovalarni Bloklash va Himoya (Accessibility)")
+                    .setMessage("Farzand bloklangan ilovani ochganda uni darhol to'xtatish va ilovani telefon sozlamalaridan o'chirishga yo'l qo'ymaslik uchun «Maxsus imkoniyatlar» (Accessibility) xizmatini yoqing.\n\n⚠️ DIQQAT (Android 13/14/15 uchun):\nAgar tizim «Cheklangan sozlama» (Restricted setting) desa:\n1. Telefon sozlamalari ➔ Ilovalar (Apps) ➔ Child Security ga kiring;\n2. Yuqori o'ng burchakdagi 3 nuqta (⋮) ni bosing;\n3. «Cheklangan sozlamalarga ruxsat berish» (Allow restricted settings) ni bosing;\n4. So'ng Maxsus imkoniyatlardan Child Security'ni yoqing.")
+                    .setPositiveButton("Xizmatni yoqish", (dialog, which) -> {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                            startActivity(intent);
+                        } catch (Exception ignored) {}
+                    })
+                    .setNeutralButton("📱 Ilova sozlamalari (3 nuqta)", (dialog, which) -> {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                            intent.setData(Uri.parse("package:" + getPackageName()));
+                            startActivity(intent);
+                        } catch (Exception ignored) {}
+                    })
+                    .setNegativeButton("Tushundim", (dialog, which) -> dialog.dismiss())
+                    .setCancelable(false)
+                    .show();
         }
     }
 
@@ -236,6 +337,8 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
             checkBackgroundLocationPermission();
+        } else if (requestCode == PERMISSION_REQUEST_CODE + 1) {
+            checkUsageAccessPermission();
         }
     }
 
@@ -276,6 +379,14 @@ public class MainActivity extends AppCompatActivity {
             webView.evaluateJavascript("if (typeof handleTelegramBackPress === 'function') { handleTelegramBackPress(); } else { window.history.back(); }", null);
         } else {
             super.onBackPressed();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            webView.evaluateJavascript("if (typeof refreshProtectionPermissionsStatus === 'function') { refreshProtectionPermissionsStatus(); }", null);
         }
     }
 
@@ -471,25 +582,33 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public boolean isAccessibilityGranted() {
-            try {
-                int accessibilityEnabled = 0;
-                final String service = context.getPackageName() + "/" + ChildSecurityAccessibilityService.class.getCanonicalName();
-                accessibilityEnabled = Settings.Secure.getInt(
-                        context.getContentResolver(),
-                        Settings.Secure.ACCESSIBILITY_ENABLED
-                );
-                if (accessibilityEnabled == 1) {
-                    String settingValue = Settings.Secure.getString(
-                            context.getContentResolver(),
-                            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-                    );
-                    if (settingValue != null) {
-                        return settingValue.contains(service) || settingValue.contains(ChildSecurityAccessibilityService.class.getSimpleName());
-                    }
+        public boolean isOverlayGranted() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return Settings.canDrawOverlays(context);
+            }
+            return true;
+        }
+
+        @JavascriptInterface
+        public void requestOverlayPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(intent);
+                } catch (Exception e) {
+                    try {
+                        Intent fallback = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
+                        fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        context.startActivity(fallback);
+                    } catch (Exception ignored) {}
                 }
-            } catch (Exception ignored) {}
-            return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isAccessibilityGranted() {
+            return isAccessibilityServiceEnabled();
         }
 
         @JavascriptInterface
@@ -499,6 +618,60 @@ public class MainActivity extends AppCompatActivity {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(intent);
             } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public void openAppDetailsSettings() {
+            try {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.parse("package:" + context.getPackageName()));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public void requestAllChildProtectionPermissions() {
+            runOnUiThread(() -> {
+                if (!UsageStatsHelper.hasUsageAccessPermission(MainActivity.this)) {
+                    checkUsageAccessPermission();
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
+                    checkOverlayPermission();
+                } else if (!isAccessibilityServiceEnabled()) {
+                    checkAccessibilityPermission();
+                } else {
+                    Toast.makeText(MainActivity.this, "✅ Barcha himoya va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String getProtectionPermissionsStatus() {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject();
+                obj.put("is_native", true);
+                obj.put("usage_access", UsageStatsHelper.hasUsageAccessPermission(context));
+                boolean overlay = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    overlay = Settings.canDrawOverlays(context);
+                }
+                obj.put("overlay", overlay);
+                obj.put("accessibility", isAccessibilityServiceEnabled());
+                boolean batt = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                    batt = (pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName()));
+                }
+                obj.put("battery_optimization", batt);
+                boolean bgLoc = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    bgLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                }
+                obj.put("background_location", bgLoc);
+                return obj.toString();
+            } catch (Exception e) {
+                return "{}";
+            }
         }
 
         @JavascriptInterface

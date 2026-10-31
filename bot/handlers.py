@@ -5252,7 +5252,10 @@ def generate_screen_time_card(child, report, policy, all_children=None):
         InlineKeyboardButton(text="✉️ Oflayn SMS Buyruqlar", callback_data=f"sms_controls:{child.id}"),
         InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"st_refresh:{child.id}")
     ])
-    buttons.append([InlineKeyboardButton(text="⚙️ Har bir ilovani alohida boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))])
+    buttons.append([
+        InlineKeyboardButton(text="🛡 Ruxsatlarni yoqish yo'riqnomasi", callback_data=f"st_perm_guide:{child.id}"),
+        InlineKeyboardButton(text="⚙️ Ilovalarni boshqarish", web_app=WebAppInfo(url=settings.MINI_APP_URL))
+    ])
 
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -5354,6 +5357,28 @@ async def toggle_net_lock_callback_handler(callback: CallbackQuery):
         )
         status_msg = "📴 Internet cheklandi (Offline rejim yoqildi)!" if new_state else "🌐 Internet cheklovi yechildi (Online tiklandi)!"
         await callback.answer(status_msg, show_alert=True)
+
+        try:
+            from api.webapp_api import ws_manager
+            import json
+            pol_msg = {
+                "type": "device_policy_update",
+                "child_id": child_id,
+                "is_all_apps_blocked": updated_policy.is_all_apps_blocked,
+                "is_network_restricted": updated_policy.is_network_restricted,
+                "bedtime_start": updated_policy.bedtime_start,
+                "bedtime_end": updated_policy.bedtime_end,
+                "daily_limit_minutes": updated_policy.daily_limit_minutes,
+                "lockdown_reason": updated_policy.lockdown_reason,
+                "blocked_packages": json.loads(updated_policy.blocked_packages or "[]"),
+                "anti_uninstall_enabled": updated_policy.anti_uninstall_enabled,
+                "has_parent_pin": bool(updated_policy.parent_pin_hash),
+            }
+            await ws_manager.send_to_user(child_id, pol_msg)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, pol_msg)
+        except Exception:
+            pass
 
         child = await crud.get_user(session, child_id)
         children = await crud.get_children_for_parent(session, callback.from_user.id)
@@ -5459,13 +5484,35 @@ async def lock_all_callback_handler(callback: CallbackQuery):
         if not parents or parent_id not in [p.id for p in parents]:
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
-        await crud.update_device_policy(
+        updated_policy = await crud.update_device_policy(
             session=session,
             child_id=child_id,
             is_all_apps_blocked=True,
             lockdown_reason="Ota-ona Telegram orqali barcha ilovalarni blokladi"
         )
         await callback.answer("🛑 Farzand telefonida barcha ilovalar bloklandi!", show_alert=True)
+
+        try:
+            from api.webapp_api import ws_manager
+            import json
+            pol_msg = {
+                "type": "device_policy_update",
+                "child_id": child_id,
+                "is_all_apps_blocked": True,
+                "is_network_restricted": updated_policy.is_network_restricted,
+                "bedtime_start": updated_policy.bedtime_start,
+                "bedtime_end": updated_policy.bedtime_end,
+                "daily_limit_minutes": updated_policy.daily_limit_minutes,
+                "lockdown_reason": updated_policy.lockdown_reason,
+                "blocked_packages": json.loads(updated_policy.blocked_packages or "[]"),
+                "anti_uninstall_enabled": updated_policy.anti_uninstall_enabled,
+                "has_parent_pin": bool(updated_policy.parent_pin_hash),
+            }
+            await ws_manager.send_to_user(child_id, pol_msg)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, pol_msg)
+        except Exception:
+            pass
 
         child = await crud.get_user(session, child_id)
         children = await crud.get_children_for_parent(session, callback.from_user.id)
@@ -5485,12 +5532,34 @@ async def unlock_all_callback_handler(callback: CallbackQuery):
         if not parents or parent_id not in [p.id for p in parents]:
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
-        await crud.update_device_policy(
+        updated_policy = await crud.update_device_policy(
             session=session,
             child_id=child_id,
             is_all_apps_blocked=False
         )
         await callback.answer("✅ Barcha ilovalardan cheklov olib tashlandi!", show_alert=True)
+
+        try:
+            from api.webapp_api import ws_manager
+            import json
+            pol_msg = {
+                "type": "device_policy_update",
+                "child_id": child_id,
+                "is_all_apps_blocked": False,
+                "is_network_restricted": updated_policy.is_network_restricted,
+                "bedtime_start": updated_policy.bedtime_start,
+                "bedtime_end": updated_policy.bedtime_end,
+                "daily_limit_minutes": updated_policy.daily_limit_minutes,
+                "lockdown_reason": updated_policy.lockdown_reason,
+                "blocked_packages": json.loads(updated_policy.blocked_packages or "[]"),
+                "anti_uninstall_enabled": updated_policy.anti_uninstall_enabled,
+                "has_parent_pin": bool(updated_policy.parent_pin_hash),
+            }
+            await ws_manager.send_to_user(child_id, pol_msg)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, pol_msg)
+        except Exception:
+            pass
 
         child = await crud.get_user(session, child_id)
         children = await crud.get_children_for_parent(session, callback.from_user.id)
@@ -5498,6 +5567,46 @@ async def unlock_all_callback_handler(callback: CallbackQuery):
         policy = await crud.get_or_create_device_policy(session, child_id)
         text, kb = generate_screen_time_card(child, report, policy, children)
         await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("st_perm_guide:"))
+async def st_perm_guide_callback_handler(callback: CallbackQuery):
+    """Send step-by-step guidance on how to enable Usage Access, Overlay, and Accessibility on child device."""
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+        child_name = child.full_name or f"Farzand #{child_id}" if child else "Farzand"
+
+    guide_text = (
+        f"🛡 **FARZAND TELEFONIDA RUXSATLARNI YOQISH QO'LLANMASI**\n\n"
+        f"👤 Farzandingiz: **{child_name}**\n\n"
+        f"Ilovalar tahlili (qancha vaqt o'tirgani) va ularni masofadan bir zumda bloklash ishlashi uchun **bola telefoniga bizning Android APK ilovamiz o'rnatilgan bo'lishi** va quyidagi 3 ta ruxsat yoqilishi shart:\n\n"
+        f"1️⃣ **Foydalanish statistikasi (Usage Access) — Ekran tahlili uchun:**\n"
+        f"• Bola telefonida: _Sozlamalar ➔ Maxsus kirish (Special app access) ➔ Foydalanish ma'lumotlariga kirish (Usage access)_ ga kiring;\n"
+        f"• Ro'yxatdan **Child Security** ilovasini topib, ruxsat bering.\n\n"
+        f"2️⃣ **Boshqa ilovalar ustida ko'rinish (Overlay) — Bloklash ekrani uchun:**\n"
+        f"• _Sozlamalar ➔ Ilovalar ➔ Maxsus kirish ➔ Boshqa ilovalar ustida ko'rinish (Display over other apps)_ ga kiring;\n"
+        f"• **Child Security** ga ruxsat bering.\n\n"
+        f"3️⃣ **Maxsus imkoniyatlar (Accessibility) — Tezkor bloklash uchun:**\n"
+        f"• _Sozlamalar ➔ Maxsus imkoniyatlar (Accessibility) ➔ O'rnatilgan xizmatlar (Downloaded apps)_ ga kiring;\n"
+        f"• **Child Security** xizmatini yoqing.\n\n"
+        f"⚠️ **Android 13, 14 va 15 foydalanuvchilari diqqatiga!**\n"
+        f"Agar tizim _«Cheklangan sozlama» (Restricted setting)_ deb ruxsat bermasa:\n"
+        f"1. Bola telefonida _Sozlamalar ➔ Ilovalar (Apps) ➔ Child Security_ ga kiring;\n"
+        f"2. Yuqori o'ng burchakdagi **3 ta nuqta (⋮)** tugmasini bosing;\n"
+        f"3. **«Cheklangan sozlamalarga ruxsat berish» (Allow restricted settings)** ni bosing va telefon PIN kodini tering;\n"
+        f"4. Shundan keyin Maxsus imkoniyatlar (Accessibility) bo'limida Child Security bemalol yoqiladi!\n\n"
+        f"💡 _Bola ilovasida «⚡ Ruxsatlarni yoqish» tugmasi orqali ham bularni 1-marta bosib bosqichma-bosqich yoqish mumkin._"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Ekran tahliliga qaytish", callback_data=f"st_child:{child_id}")]
+    ])
+    try:
+        await callback.message.edit_text(guide_text, reply_markup=kb, parse_mode="Markdown")
+    except Exception:
+        await callback.message.answer(guide_text, reply_markup=kb, parse_mode="Markdown")
+    await callback.answer()
 
 
 

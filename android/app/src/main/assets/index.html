@@ -862,6 +862,95 @@
         </button>
       </div>
 
+      <!-- 4.5. CHILD PROTECTION & APP CONTROL STATUS CARD (NATIVE ANDROID PROTECTION WIZARD) -->
+      <div id="childProtectionPermissionsCard" class="ios-glass-card p-4 flex flex-col gap-3 border-amber-500/30">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-black text-white">Himoya & Ilovalar Nazorati</h4>
+              <p class="text-[10px] text-slate-400">Tahlil va bloklash to'g'ri ishlashi uchun</p>
+            </div>
+          </div>
+          <button onclick="requestAllProtectionWizard()" class="px-2.5 py-1 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 text-white rounded-xl text-[10px] font-black active:scale-95 shadow transition">
+            ⚡ Ruxsatlarni yoqish
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-2 text-xs">
+          <!-- Item 1: Usage Access -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">📊</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Ilovalar Tahlili (Usage Access)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">YouTube, TikTok, o'yinlar sarfini aniqlash</p>
+              </div>
+            </div>
+            <div id="badgePermUsageAccess" class="shrink-0">
+              <button onclick="triggerUsageAccessRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+
+          <!-- Item 2: Overlay Lock -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">🔒</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Bloklash Qalqoni (Overlay)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">Bloklangan ilovalarni ekranda to'sish</p>
+              </div>
+            </div>
+            <div id="badgePermOverlay" class="shrink-0">
+              <button onclick="triggerOverlayRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+
+          <!-- Item 3: Accessibility -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">🛡️</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Tezkor Nazorat (Accessibility)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">Ilovani shu zahoti to'xtatish va himoya</p>
+              </div>
+            </div>
+            <div id="badgePermAccessibility" class="shrink-0">
+              <button onclick="triggerAccessibilityRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Android 13/14/15 Restricted Settings Accordion / Helper -->
+        <div class="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-[10px] text-slate-300 leading-relaxed">
+          <div class="flex items-center justify-between cursor-pointer" onclick="toggleRestrictedGuide()">
+            <span class="font-bold text-indigo-300 flex items-center gap-1">
+              <span>💡</span>
+              <span>Android 13/14/15 da «Cheklangan sozlama» desa:</span>
+            </span>
+            <i id="restrictedGuideChevron" data-lucide="chevron-down" class="w-3.5 h-3.5 text-indigo-400 transition-transform"></i>
+          </div>
+          <div id="restrictedGuideContent" class="hidden mt-2 pt-2 border-t border-indigo-500/20 flex flex-col gap-1 text-slate-300">
+            <p>1. <b>Sozlamalar ➔ Ilovalar ➔ Child Security</b> ga kiring;</p>
+            <p>2. Yuqori o'ng burchakdagi <b>3 ta nuqta (⋮)</b> ni bosing;</p>
+            <p>3. <b>«Cheklangan sozlamalarga ruxsat berish»</b> ni tanlang va telefon kodini kiriting;</p>
+            <p>4. So'ng Maxsus imkoniyatlar (Accessibility) bo'limida Child Security ni yoqing.</p>
+            <button onclick="triggerOpenAppDetails()" class="mt-1.5 py-1.5 px-2 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 rounded-lg font-bold text-center flex items-center justify-center gap-1 active:scale-95 transition">
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+              <span>Ilova sozlamalarini ochish (3 nuqta uchun)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 5. Active Missions Card (Topshiriqlar) -->
       <div class="ios-glass-card p-4 flex flex-col gap-3 border-blue-500/30">
         <div class="flex items-center justify-between">

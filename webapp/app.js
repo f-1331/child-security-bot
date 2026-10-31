@@ -9358,7 +9358,9 @@ function syncWithNativeAndroidBridge() {
         window.AndroidBridge.startBackgroundTracking(String(currentChildId), REMOTE_API_HOST);
       } catch(e) {}
     }
+    refreshProtectionPermissionsStatus();
   } else {
+    refreshProtectionPermissionsStatus();
     // Web visitor: check if user previously dismissed banner
     try {
       const dismissed = localStorage.getItem("hide_app_banner") === "1";
@@ -9389,6 +9391,131 @@ function dismissAppBanner() {
   const b = document.getElementById("parentAppDownloadBanner");
   if (b) b.classList.add("hidden");
   try { localStorage.setItem("hide_app_banner", "1"); } catch(e) {}
+}
+
+// =========================================================
+// CHILD PROTECTION & SPECIAL PERMISSIONS CONTROLLER
+// =========================================================
+function refreshProtectionPermissionsStatus() {
+  const card = document.getElementById("childProtectionPermissionsCard");
+  if (!card) return;
+
+  if (!window.AndroidBridge) {
+    const btnWizard = card.querySelector("button[onclick='requestAllProtectionWizard()']");
+    if (btnWizard) {
+      btnWizard.textContent = "📥 APK Ko'chirish";
+      btnWizard.setAttribute("onclick", "openInstallAppModal()");
+    }
+    return;
+  }
+
+  try {
+    let status = {};
+    if (typeof window.AndroidBridge.getProtectionPermissionsStatus === "function") {
+      const raw = window.AndroidBridge.getProtectionPermissionsStatus();
+      status = JSON.parse(raw || "{}");
+    } else {
+      status = {
+        usage_access: (typeof window.AndroidBridge.isUsageAccessGranted === "function") && window.AndroidBridge.isUsageAccessGranted(),
+        overlay: (typeof window.AndroidBridge.isOverlayGranted === "function") && window.AndroidBridge.isOverlayGranted(),
+        accessibility: (typeof window.AndroidBridge.isAccessibilityGranted === "function") && window.AndroidBridge.isAccessibilityGranted()
+      };
+    }
+
+    const bUsage = document.getElementById("badgePermUsageAccess");
+    if (bUsage) {
+      if (status.usage_access) {
+        bUsage.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
+      } else {
+        bUsage.innerHTML = '<button onclick="triggerUsageAccessRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
+      }
+    }
+
+    const bOverlay = document.getElementById("badgePermOverlay");
+    if (bOverlay) {
+      if (status.overlay) {
+        bOverlay.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
+      } else {
+        bOverlay.innerHTML = '<button onclick="triggerOverlayRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
+      }
+    }
+
+    const bAccess = document.getElementById("badgePermAccessibility");
+    if (bAccess) {
+      if (status.accessibility) {
+        bAccess.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
+      } else {
+        bAccess.innerHTML = '<button onclick="triggerAccessibilityRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
+      }
+    }
+
+    const btnWizard = card.querySelector("button[onclick='requestAllProtectionWizard()']");
+    if (btnWizard) {
+      if (status.usage_access && status.overlay && status.accessibility) {
+        btnWizard.className = "px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl text-[10px] font-black";
+        btnWizard.innerHTML = "✅ To'liq himoyalangan";
+      } else {
+        btnWizard.className = "px-2.5 py-1 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 text-white rounded-xl text-[10px] font-black active:scale-95 shadow transition";
+        btnWizard.innerHTML = "⚡ Ruxsatlarni yoqish";
+      }
+    }
+  } catch (e) {
+    console.error("Error refreshing protection permissions:", e);
+  }
+}
+
+function triggerUsageAccessRequest() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestUsageAccess === "function") {
+    window.AndroidBridge.requestUsageAccess();
+  } else {
+    showToast("Foydalanish statistikasi ruxsati faqat Android ilovada ishlaydi");
+  }
+}
+
+function triggerOverlayRequest() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestOverlayPermission === "function") {
+    window.AndroidBridge.requestOverlayPermission();
+  } else {
+    showToast("Overlay ruxsati faqat Android ilovada ishlaydi");
+  }
+}
+
+function triggerAccessibilityRequest() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestAccessibility === "function") {
+    window.AndroidBridge.requestAccessibility();
+  } else {
+    showToast("Maxsus imkoniyatlar ruxsati faqat Android ilovada ishlaydi");
+  }
+}
+
+function triggerOpenAppDetails() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.openAppDetailsSettings === "function") {
+    window.AndroidBridge.openAppDetailsSettings();
+  } else {
+    showToast("Ilova sozlamalarini ochish faqat Android ilovada ishlaydi");
+  }
+}
+
+function requestAllProtectionWizard() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestAllChildProtectionPermissions === "function") {
+    window.AndroidBridge.requestAllChildProtectionPermissions();
+  } else {
+    openInstallAppModal();
+  }
+}
+
+function toggleRestrictedGuide() {
+  const content = document.getElementById("restrictedGuideContent");
+  const chevron = document.getElementById("restrictedGuideChevron");
+  if (!content) return;
+  const isHidden = content.classList.contains("hidden");
+  if (isHidden) {
+    content.classList.remove("hidden");
+    if (chevron) chevron.style.transform = "rotate(180deg)";
+  } else {
+    content.classList.add("hidden");
+    if (chevron) chevron.style.transform = "rotate(0deg)";
+  }
 }
 
 // =========================================================

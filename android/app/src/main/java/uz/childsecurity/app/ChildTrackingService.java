@@ -462,30 +462,7 @@ public class ChildTrackingService extends Service implements LocationListener {
                     }
                     JSONObject resObj = new JSONObject(sb.toString());
                     if (resObj.has("policy")) {
-                        JSONObject pol = resObj.getJSONObject("policy");
-                        SharedPreferences.Editor ed = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-                        if (pol.has("is_all_apps_blocked")) {
-                            ed.putBoolean("is_all_apps_blocked", pol.getBoolean("is_all_apps_blocked"));
-                        }
-                        if (pol.has("lockdown_reason")) {
-                            ed.putString("lockdown_reason", pol.getString("lockdown_reason"));
-                        }
-                        if (pol.has("blocked_packages")) {
-                            ed.putString("blocked_packages", pol.getJSONArray("blocked_packages").toString());
-                        }
-                        if (pol.has("anti_uninstall_enabled")) {
-                            ed.putBoolean("anti_uninstall_enabled", pol.getBoolean("anti_uninstall_enabled"));
-                        }
-                        if (pol.has("is_network_restricted")) {
-                            boolean netRestricted = pol.getBoolean("is_network_restricted");
-                            ed.putBoolean("is_network_restricted", netRestricted);
-                            if (netRestricted) {
-                                LocalVpnService.startLockdown(ChildTrackingService.this);
-                            } else {
-                                LocalVpnService.stopLockdown(ChildTrackingService.this);
-                            }
-                        }
-                        ed.apply();
+                        applyPolicy(resObj.getJSONObject("policy"));
                     }
                 } catch (Exception ignored) {}
                 return true;
@@ -581,6 +558,72 @@ public class ChildTrackingService extends Service implements LocationListener {
         }
     }
 
+    public void applyPolicy(JSONObject pol) {
+        if (pol == null) return;
+        try {
+            SharedPreferences.Editor ed = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+            if (pol.has("is_all_apps_blocked")) {
+                ed.putBoolean("is_all_apps_blocked", pol.getBoolean("is_all_apps_blocked"));
+            }
+            if (pol.has("lockdown_reason")) {
+                ed.putString("lockdown_reason", pol.getString("lockdown_reason"));
+            }
+            if (pol.has("blocked_packages")) {
+                ed.putString("blocked_packages", pol.getJSONArray("blocked_packages").toString());
+            }
+            if (pol.has("anti_uninstall_enabled")) {
+                ed.putBoolean("anti_uninstall_enabled", pol.getBoolean("anti_uninstall_enabled"));
+            }
+            if (pol.has("bedtime_start")) {
+                ed.putString("bedtime_start", pol.optString("bedtime_start", ""));
+            }
+            if (pol.has("bedtime_end")) {
+                ed.putString("bedtime_end", pol.optString("bedtime_end", ""));
+            }
+            if (pol.has("is_network_restricted")) {
+                boolean netRestricted = pol.getBoolean("is_network_restricted");
+                ed.putBoolean("is_network_restricted", netRestricted);
+                if (netRestricted) {
+                    LocalVpnService.startLockdown(this);
+                } else {
+                    LocalVpnService.stopLockdown(this);
+                }
+            }
+            ed.apply();
+            Log.d(TAG, "Applied remote device policy: all_blocked=" + pol.optBoolean("is_all_apps_blocked") +
+                    ", blocked_pkgs=" + pol.opt("blocked_packages"));
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to apply device policy: " + e.getMessage());
+        }
+    }
+
+    private void fetchDevicePolicy(String cleanBase, String childId) {
+        try {
+            String endpoint = cleanBase + "/api/v1/webapp/child/" + childId + "/device-policy";
+            HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            int code = conn.getResponseCode();
+            if (code >= 200 && code < 300) {
+                try (java.io.InputStream is = conn.getInputStream();
+                     java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    JSONObject resObj = new JSONObject(sb.toString());
+                    if (resObj.has("policy")) {
+                        applyPolicy(resObj.getJSONObject("policy"));
+                    }
+                }
+            }
+            conn.disconnect();
+        } catch (Exception ignored) {}
+    }
+
     private void sendAppUsageTelemetry() {
         try {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -588,8 +631,16 @@ public class ChildTrackingService extends Service implements LocationListener {
             String serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL);
             if (childId == null || childId.trim().isEmpty()) return;
 
+            String cleanBase = (serverUrl != null && !serverUrl.trim().isEmpty()) ? serverUrl.trim() : DEFAULT_SERVER_URL;
+            if (cleanBase.contains("?")) cleanBase = cleanBase.substring(0, cleanBase.indexOf("?"));
+            cleanBase = cleanBase.replaceAll("/+$", "");
+
             JSONObject usageObj = UsageStatsHelper.getDailyAppUsageStats(this);
-            if (!usageObj.optBoolean("has_permission", false)) return;
+            if (!usageObj.optBoolean("has_permission", false)) {
+                // If usage stats permission not yet granted, keep device policy synced anyway
+                fetchDevicePolicy(cleanBase, childId.trim());
+                return;
+            }
 
             JSONObject payload = new JSONObject();
             payload.put("total_screen_time_seconds", usageObj.optLong("total_seconds", 0));
@@ -597,14 +648,12 @@ public class ChildTrackingService extends Service implements LocationListener {
             payload.put("app_stats", usageObj.optJSONArray("apps"));
 
             byte[] postData = payload.toString().getBytes(StandardCharsets.UTF_8);
-            String cleanBase = (serverUrl != null && !serverUrl.trim().isEmpty()) ? serverUrl.trim() : DEFAULT_SERVER_URL;
-            if (cleanBase.contains("?")) cleanBase = cleanBase.substring(0, cleanBase.indexOf("?"));
-            cleanBase = cleanBase.replaceAll("/+$", "");
             String endpoint = cleanBase + "/api/v1/webapp/child/" + childId.trim() + "/app-usage";
 
             HttpURLConnection conn = (HttpURLConnection) new URL(endpoint).openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setRequestProperty("Accept", "application/json");
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);
             conn.setDoOutput(true);
@@ -612,7 +661,21 @@ public class ChildTrackingService extends Service implements LocationListener {
                 os.write(postData);
                 os.flush();
             }
-            conn.getResponseCode();
+            int code = conn.getResponseCode();
+            if (code >= 200 && code < 300) {
+                try (java.io.InputStream is = conn.getInputStream();
+                     java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is, StandardCharsets.UTF_8))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    JSONObject resObj = new JSONObject(sb.toString());
+                    if (resObj.has("policy")) {
+                        applyPolicy(resObj.getJSONObject("policy"));
+                    }
+                }
+            }
             conn.disconnect();
         } catch (Exception ignored) {}
     }
