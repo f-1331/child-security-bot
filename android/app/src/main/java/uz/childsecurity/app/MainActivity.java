@@ -566,6 +566,33 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void sendEmergencySms(String recipientPhone, String messageText) {
+            try {
+                if (recipientPhone == null || recipientPhone.trim().isEmpty() || messageText == null || messageText.trim().isEmpty()) return;
+                android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
+                java.util.ArrayList<String> parts = sm.divideMessage(messageText);
+                if (parts != null && parts.size() > 1) {
+                    sm.sendMultipartTextMessage(recipientPhone.trim(), null, parts, null, null);
+                } else {
+                    sm.sendTextMessage(recipientPhone.trim(), null, messageText, null, null);
+                }
+                showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+            } catch (Exception e) {
+                Log.e("AndroidBridge", "sendEmergencySms error: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public String getLastSmsChildLocation() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                return prefs.getString("last_sms_child_location", "");
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
         public String getTodayScreenTimeJson() {
             try {
                 return UsageStatsHelper.getDailyAppUsageStats(context).toString();

@@ -144,9 +144,15 @@
     <div id="offlineStatusBar" class="hidden bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40 mb-2 transition-all duration-300">
       <div class="flex items-center gap-2">
         <span class="inline-block w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
-        <span id="offlineStatusText" class="text-[11px] font-extrabold">📡 Oflayn rejim (GPS, topshiriqlar va xarita lokal faol)</span>
+        <span id="offlineStatusText" class="text-[11px] font-extrabold">📡 Oflayn rejim (GPS, topshiriqlar va xarita faol)</span>
       </div>
-      <span class="text-[9px] bg-black/30 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">100% Oflayn</span>
+      <div class="flex items-center gap-1.5">
+        <button id="btnBannerSmsDecoder" onclick="openOfflineSmsDecoderModal()" class="text-[9.5px] bg-black/40 hover:bg-black/60 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 transition">
+          <i data-lucide="satellite" class="w-3 h-3"></i>
+          <span>SMS Joylashuv</span>
+        </button>
+        <span class="text-[9px] bg-black/30 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">100% Oflayn</span>
+      </div>
     </div>
 
     <!-- 1. DEMO MODE NOTICE BANNER & INSTANT ROLE SWITCHER -->
@@ -506,6 +512,12 @@
           <button id="btnMapInstallApp" onclick="openInstallAppModal(); closeExtraMapToolsOnMobile();" class="text-blue-400 hover:text-blue-300 relative group active:scale-95 transition" title="Mobil ilovani yuklab olish (Android APK)">
             <i data-lucide="smartphone" class="w-4 h-4"></i>
             <span class="absolute top-0.5 right-0.5 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+          </button>
+
+          <!-- Offline SMS Joylashuvini ko'rish (Parent Offline Decoder) -->
+          <button id="btnOfflineSmsDecoder" onclick="openOfflineSmsDecoderModal(); closeExtraMapToolsOnMobile();" class="text-rose-400 hover:text-rose-300 relative group active:scale-95 transition" title="Offline SMS Joylashuv (Internetsiz farzandni ko'rish)">
+            <i data-lucide="satellite" class="w-4 h-4"></i>
+            <span class="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
           </button>
         </div>
 
@@ -2114,6 +2126,12 @@
           <span>Ota-onaga qo'ng'iroq qilish</span>
         </button>
 
+        <!-- Offline Favqulodda SMS Tugmasi -->
+        <button id="btnEmergencyOfflineSms" onclick="sendEmergencyOfflineSms()" class="w-full py-2.5 px-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 active:scale-95 text-white font-bold text-xs rounded-xl border border-rose-400/50 flex items-center justify-center gap-2 transition shadow-lg shadow-rose-950/50">
+          <i data-lucide="message-square" class="w-4 h-4 shrink-0"></i>
+          <span>Internetsiz Favqulodda SMS (GSM)</span>
+        </button>
+
         <button onclick="openParentChat()" class="w-full py-2.5 px-3 bg-sky-600/20 hover:bg-sky-600/30 active:scale-95 text-sky-200 hover:text-white font-bold text-xs rounded-xl border border-sky-500/40 flex items-center justify-center gap-2 transition shadow-sm">
           <svg class="w-4 h-4 shrink-0 fill-current text-sky-400" viewBox="0 0 24 24">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.05-.19s-.16-.03-.23-.02c-.1.02-1.74 1.11-4.92 3.26-.47.32-.89.48-1.27.47-.42-.01-1.23-.24-1.83-.43-.74-.24-1.33-.37-1.28-.79.03-.22.32-.44.89-.67 3.48-1.52 5.81-2.52 6.99-3.02 3.33-1.39 4.02-1.63 4.47-1.64.1 0 .32.02.46.14.12.1.15.24.17.34-.01.07.01.22 0 .26z"/>
@@ -3213,7 +3231,67 @@
     </div>
   </div>
 
+  <!-- MODAL: OFFLINE SMS DECODER (Parent views child offline GPS coordinates on map) -->
+  <div id="modal-sms-decoder" class="hidden fixed inset-0 z-[1300] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-gradient-to-b from-slate-900 via-slate-900 to-black border border-rose-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-md flex flex-col shadow-2xl animate-fade-in relative">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+            <i data-lucide="satellite" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-white">Offline SMS Joylashuv</h3>
+            <p class="text-[10px] text-rose-300">Internetsiz farzand koordinatasini xaritada ko'rish</p>
+          </div>
+        </div>
+        <button onclick="closeOfflineSmsDecoderModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <p class="text-[11px] text-slate-300 leading-relaxed mb-3">
+        Farzandingizda internet bo'lmaganda yuborilgan favqulodda SOS yoki geolokatsiya SMS xabarini quyiga kiriting:
+      </p>
+
+      <!-- Native Android SMS Detection Box (if detected) -->
+      <div id="smsNativeDetectedBox" class="hidden mb-3 p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-left">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+            Yangi SMS aniqlandi!
+          </span>
+          <span id="smsNativeTime" class="text-[10px] text-slate-400"></span>
+        </div>
+        <p id="smsNativeText" class="text-[10.5px] text-slate-300 mt-1 font-mono break-all"></p>
+        <button onclick="useNativeDetectedSms()" class="mt-2 w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+          Xaritada ko'rsatish
+        </button>
+      </div>
+
+      <div class="space-y-2 mb-3">
+        <label class="text-[11px] font-bold text-slate-300">SMS matni yoki Google Maps havolasi:</label>
+        <textarea id="smsInputRaw" rows="3" placeholder="Masalan: 🚨 SOS! Joylashuv: https://maps.google.com/?q=41.2995,69.2401 yoki 41.2995, 69.2401" class="w-full bg-slate-800/80 border border-slate-700 focus:border-rose-500 rounded-xl p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none transition"></textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="pasteFromClipboardToSmsInput()" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5">
+          <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+          Qo'yish (Paste)
+        </button>
+        <button onclick="plotSmsCoordinatesFromInput()" class="py-2.5 px-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-rose-900/40">
+          <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+          Xaritada ko'rish
+        </button>
+      </div>
+
+      <div class="mt-3 p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50 text-[10px] text-slate-400 leading-relaxed">
+        💡 <b>Eslatma:</b> Farzand internetsiz SOS berganda yoki <code>#GPS:PIN</code> kodi orqali SMS jo'natganda, xaritadagi kesh xotirasi yordamida farzandning turgan joyi internetsiz ham xaritada aniq chiziladi.
+      </div>
+    </div>
+  </div>
+
   <!-- Application Logic -->
-  <script src="app.js?v=71"></script>
+  <script src="app.js?v=72"></script>
 </body>
 </html>

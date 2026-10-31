@@ -66,9 +66,37 @@ public class SmsCommandReceiver extends BroadcastReceiver {
                 abortBroadcast();
 
                 processSmsCommand(context, sender, body);
+            } else if (body.contains("🚨 SOS") || body.contains("Farzand koordinatasi") || body.contains("maps.google.com/?q=")) {
+                // Incoming child location or emergency SOS SMS on parent device!
+                processIncomingChildSms(context, sender, body);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error parsing incoming SMS: " + e.getMessage());
+        }
+    }
+
+    private void processIncomingChildSms(Context context, String sender, String body) {
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[-+]?\\d{1,2}\\.\\d{4,8},\\s*[-+]?\\d{1,3}\\.\\d{4,8}");
+            java.util.regex.Matcher matcher = pattern.matcher(body);
+            if (matcher.find()) {
+                String match = matcher.group();
+                String[] coords = match.split(",");
+                double lat = Double.parseDouble(coords[0].trim());
+                double lon = Double.parseDouble(coords[1].trim());
+
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, Context.MODE_PRIVATE);
+                org.json.JSONObject locObj = new org.json.JSONObject();
+                locObj.put("latitude", lat);
+                locObj.put("longitude", lon);
+                locObj.put("sender", sender);
+                locObj.put("body", body);
+                locObj.put("timestamp", System.currentTimeMillis());
+                prefs.edit().putString("last_sms_child_location", locObj.toString()).apply();
+                Log.i(TAG, "Parsed and saved incoming child offline GPS SMS: " + lat + ", " + lon);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing incoming child GPS SMS: " + e.getMessage());
         }
     }
 

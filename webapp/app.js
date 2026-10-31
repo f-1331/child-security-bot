@@ -339,7 +339,9 @@ let coinRateCoins = 1000;
 let coinRateSom = 10000;
 let childBalanceCoins = 0;
 let childBalanceSom = 0;
-let parentPhone = null;
+let parentPhone = (() => {
+  try { return localStorage.getItem("cached_parent_phone") || null; } catch(e) { return null; }
+})();
 let parentName = null;
 let parentUsername = null;
 let lastSosAlertState = false;
@@ -1808,7 +1810,10 @@ function applyChildUI(user) {
   renderChildDashboardQuests();
   renderChildDashboardCastles();
 
-  if (user.parent_phone) parentPhone = user.parent_phone;
+  if (user.parent_phone) {
+    parentPhone = user.parent_phone;
+    try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+  }
   if (user.parent_name) parentName = user.parent_name;
   if (user.is_sos_active) {
     const sosModal = document.getElementById("modal-sos-active");
@@ -2439,6 +2444,20 @@ function initMap() {
       L.DomEvent.disableScrollPropagation(dock);
     } catch (e) {}
   }
+
+  // Check if native Android intercepted an offline SMS or restore last offline plotted child
+  setTimeout(() => {
+    checkNativeSmsCoordinates();
+    try {
+      const savedChildLoc = localStorage.getItem("last_offline_plotted_child");
+      if (savedChildLoc && !childMarker) {
+        const parsed = JSON.parse(savedChildLoc);
+        if (parsed && parsed.latitude && parsed.longitude) {
+          applyOfflineChildCoordinates(parsed.latitude, parsed.longitude, parsed.label || "Farzand (Kesh)");
+        }
+      }
+    } catch(e){}
+  }, 250);
 }
 
 // Toggle between Street and Satellite Hybrid Map
@@ -4548,6 +4567,7 @@ function switchTab(tabName) {
       if (map) {
         setTimeout(() => map.invalidateSize(), 80);
       }
+      checkNativeSmsCoordinates();
     }
   }
 }
@@ -6125,23 +6145,36 @@ async function triggerChildSOS() {
     if (!isDemoMode && currentChildId) {
       // Feature 2: 5-second ambient audio recording in background
       recordAndUploadSOSAudio(currentChildId);
-      try {
-        const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (data && data.status === "success") {
-          if (data.parent_phone) parentPhone = data.parent_phone;
-          showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
+
+      if (!navigator.onLine) {
+        // Direct 100% Offline GSM SOS dispatch
+        sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
+      } else {
+        try {
+          const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (data && data.status === "success") {
+            if (data.parent_phone) {
+              parentPhone = data.parent_phone;
+              try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+            }
+            showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
+          }
+        } catch (err) {
+          console.error("SOS dispatch error:", err);
+          showToast("⚠️ Internet yo'q yoki zaif: favqulodda SMS yuborilmoqda...");
+          sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
         }
-      } catch (err) {
-        console.error("SOS dispatch error:", err);
-        showToast("⚠️ SOS signali yuborildi (tarmoq tekshirilmoqda)");
       }
     } else {
       showToast("🚨 (Demo) SOS signali faollashtirildi!");
+      if (!navigator.onLine) {
+        sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
+      }
     }
     } finally {
     setTimeout(() => {
@@ -6267,6 +6300,217 @@ function copyParentPhoneNumber() {
     });
   } else {
     showToast("Raqam: " + clean);
+  }
+}
+
+// ==========================================
+// 100% OFFLINE GSM SMS & COORDINATE DECODER
+// ==========================================
+
+function sendEmergencyOfflineSms(lat, lon, childName, battery) {
+  try {
+    const pPhone = parentPhone || localStorage.getItem("cached_parent_phone") || "";
+    const cName = childName || (childrenList.find(c => c.id == currentChildId) || {}).full_name || "Farzand";
+    const curLat = (lat !== undefined && lat !== null && !isNaN(lat)) ? lat : (childMarker ? childMarker.getLatLng().lat : DEFAULT_LAT);
+    const curLon = (lon !== undefined && lon !== null && !isNaN(lon)) ? lon : (childMarker ? childMarker.getLatLng().lng : DEFAULT_LON);
+    const battStr = (battery !== null && battery !== undefined) ? ` (Batareya: ${battery}%)` : "";
+    const gmapsUrl = `https://maps.google.com/?q=${curLat.toFixed(6)},${curLon.toFixed(6)}`;
+    
+    const smsMessage = `🚨 SOS! Farzandingiz ${cName} xavfda!${battStr}\nJoylashuv: ${gmapsUrl}\nKoordinata: ${curLat.toFixed(6)}, ${curLon.toFixed(6)}`;
+
+    // 1. Native Android direct SMS (without internet / via GSM)
+    if (window.AndroidBridge && typeof window.AndroidBridge.sendEmergencySms === "function") {
+      if (pPhone) {
+        window.AndroidBridge.sendEmergencySms(pPhone, smsMessage);
+        showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+        return;
+      }
+    }
+
+    // 2. Web browser / PWA fallback
+    if (pPhone) {
+      const cleanPhone = pPhone.replace(/[\s\-]/g, "");
+      const smsUri = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
+      const link = document.createElement("a");
+      link.href = smsUri;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => link.remove(), 500);
+      showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
+    } else {
+      const enteredPhone = prompt("Ota-onangiz telefon raqamini kiriting (+998901234567):");
+      if (enteredPhone && enteredPhone.trim()) {
+        parentPhone = enteredPhone.trim();
+        try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+        sendEmergencyOfflineSms(curLat, curLon, cName, battery);
+      }
+    }
+  } catch (err) {
+    console.error("sendEmergencyOfflineSms error:", err);
+  }
+}
+
+function openOfflineSmsDecoderModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-sms-decoder");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+
+  // Check if native Android intercepted an incoming child SMS
+  if (window.AndroidBridge && typeof window.AndroidBridge.getLastSmsChildLocation === "function") {
+    try {
+      const raw = window.AndroidBridge.getLastSmsChildLocation();
+      if (raw && raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.latitude && parsed.longitude) {
+          const box = document.getElementById("smsNativeDetectedBox");
+          const text = document.getElementById("smsNativeText");
+          const time = document.getElementById("smsNativeTime");
+          if (box && text) {
+            box.classList.remove("hidden");
+            text.textContent = parsed.body || `${parsed.latitude}, ${parsed.longitude}`;
+            if (time && parsed.timestamp) {
+              time.textContent = new Date(parsed.timestamp).toLocaleTimeString();
+            }
+            window._pendingNativeSmsLocation = parsed;
+          }
+        }
+      }
+    } catch(e) {
+      console.warn("Native SMS check error:", e);
+    }
+  }
+}
+
+function closeOfflineSmsDecoderModal() {
+  haptic("light");
+  const modal = document.getElementById("modal-sms-decoder");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function pasteFromClipboardToSmsInput() {
+  haptic("light");
+  const inputEl = document.getElementById("smsInputRaw");
+  if (!inputEl) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        inputEl.value = text;
+        showToast("📋 SMS nusxasi joylandi!");
+        return;
+      }
+    }
+  } catch(e) {}
+  const entered = prompt("SMS matni yoki koordinatasini kiriting:");
+  if (entered) inputEl.value = entered;
+}
+
+function useNativeDetectedSms() {
+  if (window._pendingNativeSmsLocation) {
+    const loc = window._pendingNativeSmsLocation;
+    closeOfflineSmsDecoderModal();
+    applyOfflineChildCoordinates(loc.latitude, loc.longitude, "Farzand (SMS orqali)");
+  }
+}
+
+function plotSmsCoordinatesFromInput() {
+  haptic("medium");
+  const inputEl = document.getElementById("smsInputRaw");
+  if (!inputEl) return;
+  const raw = inputEl.value.trim();
+  if (!raw) {
+    showToast("⚠️ SMS matnini yoki koordinatalarni kiriting!");
+    return;
+  }
+
+  let lat = null;
+  let lon = null;
+
+  // Pattern 1: Google Maps link (?q=LAT,LON)
+  const gmapsMatch = raw.match(/q=([-+]?\d{1,2}\.\d+),\s*([-+]?\d{1,3}\.\d+)/i);
+  if (gmapsMatch) {
+    lat = parseFloat(gmapsMatch[1]);
+    lon = parseFloat(gmapsMatch[2]);
+  } else {
+    // Pattern 2: Explicit comma-separated coords (41.2995, 69.2401)
+    const coordMatch = raw.match(/([-+]?\d{1,2}\.\d{3,8})[,\s]+([-+]?\d{1,3}\.\d{3,8})/);
+    if (coordMatch) {
+      lat = parseFloat(coordMatch[1]);
+      lon = parseFloat(coordMatch[2]);
+    }
+  }
+
+  if (lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
+    closeOfflineSmsDecoderModal();
+    applyOfflineChildCoordinates(lat, lon, "Farzand (Offline SMS)");
+  } else {
+    showToast("⚠️ Matndan haqiqiy koordinatalar (masalan: 41.2995, 69.2401) topilmadi!");
+  }
+}
+
+function applyOfflineChildCoordinates(lat, lon, label = "Farzand (SMS)") {
+  if (isNaN(lat) || isNaN(lon)) {
+    showToast("⚠️ Noto'g'ri koordinata formati!");
+    return;
+  }
+  if (!map) {
+    initMap();
+  }
+  const posName = label || "Farzand";
+  
+  // Render offline marker with indicator
+  renderChildMarker(lat, lon, posName, false, null, false, "📍 SMS orqali ko'rilmoqda (Offline)");
+
+  if (map) {
+    map.flyTo([lat, lon], 16, { animate: true, duration: 1 });
+  }
+
+  // Draw or extend local offline polyline trail
+  if (typeof _localLivePolyline !== "undefined" && _localLivePolyline) {
+    _localLivePolyline.addLatLng([lat, lon]);
+  } else if (map && typeof L !== "undefined") {
+    _localLivePolyline = L.polyline([[lat, lon]], {
+      color: "#38bdf8",
+      weight: 4,
+      opacity: 0.85,
+      dashArray: "6, 8"
+    }).addTo(map);
+  }
+
+  // Save to persistent storage so it stays on map even if app reloads offline
+  try {
+    localStorage.setItem("last_offline_plotted_child", JSON.stringify({
+      latitude: lat,
+      longitude: lon,
+      label: posName,
+      timestamp: Date.now()
+    }));
+  } catch(e){}
+
+  showToast(`📍 Farzand offline koordinatasi xaritada belgilandi: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+}
+
+function checkNativeSmsCoordinates() {
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.getLastSmsChildLocation === "function") {
+      const raw = window.AndroidBridge.getLastSmsChildLocation();
+      if (raw && raw.trim()) {
+        const obj = JSON.parse(raw);
+        if (obj && obj.latitude && obj.longitude) {
+          const lastPlotted = localStorage.getItem("last_auto_plotted_sms_time");
+          if (!lastPlotted || parseInt(lastPlotted) < (obj.timestamp || 0)) {
+            localStorage.setItem("last_auto_plotted_sms_time", String(obj.timestamp || Date.now()));
+            applyOfflineChildCoordinates(obj.latitude, obj.longitude, "Farzand (Avto SMS)");
+            showToast("📩 Yangi SMS orqali farzand joylashuvi xaritada yangilandi!");
+          }
+        }
+      }
+    }
+  } catch(e) {
+    console.warn("checkNativeSmsCoordinates error:", e);
   }
 }
 
