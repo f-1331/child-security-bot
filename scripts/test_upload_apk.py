@@ -14,7 +14,7 @@ def test_upload():
         f'--{boundary}'.encode(),
         b'Content-Disposition: form-data; name="chat_id"',
         b'',
-        b'6707839718',
+        b'1',
     ])
     body.extend([
         f'--{boundary}'.encode(),

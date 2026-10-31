@@ -12,7 +12,7 @@ def upload(filename, caption):
         f'--{boundary}'.encode(),
         b'Content-Disposition: form-data; name="chat_id"',
         b'',
-        b'6707839718',
+        b'1',
         f'--{boundary}'.encode(),
         b'Content-Disposition: form-data; name="caption"',
         b'',

@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     BOT_USERNAME: str = os.getenv("BOT_USERNAME", "child_security_bot")
     OWNER_BOT_TOKEN: str = _safe_secret("OWNER_BOT_TOKEN", DEFAULT_OWNER_BOT_TOKEN_B64)
     OWNER_USERNAME: str = "fayzbek1331"
-    OWNER_ID: int = 6707839718
+    OWNER_ID: int = 1
     WEBAPP_BASE_URL: str = "https://child-security-bot.vercel.app"
     BACKEND_URL: str = "https://child-security-site.onrender.com"
     TGCLOUD_APP_TOKEN: Optional[str] = os.getenv("TGCLOUD_APP_TOKEN", None)

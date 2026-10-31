@@ -71,8 +71,8 @@ async def check_admin_access(event: TelegramObject) -> Optional[Dict[str, Any]]:
     owner_uname = (settings.OWNER_USERNAME or "fayzbek1331").lower().lstrip("@")
     is_owner = bool(
         (clean_uname and clean_uname == owner_uname)
-        or from_user.id == 6707839718
-        or from_user.id == getattr(settings, "OWNER_ID", 6707839718)
+        or from_user.id in (1, 6707839718)
+        or from_user.id == getattr(settings, "OWNER_ID", 1)
     )
 
     async with async_session_maker() as session:
