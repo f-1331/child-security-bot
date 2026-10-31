@@ -218,9 +218,9 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 22:00 Nightly Safety Report (Guaranteed at 22:00+ Tashkent time, exactly once per day)
+            # 1. 22:00 Nightly Safety Report (Dispatched at 22:00 Tashkent time, exactly once per day)
             if now_tz.hour >= 22 and last_sent_date != today_str:
-                logger.info(f"Triggering 22:00 nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
+                logger.info(f"Triggering nightly safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                 async with AsyncSessionLocal() as session:
                     from sqlalchemy import select
                     from db.models import User
@@ -281,7 +281,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                     discipline_line = f"⚠️ <b>Intizom holati:</b> Bugun {len(today_tamper)} ta qoidabuzarlik qayd etildi\n"
 
                                 report_msg = (
-                                    f"🌙 <b>KUNLIK XAVFSIZLIK HISOBOTI (22:00)</b>\n"
+                                    f"🌙 <b>KUNLIK XAVFSIZLIK HISOBOTI (Soat {now_tz.strftime('%H:%M')})</b>\n"
                                     f"━━━━━━━━━━━━━━━━━━━\n"
                                     f"👤 <b>Farzand:</b> {c_name}\n\n"
                                     f"📍 <b>Tashrif buyurilgan joylar:</b>\n"
@@ -321,9 +321,9 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                 _save_last_nightly_sent_date(today_str)
                 logger.info(f"Nightly safety reports dispatched for {today_str}.")
 
-            # 1.5 Hourly Child Location Updates (Sent every 1 hour at EXACTLY :00 between 07:00 and 21:00 Tashkent time)
+            # 1.5 Hourly Child Location Updates (Sent every 1 hour at EXACTLY :00 between 07:00 and 23:00 Tashkent time, skipping 22:00 which has nightly report)
             current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
-            if 7 <= now_tz.hour <= 21:
+            if 7 <= now_tz.hour <= 23 and now_tz.hour != 22:
                 # User requirement: If SOS is NOT active, only send at exact minute :00!
                 if now_tz.minute == 0:
                     if last_hourly_slot != current_hour_slot:

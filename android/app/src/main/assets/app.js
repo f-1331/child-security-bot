@@ -880,17 +880,58 @@ function playPingSound() {
   } catch (e) {}
 }
 
-// Persistent Auth Prompt Controls (User requested: max 2 prompts, never prompt again unless switching roles)
-const AUTH_PROMPT_KEY = "smart_tracker_auth_prompt_count";
-const MAX_AUTO_AUTH_PROMPTS = 2;
+// ---------------------------------------------------------
+// 10-Sekundlik Demo Taklif Banneri (Foydalanuvchi talabi)
+// Kirish bilan demo rejimga birdaniga kirmasdan, kod yozish oynasini ochish
+// va yuqorida 10 soniyalik chiroyli demo taklifini ko'rsatish
+// ---------------------------------------------------------
+let entryDemoInterval = null;
+let entryDemoSecondsLeft = 10;
 
-function getAuthPromptCount() {
-  return parseInt(localStorage.getItem(AUTH_PROMPT_KEY) || "0", 10);
+function showEntryDemoBanner() {
+  const banner = document.getElementById("entryDemoCountdownBanner");
+  if (!banner) return;
+  banner.classList.remove("hidden");
+  entryDemoSecondsLeft = 10;
+  const timerBadge = document.getElementById("demoBannerTimer");
+  if (timerBadge) timerBadge.textContent = "10s";
+
+  if (entryDemoInterval) clearInterval(entryDemoInterval);
+  entryDemoInterval = setInterval(() => {
+    entryDemoSecondsLeft--;
+    if (timerBadge) {
+      if (entryDemoSecondsLeft > 0) {
+        timerBadge.textContent = `${entryDemoSecondsLeft}s`;
+      } else {
+        timerBadge.textContent = "Demo";
+      }
+    }
+    if (entryDemoSecondsLeft <= 0) {
+      clearInterval(entryDemoInterval);
+      entryDemoInterval = null;
+    }
+  }, 1000);
 }
 
-function incrementAuthPromptCount() {
-  const current = getAuthPromptCount();
-  localStorage.setItem(AUTH_PROMPT_KEY, String(current + 1));
+function dismissEntryDemoBanner() {
+  if (entryDemoInterval) {
+    clearInterval(entryDemoInterval);
+    entryDemoInterval = null;
+  }
+  const banner = document.getElementById("entryDemoCountdownBanner");
+  if (banner) banner.classList.add("hidden");
+}
+
+function acceptDemoFromBanner() {
+  dismissEntryDemoBanner();
+  hideAuthGateModal();
+  const target = window._pendingTargetRole || localStorage.getItem("smart_tracker_role") || "parent";
+  if (target === "child") {
+    enableChildDemoMode();
+  } else {
+    enableDemoMode();
+  }
+  showToast("🎮 Namuna (Demo) rejimiga kirildi!");
 }
 
 // Check session in localStorage, URL, or persistent role
@@ -934,7 +975,7 @@ async function checkAuthenticationState() {
           localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
           localStorage.setItem("smart_tracker_cached_children", JSON.stringify(pData.children));
           localStorage.setItem("smart_tracker_role", "parent");
-          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          dismissEntryDemoBanner();
           hideAuthGateModal();
           applyAuthenticatedUser(sess);
           return;
@@ -958,7 +999,7 @@ async function checkAuthenticationState() {
           };
           localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
           localStorage.setItem("smart_tracker_role", "child");
-          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          dismissEntryDemoBanner();
           hideAuthGateModal();
           applyAuthenticatedUser(sess);
           return;
@@ -987,7 +1028,7 @@ async function checkAuthenticationState() {
           }
           localStorage.setItem("smart_tracker_auth_code", tgData.user?.web_access_code || "");
           localStorage.setItem("smart_tracker_role", tgData.role);
-          localStorage.setItem(AUTH_PROMPT_KEY, "2");
+          dismissEntryDemoBanner();
           hideAuthGateModal();
           applyAuthenticatedUser(tgData);
           return;
@@ -1073,28 +1114,16 @@ async function checkAuthenticationState() {
     }
   }
 
-  // 4. Check prompt count: Prompt code AT MOST 2 TIMES!
-  // After 2 times, NEVER ask automatically on entry or reload again.
-  const promptCount = getAuthPromptCount();
+  // 4. NO AUTHENTICATED SESSION FOUND:
+  // User Requirement:
+  // "kirish bilan demo versiyaga bittada kirma tepada 10sekundlik habar chiqar 'demo versiyadan ko'rishingiz mumkin...' shuni yaxshilab ideal qil va kod yozish oynasini och kirish bilan"
   const savedRole = localStorage.getItem("smart_tracker_role") || "parent";
 
-  if (promptCount < MAX_AUTO_AUTH_PROMPTS) {
-    incrementAuthPromptCount();
-    if (savedRole === "child") {
-      enableChildDemoMode();
-    } else {
-      enableDemoMode();
-    }
-    showAuthGateModal();
-  } else {
-    // Already asked 2 times -> never bother the user on entry again!
-    hideAuthGateModal();
-    if (savedRole === "child") {
-      enableChildDemoMode();
-    } else {
-      enableDemoMode();
-    }
-  }
+  // Prompt code directly on entry
+  showAuthGateModal(savedRole === "child" ? "child" : "parent");
+
+  // Show the polished 10-second demo countdown banner at the top
+  showEntryDemoBanner();
 }
 
 // =========================================================
@@ -1317,7 +1346,7 @@ async function submitAuthCode() {
     if (res.status === 404 && (code === "123456" || code === "000000" || code.toLowerCase() === "demo")) {
       const target = window._pendingTargetRole || "parent";
       localStorage.setItem("smart_tracker_role", target);
-      localStorage.setItem(AUTH_PROMPT_KEY, "2");
+      dismissEntryDemoBanner();
       hideAuthGateModal();
       if (target === "child") {
         enableChildDemoMode();
@@ -1337,7 +1366,6 @@ async function submitAuthCode() {
     localStorage.setItem("smart_tracker_session", JSON.stringify(data));
     localStorage.setItem("smart_tracker_auth_code", code);
     localStorage.setItem("smart_tracker_role", data.role);
-    localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Never prompt automatically on reload again
 
     if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
       try {
@@ -1346,6 +1374,7 @@ async function submitAuthCode() {
     }
 
     haptic("success");
+    dismissEntryDemoBanner();
     hideAuthGateModal();
     applyAuthenticatedUser(data);
     showToast("🎉 Xush kelibsiz!");
@@ -1366,7 +1395,7 @@ async function submitAuthCode() {
 function startDemoMode(role) {
   haptic("medium");
   localStorage.setItem("smart_tracker_role", role);
-  localStorage.setItem(AUTH_PROMPT_KEY, "2"); // Do not prompt on future reloads
+  dismissEntryDemoBanner();
   hideAuthGateModal();
   if (role === "child") {
     enableChildDemoMode();
@@ -1470,6 +1499,7 @@ function applyAuthenticatedUser(data) {
   document.getElementById("demoBadge")?.classList.add("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
   document.getElementById("demoNoticeBanner")?.classList.add("hidden");
+  dismissEntryDemoBanner();
 
   // Purge any demo geofences on map and state when real user connects
   if (geofenceLayers && map) {
@@ -1902,7 +1932,6 @@ function logoutSession() {
     localStorage.removeItem("smart_tracker_session");
     localStorage.removeItem("smart_tracker_auth_code");
     localStorage.removeItem("smart_tracker_role");
-    localStorage.removeItem(AUTH_PROMPT_KEY);
     sessionStorage.removeItem("smart_tracker_demo_role");
     authenticatedSession = null;
     isDemoMode = false;
@@ -2876,11 +2905,16 @@ async function updateLiveTelemetry(childId) {
             offlineSmsBox.classList.remove("hidden");
             const childPhone = child.phone_number ? child.phone_number.trim() : "";
             if (btnSmsTrig) {
-              if (childPhone) {
-                btnSmsTrig.href = `sms:${childPhone}?body=${encodeURIComponent("#GPS:1234")}`;
-              } else {
-                btnSmsTrig.href = `sms:?body=${encodeURIComponent("#GPS:1234")}`;
-              }
+              const cleanChildPhone = childPhone ? childPhone.replace(/[\s\-]/g, "") : "";
+              const smsUri = cleanChildPhone ? `sms:${cleanChildPhone}?body=${encodeURIComponent("#GPS:1234")}` : `sms:?body=${encodeURIComponent("#GPS:1234")}`;
+              btnSmsTrig.onclick = (e) => {
+                e.preventDefault();
+                const link = document.createElement("a");
+                link.href = smsUri;
+                document.body.appendChild(link);
+                link.click();
+                setTimeout(() => { try { link.remove(); } catch(err){} }, 300);
+              };
             }
           }
         }
@@ -6398,7 +6432,7 @@ let lastSosTriggerTimestamp = 0;
 
 async function triggerChildSOS() {
   const now = Date.now();
-  if (isSosTriggering || (now - lastSosTriggerTimestamp < 8000)) {
+  if (isSosTriggering || (now - lastSosTriggerTimestamp < 1500)) {
     console.warn("SOS allaqachon faollashtirilmoqda, takroriy bosish bekor qilindi.");
     return;
   }
@@ -6407,85 +6441,65 @@ async function triggerChildSOS() {
 
   const btnBig = document.getElementById("btnChildBigSOS");
   if (btnBig) {
-    btnBig.classList.add("pointer-events-none", "opacity-80");
+    btnBig.classList.add("opacity-80");
   }
 
   try {
-      haptic("heavy");
-      playSirenSound();
-  
-    // Show emergency active screen on child device
+    haptic("heavy");
+    playSirenSound();
+
+    // Show emergency active screen on child device immediately
     const modal = document.getElementById("modal-sos-active");
     if (modal) {
       modal.classList.remove("hidden");
       if (window.lucide) window.lucide.createIcons();
     }
-  
+
     showToast("🚨 SOS yuborildi! Ota-onangizga xabar ketmoqda...");
-  
-    // Coordinates fallback
-    let fallbackLat = DEFAULT_LAT;
-    let fallbackLon = DEFAULT_LON;
-    if (childMarker) {
-      const pos = childMarker.getLatLng();
-      fallbackLat = pos.lat;
-      fallbackLon = pos.lng;
-    }
-  
-    let finalLat = fallbackLat;
-    let finalLon = fallbackLon;
-    let finalAcc = null;
-    let battery = null;
-  
-    try {
-      const [geo, batt] = await Promise.all([
-        getDeviceLocation(),
-        getDeviceBattery(),
-      ]);
-      if (geo) {
-        finalLat = geo.latitude;
-        finalLon = geo.longitude;
-        finalAcc = geo.accuracy;
-      }
-      if (batt !== null) {
-        battery = batt;
-      }
-    } catch (e) {
-      console.warn("GPS/Battery acquisition error:", e);
-    }
-  
+
     // Find child name for marker
     const cObj = childrenList.find(c => c.id == currentChildId) || childrenList[0] || {};
-    const cName = cObj.full_name || "Farzand";
-  
-    // Pulse red radar marker on map immediately
-    if (finalLat && finalLon) {
-      renderChildMarker(finalLat, finalLon, cName, true, battery);
-      if (map) map.flyTo([finalLat, finalLon], 16, { animate: true, duration: 1 });
+    const cName = cObj.full_name || (authenticatedSession?.user?.full_name) || "Farzand";
+
+    // Instant location resolution (0ms - never wait for 15s GPS timeout!)
+    let instantLat = DEFAULT_LAT;
+    let instantLon = DEFAULT_LON;
+    let instantAcc = 20;
+
+    if (cachedDeviceLocation && typeof cachedDeviceLocation.latitude === "number") {
+      instantLat = cachedDeviceLocation.latitude;
+      instantLon = cachedDeviceLocation.longitude;
+      instantAcc = cachedDeviceLocation.accuracy || 20;
+    } else if (childMarker) {
+      const pos = childMarker.getLatLng();
+      instantLat = pos.lat;
+      instantLon = pos.lng;
     }
-  
-    const payload = {
-      is_sos_active: true,
-      latitude: finalLat,
-      longitude: finalLon,
-      accuracy: finalAcc,
-      battery_level: battery,
-    };
-  
+
+    // Pulse red radar marker on map immediately
+    renderChildMarker(instantLat, instantLon, cName, true, null);
+    if (map) map.flyTo([instantLat, instantLon], 16, { animate: true, duration: 0.8 });
+
+    // IMMEDIATE (0ms) DISPATCH TO SERVER / TELEGRAM:
     if (!isDemoMode && currentChildId) {
-      // Feature 2: 5-second ambient audio recording in background
-      recordAndUploadSOSAudio(currentChildId);
+      // Background ambient audio snapshot (5s)
+      try { recordAndUploadSOSAudio(currentChildId); } catch(e){}
 
       if (!navigator.onLine) {
-        // Direct 100% Offline GSM SOS dispatch
-        sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
+        sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
       } else {
-        try {
-          const res = await fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
+        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_sos_active: true,
+            latitude: instantLat,
+            longitude: instantLon,
+            accuracy: instantAcc,
+            battery_level: null
+          })
+        })
+        .then(async (res) => {
           const data = await res.json();
           if (data && data.status === "success") {
             if (data.parent_phone) {
@@ -6494,29 +6508,61 @@ async function triggerChildSOS() {
             }
             showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
           }
-        } catch (err) {
-          console.error("SOS dispatch error:", err);
-          showToast("⚠️ Internet yo'q yoki zaif: favqulodda SMS yuborilmoqda...");
-          sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
-        }
+        })
+        .catch((err) => {
+          console.error("SOS instant dispatch network error:", err);
+          showToast("⚠️ Internet zaif: favqulodda SMS tayyorlanmoqda...");
+          sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
+        });
       }
     } else {
-      showToast("🚨 (Demo) SOS signali faollashtirildi!");
+      // Full interactive simulation in Demo mode
+      showToast("🚨 (Demo) SOS signali faollashtirildi! Ota-onaga xabar yetkazildi.");
       if (!navigator.onLine) {
-        sendEmergencyOfflineSms(finalLat, finalLon, cName, battery);
+        sendEmergencyOfflineSms(instantLat, instantLon, cName, 85);
       }
     }
 
-    // Start repeating emergency broadcast every 30 seconds (har yarim minutda qayta-qayta yuborish)
+    // ASYNCHRONOUS HIGH-ACCURACY GPS REFINEMENT IN BACKGROUND (non-blocking!)
+    Promise.all([
+      getDeviceLocation(),
+      getDeviceBattery()
+    ]).then(([freshGeo, freshBatt]) => {
+      let refinedLat = instantLat;
+      let refinedLon = instantLon;
+      let refinedAcc = instantAcc;
+      if (freshGeo && typeof freshGeo.latitude === "number") {
+        refinedLat = freshGeo.latitude;
+        refinedLon = freshGeo.longitude;
+        refinedAcc = freshGeo.accuracy || 10;
+      }
+      renderChildMarker(refinedLat, refinedLon, cName, true, freshBatt);
+
+      if (!isDemoMode && currentChildId && navigator.onLine) {
+        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_sos_active: true,
+            latitude: refinedLat,
+            longitude: refinedLon,
+            accuracy: refinedAcc,
+            battery_level: freshBatt
+          })
+        }).catch(console.warn);
+      }
+    }).catch(console.warn);
+
+    // Start repeating emergency broadcast every 20 seconds
     startSosRecurringBroadcast();
   } finally {
     setTimeout(() => {
       isSosTriggering = false;
       const btn = document.getElementById("btnChildBigSOS");
       if (btn) {
-        btn.classList.remove("pointer-events-none", "opacity-80");
+        btn.classList.remove("opacity-80");
       }
-    }, 4000);
+    }, 1500);
   }
 }
 
@@ -6730,10 +6776,23 @@ function stopSosRecurringBroadcast() {
 
 function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrence = false) {
   try {
+    // 0. FIRMLY PRESERVE AND PROTECT CHILD SESSION BEFORE SMS CLIENT HANDOFF
+    localStorage.setItem("smart_tracker_role", "child");
+    if (authenticatedSession) {
+      try { localStorage.setItem("smart_tracker_session", JSON.stringify(authenticatedSession)); } catch(e){}
+    }
+    if (currentChildId) {
+      try { localStorage.setItem("smart_tracker_child_id", String(currentChildId)); } catch(e){}
+    }
+    const currentCode = localStorage.getItem("smart_tracker_auth_code") || (authenticatedSession?.user?.web_access_code) || "";
+    if (currentCode) {
+      try { localStorage.setItem("smart_tracker_auth_code", currentCode); } catch(e){}
+    }
+
     const pPhone = parentPhone || localStorage.getItem("cached_parent_phone") || "";
-    const cName = childName || (childrenList.find(c => c.id == currentChildId) || {}).full_name || "Farzand";
-    const curLat = (lat !== undefined && lat !== null && !isNaN(lat)) ? lat : (childMarker ? childMarker.getLatLng().lat : DEFAULT_LAT);
-    const curLon = (lon !== undefined && lon !== null && !isNaN(lon)) ? lon : (childMarker ? childMarker.getLatLng().lng : DEFAULT_LON);
+    const cName = childName || (childrenList.find(c => c.id == currentChildId) || {}).full_name || (authenticatedSession?.user?.full_name) || "Farzand";
+    const curLat = (lat !== undefined && lat !== null && !isNaN(lat)) ? lat : (cachedDeviceLocation ? cachedDeviceLocation.latitude : (childMarker ? childMarker.getLatLng().lat : DEFAULT_LAT));
+    const curLon = (lon !== undefined && lon !== null && !isNaN(lon)) ? lon : (cachedDeviceLocation ? cachedDeviceLocation.longitude : (childMarker ? childMarker.getLatLng().lng : DEFAULT_LON));
     const battStr = (battery !== null && battery !== undefined) ? ` (Batareya: ${battery}%)` : "";
     const gmapsUrl = `https://maps.google.com/?q=${curLat.toFixed(6)},${curLon.toFixed(6)}`;
     
@@ -6755,12 +6814,15 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
       if (!isSilentRecurrence) {
         const cleanPhone = pPhone.replace(/[\s\-]/g, "");
         const smsUri = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
+        
+        // SAFE SMS HANDOFF: Do NOT use target="_blank" which causes orphaned blank tabs and WebApp reset!
         const link = document.createElement("a");
         link.href = smsUri;
-        link.target = "_blank";
         document.body.appendChild(link);
         link.click();
-        setTimeout(() => link.remove(), 500);
+        setTimeout(() => {
+          try { link.remove(); } catch(e){}
+        }, 300);
         showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
       }
     } else {
