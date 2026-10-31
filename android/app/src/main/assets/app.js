@@ -6458,9 +6458,9 @@ function startSosRecurringBroadcast() {
   }
   _sosRecurringCount = 1;
   const statusEl = document.getElementById("sosBroadcastStatusText");
-  if (statusEl) statusEl.textContent = "1-xabar jo'natildi (har 30s)";
+  if (statusEl) statusEl.textContent = "1-xabar jo'natildi (har 20s)";
 
-  // Har yarim minutda (har 30 soniyada) avtomatik qayta-qayta jo'natish
+  // Har 20 soniyada avtomatik qayta-qayta jo'natish
   _sosRecurringTimer = setInterval(async () => {
     const modal = document.getElementById("modal-sos-active");
     if (!modal || modal.classList.contains("hidden")) {
@@ -6518,11 +6518,11 @@ function startSosRecurringBroadcast() {
       if (statusEl) {
         statusEl.textContent = `${_sosRecurringCount}-xabar jo'natildi (${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`;
       }
-      console.log(`[Recurring SOS 30s] Sent #${_sosRecurringCount}: ${curLat}, ${curLon} (${curBatt}%)`);
+      console.log(`[Recurring SOS 20s] Sent #${_sosRecurringCount}: ${curLat}, ${curLon} (${curBatt}%)`);
     } catch (err) {
       console.warn("Recurring SOS broadcast error:", err);
     }
-  }, 30000); // 30 soniya (har yarim minutda)
+  }, 20000); // 20 soniya (har 20 sekundda)
 }
 
 function stopSosRecurringBroadcast() {

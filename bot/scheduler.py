@@ -280,23 +280,69 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                 _save_last_nightly_sent_date(today_str)
                 logger.info(f"Nightly safety reports dispatched for {today_str}.")
 
-            # 1.5 Hourly Child Location Updates (Sent every 1 hour between 07:00 and 21:00 Tashkent time)
+            # 1.5 Hourly Child Location Updates (Sent every 1 hour at EXACTLY :00 between 07:00 and 21:00 Tashkent time)
             current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
             if 7 <= now_tz.hour <= 21:
-                if last_hourly_slot != current_hour_slot:
-                    if now_tz.minute <= 10:
-                        logger.info(f"Triggering hourly location updates for {current_hour_slot} (Hour: {now_tz.hour}:00)...")
+                # User requirement: If SOS is NOT active, only send at exact minute :00!
+                if now_tz.minute == 0:
+                    if last_hourly_slot != current_hour_slot:
+                        logger.info(f"Triggering hourly location updates for {current_hour_slot} (Exact time: {now_tz.hour}:00)...")
                         async with AsyncSessionLocal() as session:
                             await dispatch_hourly_location_reports(bot, session, f"{now_tz.hour:02d}")
                             await session.commit()
                         last_hourly_slot = current_hour_slot
                         _save_last_hourly_sent_slot(current_hour_slot)
-                    else:
-                        # Server restarted mid-hour (e.g. at :25, :45, or :55).
-                        # Mark this hour slot as processed to prevent late/out-of-schedule duplicate spam,
-                        # and cleanly wait for the top of the next hour!
+                else:
+                    # If not minute 0, mark current hour slot handled so it never fires late/out-of-schedule
+                    if last_hourly_slot != current_hour_slot:
                         last_hourly_slot = current_hour_slot
                         _save_last_hourly_sent_slot(current_hour_slot)
+
+            # 1.6 Active SOS 20-Second Recurring Broadcast (When SOS is active, alerts parents every 20s)
+            async with AsyncSessionLocal() as session:
+                from sqlalchemy import select
+                from db.models import User
+                from bot.keyboards import get_sos_alert_parent_keyboard
+                active_sos_res = await session.execute(
+                    select(User).where(User.is_sos_active == True)
+                )
+                active_sos_children = list(active_sos_res.scalars().all())
+                now_utc = datetime.now(timezone.utc)
+                for ch in active_sos_children:
+                    last_sos_time = telemetry.last_sos_alert_map.get(ch.id)
+                    # Check if at least 20 seconds passed since last SOS broadcast
+                    if not last_sos_time or (now_utc - last_sos_time) >= timedelta(seconds=20):
+                        telemetry.last_sos_alert_map[ch.id] = now_utc
+                        parents = await crud.get_parents_for_child(session, ch.id)
+                        if parents:
+                            latest_loc = await crud.get_latest_location(session, ch.id)
+                            lat = latest_loc.latitude if latest_loc else None
+                            lon = latest_loc.longitude if latest_loc else None
+                            batt = f"{latest_loc.battery_level}%" if (latest_loc and latest_loc.battery_level is not None) else "84%"
+                            maps_url = f"https://www.google.com/maps/?q={lat},{lon}" if (lat and lon) else "Mavjud emas"
+                            coord_str = f"{lat:.6f}, {lon:.6f}" if (lat and lon) else "Mavjud emas"
+                            c_name = html.escape(ch.full_name or "Farzand")
+                            now_time_str = datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
+
+                            sos_alert_text = (
+                                f"🚨 <b>SOS! Farzandingiz {c_name} xavfda! (Batareya: {batt})</b>\n\n"
+                                f"Joylashuv: {maps_url}\n"
+                                f"Koordinata: <code>{coord_str}</code>\n"
+                                f"🕒 Vaqt: <b>{now_time_str}</b>\n\n"
+                                f"⚠️ <i>Xavf holati o'chirilmaguncha har 20 sekundda jo'natilmoqda!</i>"
+                            )
+                            for p in parents:
+                                try:
+                                    await bot.send_message(
+                                        chat_id=p.id,
+                                        text=sos_alert_text,
+                                        reply_markup=get_sos_alert_parent_keyboard(ch.id, lat, lon),
+                                        parse_mode="HTML"
+                                    )
+                                    if lat and lon:
+                                        await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
+                                except Exception as e:
+                                    logger.error(f"Failed to send 20s recurring SOS for child {ch.id} to parent {p.id}: {e}")
 
             # 2. Walk Safe Deadline Monitoring
             async with AsyncSessionLocal() as session:
@@ -341,4 +387,4 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
         except Exception as err:
             logger.error(f"Scheduler worker error: {err}")
 
-        await asyncio.sleep(15)
+        await asyncio.sleep(5)
