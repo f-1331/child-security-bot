@@ -16,12 +16,15 @@ engine_kwargs = {
     "future": True,
 }
 if is_sqlite:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    engine_kwargs["connect_args"] = {
+        "check_same_thread": False,
+        "timeout": 30.0,
+    }
 else:
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_recycle"] = 300
-    engine_kwargs["pool_size"] = 10
-    engine_kwargs["max_overflow"] = 20
+    engine_kwargs["pool_size"] = 20
+    engine_kwargs["max_overflow"] = 30
     if "postgres" in settings.RESOLVED_DATABASE_URL:
         engine_kwargs["connect_args"] = {"ssl": "require"}
 
@@ -29,6 +32,22 @@ engine = create_async_engine(
     settings.RESOLVED_DATABASE_URL,
     **engine_kwargs
 )
+
+from sqlalchemy import event
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        try:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA cache_size=-64000")
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            cursor.execute("PRAGMA mmap_size=268435456")
+            cursor.close()
+        except Exception:
+            pass
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
@@ -139,6 +158,18 @@ async def init_db() -> None:
                     await conn.execute(text(f"ALTER TABLE child_device_policies ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                 except Exception as e:
                     logger.debug(f"Device policy column migration notice ({col_name}): {e}")
+
+        # High-performance composite indexes for sub-millisecond queries
+        perf_indexes = [
+            "CREATE INDEX IF NOT EXISTS ix_loc_child_recorded ON location_logs (child_id, recorded_at DESC)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_child_status ON tasks (child_id, status)",
+            "CREATE INDEX IF NOT EXISTS ix_geofences_child_active ON geofences (child_id, is_active)"
+        ]
+        for idx_sql in perf_indexes:
+            try:
+                await conn.execute(text(idx_sql))
+            except Exception:
+                pass
 
     # If running on PostgreSQL, check if auto-seed from SQLite is needed
     if "postgres" in settings.RESOLVED_DATABASE_URL:

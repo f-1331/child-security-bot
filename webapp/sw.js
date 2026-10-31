@@ -1,6 +1,6 @@
 // Child Security Service Worker (PWA 100% Offline Resilience & Background Sync)
-const CACHE_NAME = "child-security-v16";
-const API_CACHE_NAME = "child-security-api-v16";
+const CACHE_NAME = "child-security-v17";
+const API_CACHE_NAME = "child-security-api-v17";
 
 const STATIC_ASSETS = [
   "/",
@@ -111,24 +111,28 @@ self.addEventListener("fetch", (event) => {
     }
   }
 
-  // 3. Handle App Shell Navigation & Static Assets
+  // 3. Handle App Shell Navigation & Static Assets: Stale-While-Revalidate (Instant 0ms launch)
   event.respondWith(
-    fetch(req)
-      .then((networkRes) => {
-        if (networkRes && networkRes.status === 200) {
-          const resClone = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
-        }
-        return networkRes;
-      })
-      .catch(async () => {
-        const cachedRes = await caches.match(req);
-        if (cachedRes) return cachedRes;
-        if (req.mode === "navigate") {
-          return caches.match("/index.html") || caches.match("/");
-        }
-        return new Response("Offline", { status: 503, statusText: "Offline" });
-      })
+    caches.match(req).then((cachedRes) => {
+      const fetchPromise = fetch(req)
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const resClone = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, resClone));
+          }
+          return networkRes;
+        })
+        .catch(async () => {
+          if (cachedRes) return cachedRes;
+          if (req.mode === "navigate") {
+            return (await caches.match("/index.html")) || (await caches.match("/"));
+          }
+          return new Response("Offline", { status: 503, statusText: "Offline" });
+        });
+
+      // Ultra-fast instant response: return cache immediately if available, revalidate in background!
+      return cachedRes || fetchPromise;
+    })
   );
 });
 

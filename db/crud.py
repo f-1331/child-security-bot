@@ -406,6 +406,7 @@ async def batch_log_locations(
         return 0
 
     inserted_count = 0
+    entries: List[LocationLog] = []
     for p in points:
         lat = p.get("latitude")
         lon = p.get("longitude")
@@ -449,10 +450,11 @@ async def batch_log_locations(
             is_offline_cached=True,
             recorded_at=recorded_at
         )
-        session.add(entry)
+        entries.append(entry)
         inserted_count += 1
 
-    if inserted_count > 0:
+    if entries:
+        session.add_all(entries)
         await session.commit()
     return inserted_count
 

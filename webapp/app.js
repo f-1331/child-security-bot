@@ -636,8 +636,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initMap();
   checkAuthenticationState();
 
-  // Polling every 2 seconds for high-frequency live telemetry and route tracking
+  // Polling every 2 seconds for high-frequency live telemetry and route tracking (battery/CPU optimized)
   pollInterval = setInterval(() => {
+    if (document.hidden) return; // Skip network & DOM operations when tab/app is minimized
     if (currentChildId && !isDemoMode) {
       updateLiveTelemetry(currentChildId);
       if (isRouteVisible && (Date.now() - lastRouteFetchTime > 3000)) {
@@ -645,6 +646,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   }, 2000);
+
+  // Instantly refresh telemetry when user returns to app
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && currentChildId && !isDemoMode) {
+      updateLiveTelemetry(currentChildId);
+    }
+  });
 
   // Responsive map size adjustment on screen resize & device orientation change
   window.addEventListener("resize", () => {
@@ -2882,7 +2890,11 @@ async function updateLiveTelemetry(childId) {
   }
 }
 
-// Reverse Geocoding with Nominatim & Cache
+let lastResolvedLat = null;
+let lastResolvedLon = null;
+let lastResolveTimestamp = 0;
+
+// Reverse Geocoding with Nominatim & Cache (High-performance throttled)
 async function resolveAddress(lat, lon) {
   if (lat === null || lat === undefined || lon === null || lon === undefined || isNaN(lat) || isNaN(lon)) {
     const el = document.getElementById("addressText");
@@ -2891,13 +2903,26 @@ async function resolveAddress(lat, lon) {
   }
   const numLat = Number(lat);
   const numLon = Number(lon);
-  const key = `${numLat.toFixed(4)},${numLon.toFixed(4)}`;
+  const key = `${numLat.toFixed(3)},${numLon.toFixed(3)}`;
   if (addressCache.has(key)) {
     const cached = addressCache.get(key);
     const el = document.getElementById("addressText");
-    if (el) el.textContent = cached;
+    if (el && el.textContent !== cached) el.textContent = cached;
     return;
   }
+
+  // High-efficiency throttle: if position shifted < 25m and resolved < 10s ago, keep current text
+  const now = Date.now();
+  if (lastResolvedLat !== null && lastResolvedLon !== null) {
+    const dist = Math.hypot(numLat - lastResolvedLat, numLon - lastResolvedLon);
+    if (dist < 0.00025 && (now - lastResolveTimestamp) < 10000) {
+      return;
+    }
+  }
+
+  lastResolvedLat = numLat;
+  lastResolvedLon = numLon;
+  lastResolveTimestamp = now;
 
   const el = document.getElementById("addressText");
   if (el) el.textContent = `${numLat.toFixed(5)}, ${numLon.toFixed(5)} (Manzil aniqlanmoqda...)`;
@@ -3288,6 +3313,16 @@ async function loadRouteHistory(childId, isSilent = false) {
 }
 
 function renderHistoryToMapAndList(points) {
+  if (!points || !Array.isArray(points)) return;
+
+  // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed!
+  const lastPt = points[points.length - 1];
+  const lastSig = `${points.length}_${lastPt ? (lastPt.latitude + '_' + lastPt.longitude) : ''}`;
+  if (window._lastRenderedRouteSig === lastSig && routePolyline) {
+    return;
+  }
+  window._lastRenderedRouteSig = lastSig;
+
   routePointsCache = points || [];
 
   if (routeLayerGroup && map) {
