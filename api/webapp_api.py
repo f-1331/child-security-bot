@@ -1257,9 +1257,20 @@ async def child_sos_endpoint(
         )
         safe_cname = html.escape(child_name)
 
+        cur_spd = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+        if cur_spd >= 30.0:
+            speed_info = f"🚗 <b>{cur_spd:.0f} km/soat</b> (Avtomobil / Transportda)"
+        elif cur_spd >= 6.0:
+            speed_info = f"🏃 <b>{cur_spd:.0f} km/soat</b> (Yugurmoqda)"
+        elif cur_spd >= 1.5:
+            speed_info = f"🚶 <b>{cur_spd:.0f} km/soat</b> (Piyoda yurmoqda)"
+        else:
+            speed_info = "🛑 <b>0 km/soat</b> (Harakatsiz / To'xtab turibdi)"
+
         if is_recurring:
             parent_alert = (
                 f"🚨 <b>SOS! Farzandingiz {safe_cname} xavfda! (Batareya: {battery_info})</b>\n\n"
+                f"🚀 <b>Hozirgi tezlik:</b> {speed_info}\n"
                 f"Joylashuv: {maps_link or 'Mavjud emas'}\n"
                 f"Koordinata: <code>{loc_coords}</code>\n"
                 f"🕒 Vaqt: <b>{html.escape(now_str)}</b>\n\n"
@@ -1269,6 +1280,7 @@ async def child_sos_endpoint(
             parent_alert = (
                 f"🚨🚨🚨 <b>FAVQULODDA VAZIYAT (SOS)!</b> 🚨🚨🚨\n\n"
                 f"Farzandingiz <b>{safe_cname}</b> xavf signalini yoqdi!\n\n"
+                f"🚀 <b>Hozirgi tezlik:</b> {speed_info}\n"
                 f"Joylashuv: {maps_link or 'Mavjud emas'}\n"
                 f"Koordinata: <code>{loc_coords}</code>\n"
                 f"🕒 Vaqt: <b>{html.escape(now_str)}</b>\n"

@@ -1018,6 +1018,77 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+def calculate_precise_movement_stats(logs: List[LocationLog]) -> Tuple[float, float, List[dict]]:
+    """
+    Gold-standard noise-filtered distance calculation:
+    - Rejects poor accuracy (> 40m) points from inflating distance.
+    - Stationary deadband: Only counts movement when speed >= 1.5 km/h OR
+      displacement exceeds max(22m, accuracy * 0.8).
+    - Speed plausibility: Discards jumps exceeding 150 km/h (glitch teleportation).
+    - Captures speed change events with timestamps for hourly & daily reports.
+    """
+    total_km = 0.0
+    max_speed = 0.0
+    speed_events = []
+    last_anchor = None
+
+    for l in logs:
+        # Update max speed if reported by GPS chip
+        if l.speed is not None and l.speed > 0:
+            if l.speed > max_speed and l.speed < 180.0:
+                max_speed = l.speed
+
+        # Skip points with poor GPS accuracy for distance accumulation
+        if l.accuracy is not None and l.accuracy > 40.0:
+            continue
+
+        if last_anchor is None:
+            last_anchor = l
+            continue
+
+        dist_km = haversine_km(last_anchor.latitude, last_anchor.longitude, l.latitude, l.longitude)
+        dist_m = dist_km * 1000.0
+
+        # Time difference in seconds
+        dt_sec = 0
+        if last_anchor.recorded_at and l.recorded_at:
+            t0 = last_anchor.recorded_at if last_anchor.recorded_at.tzinfo else last_anchor.recorded_at.replace(tzinfo=timezone.utc)
+            t1 = l.recorded_at if l.recorded_at.tzinfo else l.recorded_at.replace(tzinfo=timezone.utc)
+            dt_sec = max(1, int((t1 - t0).total_seconds()))
+
+        # Glitch / Teleportation check: speed > 150 km/h
+        if dt_sec > 0:
+            implied_spd = (dist_m / dt_sec) * 3.6
+            if implied_spd > 150.0:
+                # Glitch jump, do not count
+                continue
+
+        # Stationary Deadband:
+        # A phone is truly moving if:
+        # (1) Sensor speed >= 1.8 km/h and dist >= 10m, OR
+        # (2) Displacement exceeds both 22 meters and 0.8 * accuracy
+        is_moving = False
+        if l.speed is not None and l.speed >= 1.8:
+            is_moving = (dist_m >= 10.0)
+        else:
+            acc = l.accuracy or 15.0
+            deadband_m = max(22.0, acc * 0.8)
+            is_moving = (dist_m >= deadband_m)
+
+        if is_moving:
+            total_km += dist_km
+            last_anchor = l
+            if l.speed is not None and l.speed >= 3.0:
+                speed_events.append({
+                    "time": l.recorded_at,
+                    "speed": l.speed,
+                    "latitude": l.latitude,
+                    "longitude": l.longitude
+                })
+
+    return round(total_km, 2), round(max_speed, 1), speed_events
+
+
 async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> dict:
     """Compute comprehensive daily movement and safety statistics for evening report."""
     child = await get_user(session, child_id)
@@ -1026,29 +1097,7 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
     # 1. Location logs for today
     logs = await get_location_history_today(session, child_id, limit=300)
 
-    total_km = 0.0
-    max_speed = 0.0
-    speeds = []
-    last_anchor = None
-
-    for l in logs:
-        if last_anchor is None:
-            last_anchor = l
-            continue
-
-        dist = haversine_km(last_anchor.latitude, last_anchor.longitude, l.latitude, l.longitude)
-        if dist > 50.0:  # Glitch jump
-            continue
-
-        # GPS deadband filter: ignore stationary sensor drift (< 15 meters / 0.015 km)
-        if dist >= 0.015:
-            total_km += dist
-            last_anchor = l
-
-        if l.speed is not None and l.speed > 0:
-            speeds.append(l.speed)
-            if l.speed > max_speed:
-                max_speed = l.speed
+    total_km, max_speed, speed_events = calculate_precise_movement_stats(logs)
 
     tashkent_tz = timezone(timedelta(hours=5))
     first_signal = None
@@ -1110,6 +1159,7 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
         "total_distance_km": round(total_km, 2),
         "distance_formatted": distance_formatted,
         "max_speed_kmh": round(max_speed, 1),
+        "speed_events": speed_events,
         "first_signal": first_signal,
         "last_signal": last_signal,
         "battery_level": battery_level,

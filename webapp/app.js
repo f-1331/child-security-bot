@@ -3747,15 +3747,36 @@ function calculateRouteStats(points) {
   let maxSpd = 0;
   let stops = 0;
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const d = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
-    if (d < 50000) {
-      totalDistM += d;
+  let lastAnchor = points[0];
+  for (let i = 1; i < points.length; i++) {
+    const pt = points[i];
+    if (pt.speed && pt.speed > maxSpd && pt.speed < 180) {
+      maxSpd = Math.round(pt.speed);
     }
-    if (p2.speed && p2.speed > maxSpd) {
-      maxSpd = Math.round(p2.speed);
+    // Filter out poor accuracy points (> 40m) from corrupting distance accumulation
+    if (pt.accuracy && pt.accuracy > 40) continue;
+
+    const d = calculateDistanceMeters(lastAnchor.latitude, lastAnchor.longitude, pt.latitude, pt.longitude);
+
+    // Glitch teleportation filter: speed > 150 km/h
+    let dtSec = 0;
+    if (lastAnchor.recorded_at && pt.recorded_at) {
+      const t0 = new Date(lastAnchor.recorded_at).getTime();
+      const t1 = new Date(pt.recorded_at).getTime();
+      dtSec = Math.max(1, Math.round((t1 - t0) / 1000));
+    }
+    if (dtSec > 0 && (d / dtSec) * 3.6 > 150) {
+      continue;
+    }
+
+    // Industrial deadband: moving if speed >= 1.8 km/h and d >= 10m OR displacement > max(22m, acc * 0.8)
+    const acc = pt.accuracy || 15;
+    const deadband = Math.max(22, acc * 0.8);
+    const isMoving = (pt.speed && pt.speed >= 1.8 && d >= 10) || (d >= deadband);
+
+    if (isMoving) {
+      totalDistM += d;
+      lastAnchor = pt;
     }
   }
 
@@ -3859,7 +3880,7 @@ function calculateRouteStats(points) {
   if (elDist) elDist.textContent = `${distKm} km`;
   if (elSteps) elSteps.textContent = `${points.length} ta`;
   if (elSpeed) elSpeed.textContent = `${maxSpd} km/s`;
-  if (elStops) elStops.textContent = `${stops} joy`;
+  if (elStops) elStops.textContent = `${routeStopsCache.length} joy`;
 }
 
 // Filter History List by Time of Day (All, Morning, Afternoon, Evening)

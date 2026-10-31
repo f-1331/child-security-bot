@@ -67,7 +67,7 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
     with their child's current location, safe zone status, and battery level.
     """
     from sqlalchemy import select
-    from db.models import User
+    from db.models import User, LocationLog
     parents_res = await session.execute(
         select(User).where(User.role == "parent")
     )
@@ -93,7 +93,49 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                 maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
                 batt_level = latest_loc.battery_level if latest_loc.battery_level is not None else "Noma'lum"
                 charging_icon = "⚡" if latest_loc.is_charging else ""
-                speed_str = f"{latest_loc.speed:.0f} km/soat" if (latest_loc.speed and latest_loc.speed > 3) else "Piyoda / Tinch"
+
+                now_utc = datetime.now(timezone.utc)
+
+                # Speed change and movement analysis over the last hour
+                hour_ago = now_utc - timedelta(minutes=65)
+                h_res = await session.execute(
+                    select(LocationLog)
+                    .where(
+                        LocationLog.child_id == ch.id,
+                        LocationLog.recorded_at >= hour_ago
+                    )
+                    .order_by(LocationLog.recorded_at.asc())
+                )
+                hour_logs = list(h_res.scalars().all())
+
+                max_hour_spd = 0.0
+                fastest_time_str = None
+                for hl in hour_logs:
+                    if hl.speed is not None and hl.speed > max_hour_spd and hl.speed < 160.0:
+                        max_hour_spd = hl.speed
+                        if hl.recorded_at:
+                            dt = hl.recorded_at if hl.recorded_at.tzinfo else hl.recorded_at.replace(tzinfo=timezone.utc)
+                            fastest_time_str = dt.astimezone(TASHKENT_TZ).strftime("%H:%M")
+
+                cur_spd = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+
+                if max_hour_spd >= 25.0:
+                    movement_line = (
+                        f"🚗 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Transportda)\n"
+                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                    )
+                elif max_hour_spd >= 7.0:
+                    movement_line = (
+                        f"🛴 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Velosiped / Samokat)\n"
+                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                    )
+                elif max_hour_spd >= 2.0:
+                    movement_line = (
+                        f"🚶‍♂️ <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Piyoda)\n"
+                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                    )
+                else:
+                    movement_line = "🛑 <b>Harakat:</b> Soat davomida harakatsiz / bir joyda turibdi (0 km/soat)"
 
                 # Check if currently inside any active geofence
                 current_zone_name = None
@@ -114,7 +156,6 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                 rec_dt = latest_loc.recorded_at
                 if rec_dt.tzinfo is None:
                     rec_dt = rec_dt.replace(tzinfo=timezone.utc)
-                now_utc = datetime.now(timezone.utc)
                 diff_sec = max(0, int((now_utc - rec_dt).total_seconds()))
                 if diff_sec < 180:
                     time_ago = "🟢 Jonli / Hozirgina"
@@ -130,7 +171,7 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                     f"📍 <b>Joylashuv:</b> {loc_desc}\n"
                     f"🔋 <b>Batareya:</b> {batt_level}% {charging_icon}\n"
                     f"🕒 <b>Oxirgi signal:</b> {time_ago}\n"
-                    f"🚶‍♂️ <b>Harakat:</b> {speed_str}\n"
+                    f"{movement_line}\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"🗺 <a href=\"{maps_url}\">Xaritada ochish (Google Maps)</a>"
                 )
@@ -319,6 +360,16 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                             lat = latest_loc.latitude if latest_loc else None
                             lon = latest_loc.longitude if latest_loc else None
                             batt = f"{latest_loc.battery_level}%" if (latest_loc and latest_loc.battery_level is not None) else "84%"
+                            cur_spd = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+                            if cur_spd >= 30.0:
+                                speed_line = f"🚗 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat (Avtomobil / Transportda)"
+                            elif cur_spd >= 6.0:
+                                speed_line = f"🏃 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat (Yugurmoqda)"
+                            elif cur_spd >= 1.5:
+                                speed_line = f"🚶 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat (Piyoda yurmoqda)"
+                            else:
+                                speed_line = "🛑 <b>Hozirgi tezlik:</b> 0 km/soat (Harakatsiz / To'xtab turibdi)"
+
                             maps_url = f"https://www.google.com/maps/?q={lat},{lon}" if (lat and lon) else "Mavjud emas"
                             coord_str = f"{lat:.6f}, {lon:.6f}" if (lat and lon) else "Mavjud emas"
                             c_name = html.escape(ch.full_name or "Farzand")
@@ -326,6 +377,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
 
                             sos_alert_text = (
                                 f"🚨 <b>SOS! Farzandingiz {c_name} xavfda! (Batareya: {batt})</b>\n\n"
+                                f"🚀 {speed_line}\n"
                                 f"Joylashuv: {maps_url}\n"
                                 f"Koordinata: <code>{coord_str}</code>\n"
                                 f"🕒 Vaqt: <b>{now_time_str}</b>\n\n"

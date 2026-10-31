@@ -1658,9 +1658,20 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
             if latest_loc else "Joylashuv hali yozilmagan"
         )
 
+        cur_spd = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+        if cur_spd >= 30.0:
+            speed_info = f"🚗 **{cur_spd:.0f} km/soat** (Avtomobil / Transportda)"
+        elif cur_spd >= 6.0:
+            speed_info = f"🏃 **{cur_spd:.0f} km/soat** (Yugurmoqda)"
+        elif cur_spd >= 1.5:
+            speed_info = f"🚶 **{cur_spd:.0f} km/soat** (Piyoda yurmoqda)"
+        else:
+            speed_info = "🛑 **0 km/soat** (Harakatsiz / To'xtab turibdi)"
+
         parent_alert = (
             f"🚨🚨🚨 **FAVQULODDA VAZIYAT (SOS)!** 🚨🚨🚨\n\n"
             f"Farzandingiz **{child_name}** xavf tugmasini bosdi!\n\n"
+            f"🚀 Hozirgi tezlik: {speed_info}\n"
             f"🕒 Vaqt: **{now_str}**\n"
             f"🔋 Batareya: **{battery_info}**\n"
             f"📍 Koordinata: `{loc_coords}`\n"
