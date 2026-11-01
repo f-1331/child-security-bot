@@ -2412,3 +2412,26 @@ async def on_user_directory_noop(callback: CallbackQuery):
     await callback.answer(f"Hozirgi sahifa: {callback.data.split(':')[1]}")
 
 
+
+
+@owner_bot_router.callback_query(F.data.startswith("resolve_sos:"))
+async def callback_resolve_sos_owner(callback: CallbackQuery):
+    """Handle 1-tap SOS resolution from Owner Bot."""
+    try:
+        child_id = int(callback.data.split(":")[1])
+    except Exception:
+        await callback.answer("Noto'g'ri so'rov", show_alert=True)
+        return
+
+    from api.webapp_api import child_cancel_sos_endpoint
+    from db.database import async_session_maker
+    try:
+        async with async_session_maker() as session:
+            await child_cancel_sos_endpoint(child_id, session)
+        await callback.answer("✅ SOS xavf signali to'xtatildi!", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+    except Exception as e:
+        await callback.answer(f"Xato: {e}", show_alert=True)

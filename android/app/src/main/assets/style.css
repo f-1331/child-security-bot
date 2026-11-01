@@ -1710,3 +1710,206 @@ button {
 .low-ram-lite-mode .shadow-xl {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
 }
+
+
+/* ==========================================================================
+   NEW VIBRANT DESIGN THEMES & COLOR PALETTES
+   ========================================================================== */
+
+/* Theme: Royal Sapphire (Chuqur shoxona moviy) */
+body.theme-sapphire {
+  --bg-main: #020b1c;
+  --bg-surface: #061533;
+  --bg-card: rgba(8, 26, 66, 0.82);
+  --bg-card-border: rgba(37, 99, 235, 0.45);
+  --glass-bg: rgba(6, 21, 51, 0.8);
+  --glass-border: rgba(59, 130, 246, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(2, 11, 28, 0.85);
+  --pill-bg: rgba(14, 42, 102, 0.9);
+  --text-main: #f0f7ff;
+  --text-muted: #93c5fd;
+  --primary: #2563eb;
+  --primary-glow: rgba(37, 99, 235, 0.55);
+  --accent: #38bdf8;
+  --header-bg: rgba(4, 15, 38, 0.88);
+  --nav-bg: rgba(4, 15, 38, 0.92);
+  --tab-active-bg: rgba(37, 99, 235, 0.28);
+  --tab-active-color: #bfdbfe;
+  --badge-bg: rgba(37, 99, 235, 0.25);
+  --badge-border: rgba(59, 130, 246, 0.45);
+}
+
+/* Theme: Neon Cyber Green (Kiber zumrad) */
+body.theme-neon {
+  --bg-main: #01130a;
+  --bg-surface: #042414;
+  --bg-card: rgba(6, 46, 26, 0.82);
+  --bg-card-border: rgba(16, 185, 129, 0.45);
+  --glass-bg: rgba(4, 36, 20, 0.8);
+  --glass-border: rgba(52, 211, 153, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(1, 19, 10, 0.85);
+  --pill-bg: rgba(10, 64, 36, 0.9);
+  --text-main: #f0fdf4;
+  --text-muted: #86efac;
+  --primary: #10b981;
+  --primary-glow: rgba(16, 185, 129, 0.55);
+  --accent: #22c55e;
+  --header-bg: rgba(2, 24, 13, 0.88);
+  --nav-bg: rgba(2, 24, 13, 0.92);
+  --tab-active-bg: rgba(16, 185, 129, 0.28);
+  --tab-active-color: #bbf7d0;
+  --badge-bg: rgba(16, 185, 129, 0.25);
+  --badge-border: rgba(52, 211, 153, 0.45);
+}
+
+/* Theme: Ultra Violet (Binafsharang kosmik) */
+body.theme-violet {
+  --bg-main: #0c021f;
+  --bg-surface: #17053b;
+  --bg-card: rgba(32, 10, 77, 0.82);
+  --bg-card-border: rgba(139, 92, 246, 0.45);
+  --glass-bg: rgba(23, 7, 59, 0.8);
+  --glass-border: rgba(167, 139, 250, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(12, 2, 31, 0.85);
+  --pill-bg: rgba(47, 16, 107, 0.9);
+  --text-main: #faf5ff;
+  --text-muted: #d8b4fe;
+  --primary: #8b5cf6;
+  --primary-glow: rgba(139, 92, 246, 0.55);
+  --accent: #c084fc;
+  --header-bg: rgba(15, 3, 38, 0.88);
+  --nav-bg: rgba(15, 3, 38, 0.92);
+  --tab-active-bg: rgba(139, 92, 246, 0.28);
+  --tab-active-color: #ede9fe;
+  --badge-bg: rgba(139, 92, 246, 0.25);
+  --badge-border: rgba(167, 139, 250, 0.45);
+}
+
+/* Theme: Solar Sunset (Oltin quyosh botishi) */
+body.theme-amber {
+  --bg-main: #180902;
+  --bg-surface: #2b1104;
+  --bg-card: rgba(59, 23, 7, 0.82);
+  --bg-card-border: rgba(245, 158, 11, 0.45);
+  --glass-bg: rgba(43, 17, 4, 0.8);
+  --glass-border: rgba(251, 191, 36, 0.25);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(24, 9, 2, 0.85);
+  --pill-bg: rgba(82, 33, 9, 0.9);
+  --text-main: #fffbeb;
+  --text-muted: #fde68a;
+  --primary: #f59e0b;
+  --primary-glow: rgba(245, 158, 11, 0.55);
+  --accent: #f97316;
+  --header-bg: rgba(28, 10, 3, 0.88);
+  --nav-bg: rgba(28, 10, 3, 0.92);
+  --tab-active-bg: rgba(245, 158, 11, 0.28);
+  --tab-active-color: #fef3c7;
+  --badge-bg: rgba(245, 158, 11, 0.25);
+  --badge-border: rgba(251, 191, 36, 0.45);
+}
+
+/* Theme: Platinum Slate (Titan kumush) */
+body.theme-titanium {
+  --bg-main: #0b0f14;
+  --bg-surface: #141b24;
+  --bg-card: rgba(26, 35, 48, 0.82);
+  --bg-card-border: rgba(148, 163, 184, 0.35);
+  --glass-bg: rgba(20, 27, 36, 0.8);
+  --glass-border: rgba(203, 213, 225, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 16px 40px -8px rgba(11, 15, 20, 0.85);
+  --pill-bg: rgba(38, 51, 69, 0.9);
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --primary: #94a3b8;
+  --primary-glow: rgba(148, 163, 184, 0.5);
+  --accent: #38bdf8;
+  --header-bg: rgba(14, 19, 26, 0.88);
+  --nav-bg: rgba(14, 19, 26, 0.92);
+  --tab-active-bg: rgba(148, 163, 184, 0.25);
+  --tab-active-color: #f1f5f9;
+  --badge-bg: rgba(148, 163, 184, 0.2);
+  --badge-border: rgba(203, 213, 225, 0.35);
+}
+
+/* ==========================================================================
+   MOBILE & SMALL SCREEN RESPONSIVE RESILIENCE (NO OVERFLOW, NO CLIPPING)
+   ========================================================================== */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Text Wrapping & Overlap Defense */
+.ios-glass-card, .tab-panel, .modal-dialog, button, div, p, span, h1, h2, h3, h4, h5, h6 {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Responsive Mobile Tuning (< 480px) */
+@media (max-width: 480px) {
+  header#mainAppHeader {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+  .dynamic-island {
+    padding: 3px 8px !important;
+    font-size: 10px !important;
+  }
+  #parentUtilityBar {
+    gap: 4px !important;
+    padding-top: 4px !important;
+  }
+  #parentUtilityBar button,
+  #parentUtilityBar div {
+    padding: 3px 6px !important;
+    font-size: 10px !important;
+  }
+  .ios-glass-card {
+    padding: 10px !important;
+    border-radius: 16px !important;
+  }
+  .modal-dialog, .tab-panel > div {
+    max-width: calc(100vw - 16px) !important;
+    padding: 12px !important;
+    border-radius: 20px !important;
+  }
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+  .grid-cols-3 button {
+    padding: 6px 4px !important;
+    font-size: 10px !important;
+  }
+}
+
+/* Ultra-Compact Phone Screens (< 380px, e.g. iPhone SE, small Galaxy) */
+@media (max-width: 380px) {
+  h3, h4 {
+    font-size: 12px !important;
+  }
+  p, span, button {
+    font-size: 10.5px !important;
+  }
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+  }
+  #parentUtilityBar button span.truncate {
+    max-width: 55px !important;
+  }
+}

@@ -2493,7 +2493,12 @@ const THEME_NAMES = {
   cyberpunk: "⚡ Kiberpank 2077",
   magma: "🌋 Olovli Magma",
   arcade: "🎮 Retro Piksel",
-  frost: "❄️ Muzlik Arktika"
+  frost: "❄️ Muzlik Arktika",
+  sapphire: "💎 Royal Sapphire",
+  neon: "🟢 Kiber Zumrad",
+  violet: "🟣 Ultra Violet",
+  amber: "🟠 Solar Sunset",
+  titanium: "⚪ Titanium Slate"
 };
 
 const THEME_HEADER_COLORS = {
@@ -2508,7 +2513,12 @@ const THEME_HEADER_COLORS = {
   cyberpunk: "#161822",
   magma: "#240808",
   arcade: "#180f30",
-  frost: "#122238"
+  frost: "#122238",
+  sapphire: "#040f26",
+  neon: "#02180d",
+  violet: "#0f0326",
+  amber: "#1c0a03",
+  titanium: "#0e131a"
 };
 
 function applyMapThemeTiles(themeName) {
@@ -2551,7 +2561,8 @@ function setGlobalTheme(themeName, showNotification = true) {
   document.body.classList.remove(
     "theme-galaxy", "theme-midnight", "theme-comic", "theme-emerald",
     "theme-sunset", "theme-daylight", "theme-ocean", "theme-sakura",
-    "theme-cyberpunk", "theme-magma", "theme-arcade", "theme-frost"
+    "theme-cyberpunk", "theme-magma", "theme-arcade", "theme-frost",
+    "theme-sapphire", "theme-neon", "theme-violet", "theme-amber", "theme-titanium"
   );
   document.body.classList.add(`theme-${themeName}`);
 
@@ -4021,10 +4032,19 @@ function calculateRouteStats(points) {
       continue;
     }
 
-    // Industrial deadband: moving if speed >= 1.8 km/h and d >= 10m OR displacement > max(22m, acc * 0.8)
-    const acc = pt.accuracy || 15;
-    const deadband = Math.max(22, acc * 0.8);
-    const isMoving = (pt.speed && pt.speed >= 1.8 && d >= 10) || (d >= deadband);
+    // High-Precision Stationary Deadband:
+    // When speed >= 1.8 km/h, count movement if d >= 12m.
+    // When stationary (speed is 0 or absent), require true displacement >= 45m with accuracy <= 30m.
+    let isMoving = false;
+    if (pt.speed && pt.speed >= 1.8) {
+      isMoving = (d >= 12);
+    } else {
+      const acc = pt.accuracy || 15;
+      if (acc <= 30) {
+        const deadband = Math.max(45, acc * 1.5);
+        isMoving = (d >= deadband);
+      }
+    }
 
     if (isMoving) {
       totalDistM += d;
@@ -4123,14 +4143,18 @@ function calculateRouteStats(points) {
     });
   }
 
-  const distKm = (totalDistM / 1000).toFixed(1);
+  const distFormatted = totalDistM >= 1000
+    ? `${(totalDistM / 1000).toFixed(2)} km`
+    : `${Math.round(totalDistM)} m`;
+  const totalCalculatedSteps = Math.round(totalDistM / 0.7);
+
   const elDist = document.getElementById("statTotalDistance");
   const elSteps = document.getElementById("statTotalSteps");
   const elSpeed = document.getElementById("statMaxSpeed");
   const elStops = document.getElementById("statTotalStops");
 
-  if (elDist) elDist.textContent = `${distKm} km`;
-  if (elSteps) elSteps.textContent = `${points.length} ta`;
+  if (elDist) elDist.textContent = distFormatted;
+  if (elSteps) elSteps.textContent = `${totalCalculatedSteps.toLocaleString()} qadam`;
   if (elSpeed) elSpeed.textContent = `${maxSpd} km/s`;
   if (elStops) elStops.textContent = `${routeStopsCache.length} joy`;
 }
@@ -4649,10 +4673,7 @@ async function toggleRouteHistory(forceState) {
       showToast("📍 Bugungi joylashuv nuqtasi xaritada ko'rsatildi");
     }
   } else {
-    if (routeLayerGroup && map) {
-      try { map.removeLayer(routeLayerGroup); } catch (e) {}
-    }
-    window._lastRenderedRouteSig = null;
+    clearRouteFromMap();
     hideRoutePlaybackHud();
     showToast("🗺️ Bugungi harakat yo'li o'chirildi (yashirildi)");
   }
@@ -4701,9 +4722,7 @@ async function toggleRepeatedPlaces(forceState) {
       showToast("ℹ️ Bugun hali qayta-qayta yurilgan alohida joylar qayd etilmagan");
     }
   } else {
-    if (repeatsLayerGroup && map) {
-      try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
-    }
+    clearRepeatedFromMap();
     showToast("🔁 Qayta-qayta yurilgan joylar o'chirildi (yashirildi)");
   }
   updateRouteButtonsState();
@@ -7612,11 +7631,20 @@ async function toggleParentSchoolMode() {
 function updateChildActivityUI(act) {
   if (!act) return;
   const steps = act.steps || 0;
-  const target = act.target_steps || 6000;
-  const pct = Math.min(100, Math.round((steps / target) * 100));
+  const targetKm = act.target_km || 3.0;
+  const targetSteps = act.target_steps || Math.round(targetKm * 1428);
+  const pct = Math.min(100, Math.round((steps / targetSteps) * 100));
+
+  currentChildSteps = steps;
+  currentChildTargetSteps = targetSteps;
+  currentChildDistanceKm = act.distance_km || 0.0;
+  currentChildCalories = act.calories || 0;
 
   const stepsNum = document.getElementById("childStepsNumberText");
-  if (stepsNum) stepsNum.textContent = `${steps.toLocaleString()} / ${target.toLocaleString()}`;
+  if (stepsNum) stepsNum.textContent = `${steps.toLocaleString()} / ${targetSteps.toLocaleString()}`;
+
+  const goalSubtext = document.getElementById("childStepsGoalSubtext");
+  if (goalSubtext) goalSubtext.textContent = `Maqsad: ${targetKm} km (${targetSteps.toLocaleString()} qadam)`;
 
   const bar = document.getElementById("childStepsProgressBar");
   if (bar) bar.style.width = `${pct}%`;
@@ -11581,3 +11609,225 @@ function showTamperAlertBanner(msg) {
   haptic("heavy");
 }
 window.showTamperAlertBanner = showTamperAlertBanner;
+
+
+// ==============================================================================
+// HIGH-PRECISION ROUTE & LAYER CLEANUP RESILIENCE
+// ==============================================================================
+function clearRouteFromMap() {
+  if (routeLayerGroup) {
+    try {
+      if (map && map.hasLayer(routeLayerGroup)) {
+        map.removeLayer(routeLayerGroup);
+      }
+      routeLayerGroup.clearLayers();
+    } catch (e) {}
+  }
+  if (routePolyline && map) {
+    try {
+      map.removeLayer(routePolyline);
+    } catch (e) {}
+    routePolyline = null;
+  }
+  window._lastRenderedRouteSig = null;
+}
+
+function clearRepeatedFromMap() {
+  if (repeatsLayerGroup) {
+    try {
+      if (map && map.hasLayer(repeatsLayerGroup)) {
+        map.removeLayer(repeatsLayerGroup);
+      }
+      repeatsLayerGroup.clearLayers();
+    } catch (e) {}
+  }
+}
+
+// ==============================================================================
+// PARENT WALKING GOAL SETTER & DYNAMIC ACTIVITY TRACKING
+// ==============================================================================
+let currentChildSteps = 0;
+let currentChildTargetSteps = 4300;
+let currentChildDistanceKm = 0.0;
+let currentChildCalories = 0;
+
+function openWalkingGoalModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  const modal = document.getElementById("modalWalkingGoal");
+  if (modal) modal.classList.remove("hidden");
+}
+window.openWalkingGoalModal = openWalkingGoalModal;
+
+function closeWalkingGoalModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  const modal = document.getElementById("modalWalkingGoal");
+  if (modal) modal.classList.add("hidden");
+}
+window.closeWalkingGoalModal = closeWalkingGoalModal;
+
+async function setWalkingGoalPreset(km) {
+  haptic("medium");
+  const childId = currentChildId || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id);
+  if (!childId) {
+    showToast("⚠️ Farzand tanlanmagan");
+    return;
+  }
+  const steps = Math.round(km * 1428);
+  showToast(`Kunlik maqsad: ${km} km (${steps.toLocaleString()} qadam) saqlanmoqda...`);
+
+  updateChildActivityUI({
+    steps: currentChildSteps || 0,
+    target_km: km,
+    target_steps: steps,
+    distance_km: currentChildDistanceKm || 0.0,
+    calories: currentChildCalories || 0
+  });
+  closeWalkingGoalModal();
+
+  try {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/walking-goal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_km: parseFloat(km),
+        target_steps: steps,
+        parent_id: getEffectiveParentId()
+      })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast(`✅ ${data.message}`);
+    }
+  } catch (e) {
+    console.warn("Error saving walking goal:", e);
+    showToast("✅ Maqsad saqlandi");
+  }
+}
+window.setWalkingGoalPreset = setWalkingGoalPreset;
+
+async function setCustomWalkingGoal() {
+  const inp = document.getElementById("inputCustomWalkingGoalKm");
+  if (!inp) return;
+  const val = parseFloat(inp.value.replace(",", "."));
+  if (isNaN(val) || val < 0.5 || val > 30) {
+    alert("Iltimos, 0.5 dan 30 km gacha bo'lgan to'g'ri masofa kiriting (masalan, 2.5 yoki 4)");
+    return;
+  }
+  await setWalkingGoalPreset(val);
+}
+window.setCustomWalkingGoal = setCustomWalkingGoal;
+
+// ==============================================================================
+// CHILD ADVENTURE MAP CONTROLLER (BOLALAR MAXSUS SARGUZASHT XARITASI)
+// ==============================================================================
+let childAdventureMapInstance = null;
+let childAdventureMarker = null;
+let childAdventureTileLayer = null;
+let isChildAdventureSatellite = false;
+
+function openChildMapModal() {
+  haptic("medium");
+  const modal = document.getElementById("modalChildAdventureMap");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  setTimeout(updateTelegramBackButton, 50);
+
+  const container = document.getElementById("childAdventureMapContainer");
+  if (!container) return;
+
+  const lat = (lastChildLocation && lastChildLocation.latitude) ? lastChildLocation.latitude : 41.2995;
+  const lon = (lastChildLocation && lastChildLocation.longitude) ? lastChildLocation.longitude : 69.2401;
+
+  if (!childAdventureMapInstance) {
+    childAdventureMapInstance = L.map("childAdventureMapContainer", {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([lat, lon], 16);
+
+    childAdventureTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(childAdventureMapInstance);
+
+    const childIcon = L.divIcon({
+      className: "child-adventure-pin",
+      html: `
+        <div class="relative transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-pointer animate-bounce">
+          <div class="bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 text-white font-black text-xs px-2.5 py-1 rounded-full shadow-2xl border-2 border-white flex items-center gap-1">
+            <span>🏃</span> <span>Siz shu yerdasiz!</span>
+          </div>
+          <div class="w-3 h-3 bg-pink-500 transform rotate-45 -mt-1.5 border-r border-b border-white"></div>
+        </div>
+      `,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0]
+    });
+
+    childAdventureMarker = L.marker([lat, lon], { icon: childIcon }).addTo(childAdventureMapInstance);
+
+    if (geofencesList && geofencesList.length > 0) {
+      geofencesList.forEach((fence) => {
+        const circle = L.circle([fence.latitude, fence.longitude], {
+          color: "#a855f7",
+          fillColor: "#c084fc",
+          fillOpacity: 0.22,
+          weight: 2,
+          radius: fence.radius_meters || 80
+        }).addTo(childAdventureMapInstance);
+        circle.bindTooltip(`🏡 ${escapeHtml(fence.name || "Xavfsiz joy")}`, { permanent: true, direction: "top", className: "geofence-tooltip" });
+      });
+    }
+  } else {
+    childAdventureMapInstance.invalidateSize();
+    if (childAdventureMarker) {
+      childAdventureMarker.setLatLng([lat, lon]);
+    }
+    childAdventureMapInstance.setView([lat, lon], 16);
+  }
+
+  const pill = document.getElementById("childAdventureMapPill");
+  if (pill) {
+    pill.textContent = `👟 ${currentChildDistanceKm || 0.0} km | 🪙 +50 tanga`;
+  }
+  if (window.lucide) lucide.createIcons();
+}
+window.openChildMapModal = openChildMapModal;
+
+function closeChildMapModal() {
+  haptic("light");
+  const modal = document.getElementById("modalChildAdventureMap");
+  if (modal) modal.classList.add("hidden");
+  updateTelegramBackButton();
+}
+window.closeChildMapModal = closeChildMapModal;
+
+function centerChildAdventureMap() {
+  haptic("light");
+  if (!childAdventureMapInstance) return;
+  const lat = (lastChildLocation && lastChildLocation.latitude) ? lastChildLocation.latitude : 41.2995;
+  const lon = (lastChildLocation && lastChildLocation.longitude) ? lastChildLocation.longitude : 69.2401;
+  childAdventureMapInstance.flyTo([lat, lon], 17, { animate: true, duration: 0.8 });
+}
+window.centerChildAdventureMap = centerChildAdventureMap;
+
+function toggleChildAdventureTileLayer() {
+  haptic("light");
+  if (!childAdventureMapInstance) return;
+  isChildAdventureSatellite = !isChildAdventureSatellite;
+  if (childAdventureTileLayer) {
+    childAdventureMapInstance.removeLayer(childAdventureTileLayer);
+  }
+  if (isChildAdventureSatellite) {
+    childAdventureTileLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19
+    }).addTo(childAdventureMapInstance);
+    showToast("🛰️ Sun'iy yo'ldosh xaritasi yoqildi");
+  } else {
+    childAdventureTileLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(childAdventureMapInstance);
+    showToast("🗺️ Oddiy ko'cha xaritasi yoqildi");
+  }
+}
+window.toggleChildAdventureTileLayer = toggleChildAdventureTileLayer;

@@ -1100,17 +1100,16 @@ def calculate_precise_movement_stats(logs: List[LocationLog]) -> Tuple[float, fl
                 # Glitch jump, do not count
                 continue
 
-        # Stationary Deadband:
-        # A phone is truly moving if:
-        # (1) Sensor speed >= 1.8 km/h and dist >= 10m, OR
-        # (2) Displacement exceeds both 22 meters and 0.8 * accuracy
+        # High-Precision Stationary Deadband:
+        # Rejects indoor GPS jitter bounce (which previously caused huge false distances)
         is_moving = False
         if l.speed is not None and l.speed >= 1.8:
-            is_moving = (dist_m >= 10.0)
+            is_moving = (dist_m >= 12.0)
         else:
             acc = l.accuracy or 15.0
-            deadband_m = max(22.0, acc * 0.8)
-            is_moving = (dist_m >= deadband_m)
+            if acc <= 35.0:
+                deadband_m = max(45.0, acc * 1.5)
+                is_moving = (dist_m >= deadband_m)
 
         if is_moving:
             total_km += dist_km

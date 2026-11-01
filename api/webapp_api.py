@@ -724,8 +724,11 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
 
     today_logs = await crud.get_location_history_today(session, child_id, limit=300)
     total_km, max_speed, _ = crud.calculate_precise_movement_stats(today_logs)
-    steps_today = int(total_km * 1312)
-    calories_today = int(total_km * 52)
+    steps_today = int(total_km * 1428)
+    calories_today = int(total_km * 55)
+
+    target_km = float(getattr(policy, "daily_walking_goal_km", 3.0) or 3.0)
+    target_steps = int(getattr(policy, "daily_walking_goal_steps", 5000) or int(target_km * 1428))
 
     safety_score = 100
     if latest:
@@ -773,7 +776,8 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
             "activity": {
                 "distance_km": round(total_km, 2),
                 "steps": steps_today,
-                "target_steps": 6000,
+                "target_km": round(target_km, 1),
+                "target_steps": target_steps,
                 "calories": calories_today,
                 "max_speed": round(max_speed, 1),
                 "safety_score": safety_score
@@ -1482,40 +1486,42 @@ async def child_sos_endpoint(
 
         if parents:
             for p in parents:
+                target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
                 try:
                     sent_m = await bot.send_message(
-                        chat_id=p.id,
+                        chat_id=target_chat_id,
                         text=parent_alert,
                         reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
                         parse_mode="HTML"
                     )
-                    record_sos_message(child_id, bot, p.id, sent_m.message_id)
+                    record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
                     if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
                         sent_loc = await bot.send_location(
-                            chat_id=p.id,
+                            chat_id=target_chat_id,
                             latitude=lat,
                             longitude=lon
                         )
-                        record_sos_message(child_id, bot, p.id, sent_loc.message_id)
+                        record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
                 except Exception as e:
-                    logger.error(f"Failed to notify parent {p.id} of SOS via main bot: {e}")
-                    # Fallback to owner bot if parent is owner or main bot was blocked
-                    if p.id == 6707839718:
-                        ob = get_owner_bot()
-                        if ob:
-                            try:
-                                sent_ob = await ob.send_message(
-                                    chat_id=p.id,
-                                    text=parent_alert,
-                                    reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                                    parse_mode="HTML"
-                                )
-                                record_sos_message(child_id, ob, p.id, sent_ob.message_id)
-                                if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                                    sent_ob_loc = await ob.send_location(chat_id=p.id, latitude=lat, longitude=lon)
-                                    record_sos_message(child_id, ob, p.id, sent_ob_loc.message_id)
-                            except Exception as oe:
-                                logger.error(f"Fallback to owner bot also failed: {oe}")
+                    logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS via main bot: {e}")
+
+                # Always deliver to owner bot if parent is owner (ID 1 or 6707839718)
+                if p.id in (1, 6707839718):
+                    ob = get_owner_bot()
+                    if ob:
+                        try:
+                            sent_ob = await ob.send_message(
+                                chat_id=6707839718,
+                                text=parent_alert,
+                                reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                                parse_mode="HTML"
+                            )
+                            record_sos_message(child_id, ob, 6707839718, sent_ob.message_id)
+                            if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                                sent_ob_loc = await ob.send_location(chat_id=6707839718, latitude=lat, longitude=lon)
+                                record_sos_message(child_id, ob, 6707839718, sent_ob_loc.message_id)
+                        except Exception as oe:
+                            logger.error(f"Owner bot dispatch also failed: {oe}")
 
             # Also notify Owner Bot for global admin oversight
             owner_bot = get_owner_bot()
@@ -1642,21 +1648,22 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     if bot:
         if parents:
             for p in parents:
+                target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
                 try:
                     await bot.send_message(
-                        chat_id=p.id,
+                        chat_id=target_chat_id,
                         text=cancel_text,
                         parse_mode="HTML"
                     )
                     if has_live_loc:
                         await bot.send_location(
-                            chat_id=p.id,
+                            chat_id=target_chat_id,
                             latitude=cur_lat,
                             longitude=cur_lon,
                             live_period=1800
                         )
                 except Exception as e:
-                    logger.error(f"Failed to notify parent {p.id} of SOS cancellation: {e}")
+                    logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS cancellation: {e}")
         else:
             owner_id = 6707839718
             try:
@@ -2846,17 +2853,31 @@ async def send_child_quick_signal(
         tg_text += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
 
     notified = 0
-    if telemetry.telegram_bot and parents:
+    tbot = telemetry.get_telegram_bot()
+    ob = get_owner_bot()
+    if parents:
         for p in parents:
-            try:
-                await telemetry.telegram_bot.send_message(
-                    chat_id=p.id,
-                    text=tg_text,
-                    parse_mode="HTML"
-                )
-                notified += 1
-            except Exception as e:
-                logger.error(f"Failed to send quick signal to parent {p.id}: {e}")
+            target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+            if tbot:
+                try:
+                    await tbot.send_message(
+                        chat_id=target_chat_id,
+                        text=tg_text,
+                        parse_mode="HTML"
+                    )
+                    notified += 1
+                except Exception as e:
+                    logger.error(f"Failed to send quick signal to parent {p.id} via client bot: {e}")
+            if p.id in (1, 6707839718) and ob:
+                try:
+                    await ob.send_message(
+                        chat_id=6707839718,
+                        text=f"📡 <b>[TEZKOR XABAR]</b>\n\n" + tg_text,
+                        parse_mode="HTML"
+                    )
+                    notified += 1
+                except Exception as oe:
+                    logger.error(f"Failed to send quick signal to owner bot: {oe}")
 
     ws_data = {
         "type": "quick_signal",
@@ -3772,4 +3793,43 @@ async def security_status_endpoint(session: AsyncSession = Depends(get_db)):
             },
             "active_websockets_users": len(ws_manager.active_connections)
         }
+    }
+
+
+class SetWalkingGoalRequest(BaseModel):
+    parent_id: Optional[int] = None
+    target_km: float = Field(..., ge=0.5, le=50.0)
+    target_steps: Optional[int] = None
+
+
+@router.post("/child/{child_id}/walking-goal")
+async def set_child_walking_goal_endpoint(
+    child_id: int,
+    payload: SetWalkingGoalRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Allow parent to set custom daily walking/activity goal (km / steps) for child."""
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    steps_calc = payload.target_steps or int(payload.target_km * 1428)
+    policy.daily_walking_goal_km = payload.target_km
+    policy.daily_walking_goal_steps = steps_calc
+    await session.commit()
+
+    # Notify via WebSocket
+    msg = {
+        "type": "walking_goal_update",
+        "child_id": child_id,
+        "target_km": payload.target_km,
+        "target_steps": steps_calc
+    }
+    parents = await crud.get_parents_for_child(session, child_id)
+    for p in parents:
+        await ws_manager.send_to_user(p.id, msg)
+    await ws_manager.send_to_user(child_id, msg)
+
+    return {
+        "status": "success",
+        "target_km": payload.target_km,
+        "target_steps": steps_calc,
+        "message": f"Kunlik maqsad {payload.target_km} km ({steps_calc:,} qadam) qilib belgilandi!"
     }

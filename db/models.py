@@ -177,6 +177,8 @@ class ChildDevicePolicy(Base):
     bedtime_start: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # e.g. "22:00"
     bedtime_end: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)    # e.g. "07:00"
     daily_limit_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    daily_walking_goal_km: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=3.0)
+    daily_walking_goal_steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=5000)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
