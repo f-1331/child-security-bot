@@ -717,12 +717,15 @@ async def perform_global_factory_reset(bot: Optional[Bot], session: AsyncSession
     from sqlalchemy import select, delete, update
     from bot.keyboards import get_role_selection_keyboard
 
+    owner_id = getattr(settings, "OWNER_ID", 6707839718)
+
     # 1. Delete all parent-child connections
     await session.execute(delete(ParentChildLink))
 
-    # 2. Reset roles, pairing codes, web codes, and SOS
+    # 2. Reset roles, pairing codes, web codes, and SOS (exclude owner)
     stmt = (
         update(User)
+        .where(User.id != owner_id)
         .values(
             role="unassigned",
             pairing_code=None,
@@ -735,11 +738,11 @@ async def perform_global_factory_reset(bot: Optional[Bot], session: AsyncSession
     await session.commit()
     reset_count = res.rowcount if hasattr(res, "rowcount") else 0
 
-    # 3. Notify all users with fresh onboarding keyboard
+    # 3. Notify all users with fresh onboarding keyboard (exclude owner)
     target_bot = bot or get_main_bot()
     notified_count = 0
     if target_bot:
-        users_res = await session.execute(select(User).where(User.is_active == True))
+        users_res = await session.execute(select(User).where(User.is_active == True, User.id != owner_id))
         users = users_res.scalars().all()
         notice_text = (
             "🔄 <b>TIZIM BOSHLANG'ICH HOLATGA QAYTARILDI!</b>\n"
