@@ -72,6 +72,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔋 Batareya va Holat")
         ],
         [
+            KeyboardButton(text="📚 Maktab rejimi (Dars vaqti)"),
+            KeyboardButton(text="💬 Farzandga ko'rsatma")
+        ],
+        [
             KeyboardButton(text="📍 Kerakli joylar"),
             KeyboardButton(text="📋 Vazifalar va Tangalar")
         ],
@@ -124,11 +128,11 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=child")),
-            KeyboardButton(text="✅ Yetib keldim (Check-in)")
+            KeyboardButton(text="💬 Ota-onaga tezkor xabar")
         ],
         [
-            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq"),
-            KeyboardButton(text="🔑 Saytga kirish kodi")
+            KeyboardButton(text="✅ Yetib keldim (Check-in)"),
+            KeyboardButton(text="📞 Ota-onamga qo'ng'iroq")
         ],
         [
             KeyboardButton(text="📋 Vazifalarim va Tangalar"),
@@ -627,6 +631,63 @@ def get_empty_children_kb() -> InlineKeyboardMarkup:
                     text="➕ Farzand ulash (Kodi)",
                     callback_data="show_pairing_code_callback"
                 )
+            ]
+        ]
+    )
+
+
+def get_school_mode_inline_keyboard(child_id: int, is_active: bool) -> InlineKeyboardMarkup:
+    """Toggle School Mode directly from Telegram inline button."""
+    btn_text = "🔴 O'chirish (Cheklovlarni yechish)" if is_active else "🟢 Faollashtirish (Dars vaqti)"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=btn_text, callback_data=f"toggle_school:{child_id}:{0 if is_active else 1}")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Orqaga", callback_data="cancel_action")
+            ]
+        ]
+    )
+
+
+def get_parent_directive_inline_keyboard(child_id: int) -> InlineKeyboardMarkup:
+    """Quick 1-tap parental directive choices."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🏠 Tezroq uyga qayt", callback_data=f"p_dir:{child_id}:return_home"),
+                InlineKeyboardButton(text="📞 Menga qo'ng'iroq qil", callback_data=f"p_dir:{child_id}:call_me"),
+            ],
+            [
+                InlineKeyboardButton(text="🍱 Dori / Ovqat vaqti", callback_data=f"p_dir:{child_id}:take_medicine"),
+                InlineKeyboardButton(text="❤️ Seni yaxshi ko'ramiz", callback_data=f"p_dir:{child_id}:cheer"),
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Orqaga", callback_data="cancel_action")
+            ]
+        ]
+    )
+
+
+def get_child_quick_signals_inline_keyboard() -> InlineKeyboardMarkup:
+    """Quick 1-tap signal choices for child in Telegram bot."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎒 Maktabdaman", callback_data="c_sig:school_arrived"),
+                InlineKeyboardButton(text="🏠 Uydaman", callback_data="c_sig:home_arrived"),
+            ],
+            [
+                InlineKeyboardButton(text="🚗 Olib keting", callback_data="c_sig:pickup_me"),
+                InlineKeyboardButton(text="⚽ Mashg'ulotdaman", callback_data="c_sig:training"),
+            ],
+            [
+                InlineKeyboardButton(text="🪫 Zaryadim kam", callback_data="c_sig:low_battery"),
+                InlineKeyboardButton(text="❓ Qayerdasiz?", callback_data="c_sig:where_are_you"),
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Yopish", callback_data="cancel_action")
             ]
         ]
     )

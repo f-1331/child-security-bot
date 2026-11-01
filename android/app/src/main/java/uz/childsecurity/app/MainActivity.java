@@ -45,6 +45,15 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
 
     private void detectRole() {
+        // 0. Try SharedPreferences saved role
+        try {
+            SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+            String savedRole = prefs.getString("saved_role", null);
+            if (savedRole != null && !savedRole.isEmpty()) {
+                appRole = savedRole;
+            }
+        } catch (Exception ignored) {}
+
         // 1. Try BuildConfig APP_ROLE reflection
         try {
             Class<?> clazz = Class.forName(getPackageName() + ".BuildConfig");
@@ -461,6 +470,24 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void setAppRole(String role) {
+            if (role != null && !role.isEmpty()) {
+                appRole = role;
+                try {
+                    SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                    prefs.edit().putString("saved_role", role).apply();
+                } catch (Exception ignored) {}
+
+                if ("child".equalsIgnoreCase(role)) {
+                    runOnUiThread(() -> {
+                        checkAndRequestPermissions();
+                        requestBatteryOptimization();
+                    });
+                }
+            }
+        }
+
+        @JavascriptInterface
         public void saveSession(String sessionJson, String authCode, String role) {
             try {
                 SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
@@ -470,6 +497,14 @@ public class MainActivity extends AppCompatActivity {
                 if (role != null) ed.putString("saved_role", role);
                 ed.apply();
                 Log.d(TAG, "Saved permanent session in native Android SharedPreferences");
+
+                if ("child".equalsIgnoreCase(role)) {
+                    appRole = "child";
+                    runOnUiThread(() -> {
+                        checkAndRequestPermissions();
+                        requestBatteryOptimization();
+                    });
+                }
             } catch (Exception ignored) {}
         }
 
@@ -633,7 +668,9 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void requestAllChildProtectionPermissions() {
             runOnUiThread(() -> {
-                if (!UsageStatsHelper.hasUsageAccessPermission(MainActivity.this)) {
+                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    checkAndRequestPermissions();
+                } else if (!UsageStatsHelper.hasUsageAccessPermission(MainActivity.this)) {
                     checkUsageAccessPermission();
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
                     checkOverlayPermission();

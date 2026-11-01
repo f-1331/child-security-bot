@@ -1424,25 +1424,25 @@ function enableChildDemoMode() {
   currentChildId = 2002;
   coinRateCoins = 1000;
   coinRateSom = 10000;
-  childBalanceCoins = 15000;
-  childBalanceSom = 150000;
+  childBalanceCoins = 0;
+  childBalanceSom = 0;
 
   childrenList = [
     {
       id: 2002,
-      full_name: "Azizbek Karimov (Farzand)",
-      username: "azizbek_child",
-      virtual_balance: 15000,
-      virtual_money_som: 150000,
+      full_name: "Azizbek (Demo Versiya)",
+      username: "azizbek_demo",
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
     {
       id: 2003,
-      full_name: "Madinaxon Karimova (Farzand 2)",
-      username: "madina_child",
-      virtual_balance: 8000,
-      virtual_money_som: 80000,
+      full_name: "Madinaxon (Demo 2)",
+      username: "madina_demo",
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -1450,25 +1450,26 @@ function enableChildDemoMode() {
 
   applyChildUI({
     id: 2002,
-    full_name: "Azizbek Karimov (Farzand Demo)",
-    virtual_balance: 15000,
-    virtual_money_som: 150000,
+    full_name: "Farzand (Demo Versiya)",
+    virtual_balance: 0,
+    virtual_money_som: 0,
     coin_rate_coins: 1000,
     coin_rate_som: 10000,
     parent_phone: "+998901234567",
     parent_name: "Ota-ona (Demo)"
   });
 
-  document.getElementById("emptyStateBanner").classList.add("hidden");
+  document.getElementById("emptyStateBanner")?.classList.add("hidden");
   document.getElementById("demoBadge")?.classList.remove("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
+  document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
   if (window.lucide) lucide.createIcons();
 
   // Render demo child live position
   const demoLat = 41.2916;
   const demoLon = 69.2121;
-  renderChildMarker(demoLat, demoLon, "Azizbek Karimov (Demo)", false, 85);
+  renderChildMarker(demoLat, demoLon, "Azizbek (Demo Versiya)", false, 85);
   updateBatteryUI(85, false);
   updateSoundUI("normal");
   resolveAddress(demoLat, demoLon);
@@ -1476,7 +1477,7 @@ function enableChildDemoMode() {
   // If real device GPS is available, dynamically center demo on tester's real location
   getDeviceLocation().then((loc) => {
     if (loc && typeof loc.latitude === "number" && !loc.fallback) {
-      renderChildMarker(loc.latitude, loc.longitude, "Azizbek Karimov (Demo)", false, 85);
+      renderChildMarker(loc.latitude, loc.longitude, "Azizbek (Demo Versiya)", false, 85);
       resolveAddress(loc.latitude, loc.longitude);
       if (map) map.flyTo([loc.latitude, loc.longitude], 16, { animate: true, duration: 0.8 });
     }
@@ -1505,7 +1506,12 @@ function applyAuthenticatedUser(data) {
   document.getElementById("demoBadge")?.classList.add("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
   document.getElementById("demoNoticeBanner")?.classList.add("hidden");
+  document.getElementById("globalDemoWarningBanner")?.classList.add("hidden");
   dismissEntryDemoBanner();
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.setAppRole === "function") {
+    try { window.AndroidBridge.setAppRole(data.role || currentRole); } catch (e) {}
+  }
 
   // Purge any demo geofences on map and state when real user connects
   if (geofenceLayers && map) {
@@ -2699,23 +2705,24 @@ function enableDemoMode() {
   document.getElementById("demoBadge")?.classList.remove("hidden");
   document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
+  document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
 
   childrenList = [
     {
       id: 2002,
-      full_name: "Azizbek Karimov (Farzand)",
-      username: "azizbek_child",
-      virtual_balance: 15000,
-      virtual_money_som: 150000,
+      full_name: "Azizbek (Demo Versiya)",
+      username: "azizbek_demo",
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.2916, longitude: 69.2121, battery_level: 82, is_charging: false, sound_mode: "normal" }
     },
     {
       id: 2003,
-      full_name: "Madinaxon Karimova (Farzand 2)",
-      username: "madina_child",
-      virtual_balance: 8000,
-      virtual_money_som: 80000,
+      full_name: "Madinaxon (Demo 2)",
+      username: "madina_demo",
+      virtual_balance: 0,
+      virtual_money_som: 0,
       is_sos_active: false,
       location: { latitude: 41.3111, longitude: 69.2797, battery_level: 95, is_charging: true, sound_mode: "normal" }
     }
@@ -6562,15 +6569,17 @@ async function triggerChildSOS() {
     renderChildMarker(instantLat, instantLon, cName, true, null);
     if (map) map.flyTo([instantLat, instantLon], 16, { animate: true, duration: 0.8 });
 
+    const targetChildId = currentChildId || authenticatedSession?.user?.id;
+
     // IMMEDIATE (0ms) DISPATCH TO SERVER / TELEGRAM:
-    if (!isDemoMode && currentChildId) {
+    if (!isDemoMode && targetChildId) {
       // Background ambient audio snapshot (5s)
-      try { recordAndUploadSOSAudio(currentChildId); } catch(e){}
+      try { recordAndUploadSOSAudio(targetChildId); } catch(e){}
 
       if (!navigator.onLine) {
         sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
       } else {
-        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+        fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -6588,7 +6597,11 @@ async function triggerChildSOS() {
               parentPhone = data.parent_phone;
               try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
             }
-            showToast("🚨 Ota-onangizga SOS manzilingiz yetkazildi!");
+            if (data.has_linked_parents === false) {
+              showToast("🚨 SOS yuborildi! (Diqqat: Hisob hali ota-onaga ulanmagan. Iltimos, kodingizni ota-onangizga yuboring)");
+            } else {
+              showToast("🚨 Ota-onangizga SOS manzilingiz va xabari yetkazildi!");
+            }
           }
         })
         .catch((err) => {
@@ -6599,7 +6612,7 @@ async function triggerChildSOS() {
       }
     } else {
       // Full interactive simulation in Demo mode
-      showToast("🚨 (Demo) SOS signali faollashtirildi! Ota-onaga xabar yetkazildi.");
+      showToast("⚠️ DIQQAT: Siz DEMO (Namuna) rejimidasiz! Real ota-onaga SOS yuborish uchun shaxsiy kodingiz bilan kiring.");
       if (!navigator.onLine) {
         sendEmergencyOfflineSms(instantLat, instantLon, cName, 85);
       }
@@ -6620,8 +6633,8 @@ async function triggerChildSOS() {
       }
       renderChildMarker(refinedLat, refinedLon, cName, true, freshBatt);
 
-      if (!isDemoMode && currentChildId && navigator.onLine) {
-        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+      if (!isDemoMode && targetChildId && navigator.onLine) {
+        fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -6662,9 +6675,10 @@ async function cancelChildSOS() {
 
   showToast("✅ Xavf bartaraf etildi. Ota-onangizga xabar yetkazilmoqda...");
 
-  if (!isDemoMode && currentChildId) {
+  const targetChildId = currentChildId || authenticatedSession?.user?.id;
+  if (!isDemoMode && targetChildId) {
     try {
-      await fetch(`/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
+      await fetch(`/api/v1/webapp/child/${targetChildId}/sos/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -7531,7 +7545,20 @@ function initChildPermissionsAndTracking(childId) {
 
   // Check if permissions onboarding modal needs to be shown for first-time instructions
   const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
-  if (!granted) {
+  let needsPermissionPrompt = !granted;
+
+  // In Native Android APK, proactively check if Usage Access or Accessibility are missing
+  if (window.AndroidBridge && typeof window.AndroidBridge.isUsageAccessGranted === "function") {
+    try {
+      const hasUsage = window.AndroidBridge.isUsageAccessGranted();
+      const hasAccess = typeof window.AndroidBridge.isAccessibilityGranted === "function" ? window.AndroidBridge.isAccessibilityGranted() : true;
+      if (!hasUsage || !hasAccess) {
+        needsPermissionPrompt = true;
+      }
+    } catch (e) {}
+  }
+
+  if (needsPermissionPrompt) {
     const modal = document.getElementById("childOnboardingModal");
     if (modal) {
       modal.classList.remove("hidden");
@@ -7631,12 +7658,25 @@ async function requestChildAllPermissions() {
 
   const targetId = currentChildId || authenticatedSession?.user?.id;
 
-  // 0. Native Android APK background tracking integration
-  if (window.AndroidBridge && typeof window.AndroidBridge.startBackgroundTracking === "function" && targetId) {
-    try {
-      window.AndroidBridge.startBackgroundTracking(String(targetId), PRODUCTION_BACKEND_URL);
-    } catch (e) {
-      console.warn("AndroidBridge start:", e);
+  // 0. Native Android APK full child permissions (GPS, Usage Access, Overlay, Accessibility)
+  if (window.AndroidBridge) {
+    if (typeof window.AndroidBridge.requestAllChildProtectionPermissions === "function") {
+      try {
+        window.AndroidBridge.requestAllChildProtectionPermissions();
+      } catch (e) {
+        console.warn("AndroidBridge requestAllChildProtectionPermissions error:", e);
+      }
+    } else if (typeof window.AndroidBridge.requestUsageAccess === "function") {
+      try {
+        window.AndroidBridge.requestUsageAccess();
+      } catch (e) {}
+    }
+    if (typeof window.AndroidBridge.startBackgroundTracking === "function" && targetId) {
+      try {
+        window.AndroidBridge.startBackgroundTracking(String(targetId), PRODUCTION_BACKEND_URL);
+      } catch (e) {
+        console.warn("AndroidBridge start:", e);
+      }
     }
   }
 
@@ -10119,19 +10159,40 @@ function updateDevicePolicyUI(policy) {
 }
 
 function setAppNativeRole(role) {
-  if (role === "child") {
-    localStorage.setItem("smart_tracker_role", "child");
-    currentRole = "child";
-    if (!authenticatedSession) {
-      enableChildDemoMode();
-    }
-  } else if (role === "parent") {
-    localStorage.setItem("smart_tracker_role", "parent");
-    currentRole = "parent";
-    if (!authenticatedSession) {
-      enableDemoMode();
-    }
+  const targetRole = (role === "child") ? "child" : "parent";
+  localStorage.setItem("smart_tracker_role", targetRole);
+  currentRole = targetRole;
+
+  // 1. If session is already loaded in memory, do nothing
+  if (authenticatedSession && authenticatedSession.user) {
+    return;
   }
+
+  // 2. Check native AndroidBridge or localStorage for saved session
+  let stored = localStorage.getItem("smart_tracker_session");
+  if ((!stored || stored === "null" || stored === "{}") && window.AndroidBridge && typeof window.AndroidBridge.getSavedSession === "function") {
+    try {
+      const nativeSess = window.AndroidBridge.getSavedSession();
+      if (nativeSess && nativeSess.length > 10) {
+        stored = nativeSess;
+        localStorage.setItem("smart_tracker_session", nativeSess);
+      }
+    } catch (e) {}
+  }
+
+  if (stored) {
+    try {
+      const data = JSON.parse(stored);
+      if (data && data.user && data.role) {
+        applyAuthenticatedUser(data);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 3. User is NOT authenticated: DO NOT FORCE DEMO MODE!
+  // Instead, present the code authentication modal directly so they can log in
+  showAuthGateModal(targetRole);
 }
 
 function selectChildForScreenTime(childId) {

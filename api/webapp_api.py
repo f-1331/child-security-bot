@@ -300,6 +300,25 @@ class AppUsageUploadRequest(BaseModel):
     report_date: Optional[str] = None
 
 
+class QuickSignalRequest(BaseModel):
+    signal_type: str = Field(..., max_length=50)
+    custom_text: Optional[str] = Field(None, max_length=200)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    battery_level: Optional[int] = Field(None, ge=0, le=100)
+
+
+class ParentPingRequest(BaseModel):
+    parent_id: int
+    ping_type: str = Field(..., max_length=50)
+    custom_note: Optional[str] = Field(None, max_length=200)
+
+
+class SchoolModeRequest(BaseModel):
+    parent_id: int
+    enabled: bool
+
+
 async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -> dict:
     """Standardized user auth payload builder for both code and Telegram initData authentications."""
     effective_code = user.web_access_code or user.pairing_code or code
@@ -651,6 +670,30 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
 
     screen_time = await crud.get_app_usage_report_today(session, child_id)
 
+    today_logs = await crud.get_location_history_today(session, child_id, limit=300)
+    total_km, max_speed, _ = crud.calculate_precise_movement_stats(today_logs)
+    steps_today = int(total_km * 1312)
+    calories_today = int(total_km * 52)
+
+    safety_score = 100
+    if latest:
+        if latest.battery_level is not None and latest.battery_level <= 15:
+            safety_score -= 20
+        elif latest.battery_level is not None and latest.battery_level <= 30:
+            safety_score -= 10
+        if latest.recorded_at:
+            rec_dt = latest.recorded_at if latest.recorded_at.tzinfo else latest.recorded_at.replace(tzinfo=timezone.utc)
+            diff_hours = (datetime.now(timezone.utc) - rec_dt).total_seconds() / 3600
+            if diff_hours > 3:
+                safety_score -= 30
+            elif diff_hours > 1:
+                safety_score -= 15
+    else:
+        safety_score = 60
+    if child.is_sos_active:
+        safety_score = 20
+    safety_score = max(10, min(100, safety_score))
+
     return {
         "status": "success",
         "child": {
@@ -675,6 +718,14 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
                 "sound_mode": latest.sound_mode if latest else "normal",
                 "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None,
+            "activity": {
+                "distance_km": round(total_km, 2),
+                "steps": steps_today,
+                "target_steps": 6000,
+                "calories": calories_today,
+                "max_speed": round(max_speed, 1),
+                "safety_score": safety_score
+            },
             "walk_safe": {
                 "active": child.walk_safe_active or False,
                 "destination": child.walk_safe_destination or "Uyga",
@@ -1323,7 +1374,9 @@ async def child_sos_endpoint(
     last_sos = telemetry.last_sos_alert_map.get(child_id)
     is_duplicate_sos = bool(last_sos and (now_utc - last_sos) < timedelta(seconds=10))
 
-    if telemetry.telegram_bot and parents and not is_duplicate_sos:
+    bot = telemetry.get_telegram_bot()
+
+    if bot and not is_duplicate_sos:
         is_recurring = bool(last_sos)
         telemetry.last_sos_alert_map[child_id] = now_utc
         now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y, %H:%M:%S")
@@ -1366,22 +1419,47 @@ async def child_sos_endpoint(
                 f"⚠️ <b>DIQQAT:</b> Farzandingiz bilan zudlik bilan bog'laning yoki xaritada tekshiring!"
             )
 
-        for p in parents:
+        if parents:
+            for p in parents:
+                try:
+                    await bot.send_message(
+                        chat_id=p.id,
+                        text=parent_alert,
+                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                        parse_mode="HTML"
+                    )
+                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                        await bot.send_location(
+                            chat_id=p.id,
+                            latitude=lat,
+                            longitude=lon
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
+        else:
+            # Fallback for unlinked child accounts or admin testing: notify owner
+            owner_id = 6707839718
             try:
-                await telemetry.telegram_bot.send_message(
-                    chat_id=p.id,
-                    text=parent_alert,
+                owner_alert = (
+                    f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS]</b>\n"
+                    f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
+                    + parent_alert
+                )
+                await bot.send_message(
+                    chat_id=owner_id,
+                    text=owner_alert,
                     reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
                     parse_mode="HTML"
                 )
-                if lat is not None and lon is not None:
-                    await telemetry.telegram_bot.send_location(
-                        chat_id=p.id,
+                if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                    await bot.send_location(
+                        chat_id=owner_id,
                         latitude=lat,
                         longitude=lon
                     )
+                logger.info(f"Dispatched fallback SOS alert to owner {owner_id} for unlinked child {child_id}")
             except Exception as e:
-                logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
+                logger.warning(f"Could not dispatch fallback SOS to owner {owner_id}: {e}")
 
     parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
@@ -1391,6 +1469,7 @@ async def child_sos_endpoint(
         "is_sos_active": True,
         "parent_phone": parent_phone,
         "notified_parents": len(parents),
+        "has_linked_parents": bool(parents),
         "latitude": lat,
         "longitude": lon,
         "battery_level": battery_lvl
@@ -1407,22 +1486,34 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     parents = await crud.get_parents_for_child(session, child_id)
     await session.commit()
 
-    if telemetry.telegram_bot:
+    bot = telemetry.get_telegram_bot()
+    if bot:
         if parents:
             for p in parents:
                 try:
                     safe_cname = html.escape(child_name)
-                    await telemetry.telegram_bot.send_message(
+                    await bot.send_message(
                         chat_id=p.id,
                         text=f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\nFarzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.",
                         parse_mode="HTML"
                     )
                 except Exception as e:
                     logger.error(f"Failed to notify parent {p.id} of SOS cancellation: {e}")
+        else:
+            owner_id = 6707839718
+            try:
+                safe_cname = html.escape(child_name)
+                await bot.send_message(
+                    chat_id=owner_id,
+                    text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
 
         if child:
             try:
-                await telemetry.telegram_bot.send_message(
+                await bot.send_message(
                     chat_id=child.id,
                     text="✅ <b>SOS xavf signali to'xtatildi.</b> Hammasi joyida ekanligidan xursandmiz! 🛡️✨",
                     parse_mode="HTML"
@@ -2436,6 +2527,208 @@ async def trigger_call_parent_endpoint(child_id: int, session: AsyncSession = De
             } for p in parents
         ],
         "sent_contacts": sent_contacts
+    }
+
+
+# ---------------------------------------------------------
+# QUICK FAMILY SIGNALS & PARENT DIRECTIVE ENDPOINTS
+# ---------------------------------------------------------
+
+@router.post("/child/{child_id}/quick-signal")
+async def send_child_quick_signal(
+    child_id: int,
+    payload: QuickSignalRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child sends 1-tap preset status signal to parents with location and battery."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child and child.full_name else f"Farzand #{child_id}"
+    safe_cname = html.escape(child_name)
+    parents = await crud.get_parents_for_child(session, child_id)
+
+    signal_info = {
+        "school_arrived": ("🎒 Maktabga yetib keldim!", "Farzandingiz maktabga yetib bordi va darslarga tayyor. 📚"),
+        "home_arrived": ("🏠 Uyga yetib keldim!", "Farzandingiz xavfsiz tarzda uyga yetib keldi. 🏡"),
+        "pickup_me": ("🚗 Meni olib keting!", "Farzandingiz dars yoki mashg'ulotlari tugaganini va uni olib ketishingizni so'ramoqda. 🚘"),
+        "training": ("⚽ Mashg'ulotdaman!", "Farzandingiz qo'shimcha to'garak / sport mashg'ulotida yoki repetitorda. 🏃‍♂️"),
+        "low_battery": ("🪫 Telefonim quvvati oz qoldi!", "Farzandingiz telefonining quvvati tugayotgani haqida xabar berdi. 🔋"),
+        "where_are_you": ("❓ Qayerdasiz?", "Farzandingiz: «Dada/Oyi, qayerdasiz? Qo'ng'iroq qiling» deb signal yubordi. 📞"),
+    }
+    title, desc = signal_info.get(payload.signal_type, ("📢 Farzandingizdan tezkor signal!", payload.custom_text or "Yangi signal yuborildi."))
+    if payload.custom_text:
+        desc = html.escape(payload.custom_text)
+
+    now_tashkent = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+    tg_text = (
+        f"<b>{title}</b>\n\n"
+        f"👤 Farzand: <b>{safe_cname}</b>\n"
+        f"💬 Xabar: <i>{desc}</i>\n"
+        f"🕒 Vaqt: <b>{now_tashkent}</b>\n"
+    )
+    if payload.battery_level is not None:
+        tg_text += f"🔋 Batareya: <b>{payload.battery_level}%</b>\n"
+    if payload.latitude and payload.longitude:
+        maps_url = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+        tg_text += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
+
+    notified = 0
+    if telemetry.telegram_bot and parents:
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=p.id,
+                    text=tg_text,
+                    parse_mode="HTML"
+                )
+                notified += 1
+            except Exception as e:
+                logger.error(f"Failed to send quick signal to parent {p.id}: {e}")
+
+    ws_data = {
+        "type": "quick_signal",
+        "child_id": child_id,
+        "child_name": child_name,
+        "signal_type": payload.signal_type,
+        "title": title,
+        "message": desc,
+        "time": now_tashkent,
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "battery_level": payload.battery_level
+    }
+    for p in parents:
+        try:
+            await ws_manager.send_to_user(p.id, ws_data)
+        except Exception:
+            pass
+
+    return {
+        "status": "success",
+        "signal_type": payload.signal_type,
+        "notified_parents": notified,
+        "message": "Signal muvaffaqiyatli yuborildi!"
+    }
+
+
+@router.post("/child/{child_id}/parent-ping")
+async def send_parent_ping_to_child(
+    child_id: int,
+    payload: ParentPingRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Parent sends 1-tap directive or cheer to child's phone and WebApp."""
+    if child_id != 2002:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or payload.parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
+    parent_user = await crud.get_user(session, payload.parent_id)
+    parent_name = parent_user.full_name if parent_user and parent_user.full_name else "Ota-onangiz"
+    safe_pname = html.escape(parent_name)
+
+    ping_info = {
+        "return_home": ("🏠 Uyga qaytish vaqti bo'ldi!", "Kech bo'lib qoldi, sekin uyga qaytishni boshla. 🏡"),
+        "call_me": ("📞 Menga qo'ng'iroq qil!", "Seni kutyapman, bo'shashing bilan menga telefon qil. 📲"),
+        "take_medicine": ("🍱 Ovqatlanish va dori ichish vaqti!", "Ovqatlanish yoki dorilaringni o'z vaqtida ichishni unutma! 💊"),
+        "cheer": ("❤️ Seni yaxshi ko'ramiz!", "O'zingni ehtiyot qil, biz sen bilan faxrlanamiz! 🌟")
+    }
+    title, desc = ping_info.get(payload.ping_type, ("💬 Ota-onangizdan xabar!", payload.custom_note or "Yangi eslatma"))
+    if payload.custom_note:
+        desc = html.escape(payload.custom_note)
+
+    now_tashkent = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+
+    if telemetry.telegram_bot and child_id != 2002:
+        try:
+            tg_text = (
+                f"<b>{title}</b>\n\n"
+                f"👤 Yuboruvchi: <b>{safe_pname}</b>\n"
+                f"💬 Ko'rsatma: <i>{desc}</i>\n"
+                f"🕒 Vaqt: <b>{now_tashkent}</b>"
+            )
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text=tg_text,
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send parent ping to child Telegram {child_id}: {e}")
+
+    try:
+        await ws_manager.send_to_user(child_id, {
+            "type": "parent_ping",
+            "parent_id": payload.parent_id,
+            "parent_name": parent_name,
+            "ping_type": payload.ping_type,
+            "title": title,
+            "message": desc,
+            "time": now_tashkent
+        })
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "ping_type": payload.ping_type,
+        "message": "Xabar farzand telefoniga yetkazildi!"
+    }
+
+
+@router.post("/child/{child_id}/school-mode")
+async def toggle_child_school_mode(
+    child_id: int,
+    payload: SchoolModeRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Toggle 1-tap School DND mode: locks all distracting apps during class hours."""
+    if child_id != 2002:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not parents or payload.parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+            )
+
+    policy = await crud.get_or_create_device_policy(session, child_id)
+    policy.is_all_apps_blocked = payload.enabled
+    policy.lockdown_reason = "Maktab dars vaqti 📚" if payload.enabled else "Dars vaqti"
+    await session.commit()
+
+    update_data = {
+        "type": "device_policy_update",
+        "child_id": child_id,
+        "is_all_apps_blocked": policy.is_all_apps_blocked,
+        "lockdown_reason": policy.lockdown_reason,
+        "school_mode": payload.enabled
+    }
+    try:
+        await ws_manager.send_to_user(child_id, update_data)
+        if child_id != 2002:
+            parents = await crud.get_parents_for_child(session, child_id)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, update_data)
+    except Exception:
+        pass
+
+    if telemetry.telegram_bot and child_id != 2002:
+        try:
+            status_text = "📚 <b>Maktab Rejimi faollashtirildi!</b>\n\nDarslar davomida diqqatni jamlash uchun o'yinlar va tarmoqlar vaqtincha cheklandi." if payload.enabled else "✅ <b>Maktab Rejimi o'chirildi!</b>\n\nIlovalardan foydalanish cheklovlari olib tashlandi."
+            await telemetry.telegram_bot.send_message(
+                chat_id=child_id,
+                text=status_text,
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "school_mode": payload.enabled,
+        "message": "Maktab rejimi yoqildi" if payload.enabled else "Maktab rejimi o'chirildi"
     }
 
 # ---------------------------------------------------------

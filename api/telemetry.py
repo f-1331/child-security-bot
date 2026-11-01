@@ -50,6 +50,26 @@ def set_bot_instance(bot: Bot):
     telegram_bot = bot
 
 
+def get_telegram_bot() -> Optional[Bot]:
+    """Retrieve active telegram bot instance or initialize lazy fallback using config.settings."""
+    global telegram_bot
+    if telegram_bot is not None:
+        return telegram_bot
+    try:
+        from config import settings
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
+        if settings.BOT_TOKEN:
+            telegram_bot = Bot(
+                token=settings.BOT_TOKEN,
+                default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+            )
+            logger.info("Initialized lazy fallback Telegram bot instance in telemetry.")
+    except Exception as e:
+        logger.warning(f"Could not initialize fallback Telegram bot: {e}")
+    return telegram_bot
+
+
 class TelemetryPayload(BaseModel):
     child_id: int = Field(..., description="Telegram ID of the child")
     lat: float = Field(..., description="Latitude coordinate", ge=-90.0, le=90.0)

@@ -99,6 +99,9 @@ from bot.keyboards import (
     get_logout_step2_keyboard,
     get_coin_rate_preset_keyboard,
     get_empty_children_kb,
+    get_school_mode_inline_keyboard,
+    get_parent_directive_inline_keyboard,
+    get_child_quick_signals_inline_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -2298,6 +2301,260 @@ async def on_checkin_pressed(message: Message, bot: Bot):
             f"🌟 **Rahmat!** Ota-onangizga soat {now_str} da manzilga eson-omon yetib borganingiz bildirildi.",
             parse_mode="Markdown"
         )
+
+
+# ---------------------------------------------------------
+# NEW FEATURES: School Mode, Directives & Quick Signals
+# ---------------------------------------------------------
+
+@router.message(F.text.startswith("📚 Maktab rejimi") | (F.text == "/school"))
+async def on_parent_school_mode_command(message: Message, bot: Bot):
+    """Parent toggles school mode to block games and social media during class hours."""
+    parent_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, parent_id)
+        if not children:
+            await message.answer(
+                "⚠️ Sizga hali hech qanday farzand biriktirilmagan.",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="HTML"
+            )
+            return
+
+        for ch in children:
+            policy = await crud.get_or_create_device_policy(session, ch.id)
+            c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
+            status_desc = "🟢 <b>FAOL (Ilovalar cheklangan)</b>" if policy.is_all_apps_blocked else "⚪ <b>O'chiq (Cheklovlar yo'q)</b>"
+            await message.answer(
+                f"📚 <b>MAKTAB REJIMI (Dars vaqti)</b>\n\n"
+                f"👤 Farzand: <b>{c_name}</b>\n"
+                f"📊 Joriy holat: {status_desc}\n\n"
+                f"Ushbu rejim yoqilganda farzand telefonidagi chalg'ituvchi o'yinlar va ijtimoiy tarmoqlar dars davomida avtomatik bloklanadi.",
+                reply_markup=get_school_mode_inline_keyboard(ch.id, policy.is_all_apps_blocked),
+                parse_mode="HTML"
+            )
+
+
+@router.callback_query(F.data.startswith("toggle_school:"))
+async def on_toggle_school_callback(callback: CallbackQuery, bot: Bot):
+    """Handle 1-tap School Mode toggle callback."""
+    parent_id = callback.from_user.id
+    parts = callback.data.split(":")
+    child_id = int(parts[1])
+    enable = bool(int(parts[2]))
+
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not any(p.id == parent_id for p in parents):
+            await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
+            return
+
+        policy = await crud.get_or_create_device_policy(session, child_id)
+        policy.is_all_apps_blocked = enable
+        policy.lockdown_reason = "Maktab dars vaqti 📚" if enable else "Dars vaqti"
+        await session.commit()
+
+        child_user = await crud.get_user(session, child_id)
+        c_name = html.escape(child_user.full_name or f"Farzand #{child_id}")
+
+        try:
+            from api.webapp_api import ws_manager
+            update_data = {
+                "type": "device_policy_update",
+                "child_id": child_id,
+                "is_all_apps_blocked": enable,
+                "lockdown_reason": policy.lockdown_reason,
+                "school_mode": enable
+            }
+            await ws_manager.send_to_user(child_id, update_data)
+            for p in parents:
+                await ws_manager.send_to_user(p.id, update_data)
+        except Exception:
+            pass
+
+        try:
+            ch_msg = (
+                "📚 <b>DIQQAT: Ota-onangiz Maktab Rejimini yoqdi!</b>\n\n"
+                "Darslar davomida diqqatni jamlash uchun o'yinlar va tarmoqlar vaqtincha cheklandi."
+                if enable else
+                "✅ <b>Maktab Rejimi yakunlandi!</b>\n\nIlovalardan foydalanish cheklovlari olib tashlandi."
+            )
+            await bot.send_message(chat_id=child_id, text=ch_msg, parse_mode="HTML")
+        except Exception:
+            pass
+
+        status_desc = "🟢 <b>FAOL (Ilovalar cheklangan)</b>" if enable else "⚪ <b>O'chiq (Cheklovlar yo'q)</b>"
+        await callback.message.edit_text(
+            f"📚 <b>MAKTAB REJIMI YANGILANDI!</b>\n\n"
+            f"👤 Farzand: <b>{c_name}</b>\n"
+            f"📊 Joriy holat: {status_desc}\n\n"
+            f"O'zgarish farzand telefoniga darhol qo'llanildi.",
+            reply_markup=get_school_mode_inline_keyboard(child_id, enable),
+            parse_mode="HTML"
+        )
+    await callback.answer("Maktab rejimi muvaffaqiyatli o'zgartirildi.")
+
+
+@router.message(F.text.startswith("💬 Farzandga ko'rsatma") | (F.text == "/ping"))
+async def on_parent_directive_command(message: Message, bot: Bot):
+    """Parent sends 1-tap preset guidance or cheer to child."""
+    parent_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, parent_id)
+        if not children:
+            await message.answer(
+                "⚠️ Sizga hali hech qanday farzand biriktirilmagan.",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="HTML"
+            )
+            return
+
+        for ch in children:
+            c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
+            await message.answer(
+                f"💬 <b>FARZANDGA TEZKOR KO'RSATMA YUBORISH</b>\n\n"
+                f"👤 Farzand: <b>{c_name}</b>\n\n"
+                f"Quyidagi tezkor ko'rsatmalardan birini tanlang. U farzand telefoniga darhol yetkaziladi 👇",
+                reply_markup=get_parent_directive_inline_keyboard(ch.id),
+                parse_mode="HTML"
+            )
+
+
+@router.callback_query(F.data.startswith("p_dir:"))
+async def on_parent_directive_callback(callback: CallbackQuery, bot: Bot):
+    """Handle parental 1-tap directive delivery."""
+    parent_id = callback.from_user.id
+    parts = callback.data.split(":")
+    child_id = int(parts[1])
+    ping_type = parts[2]
+
+    directives = {
+        "return_home": ("🏠 Uyga qaytish vaqti bo'ldi!", "Kech bo'lib qoldi, sekin uyga qaytishni boshla. 🏡"),
+        "call_me": ("📞 Menga qo'ng'iroq qil!", "Seni kutyapman, bo'shashing bilan menga telefon qil. 📲"),
+        "take_medicine": ("🍱 Ovqatlanish va dori vaqti!", "Ovqatlanish yoki dorilaringni o'z vaqtida ichishni unutma! 💊"),
+        "cheer": ("❤️ Seni yaxshi ko'ramiz!", "O'zingni ehtiyot qil, biz sen bilan faxrlanamiz! 🌟")
+    }
+    title, desc = directives.get(ping_type, ("💬 Ota-onangizdan xabar!", "Yangi xabarnoma"))
+
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not any(p.id == parent_id for p in parents):
+            await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
+            return
+
+        parent_user = await crud.get_user(session, parent_id)
+        safe_pname = html.escape(parent_user.full_name or "Ota-onangiz")
+
+        now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+        try:
+            tg_text = (
+                f"<b>{title}</b>\n\n"
+                f"👤 Yuboruvchi: <b>{safe_pname}</b>\n"
+                f"💬 Ko'rsatma: <i>{desc}</i>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>"
+            )
+            await bot.send_message(chat_id=child_id, text=tg_text, parse_mode="HTML")
+        except Exception:
+            pass
+
+        try:
+            from api.webapp_api import ws_manager
+            await ws_manager.send_to_user(child_id, {
+                "type": "parent_ping",
+                "parent_id": parent_id,
+                "parent_name": parent_user.full_name or "Ota-onangiz",
+                "ping_type": ping_type,
+                "title": title,
+                "message": desc,
+                "time": now_time
+            })
+        except Exception:
+            pass
+
+    await callback.message.edit_text(
+        f"✅ <b>Ko'rsatma muvaffaqiyatli yetkazildi!</b>\n\n"
+        f"📌 <b>{title}</b>\n"
+        f"💬 <i>{desc}</i>\n\n"
+        f"Farzandingiz telefoniga bildirishnoma bordi.",
+        parse_mode="HTML"
+    )
+    await callback.answer("Ko'rsatma yetkazildi!")
+
+
+@router.message(F.text.startswith("💬 Ota-onaga tezkor xabar") | (F.text == "/signals"))
+async def on_child_quick_signals_command(message: Message):
+    """Child sends 1-tap preset message to parents."""
+    await message.answer(
+        "💬 <b>OTA-ONANGIZGA TEZKOR XABAR YUBORISH</b>\n\n"
+        "Matn yozib o'tirmasdan, quyidagi tayyor tugmalardan birini bosing va ota-onangizga darhol xabar yetkaziladi 👇",
+        reply_markup=get_child_quick_signals_inline_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data.startswith("c_sig:"))
+async def on_child_quick_signal_callback(callback: CallbackQuery, bot: Bot):
+    """Handle child 1-tap quick status callback."""
+    child_id = callback.from_user.id
+    child_name = html.escape(callback.from_user.full_name or "Farzand")
+    signal_type = callback.data.split(":")[1]
+
+    signals = {
+        "school_arrived": ("🎒 Maktabga yetib keldim!", "Farzandingiz maktabga yetib bordi va darslarga tayyor. 📚"),
+        "home_arrived": ("🏠 Uyga yetib keldim!", "Farzandingiz xavfsiz tarzda uyga yetib keldi. 🏡"),
+        "pickup_me": ("🚗 Meni olib keting!", "Farzandingiz dars yoki mashg'ulotlari tugaganini va uni olib ketishingizni so'ramoqda. 🚘"),
+        "training": ("⚽ Mashg'ulotdaman!", "Farzandingiz qo'shimcha to'garak / sport mashg'ulotida yoki repetitorda. 🏃‍♂️"),
+        "low_battery": ("🪫 Telefonim quvvati oz qoldi!", "Farzandingiz telefonining quvvati tugayotgani haqida xabar berdi. 🔋"),
+        "where_are_you": ("❓ Qayerdasiz?", "Farzandingiz: «Dada/Oyi, qayerdasiz? Qo'ng'iroq qiling» deb signal yubordi. 📞"),
+    }
+    title, desc = signals.get(signal_type, ("📢 Farzandingizdan tezkor signal!", "Yangi signal"))
+    now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        latest_loc = await crud.get_latest_location(session, child_id)
+
+        tg_msg = (
+            f"<b>{title}</b>\n\n"
+            f"👤 Farzand: <b>{child_name}</b>\n"
+            f"💬 Xabar: <i>{desc}</i>\n"
+            f"🕒 Vaqt: <b>{now_time}</b>\n"
+        )
+        if latest_loc and latest_loc.battery_level is not None:
+            tg_msg += f"🔋 Batareya: <b>{latest_loc.battery_level}%</b>\n"
+        if latest_loc and latest_loc.latitude and latest_loc.longitude:
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={latest_loc.latitude},{latest_loc.longitude}"
+            tg_msg += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
+
+        for p in parents:
+            try:
+                await bot.send_message(chat_id=p.id, text=tg_msg, parse_mode="HTML")
+            except Exception:
+                pass
+
+        try:
+            from api.webapp_api import ws_manager
+            for p in parents:
+                await ws_manager.send_to_user(p.id, {
+                    "type": "quick_signal",
+                    "child_id": child_id,
+                    "child_name": callback.from_user.full_name or "Farzand",
+                    "signal_type": signal_type,
+                    "title": title,
+                    "message": desc,
+                    "time": now_time,
+                    "battery_level": latest_loc.battery_level if latest_loc else None
+                })
+        except Exception:
+            pass
+
+    await callback.message.edit_text(
+        f"✅ <b>Ota-onangizga xabar yetkazildi!</b>\n\n"
+        f"📌 <b>{title}</b>\n"
+        f"🕒 Yuborilgan vaqt: <b>{now_time}</b>",
+        parse_mode="HTML"
+    )
+    await callback.answer("Xabar yetkazildi!")
 
 
 # ---------------------------------------------------------
