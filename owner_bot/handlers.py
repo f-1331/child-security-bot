@@ -3,7 +3,7 @@ import logging
 from typing import Any, Callable, Dict, Optional
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -37,6 +37,11 @@ from owner_bot.service import (
     get_battery_and_device_radar,
     perform_database_optimization,
     distribute_coins_airdrop,
+    get_live_gps_radar,
+    get_database_health_stats,
+    generate_magic_login_url,
+    trigger_remote_siren,
+    trigger_remote_screen_lock,
 )
 
 logger = logging.getLogger("smart_parental_tracker.owner_bot")
@@ -54,6 +59,7 @@ class OwnerBotStates(StatesGroup):
     waiting_for_broadcast_content = State()
     waiting_for_broadcast_confirm = State()
     waiting_for_airdrop_custom = State()
+    waiting_for_magic_id = State()
 
 
 # ==============================================================================
@@ -180,10 +186,9 @@ async def handle_start(message: Message, state: FSMContext, auth_info: Dict[str,
 
 
 # ==============================================================================
-# STATISTIKA
+# STATISTIKA & RADAR & DB STATS
 # ==============================================================================
-@owner_bot_router.message(F.text == "📊 Umumiy Statistika")
-@owner_bot_router.message(Command("stats"))
+@owner_bot_router.message(F.text.contains("Umumiy Statistika") | (F.text == "/stats"))
 async def handle_statistics(message: Message):
     async with async_session_maker() as session:
         stats = await crud.get_system_overview_stats(session)
@@ -205,10 +210,160 @@ async def handle_statistics(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 
+@owner_bot_router.message(F.text.contains("Jonli GPS Radar") | (F.text == "/radar"))
+async def handle_live_gps_radar_cmd(message: Message):
+    async with async_session_maker() as session:
+        html_text, kb = await get_live_gps_radar(session)
+    await message.answer(html_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_radar")
+async def handle_refresh_radar_cb(callback: CallbackQuery):
+    async with async_session_maker() as session:
+        html_text, kb = await get_live_gps_radar(session)
+    try:
+        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception:
+        pass
+    await callback.answer("Radar yangilandi!")
+
+
+@owner_bot_router.message(F.text.contains("Neon DB Holati") | (F.text == "/db_stats") | (F.text == "/db"))
+async def handle_database_health_cmd(message: Message):
+    async with async_session_maker() as session:
+        text = await get_database_health_stats(session)
+    await message.answer(text, parse_mode="HTML")
+
+
+@owner_bot_router.message(F.text.contains("Magic Login Link") | (F.text == "/magic"))
+async def prompt_magic_link(message: Message, state: FSMContext):
+    await state.set_state(OwnerBotStates.waiting_for_magic_id)
+    await message.answer(
+        "🔑 <b>VIP / Magic Login Link Generatori</b>\n\n"
+        "Qaysi foydalanuvchi hisobiga parolsiz 1-bosishda WebApp orqali kirmoqchisiz? Telegram ID raqamini kiriting:\n\n"
+        "<i>Misol: <code>6707839718</code></i>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_magic_id)
+async def process_magic_link_input(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if not message.text:
+        return
+    raw = message.text.strip()
+    await state.clear()
+    if not raw.isdigit():
+        await message.answer("⚠️ Iltimos, faqat raqamli Telegram ID kiriting:", reply_markup=get_owner_main_keyboard(auth_info["is_owner"]))
+        return
+    user_id = int(raw)
+    async with async_session_maker() as session:
+        user = await crud.get_user(session, user_id)
+        if not user:
+            await message.answer(f"❌ ID <code>{user_id}</code> bo'yicha foydalanuvchi topilmadi.", reply_markup=get_owner_main_keyboard(auth_info["is_owner"]), parse_mode="HTML")
+            return
+        magic_url = generate_magic_login_url(user)
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"🚀 {user.full_name or 'Foydalanuvchi'} hisobiga kirish", url=magic_url)],
+            [InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]
+        ])
+        await message.answer(
+            f"✅ <b>Magic WebApp Login Link Tayyor!</b>\n\n"
+            f"👤 Foydalanuvchi: <b>{user.full_name or 'Foydalanuvchi'}</b> (ID: <code>{user.id}</code>)\n"
+            f"🎭 Rol: <code>{user.role}</code>\n"
+            f"🔑 Kirish kodi: <code>{user.web_access_code or 'CS-DEMO'}</code>\n\n"
+            f"🔗 <b>Havola:</b>\n<code>{magic_url}</code>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+
+# ==============================================================================
+# MASOFAVIY BUYRUQLAR (/siren, /lock, /unlock, /add_coins)
+# ==============================================================================
+@owner_bot_router.message(Command("siren"))
+async def on_siren_command(message: Message, command: CommandObject):
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer("⚠️ Foydalanish: <code>/siren &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    child_id = int(command.args.strip())
+    await trigger_remote_siren(child_id)
+    await message.answer(f"🚨 <b>ID {child_id}</b> qurilmasiga masofaviy favqulodda sirena yuborildi! 🔊", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("lock"))
+async def on_lock_command(message: Message, command: CommandObject):
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer("⚠️ Foydalanish: <code>/lock &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    child_id = int(command.args.strip())
+    await trigger_remote_screen_lock(child_id, lock=True)
+    await message.answer(f"🛑 <b>ID {child_id}</b> qurilmasi masofaviy bloklandi!", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("unlock"))
+async def on_unlock_command(message: Message, command: CommandObject):
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer("⚠️ Foydalanish: <code>/unlock &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    child_id = int(command.args.strip())
+    await trigger_remote_screen_lock(child_id, lock=False)
+    await message.answer(f"✅ <b>ID {child_id}</b> qurilmasi qulfdan chiqarildi!", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("add_coins"))
+async def on_add_coins_command(message: Message, command: CommandObject):
+    if not command.args or len(command.args.split()) < 2:
+        await message.answer("⚠️ Foydalanish: <code>/add_coins &lt;child_id&gt; &lt;amount&gt;</code>", parse_mode="HTML")
+        return
+    parts = command.args.split()
+    if not parts[0].isdigit() or not parts[1].lstrip("-").isdigit():
+        await message.answer("⚠️ Noto'g'ri format. Misol: <code>/add_coins 12345 500</code>", parse_mode="HTML")
+        return
+    child_id = int(parts[0])
+    amount = int(parts[1])
+    async with async_session_maker() as session:
+        child = await crud.get_user(session, child_id)
+        if not child:
+            await message.answer(f"❌ ID {child_id} topilmadi.", parse_mode="HTML")
+            return
+        child.child_balance_coins = (child.child_balance_coins or 0) + amount
+        await session.commit()
+    await message.answer(f"✅ <b>ID {child_id} ({child.full_name})</b> ga {amount:+,} tanga berildi! Yangi balans: <code>{child.child_balance_coins}</code> tanga", parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_magic:"))
+async def on_dossier_magic_link_cb(callback: CallbackQuery):
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        user = await crud.get_user(session, user_id)
+        if not user:
+            await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
+            return
+        magic_url = generate_magic_login_url(user)
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 WebApp Dashboardga kirish", url=magic_url)],
+            [InlineKeyboardButton(text="⬅️ Orqaga", callback_data=f"adm_inspect:{user_id}")]
+        ])
+        await callback.message.answer(
+            f"🔑 <b>{user.full_name} hisobiga 1-bosishda kirish havolasi:</b>\n\n<code>{magic_url}</code>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data.startswith("adm_siren:"))
+async def on_dossier_siren_cb(callback: CallbackQuery):
+    child_id = int(callback.data.split(":")[1])
+    await trigger_remote_siren(child_id)
+    await callback.answer("🔊 Masofaviy Sirena signali farzand telefoniga yuborildi!", show_alert=True)
+
+
 # ==============================================================================
 # FOYDALANUVCHINI TEKSHIRISH (ID / USERNAME QUERY)
 # ==============================================================================
-@owner_bot_router.message(F.text == "🔍 ID bo'yicha tekshirish")
+@owner_bot_router.message(F.text.contains("ID bo'yicha tekshirish") | (F.text == "/inspect"))
 @owner_bot_router.message(Command("inspect"))
 async def prompt_user_query(message: Message, state: FSMContext):
     await state.set_state(OwnerBotStates.waiting_for_user_query)
@@ -489,8 +644,7 @@ async def callback_unlink_execute(callback: CallbackQuery, auth_info: Dict[str, 
 # ==============================================================================
 # FAOL SOS SIGNALLARI
 # ==============================================================================
-@owner_bot_router.message(F.text == "🚨 Faol SOS signallari")
-@owner_bot_router.message(Command("sos_list"))
+@owner_bot_router.message(F.text.contains("Faol SOS signallari") | (F.text == "/sos_list"))
 async def handle_active_sos(message: Message):
     async with async_session_maker() as session:
         sos_users = await crud.get_active_sos_list(session)
@@ -523,8 +677,7 @@ async def handle_active_sos(message: Message):
 # ==============================================================================
 # ADMINLARNI BOSHQARISH (FAQAT @fayzbek1331 UCHUN)
 # ==============================================================================
-@owner_bot_router.message(F.text == "👥 Adminlarni boshqarish")
-@owner_bot_router.message(Command("admins"))
+@owner_bot_router.message(F.text.contains("Adminlarni boshqarish") | (F.text == "/admins"))
 async def handle_admin_management(message: Message, auth_info: Dict[str, Any]):
     if not auth_info["is_owner"]:
         await message.answer(
@@ -690,8 +843,7 @@ async def callback_delete_admin(callback: CallbackQuery, auth_info: Dict[str, An
 # ==============================================================================
 # HAMMAGA XABAR (BROADCAST)
 # ==============================================================================
-@owner_bot_router.message(F.text == "📢 Hammaga xabar (Broadcast)")
-@owner_bot_router.message(Command("broadcast"))
+@owner_bot_router.message(F.text.contains("Hammaga xabar") | (F.text == "/broadcast"))
 async def handle_broadcast_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -817,8 +969,7 @@ async def callback_broadcast_execute(callback: CallbackQuery, state: FSMContext,
 # ==============================================================================
 # SERVER & TIZIM HOLATI DIAGNOSTIKASI
 # ==============================================================================
-@owner_bot_router.message(F.text == "🌐 Server & Xavfsizlik")
-@owner_bot_router.message(Command("server"))
+@owner_bot_router.message(F.text.contains("Server &") | (F.text == "/server"))
 async def handle_system_status(message: Message):
     async with async_session_maker() as session:
         html = await get_system_diagnostic_html(session)
@@ -828,8 +979,7 @@ async def handle_system_status(message: Message):
 # ==============================================================================
 # SO'NGGI FOYDALANUVCHILAR
 # ==============================================================================
-@owner_bot_router.message(F.text == "📜 So'nggi foydalanuvchilar")
-@owner_bot_router.message(Command("recent"))
+@owner_bot_router.message(F.text.contains("So'nggi foydalanuvchilar") | (F.text == "/recent"))
 async def handle_recent_users(message: Message):
     async with async_session_maker() as session:
         users = await crud.get_recent_registered_users(session, limit=10)
@@ -862,8 +1012,7 @@ async def handle_recent_users(message: Message):
 # ==============================================================================
 # SERVER LOGLARI
 # ==============================================================================
-@owner_bot_router.message(F.text == "📑 Server loglari")
-@owner_bot_router.message(Command("logs"))
+@owner_bot_router.message(F.text.contains("Server loglari") | (F.text == "/logs"))
 async def handle_server_logs(message: Message):
     logs = get_recent_logs(limit=25)
     log_text = "\n".join(logs)
@@ -880,8 +1029,7 @@ async def handle_server_logs(message: Message):
 # ==============================================================================
 # BAZA ZAXIRASI (BACKUP & EXPORT)
 # ==============================================================================
-@owner_bot_router.message(F.text == "💾 Baza zaxirasi (Backup)")
-@owner_bot_router.message(Command("backup"))
+@owner_bot_router.message(F.text.contains("Baza zaxirasi") | (F.text == "/backup"))
 async def handle_backup_command(message: Message):
     from db.backup_service import send_db_backup_to_chat
     await message.answer("⏳ <i>Ma'lumotlar bazasi zaxiralanmoqda va tayyorlanmoqda...</i>", parse_mode="HTML")
@@ -907,8 +1055,7 @@ async def handle_owner_clean_chat(message: Message, bot: Bot):
 # ==============================================================================
 # /HELP QO'LLANMA
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"ℹ️ Yordam", "ℹ️ Yordam & Buyruqlar"}))
-@owner_bot_router.message(Command("help"))
+@owner_bot_router.message(F.text.contains("Yordam") | (F.text == "/help"))
 async def handle_help(message: Message, auth_info: Dict[str, Any]):
     help_text = (
         "📖 <b>EGA VA ADMIN BOTI BO'YICHA QO'LLANMA</b>\n\n"
@@ -1003,7 +1150,7 @@ async def handle_owner_desktop_info(message: Message, auth_info: Dict[str, Any])
 # ==============================================================================
 # SCREEN TIME & APP INTELLIGENCE ANALYTICS
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"📱 Ilovalar & Ekran tahlili", "/apps", "/screentime"}))
+@owner_bot_router.message(F.text.contains("Ekran tahlili") | (F.text == "/apps") | (F.text == "/screentime"))
 async def handle_apps_analytics(message: Message, auth_info: Dict[str, Any]):
     async with async_session_maker() as session:
         html, kb = await get_apps_and_screen_time_summary(session)
@@ -1069,7 +1216,7 @@ async def handle_unlock_all_do(callback: CallbackQuery, auth_info: Dict[str, Any
 # ==============================================================================
 # BATTERY & SILENT DEVICES RADAR
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"🔋 Batareya & Qurilmalar radari", "/battery", "/devices"}))
+@owner_bot_router.message(F.text.contains("Batareya") | (F.text == "/battery") | (F.text == "/devices"))
 async def handle_battery_radar_command(message: Message, auth_info: Dict[str, Any]):
     async with async_session_maker() as session:
         html, kb = await get_battery_and_device_radar(session)
@@ -1095,7 +1242,7 @@ async def handle_ping_all_devices(callback: CallbackQuery, auth_info: Dict[str, 
 # ==============================================================================
 # SECURITY, FIREWALL & ANTI-SPAM SHIELD
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"🛡️ Xavfsizlik & Anti-Spam", "/shield", "/antispam"}))
+@owner_bot_router.message(F.text.contains("Anti-Spam") | (F.text == "/shield") | (F.text == "/antispam"))
 async def handle_shield_command(message: Message, auth_info: Dict[str, Any]):
     from bot.anti_ad_middleware import AD_SPAM_PATTERNS
     html = (
@@ -1128,7 +1275,7 @@ async def handle_refresh_shield_cb(callback: CallbackQuery):
 # ==============================================================================
 # DATABASE MAINTENANCE & OPTIMIZE (VACUUM)
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"🧹 Baza tozalash (Optimize)", "/optimize", "/vacuum"}))
+@owner_bot_router.message(F.text.contains("tozalash") | (F.text == "/optimize") | (F.text == "/vacuum"))
 async def handle_db_optimize_cmd(message: Message, auth_info: Dict[str, Any]):
     msg = await message.answer("⏳ <i>Ma'lumotlar bazasi tekshirilmoqda va optimallashmoqda...</i>", parse_mode="HTML")
     async with async_session_maker() as session:
@@ -1139,7 +1286,7 @@ async def handle_db_optimize_cmd(message: Message, auth_info: Dict[str, Any]):
 # ==============================================================================
 # AIRDROP COIN BONUS TO ALL CHILDREN
 # ==============================================================================
-@owner_bot_router.message(F.text.in_({"🎁 Bolalarga bonus (Airdrop)", "/airdrop"}))
+@owner_bot_router.message(F.text.contains("bonus") | (F.text == "/airdrop"))
 async def handle_airdrop_cmd(message: Message, auth_info: Dict[str, Any]):
     if not auth_info["is_owner"]:
         await message.answer("Ushbu amal faqat Bosh Ega uchun ruxsat etilgan.")

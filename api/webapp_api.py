@@ -1535,6 +1535,71 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     return {"status": "success", "child_id": child_id, "is_sos_active": False}
 
 
+class EmergencyTextMessagePayload(BaseModel):
+    message: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@router.post("/child/{child_id}/emergency-message")
+async def send_emergency_text_message(
+    child_id: int,
+    payload: EmergencyTextMessagePayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """Instant high-priority emergency message from child to parent bot."""
+    child = await crud.get_user(session, child_id)
+    child_name = child.full_name if child else f"Farzand #{child_id}"
+    parents = await crud.get_parents_for_child(session, child_id)
+    safe_cname = html.escape(child_name)
+    safe_text = html.escape(payload.message.strip())
+    now_str = datetime.now(TASHKENT_TZ).strftime("%d.%m.%Y, %H:%M:%S")
+
+    loc_txt = ""
+    maps_link = ""
+    if payload.latitude and payload.longitude:
+        maps_link = f"https://www.google.com/maps/search/?api=1&query={payload.latitude},{payload.longitude}"
+        loc_txt = f"\n📍 <b>Joylashuv:</b> {maps_link}\n📌 <b>Koordinata:</b> <code>{payload.latitude:.6f}, {payload.longitude:.6f}</code>"
+
+    msg = (
+        f"🚨 <b>[FARZANDINGIZDAN TEZKOR XABAR!]</b> 🚨\n\n"
+        f"👤 <b>Farzand:</b> {safe_cname}\n"
+        f"💬 <b>Xabar:</b> «{safe_text}»\n"
+        f"🕒 <b>Vaqt:</b> {now_str}"
+        f"{loc_txt}\n\n"
+        f"⚠️ <i>Iltimos, zudlik bilan farzandingiz bilan bog'laning!</i>"
+    )
+
+    bot = telemetry.get_telegram_bot()
+    notified = 0
+    if bot:
+        if parents:
+            for p in parents:
+                try:
+                    await bot.send_message(chat_id=p.id, text=msg, parse_mode="HTML")
+                    if payload.latitude and payload.longitude and (abs(payload.latitude) > 0.1 or abs(payload.longitude) > 0.1):
+                        await bot.send_location(chat_id=p.id, latitude=payload.latitude, longitude=payload.longitude)
+                    notified += 1
+                except Exception as e:
+                    logger.error(f"Failed to send emergency message to parent {p.id}: {e}")
+        else:
+            owner_id = 6707839718
+            try:
+                await bot.send_message(chat_id=owner_id, text=f"⚠️ [TEST FARZAND] " + msg, parse_mode="HTML")
+                if payload.latitude and payload.longitude and (abs(payload.latitude) > 0.1 or abs(payload.longitude) > 0.1):
+                    await bot.send_location(chat_id=owner_id, latitude=payload.latitude, longitude=payload.longitude)
+                notified += 1
+            except Exception:
+                pass
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "notified_parents": notified,
+        "message": "Xabar ota-onangizga yetkazildi!"
+    }
+
+
 @router.post("/child/{child_id}/checkin")
 async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(get_db)):
     """Safe arrival check-in ('Men yetib keldim') notification to parents."""

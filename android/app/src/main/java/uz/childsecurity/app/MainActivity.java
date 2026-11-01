@@ -211,6 +211,19 @@ public class MainActivity extends AppCompatActivity {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             needed.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         }
+        // Offline Favqulodda SMS va qo'ng'iroq holati ruxsatnomalari (100% avtomatik SOS jo'natish uchun)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.SEND_SMS);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECEIVE_SMS);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.READ_PHONE_STATE);
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.RECORD_AUDIO);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 needed.add(Manifest.permission.POST_NOTIFICATIONS);
@@ -348,6 +361,9 @@ public class MainActivity extends AppCompatActivity {
             checkBackgroundLocationPermission();
         } else if (requestCode == PERMISSION_REQUEST_CODE + 1) {
             checkUsageAccessPermission();
+        } else if (requestCode == PERMISSION_REQUEST_CODE + 2) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            runOnUiThread(() -> webView.evaluateJavascript("if (typeof onSmsPermissionResult === 'function') onSmsPermissionResult(" + granted + ");", null));
         }
     }
 
@@ -668,7 +684,8 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void requestAllChildProtectionPermissions() {
             runOnUiThread(() -> {
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
                     checkAndRequestPermissions();
                 } else if (!UsageStatsHelper.hasUsageAccessPermission(MainActivity.this)) {
                     checkUsageAccessPermission();
@@ -677,7 +694,7 @@ public class MainActivity extends AppCompatActivity {
                 } else if (!isAccessibilityServiceEnabled()) {
                     checkAccessibilityPermission();
                 } else {
-                    Toast.makeText(MainActivity.this, "✅ Barcha himoya va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "✅ Barcha himoya, SMS va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -694,6 +711,8 @@ public class MainActivity extends AppCompatActivity {
                 }
                 obj.put("overlay", overlay);
                 obj.put("accessibility", isAccessibilityServiceEnabled());
+                boolean sms = ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+                obj.put("sms_permission", sms);
                 boolean batt = true;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
@@ -709,6 +728,42 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 return "{}";
             }
+        }
+
+        @JavascriptInterface
+        public boolean isSmsPermissionGranted() {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestSmsPermission() {
+            runOnUiThread(() -> {
+                ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                        Manifest.permission.SEND_SMS,
+                        Manifest.permission.RECEIVE_SMS,
+                        Manifest.permission.READ_PHONE_STATE
+                }, PERMISSION_REQUEST_CODE + 2);
+            });
+        }
+
+        @JavascriptInterface
+        public void setParentEmergencyPhone(String phone) {
+            try {
+                if (phone != null && !phone.trim().isEmpty()) {
+                    SharedPreferences.Editor ed = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE).edit();
+                    ed.putString("parent_emergency_phone", phone.trim());
+                    ed.apply();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
+        public String getParentEmergencyPhone() {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                return prefs.getString("parent_emergency_phone", "");
+            } catch (Exception ignored) {}
+            return "";
         }
 
         @JavascriptInterface
@@ -776,9 +831,27 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public void sendEmergencySms(String recipientPhone, String messageText) {
+        public boolean sendEmergencySms(String recipientPhone, String messageText) {
             try {
-                if (recipientPhone == null || recipientPhone.trim().isEmpty() || messageText == null || messageText.trim().isEmpty()) return;
+                if (recipientPhone == null || recipientPhone.trim().isEmpty()) {
+                    SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                    recipientPhone = prefs.getString("parent_emergency_phone", "");
+                }
+                if (recipientPhone == null || recipientPhone.trim().isEmpty() || messageText == null || messageText.trim().isEmpty()) {
+                    Log.w("AndroidBridge", "sendEmergencySms: recipientPhone or messageText is empty");
+                    return false;
+                }
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                    Log.w("AndroidBridge", "sendEmergencySms: SEND_SMS permission NOT granted, requesting now...");
+                    runOnUiThread(() -> {
+                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                                Manifest.permission.SEND_SMS,
+                                Manifest.permission.RECEIVE_SMS,
+                                Manifest.permission.READ_PHONE_STATE
+                        }, PERMISSION_REQUEST_CODE + 2);
+                    });
+                    return false;
+                }
                 android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
                 java.util.ArrayList<String> parts = sm.divideMessage(messageText);
                 if (parts != null && parts.size() > 1) {
@@ -786,10 +859,27 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     sm.sendTextMessage(recipientPhone.trim(), null, messageText, null, null);
                 }
-                showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+                showToast("🚨 Ota-onangizga favqulodda SMS avtomatik jo'natildi!");
+                return true;
             } catch (Exception e) {
                 Log.e("AndroidBridge", "sendEmergencySms error: " + e.getMessage());
+                return false;
             }
+        }
+
+        @JavascriptInterface
+        public boolean sendNativeDirectSms(String recipientPhone, String messageText) {
+            return sendEmergencySms(recipientPhone, messageText);
+        }
+
+        @JavascriptInterface
+        public boolean isSmsPermissionGranted() {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestAllPermissionsDirectly() {
+            runOnUiThread(MainActivity.this::checkAndRequestPermissions);
         }
 
         @JavascriptInterface

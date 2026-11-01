@@ -101,6 +101,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
         ]
     ]
 
+    # Maxsus: faqat tizim asoschisi @fayzbek1331 (ID 6707839718) uchun Asoschi boshqaruv tugmasi
+    if parent_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+        keyboard.insert(0, [KeyboardButton(text="👑 Asoschi (Owner) Boshqaruv")])
+
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
         resize_keyboard=True,
@@ -108,11 +112,12 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
     )
 
 
-def get_child_main_keyboard() -> ReplyKeyboardMarkup:
+def get_child_main_keyboard(child_id: Optional[int] = None) -> ReplyKeyboardMarkup:
     """
     Persistent reply keyboard for Child.
     Includes Parent App, Child App, Laptop App, instant Location sharing, instant SOS, Check-in, Web App, and Emergency Call.
     """
+    child_param = f"&child_id={child_id}" if child_id else ""
     keyboard = [
         [
             KeyboardButton(text="📱 Telefon uchun ilova (Android & iOS)"),
@@ -127,7 +132,7 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="🚨 SOS (Xavf tugmasi)")
         ],
         [
-            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=child")),
+            KeyboardButton(text="📱 Web App (Sayt)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=child{child_param}")),
             KeyboardButton(text="💬 Ota-onaga tezkor xabar")
         ],
         [
@@ -146,6 +151,10 @@ def get_child_main_keyboard() -> ReplyKeyboardMarkup:
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
+
+    # Maxsus: faqat tizim asoschisi @fayzbek1331 (ID 6707839718) uchun Asoschi boshqaruv tugmasi
+    if child_id and child_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+        keyboard.insert(0, [KeyboardButton(text="👑 Asoschi (Owner) Boshqaruv")])
 
     return ReplyKeyboardMarkup(
         keyboard=keyboard,
@@ -688,6 +697,36 @@ def get_child_quick_signals_inline_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🔙 Yopish", callback_data="cancel_action")
+            ]
+        ]
+    )
+
+
+def get_owner_panel_inline_keyboard() -> InlineKeyboardMarkup:
+    """Special owner dashboard keyboard inside main bot for @fayzbek1331."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📊 Umumiy Statistika", callback_data="own_main:stats"),
+                InlineKeyboardButton(text="📡 Jonli GPS Radar", callback_data="own_main:radar"),
+            ],
+            [
+                InlineKeyboardButton(text="🚨 Faol SOS signallari", callback_data="own_main:sos_list"),
+                InlineKeyboardButton(text="🔋 Batareya & Holat", callback_data="own_main:battery"),
+            ],
+            [
+                InlineKeyboardButton(text="🔍 Foydalanuvchini tekshirish", callback_data="own_main:inspect"),
+                InlineKeyboardButton(text="🔑 Magic WebApp Login", callback_data="own_main:magic"),
+            ],
+            [
+                InlineKeyboardButton(text="👨‍👩‍👧 Ota-ona bo'lib kirish", callback_data="own_switch:parent"),
+                InlineKeyboardButton(text="👦 Farzand bo'lib kirish", callback_data="own_switch:child"),
+            ],
+            [
+                InlineKeyboardButton(text="🤖 Maxsus Owner Botga o'tish", url="https://t.me/child_security_owner_bot"),
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Menyuga qaytish", callback_data="own_main:close"),
             ]
         ]
     )

@@ -11,7 +11,11 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
     keyboard = [
         [
             KeyboardButton(text="📊 Umumiy Statistika"),
+            KeyboardButton(text="📡 Jonli GPS Radar"),
+        ],
+        [
             KeyboardButton(text="🔍 ID bo'yicha tekshirish"),
+            KeyboardButton(text="🔑 Magic Login Link"),
         ],
         [
             KeyboardButton(text="🚨 Faol SOS signallari"),
@@ -27,13 +31,14 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
         ],
         [
             KeyboardButton(text="🌐 Server & Diagnostika"),
+            KeyboardButton(text="🗄️ Neon DB Holati"),
+        ],
+        [
             KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
-        ],
-        [
             KeyboardButton(text="📑 Server loglari"),
-            KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
         ],
         [
+            KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
             KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]
@@ -98,6 +103,10 @@ def get_user_dossier_inline_keyboard(
     # Row 3: Device Control (for children)
     if role == "child":
         buttons.append([
+            InlineKeyboardButton(text="🔊 Sirena chalish", callback_data=f"adm_siren:{user_id}"),
+            InlineKeyboardButton(text="🔑 Magic WebApp Login", callback_data=f"adm_magic:{user_id}"),
+        ])
+        buttons.append([
             InlineKeyboardButton(text="🛑 Ilovalarni bloklash", callback_data=f"adm_lock:{user_id}"),
             InlineKeyboardButton(text="✅ Ilovalarni ochish", callback_data=f"adm_unlock:{user_id}"),
         ])
@@ -108,6 +117,10 @@ def get_user_dossier_inline_keyboard(
         buttons.append([
             InlineKeyboardButton(text="💰 +100 tanga", callback_data=f"adm_coin:{user_id}:100"),
             InlineKeyboardButton(text="💰 +500 tanga", callback_data=f"adm_coin:{user_id}:500"),
+        ])
+    else:
+        buttons.append([
+            InlineKeyboardButton(text="🔑 Magic WebApp Login", callback_data=f"adm_magic:{user_id}"),
         ])
 
     # Row 4: Unlink & Back

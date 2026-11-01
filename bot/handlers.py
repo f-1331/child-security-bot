@@ -102,6 +102,7 @@ from bot.keyboards import (
     get_school_mode_inline_keyboard,
     get_parent_directive_inline_keyboard,
     get_child_quick_signals_inline_keyboard,
+    get_owner_panel_inline_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,16 @@ class PhoneSaveState(StatesGroup):
 
 class ChildPhoneSaveState(StatesGroup):
     waiting_for_child_phone = State()
+
+
+class DirectMessagingState(StatesGroup):
+    waiting_for_parent_reply = State()
+    waiting_for_child_reply = State()
+
+
+class OwnerActionState(StatesGroup):
+    waiting_for_inspect_query = State()
+    waiting_for_magic_id = State()
 
 
 # ---------------------------------------------------------
@@ -191,7 +202,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             "ℹ️ **Bu sizning shaxsiy ulanish havolangiz!**\n\n"
                             "Ota-onangiz sizning xavfsizligingizni kuzatib borishi va topshiriqlar bera olishi uchun "
                             "ushbu havolani **ota-onangizga yuboring**.",
-                            reply_markup=get_child_main_keyboard(),
+                            reply_markup=get_child_main_keyboard(user_id),
                             parse_mode="Markdown"
                         )
                         return
@@ -247,7 +258,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                                         f"🎉 **Ajoyib yangilik!**\n\n"
                                         f"Ota-onangiz (**{clean_md(full_name)}**) taklifingiz orqali hisobingizga muvaffaqiyatli ulandi! 🛡️"
                                     ),
-                                    reply_markup=get_child_main_keyboard(),
+                                    reply_markup=get_child_main_keyboard(target_child_id),
                                     parse_mode="Markdown"
                                 )
                             except Exception as e:
@@ -368,7 +379,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             f"🔑 <b>Saytga (Web App) kirish kodingiz:</b> <code>{child_web_code}</code>\n"
                             f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
                             f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
-                            reply_markup=get_child_main_keyboard(),
+                            reply_markup=get_child_main_keyboard(user_id),
                             parse_mode="HTML"
                         )
                         return
@@ -390,7 +401,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                             f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
                             f"<i>(Saytga kirganda ushbu 6 xonali shaxsiy kodingizni kiriting)</i>\n\n"
                             f"Quyidagi xavfsizlik menyusidan foydalanishingiz mumkin:",
-                            reply_markup=get_child_main_keyboard(),
+                            reply_markup=get_child_main_keyboard(user_id),
                             parse_mode="HTML"
                         )
 
@@ -556,7 +567,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 f"Ulangan ota-ona: <b>{parent_names}</b>.\n\n"
                 f"Har qanday favqulodda vaziyatda darhol <b>'🚨 SOS'</b> tugmasini bosing!\n\n"
                 f"📲 <b>Child Security Android APK</b> ilovasini o'rnatish uchun pastdagi <b>«📲 Android APK Yuklab Olish»</b> tugmasini bosing.",
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(user_id),
                 parse_mode="HTML"
             )
             await message.answer(
@@ -637,7 +648,7 @@ async def on_role_selected(callback: CallbackQuery, state: FSMContext, bot: Bot)
                 "1️⃣ Ota-onangiz bergan **6 xonali ulanish kodi**ni kiriting (masalan: `123456`)\n"
                 "2️⃣ Yoki pastdagi **«📍 Jonli joylashuvimni yuborish»** tugmasi orqali joylashuvingizni ulashing!\n\n"
                 "*(Rolni almashtirish uchun istalgan payt /chiqish deb yozing)*",
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(user_id),
                 parse_mode="Markdown"
             )
 
@@ -711,7 +722,7 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
                 f"🔑 <b>Saytga kirish kodingiz:</b> <code>{child_web_code}</code>\n"
                 f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
                 f"Quyidagi xavfsizlik menyusi faol:",
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(user_id),
                 parse_mode="HTML"
             )
             return
@@ -734,7 +745,7 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
             f"🌐 <b>Sayt manzili:</b> {settings.WEBAPP_BASE_URL}\n\n"
             f"<i>(Saytga ushbu o'zingizning shaxsiy kodingiz bilan kirsangiz, sizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi)</i>\n\n"
             f"Quyidagi xavfsizlik menyusi faollashtirildi:",
-            reply_markup=get_child_main_keyboard(),
+            reply_markup=get_child_main_keyboard(user_id),
             parse_mode="HTML"
         )
 
@@ -912,7 +923,7 @@ async def dispatch_child_location_to_parent(bot: Bot, chat_id: int, child, sessi
                     f"🔔 <b>Ota-onangiz joylashuvingizni so'ramoqda!</b>\n\n"
                     f"Iltimos, pastdagi <b>«📍 Jonli joylashuvimni yuborish»</b> tugmasini bosing yoki xaritani oching."
                 ),
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(child.id),
                 parse_mode="HTML"
             )
         except Exception as alert_err:
@@ -3539,7 +3550,7 @@ async def on_link_demo_child(callback: CallbackQuery, bot: Bot):
                 full_name="Azizbek (Namuna farzand)",
                 username="azizbek_demo"
             )
-            demo_user.virtual_balance = 1500
+            demo_user.virtual_balance = 0
 
             await crud.link_parent_child(session, parent_id, demo_id, nickname="Azizbek (Namuna)")
 
@@ -4279,7 +4290,7 @@ async def on_webapp_requested(message: Message):
                     "⚠️ <b>Siz hali ota-onangizga ulanmagansiz!</b>\n\n"
                     "Saytga (Web App) kirish kodi ota-onangiz profilingizga ulangandan so'ng beriladi.\n\n"
                     "Iltimos, avval ota-onangiz bergan 6 xonali ulanish kodini kiritib hisobingizni ulang.",
-                    reply_markup=get_child_main_keyboard(),
+                    reply_markup=get_child_main_keyboard(child.id),
                     parse_mode="HTML"
                 )
                 return
@@ -4288,6 +4299,10 @@ async def on_webapp_requested(message: Message):
         if user:
             access_code = await crud.generate_web_access_code(session, user_id)
             await session.commit()
+
+        id_param = f"parent_id={user_id}" if role == "parent" else f"child_id={user_id}"
+        code_param = f"&code={access_code}" if access_code else ""
+        webapp_url = f"{settings.RESOLVED_WEBAPP_URL}?role={role}&{id_param}{code_param}"
 
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -4306,8 +4321,8 @@ async def on_webapp_requested(message: Message):
             ]
         )
 
-        code_text = f"🔑 <b>Sizning saytga kirish kodingiz:</b> <code>{access_code}</code>\n\n<i>(Sayt ochilganda ushbu 6 xonali kodni kiriting)</i>\n\n" if access_code else ""
-        reply_kb = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard()
+        code_text = f"🔑 <b>Sizning saytga kirish kodingiz:</b> <code>{access_code}</code>\n\n<i>(Sayt ochilganda ushbu 6 xonali kod avtomatik tekshiriladi)</i>\n\n" if access_code else ""
+        reply_kb = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard(user_id)
 
         await message.answer(
             f"🌐 <b>Child Security — Rasmiy Web App (Sayt):</b>\n\n"
@@ -5589,7 +5604,7 @@ async def on_parent_reject_child_logout(callback: CallbackQuery, bot: Bot):
                     f"❌ <b>Ota-onangiz hisobdan chiqish so'rovingizni rad etdi!</b>\n\n"
                     f"Siz farzand hisobida qolasiz va xavfsizlik nazorati davom etadi."
                 ),
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(child.id),
                 parse_mode="HTML"
             )
         except Exception:
@@ -5653,7 +5668,7 @@ async def on_logout_code_entered(message: Message, state: FSMContext, bot: Bot):
         await state.clear()
         async with AsyncSessionLocal() as session:
             user = await crud.get_user(session, message.from_user.id)
-            keyboard = get_parent_main_keyboard(message.from_user.id) if (user and user.role == "parent") else get_child_main_keyboard()
+            keyboard = get_parent_main_keyboard(message.from_user.id) if (user and user.role == "parent") else get_child_main_keyboard(message.from_user.id)
         await message.answer("✅ Chiqish bekor qilindi. O'z hisobingizdasiz.", reply_markup=keyboard)
     else:
         await message.answer(
@@ -5673,7 +5688,7 @@ async def on_logout_cancel(callback: CallbackQuery, state: FSMContext):
         user = await crud.get_user(session, user_id)
         role = user.role if user else "unassigned"
 
-    keyboard = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard()
+    keyboard = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard(user_id)
 
     try:
         await callback.message.edit_text(
@@ -5757,7 +5772,7 @@ async def on_show_web_access_code(event: Message | CallbackQuery):
                     "⚠️ <b>Siz hali ota-onangizga ulanmagansiz!</b>\n\n"
                     "Saytga (Web App) kirish kodi ota-onangiz profilingizga ulangandan so'ng beriladi.\n\n"
                     "Iltimos, avval ota-onangiz bergan 6 xonali ulanish kodini kiritib hisobingizni ulang.",
-                    reply_markup=get_child_main_keyboard(),
+                    reply_markup=get_child_main_keyboard(child.id),
                     parse_mode="HTML"
                 )
                 if isinstance(event, CallbackQuery):
@@ -6523,33 +6538,384 @@ async def st_perm_guide_callback_handler(callback: CallbackQuery):
 
 
 
-@router.message(F.text)
-async def fallback_text_handler(message: Message):
-    """Fallback handler for unrecognized text messages: automatically restores and refreshes the main keyboard."""
+# ==============================================================================
+# ASOSCHI (OWNER) BOSHQARUV PANELI VA ROLNI O'ZGARTIRISH (@fayzbek1331)
+# ==============================================================================
+def is_bot_owner(user_id: int, username: Optional[str] = None) -> bool:
+    clean_uname = (username or "").lower().lstrip("@")
+    return (
+        user_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718)
+        or clean_uname == "fayzbek1331"
+    )
+
+
+@router.message(Command("owner", "panel", "stats", "statistika"))
+@router.message(F.text.in_({"👑 Asoschi (Owner) Boshqaruv", "📊 Umumiy Statistika"}))
+async def on_owner_dashboard_command(message: Message, bot: Bot):
     user_id = message.from_user.id
+    if not is_bot_owner(user_id, message.from_user.username):
+        await message.answer("⚠️ Ushbu buyruq faqat loyiha asoschisi (@fayzbek1331) uchun ochiq.")
+        return
+
+    async with AsyncSessionLocal() as session:
+        stats = await crud.get_system_overview_stats(session)
+
+    text = (
+        "👑 <b>ASOSCHI (OWNER) BOSHQARUV PANELI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Asoschi: <b>@{settings.OWNER_USERNAME}</b> (ID: <code>{user_id}</code>)\n\n"
+        "📊 <b>PLATFORMA BO'YICHA JONLI STATISTIKA:</b>\n"
+        f"• 👥 Jami foydalanuvchilar: <b>{stats['total_users']}</b> ta\n"
+        f"  ├ 👨‍👩‍👧 Ota-onalar: <b>{stats['total_parents']}</b> ta\n"
+        f"  └ 👦 Farzandlar: <b>{stats['total_children']}</b> ta\n"
+        f"• 📅 Bugungi a'zolar: <b>{stats['today_users']}</b> ta\n"
+        f"• 🚨 Faol SOS signallari: <b>{stats['active_sos']}</b> ta\n"
+        f"• 🛡 Geofence hududlar: <b>{stats['total_geofences']}</b> ta\n"
+        f"• 📍 GPS koordinatalar: <b>{stats['total_location_logs']}</b> ta\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>Quyidagi tugmalar orqali platformani to'liq boshqarishingiz yoki oddiy mijoz (ota-ona/farzand) sifatida kirib sinashingiz mumkin:</i>"
+    )
+    await message.answer(text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("own_main:"))
+async def on_owner_main_callback(callback: CallbackQuery, bot: Bot, state: FSMContext):
+    user_id = callback.from_user.id
+    if not is_bot_owner(user_id, callback.from_user.username):
+        await callback.answer("⛔ Ruxsat berilmagan!", show_alert=True)
+        return
+
+    action = callback.data.split(":")[1]
+    async with AsyncSessionLocal() as session:
+        if action == "stats":
+            stats = await crud.get_system_overview_stats(session)
+            text = (
+                "📊 <b>PLATFORMA BO'YICHA STATISTIKA</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👥 Jami foydalanuvchilar: <code>{stats['total_users']}</code> ta\n"
+                f"👨‍👩‍👧 Ota-onalar: <code>{stats['total_parents']}</code> ta\n"
+                f"👦 Farzandlar: <code>{stats['total_children']}</code> ta\n"
+                f"📅 Bugun qo'shilganlar: <code>{stats['today_users']}</code> ta\n"
+                f"🚨 Faol SOS signallari: <code>{stats['active_sos']}</code> ta\n"
+                f"🛡 Geofence zonalar: <code>{stats['total_geofences']}</code> ta\n"
+                f"📋 Topshiriqlar: <code>{stats['total_tasks']}</code> ta\n"
+                f"📍 GPS nuqtalar bazasi: <code>{stats['total_location_logs']}</code> ta\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+            await callback.message.edit_text(text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+            await callback.answer("Statistika yangilandi!")
+        elif action == "radar":
+            from db.models import User
+            from sqlalchemy import select
+            res = await session.execute(select(User).where(User.role == "child", User.is_active == True))
+            children = res.scalars().all()
+            if not children:
+                await callback.answer("Hozirda ro'yxatdan o'tgan bolalar yo'q.", show_alert=True)
+                return
+            radar_lines = ["📡 <b>JONLI GPS RADAR (SO'NGGI QURILMALAR)</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+            valid_c = 0
+            for ch in children:
+                loc = await crud.get_latest_location(session, ch.id)
+                if loc and loc.latitude and loc.longitude:
+                    valid_c += 1
+                    c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
+                    maps_url = f"https://maps.google.com/?q={loc.latitude:.6f},{loc.longitude:.6f}"
+                    batt_str = f"🔋 {loc.battery_level}%" if loc.battery_level is not None else ""
+                    radar_lines.append(
+                        f"👤 <b>{c_name}</b> (ID: <code>{ch.id}</code>) {batt_str}\n"
+                        f"📍 <a href=\"{maps_url}\">Google Maps ({loc.latitude:.5f}, {loc.longitude:.5f})</a>\n"
+                    )
+            if valid_c == 0:
+                radar_lines.append("<i>Hozircha birorta ham GPS signali kelmagan.</i>")
+            radar_lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            await callback.message.edit_text("\n".join(radar_lines), reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML", disable_web_page_preview=True)
+            await callback.answer()
+        elif action == "sos_list":
+            active_sos_list = await crud.get_active_sos_list(session)
+            if not active_sos_list:
+                await callback.message.edit_text(
+                    "🟢 <b>Faol SOS signallari yo'q!</b>\n\nBarcha bolalar tinch va xavfsiz holatda.",
+                    reply_markup=get_owner_panel_inline_keyboard(),
+                    parse_mode="HTML"
+                )
+                await callback.answer()
+                return
+            lines = ["🚨 <b>FAOL SOS SIGNALLARI:</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+            for c in active_sos_list:
+                safe_name = html.escape(c.full_name or "Farzand")
+                lines.append(f"⚠️ <b>{safe_name}</b> (ID: <code>{c.id}</code>) — SOS holatida!")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            await callback.message.edit_text("\n".join(lines), reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+            await callback.answer()
+        elif action == "battery":
+            from owner_bot.service import get_battery_and_device_radar
+            html_text, _ = await get_battery_and_device_radar(session)
+            await callback.message.edit_text(html_text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+            await callback.answer()
+        elif action == "inspect":
+            await state.set_state(OwnerActionState.waiting_for_inspect_query)
+            await callback.message.answer(
+                "🔍 <b>Foydalanuvchi ma'lumotlarini tekshirish</b>\n\n"
+                "Iltimos, foydalanuvchining <b>Telegram ID</b>si yoki <b>@username</b>ini yozing:",
+                parse_mode="HTML"
+            )
+            await callback.answer()
+        elif action == "magic":
+            await state.set_state(OwnerActionState.waiting_for_magic_id)
+            await callback.message.answer(
+                "🔑 <b>VIP / Magic Login Link Generatori</b>\n\n"
+                "Qaysi foydalanuvchi hisobiga parolsiz 1-bosishda WebApp orqali kirmoqchisiz? Telegram ID raqamini kiriting:",
+                parse_mode="HTML"
+            )
+            await callback.answer()
+        elif action == "close":
+            user = await crud.get_user(session, user_id)
+            role = user.role if user else "parent"
+            kb = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard(user_id)
+            await callback.message.delete()
+            await callback.message.answer("Menyuga qaytdingiz:", reply_markup=kb)
+            await callback.answer()
+
+
+@router.callback_query(F.data.startswith("own_switch:"))
+async def on_owner_switch_role_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    if not is_bot_owner(user_id, callback.from_user.username):
+        await callback.answer("⛔ Ruxsat berilmagan!", show_alert=True)
+        return
+
+    new_role = callback.data.split(":")[1]
     async with AsyncSessionLocal() as session:
         user = await crud.get_user(session, user_id)
-        if not user or not user.role:
-            await message.answer(
-                "Iltimos, avval rolingizni tanlang:",
-                reply_markup=get_role_selection_keyboard()
-            )
+        if user:
+            user.role = new_role
+            await session.commit()
+
+    if new_role == "parent":
+        await callback.message.answer(
+            "👨‍👩‍👧 <b>Siz Ota-ona (Parent) rejimiga o'tdingiz!</b>\n\n"
+            "Platformadan oddiy ota-ona sifatida to'liq foydalanishingiz mumkin. "
+            "Istalgan vaqtda <b>«👑 Asoschi (Owner) Boshqaruv»</b> tugmasi orqali boshqaruvga qayta olasiz.",
+            reply_markup=get_parent_main_keyboard(user_id),
+            parse_mode="HTML"
+        )
+    else:
+        await callback.message.answer(
+            "👦 <b>Siz Farzand (Child) rejimiga o'tdingiz!</b>\n\n"
+            "Platformani farzand sifatida sinab ko'rishingiz, geolokatsiya va SOS tugmasini tekshirishingiz mumkin. "
+            "Istalgan vaqtda <b>«👑 Asoschi (Owner) Boshqaruv»</b> tugmasi orqali boshqaruvga qayta olasiz.",
+            reply_markup=get_child_main_keyboard(user_id),
+            parse_mode="HTML"
+        )
+    await callback.answer("Rol muvaffaqiyatli o'zgartirildi!")
+
+
+@router.message(OwnerActionState.waiting_for_inspect_query, F.text)
+async def on_owner_inspect_entered(message: Message, state: FSMContext):
+    await state.clear()
+    query = message.text.strip()
+    async with AsyncSessionLocal() as session:
+        user = await crud.search_user_by_query(session, query)
+        if not user:
+            await message.answer(f"❌ <b>'{query}'</b> bo'yicha foydalanuvchi topilmadi.", parse_mode="HTML")
             return
 
-        if user.role == "parent":
-            await message.answer(
-                "📋 <b>Menyu yangilandi!</b>\n\n"
-                "Quyidagi menyu tugmalaridan birini tanlang. Mobil ilovani yuklab olish uchun pastdagi <b>«📲 Mobil ilova (Android APK)»</b> tugmasini bosing:",
-                reply_markup=get_parent_main_keyboard(user_id),
-                parse_mode="HTML"
-            )
-        else:
-            await message.answer(
-                "📋 <b>Menyu yangilandi!</b>\n\n"
-                "Quyidagi xavfsizlik menyusi tugmalaridan birini tanlang:",
-                reply_markup=get_child_main_keyboard(),
-                parse_mode="HTML"
-            )
+        parents = await crud.get_parents_for_child(session, user.id) if user.role == "child" else []
+        children = await crud.get_children_for_parent(session, user.id) if user.role == "parent" else []
+        latest_loc = await crud.get_latest_location(session, user.id)
+
+        safe_name = html.escape(user.full_name or "Kiritilmagan")
+        safe_uname = f"@{user.username}" if user.username else "Mavjud emas"
+        phone = user.phone_number or "Kiritilmagan"
+        code = user.web_access_code or "Mavjud emas"
+
+        info = [
+            f"👤 <b>FOYDALANUVCHI MA'LUMOTLARI:</b>\n━━━━━━━━━━━━━━━━━━━━━━",
+            f"• <b>ID:</b> <code>{user.id}</code>",
+            f"• <b>Ism:</b> <b>{safe_name}</b>",
+            f"• <b>Username:</b> {safe_uname}",
+            f"• <b>Rol:</b> <code>{user.role}</code>",
+            f"• <b>Telefon:</b> <code>{phone}</code>",
+            f"• <b>Web Kirish Kodi:</b> <code>{code}</code>",
+            f"• <b>Tangalar:</b> 🪙 <code>{user.child_balance_coins or 0}</code> (so'm: <code>{user.child_balance_som or 0}</code>)",
+            f"• <b>SOS Holati:</b> {'🚨 FAOL SOS!' if user.is_sos_active else '🟢 Xavfsiz'}",
+        ]
+        if parents:
+            info.append(f"• <b>Ota-onalar:</b> " + ", ".join([f"{p.full_name} (<code>{p.id}</code>)" for p in parents]))
+        if children:
+            info.append(f"• <b>Farzandlar:</b> " + ", ".join([f"{c.full_name} (<code>{c.id}</code>)" for c in children]))
+        if latest_loc:
+            info.append(f"• <b>So'nggi GPS:</b> <a href=\"https://maps.google.com/?q={latest_loc.latitude},{latest_loc.longitude}\">{latest_loc.latitude:.5f}, {latest_loc.longitude:.5f}</a> (🔋 {latest_loc.battery_level}%)")
+
+        info.append("━━━━━━━━━━━━━━━━━━━━━━")
+
+        magic_url = f"{settings.RESOLVED_WEBAPP_URL}?auth_code={code}&role={user.role or 'parent'}&user_id={user.id}"
+        inspect_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 WebApp Profilini Ochish (Magic Link)", url=magic_url)],
+            [InlineKeyboardButton(text="🔙 Asosiy Panel", callback_data="own_main:stats")]
+        ])
+        await message.answer("\n".join(info), reply_markup=inspect_kb, parse_mode="HTML")
+
+
+@router.message(OwnerActionState.waiting_for_magic_id, F.text)
+async def on_owner_magic_entered(message: Message, state: FSMContext):
+    await state.clear()
+    raw = message.text.strip()
+    if not raw.isdigit():
+        await message.answer("⚠️ Iltimos, faqat raqamli Telegram ID kiriting:")
+        return
+
+    target_id = int(raw)
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, target_id)
+        if not user:
+            await message.answer(f"❌ ID <code>{target_id}</code> bo'yicha foydalanuvchi topilmadi.", parse_mode="HTML")
+            return
+
+        code = user.web_access_code or "CS-DEMO"
+        role = user.role or "parent"
+        magic_url = f"{settings.RESOLVED_WEBAPP_URL}?auth_code={code}&role={role}&user_id={user.id}"
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"🚀 {user.full_name or 'Foydalanuvchi'} hisobiga kirish", url=magic_url)],
+            [InlineKeyboardButton(text="🔙 Panel", callback_data="own_main:stats")]
+        ])
+        await message.answer(
+            f"✅ <b>Magic WebApp Login Link Tayyor!</b>\n\n"
+            f"👤 Foydalanuvchi: <b>{html.escape(user.full_name or 'Foydalanuvchi')}</b> (ID: <code>{user.id}</code>)\n"
+            f"🔑 Kirish kodi: <code>{code}</code>\n"
+            f"🎭 Rol: <code>{role}</code>\n\n"
+            f"🔗 <b>To'g'ridan-to'g'ri havola:</b>\n<code>{magic_url}</code>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+
+# ==============================================================================
+# TELEGRAM TWO-WAY DIRECT MESSAGING (PARENT <-> CHILD REAL-TIME WALKIE-TALKIE)
+# ==============================================================================
+@router.callback_query(F.data.startswith("p_reply:"))
+async def on_parent_reply_callback(callback: CallbackQuery, state: FSMContext):
+    child_id = int(callback.data.split(":")[1])
+    await state.set_state(DirectMessagingState.waiting_for_parent_reply)
+    await state.update_data(target_child_id=child_id)
+    await callback.message.answer(
+        "✍️ <b>Farzandingizga javob xabaringizni yozing:</b>\n\n"
+        "<i>Xabaringiz farzandingiz telefoniga darhol Telegram va mobil ilova orqali yetkaziladi.</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(DirectMessagingState.waiting_for_parent_reply, F.text)
+async def on_parent_reply_entered(message: Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    child_id = data.get("target_child_id")
+    await state.clear()
+    if not child_id:
+        return
+
+    parent_id = message.from_user.id
+    parent_name = html.escape(message.from_user.full_name or "Ota-onangiz")
+    safe_text = html.escape(message.text)
+    now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+
+    child_alert = (
+        f"💬 <b>OTA-ONANGIZDAN TEZKOR XABAR!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Yuboruvchi: <b>{parent_name}</b>\n"
+        f"💬 Xabar: <b>«{safe_text}»</b>\n"
+        f"🕒 Vaqt: <b>{now_time}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i>Javob yozish uchun to'g'ridan-to'g'ri botga yozing yoki pastdagi tugmani bosing:</i>"
+    )
+    reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"c_reply:{parent_id}")]
+    ])
+    try:
+        await bot.send_message(chat_id=child_id, text=child_alert, reply_markup=reply_kb, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"Failed to forward parent reply to child {child_id}: {e}")
+
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "parent_direct_message",
+            "parent_id": parent_id,
+            "parent_name": message.from_user.full_name or "Ota-onangiz",
+            "text": message.text,
+            "time": now_time
+        })
+    except Exception:
+        pass
+
+    await message.answer(
+        f"✅ <b>Xabaringiz yetkazildi!</b> 🚀\n\n💬 <i>«{safe_text}»</i>",
+        reply_markup=get_parent_main_keyboard(parent_id),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data.startswith("c_reply:"))
+async def on_child_reply_callback(callback: CallbackQuery, state: FSMContext):
+    parent_id = int(callback.data.split(":")[1])
+    await state.set_state(DirectMessagingState.waiting_for_child_reply)
+    await state.update_data(target_parent_id=parent_id)
+    await callback.message.answer(
+        "✍️ <b>Ota-onangizga javob xabaringizni yozing:</b>\n\n"
+        "<i>Xabaringiz ota-onangiz telefoniga zudlik bilan yetkaziladi.</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.message(DirectMessagingState.waiting_for_child_reply, F.text)
+async def on_child_reply_entered(message: Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    parent_id = data.get("target_parent_id")
+    await state.clear()
+    if not parent_id:
+        return
+
+    child_id = message.from_user.id
+    child_name = html.escape(message.from_user.full_name or "Farzand")
+    safe_text = html.escape(message.text)
+    now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+
+    parent_alert = (
+        f"💬 <b>FARZANDINGIZDAN TEZKOR JAVOB!</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Farzand: <b>{child_name}</b>\n"
+        f"💬 Xabar: <b>«{safe_text}»</b>\n"
+        f"🕒 Vaqt: <b>{now_time}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"p_reply:{child_id}")],
+        [InlineKeyboardButton(text="📍 Xaritada ko'rish", callback_data=f"child_view:{child_id}")]
+    ])
+    try:
+        await bot.send_message(chat_id=parent_id, text=parent_alert, reply_markup=reply_kb, parse_mode="HTML")
+    except Exception as e:
+        logger.warning(f"Failed to deliver child reply to parent {parent_id}: {e}")
+
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(parent_id, {
+            "type": "child_direct_message",
+            "child_id": child_id,
+            "child_name": message.from_user.full_name or "Farzand",
+            "text": message.text,
+            "time": now_time
+        })
+    except Exception:
+        pass
+
+    await message.answer(
+        f"✅ <b>Xabaringiz ota-onangizga darhol yetkazildi!</b> 🚀\n\n💬 <i>«{safe_text}»</i>",
+        reply_markup=get_child_main_keyboard(child_id),
+        parse_mode="HTML"
+    )
 
 
 @router.callback_query(F.data.startswith("set_child_phone:"))
@@ -6629,6 +6995,156 @@ async def on_child_phone_entered(message: Message, state: FSMContext):
         reply_markup=test_kb,
         parse_mode="HTML"
     )
+
+
+# ==============================================================================
+# FALLBACK TEXT HANDLER WITH TWO-WAY WALKIE-TALKIE DISPATCH
+# ==============================================================================
+@router.message(StateFilter(None), F.text)
+async def fallback_text_handler(message: Message, bot: Bot):
+    """
+    Intelligent two-way text dispatcher:
+    - If Owner (@fayzbek1331) -> routes owner commands & panels
+    - If Child -> forwards message INSTANTLY to all linked parents (Telegram + WebApp WebSocket)
+    - If Parent -> forwards message INSTANTLY to child (Telegram + WebApp WebSocket)
+    """
+    user_id = message.from_user.id
+    raw_text = (message.text or "").strip()
+
+    # 1. Check if Owner command was sent
+    if is_bot_owner(user_id, message.from_user.username):
+        if raw_text in {"👑 Asoschi (Owner) Boshqaruv", "/owner", "/panel", "/stats", "📊 Umumiy Statistika", "Statistika", "statistika"}:
+            await on_owner_dashboard_command(message, bot)
+            return
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or not user.role:
+            await message.answer(
+                "Iltimos, avval rolingizni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            return
+
+        now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+        safe_text = html.escape(raw_text)
+
+        # 2. CHILD SENDS TEXT -> Deliver to parents
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if not parents:
+                await message.answer(
+                    "⚠️ <b>Siz hali birorta ham ota-onaga ulanmagansiz.</b>\n\n"
+                    "Ota-onangizga ulanish uchun <b>«👨‍👩‍👧 Ota-onamni taklif qilish»</b> tugmasini bosing va kodni bering.",
+                    reply_markup=get_child_main_keyboard(user_id),
+                    parse_mode="HTML"
+                )
+                return
+
+            child_name = html.escape(user.full_name or "Farzand")
+            latest_loc = await crud.get_latest_location(session, user_id)
+            loc_str = ""
+            if latest_loc and latest_loc.latitude and latest_loc.longitude:
+                maps_url = f"https://maps.google.com/?q={latest_loc.latitude:.6f},{latest_loc.longitude:.6f}"
+                batt_str = f" (🔋 {latest_loc.battery_level}%)" if latest_loc.battery_level is not None else ""
+                loc_str = f"\n📍 <b>Joylashuv:</b> <a href=\"{maps_url}\">Xaritada ochish</a>{batt_str}"
+
+            parent_alert = (
+                f"💬 <b>FARZANDINGIZDAN TEZKOR XABAR!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Farzand: <b>{child_name}</b>\n"
+                f"💬 Xabar: <b>«{safe_text}»</b>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>"
+                f"{loc_str}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Javob berish uchun pastdagi tugmani bosing:</i>"
+            )
+            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"p_reply:{user_id}")],
+                [InlineKeyboardButton(text="📍 Xaritada ko'rish", callback_data=f"child_view:{user_id}")]
+            ])
+
+            for p in parents:
+                try:
+                    await bot.send_message(chat_id=p.id, text=parent_alert, reply_markup=reply_kb, parse_mode="HTML")
+                except Exception as e:
+                    logger.warning(f"Failed to forward child message to parent {p.id}: {e}")
+
+            try:
+                from api.webapp_api import ws_manager
+                for p in parents:
+                    await ws_manager.send_to_user(p.id, {
+                        "type": "child_direct_message",
+                        "child_id": user_id,
+                        "child_name": user.full_name or "Farzand",
+                        "text": raw_text,
+                        "time": now_time
+                    })
+            except Exception:
+                pass
+
+            await message.answer(
+                f"✅ <b>Xabaringiz ota-onangizga darhol yetkazildi!</b> 🚀\n\n"
+                f"💬 <i>«{safe_text}»</i>\n\n"
+                f"Ota-onangiz javob yozishi bilan bu yerda ko'rinadi.",
+                reply_markup=get_child_main_keyboard(user_id),
+                parse_mode="HTML"
+            )
+            return
+
+        # 3. PARENT SENDS TEXT -> Deliver to child
+        if user.role == "parent":
+            children = await crud.get_children_for_parent(session, user_id)
+            if not children:
+                await message.answer(
+                    "⚠️ <b>Sizga hali farzand biriktirilmagan.</b>\n\n"
+                    "Farzand telefonini ulash uchun <b>«➕ Farzand ulash (Kodi)»</b> tugmasini bosing.",
+                    reply_markup=get_parent_main_keyboard(user_id),
+                    parse_mode="HTML"
+                )
+                return
+
+            parent_name = html.escape(user.full_name or "Ota-onangiz")
+            child_alert = (
+                f"💬 <b>OTA-ONANGIZDAN TEZKOR XABAR!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Yuboruvchi: <b>{parent_name}</b>\n"
+                f"💬 Xabar: <b>«{safe_text}»</b>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Javob yozish uchun to'g'ridan-to'g'ri botga yozing yoki pastdagi tugmani bosing:</i>"
+            )
+            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"c_reply:{user_id}")]
+            ])
+
+            for ch in children:
+                try:
+                    await bot.send_message(chat_id=ch.id, text=child_alert, reply_markup=reply_kb, parse_mode="HTML")
+                except Exception as e:
+                    logger.warning(f"Failed to forward parent message to child {ch.id}: {e}")
+
+            try:
+                from api.webapp_api import ws_manager
+                for ch in children:
+                    await ws_manager.send_to_user(ch.id, {
+                        "type": "parent_direct_message",
+                        "parent_id": user_id,
+                        "parent_name": user.full_name or "Ota-onangiz",
+                        "text": raw_text,
+                        "time": now_time
+                    })
+            except Exception:
+                pass
+
+            target_names = ", ".join([html.escape(c.full_name or "Farzand") for c in children])
+            await message.answer(
+                f"✅ <b>Xabaringiz {target_names}ga darhol yetkazildi!</b> 🚀\n\n"
+                f"💬 <i>«{safe_text}»</i>",
+                reply_markup=get_parent_main_keyboard(user_id),
+                parse_mode="HTML"
+            )
+            return
 
 
 @router.errors()

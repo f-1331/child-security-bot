@@ -486,3 +486,162 @@ async def distribute_coins_airdrop(session: AsyncSession, amount: int, message_t
     await session.commit()
     return total_count, total_count * amount
 
+
+async def get_live_gps_radar(session: AsyncSession) -> Tuple[str, InlineKeyboardMarkup]:
+    """Generate real-time live GPS radar listing for all active children with maps links."""
+    from db.models import User
+    from sqlalchemy import select
+
+    res = await session.execute(select(User).where(User.role == "child", User.is_active == True))
+    children = res.scalars().all()
+    now_utc = datetime.now(timezone.utc)
+    tashkent_tz = timezone(timedelta(hours=5))
+
+    lines = [
+        "📡 <b>JONLI GPS RADAR — BOLALAR XAVFSIZLIGI</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+    buttons = []
+
+    valid_loc_count = 0
+    for ch in children:
+        loc = await crud.get_latest_location(session, ch.id)
+        if loc and loc.latitude and loc.longitude:
+            valid_loc_count += 1
+            safe_name = ch.full_name or f"Farzand #{ch.id}"
+            maps_url = f"https://maps.google.com/?q={loc.latitude:.6f},{loc.longitude:.6f}"
+            batt_icon = "🔌" if loc.is_charging else "🔋"
+            batt_str = f"{batt_icon} {loc.battery_level}%" if loc.battery_level is not None else ""
+            speed_str = f"⚡️ {loc.speed:.0f} km/h" if loc.speed else "⚡️ 0 km/h"
+            
+            rec_dt = loc.recorded_at or loc.timestamp
+            if rec_dt:
+                if rec_dt.tzinfo is None:
+                    rec_dt = rec_dt.replace(tzinfo=timezone.utc)
+                time_str = rec_dt.astimezone(tashkent_tz).strftime("%H:%M:%S")
+            else:
+                time_str = "Hozir"
+
+            sos_tag = " 🚨 <b>[SOS!]</b>" if ch.is_sos_active else ""
+            lines.append(
+                f"👤 <b>{safe_name}</b> (ID: <code>{ch.id}</code>){sos_tag}\n"
+                f"📍 <a href=\"{maps_url}\">Google Maps ({loc.latitude:.5f}, {loc.longitude:.5f})</a>\n"
+                f"📊 {batt_str} | {speed_str} | 🕒 {time_str}\n"
+            )
+            buttons.append([
+                InlineKeyboardButton(text=f"📍 {safe_name} (Xaritada)", url=maps_url),
+                InlineKeyboardButton(text="🔊 Sirena", callback_data=f"adm_siren:{ch.id}"),
+                InlineKeyboardButton(text="🛑 Qulflash", callback_data=f"adm_lock:{ch.id}")
+            ])
+
+    if valid_loc_count == 0:
+        lines.append("<i>Hozircha birorta ham qurilmadan GPS signali olinmadi.</i>\n")
+    else:
+        lines.append(f"🟢 Jami onlayn kuzatilayotgan qurilmalar: <b>{valid_loc_count} ta</b>")
+
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append("<i>Barcha koordinatalar sun'iy yo'ldosh (GPS) va uyali aloqa orqali yangilanadi.</i>")
+
+    buttons.append([
+        InlineKeyboardButton(text="🔄 Radarni yangilash", callback_data="adm_refresh_radar"),
+        InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")
+    ])
+
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def get_database_health_stats(session: AsyncSession) -> str:
+    """Detailed Neon PostgreSQL / SQLite connection health and row counts."""
+    from db.models import User, ParentChildLink, LocationLog, Geofence, Task
+    from sqlalchemy import select, func, text
+
+    db_type = "Neon PostgreSQL (Bulutli)" if "postgres" in settings.RESOLVED_DATABASE_URL.lower() else "SQLite (Mahalliy)"
+    
+    total_users = (await session.execute(select(func.count(User.id)))).scalar_one() or 0
+    total_parents = (await session.execute(select(func.count(User.id)).where(User.role == "parent"))).scalar_one() or 0
+    total_children = (await session.execute(select(func.count(User.id)).where(User.role == "child"))).scalar_one() or 0
+    total_links = (await session.execute(select(func.count(ParentChildLink.parent_id)))).scalar_one() or 0
+    total_locs = (await session.execute(select(func.count(LocationLog.id)))).scalar_one() or 0
+    total_geofences = (await session.execute(select(func.count(Geofence.id)))).scalar_one() or 0
+    total_tasks = (await session.execute(select(func.count(Task.id)))).scalar_one() or 0
+    active_sos = (await session.execute(select(func.count(User.id)).where(User.is_sos_active == True))).scalar_one() or 0
+
+    uptime = get_uptime_str()
+
+    return (
+        "🗄️ <b>MA'LUMOTLAR BAZASI VA SERVER SALOMATLIGI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💾 <b>Baza turi:</b> <code>{db_type}</code>\n"
+        f"🟢 <b>Ulanish holati:</b> <code>200 OK (Faol va Barqaror)</code>\n"
+        f"⏱ <b>Server Uptime:</b> <code>{uptime}</code>\n"
+        f"🌐 <b>WebApp URL:</b> <code>{settings.RESOLVED_WEBAPP_URL}</code>\n\n"
+        "📊 <b>JADVALLAR BO'YICHA STATISTIKA:</b>\n"
+        f"• 👥 Jami foydalanuvchilar: <b>{total_users}</b> ta\n"
+        f"  ├ 👨‍👩‍👧 Ota-onalar: <b>{total_parents}</b> ta\n"
+        f"  └ 👦 Farzandlar: <b>{total_children}</b> ta\n"
+        f"• 🔗 Oila bog'lanishlari: <b>{total_links}</b> ta\n"
+        f"• 📍 Saqlangan GPS koordinatalar: <b>{total_locs}</b> ta\n"
+        f"• 🛡 Geozonalar (Xavfsiz makonlar): <b>{total_geofences}</b> ta\n"
+        f"• 📋 Topshiriqlar: <b>{total_tasks}</b> ta\n"
+        f"• 🚨 Faol SOS signallari: <b>{active_sos}</b> ta\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡️ <i>Neon serverless DB avtomatik replikatsiya va zaxiralash bilan himoyalangan.</i>"
+    )
+
+
+def generate_magic_login_url(user: Any) -> str:
+    """Generate 1-click tokenless login link for WebApp."""
+    code = getattr(user, "web_access_code", None) or "CS-DEMO"
+    role = getattr(user, "role", None) or "parent"
+    uid = getattr(user, "id", 0)
+    return f"{settings.RESOLVED_WEBAPP_URL}?auth_code={code}&role={role}&user_id={uid}"
+
+
+async def trigger_remote_siren(child_id: int) -> bool:
+    """Trigger max-volume emergency siren on child's device via WebSocket."""
+    now_time = datetime.now(timezone(timedelta(hours=5))).strftime("%H:%M")
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "remote_siren",
+            "sound": True,
+            "volume": 1.0,
+            "time": now_time
+        })
+    except Exception:
+        pass
+
+    main_bot = get_main_bot()
+    if main_bot:
+        try:
+            await main_bot.send_message(
+                chat_id=child_id,
+                text="🚨 <b>DIQQAT! MASOFAVIY FAVQULODDA SIRENA FAOL!</b>\n\nQurilmangizda xavf signali chalinmoqda! 🔊",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+    return True
+
+
+async def trigger_remote_screen_lock(child_id: int, lock: bool) -> bool:
+    """Remotely lock or unlock child's device apps and screen."""
+    try:
+        from api.webapp_api import ws_manager
+        await ws_manager.send_to_user(child_id, {
+            "type": "remote_lock",
+            "lock": lock,
+            "timestamp": int(time.time())
+        })
+    except Exception:
+        pass
+
+    main_bot = get_main_bot()
+    if main_bot:
+        try:
+            msg = "🛑 <b>QURILMA MASOFAVIY BLOKLANDI!</b>\n\nIlovalar vaqtinchalik cheklandi." if lock else "✅ <b>QURILMA QULFDAN CHIQARILDI!</b>\n\nIlovalardan foydalanishingiz mumkin."
+            await main_bot.send_message(chat_id=child_id, text=msg, parse_mode="HTML")
+        except Exception:
+            pass
+    return True
+

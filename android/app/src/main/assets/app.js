@@ -1039,9 +1039,21 @@ async function checkAuthenticationState() {
     }
   }
 
-  // 3. Check localStorage session (User previously authenticated or offline fallback)
+  // 3. Check localStorage & sessionStorage (User previously authenticated or offline fallback)
   let stored = localStorage.getItem("smart_tracker_session");
   let storedCode = localStorage.getItem("smart_tracker_auth_code");
+
+  if (!stored || stored === "null" || stored === "{}") {
+    try {
+      const sessStored = sessionStorage.getItem("smart_tracker_session");
+      if (sessStored && sessStored.length > 10) {
+        stored = sessStored;
+        storedCode = sessionStorage.getItem("smart_tracker_auth_code") || storedCode;
+        localStorage.setItem("smart_tracker_session", stored);
+        if (storedCode) localStorage.setItem("smart_tracker_auth_code", storedCode);
+      }
+    } catch (e) {}
+  }
 
   // Check native AndroidBridge backup if localStorage was lost or emptied
   if ((!stored || stored === "null" || stored === "{}") && window.AndroidBridge && typeof window.AndroidBridge.getSavedSession === "function") {
@@ -1302,6 +1314,7 @@ function hideAuthGateModal() {
     } else {
       enableDemoMode();
     }
+    document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
   }
 }
 
@@ -1759,6 +1772,13 @@ function applyChildUI(user) {
   document.getElementById("childHeaderRow")?.classList.remove("hidden");
 
   document.getElementById("childWelcomeBanner")?.classList.remove("hidden");
+  if (isDemoMode) {
+    document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
+    document.getElementById("demoBadge")?.classList.remove("hidden");
+  } else {
+    document.getElementById("globalDemoWarningBanner")?.classList.add("hidden");
+    document.getElementById("demoBadge")?.classList.add("hidden");
+  }
   document.getElementById("btnCoinRateCorner")?.classList.add("hidden");
   document.getElementById("childFloatingActions")?.classList.remove("hidden");
   document.getElementById("btnParentSiren")?.classList.add("hidden");
@@ -1899,6 +1919,9 @@ function applyChildUI(user) {
   if (candidatePhone) {
     parentPhone = candidatePhone;
     try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+    if (window.AndroidBridge && typeof window.AndroidBridge.setParentEmergencyPhone === "function") {
+      try { window.AndroidBridge.setParentEmergencyPhone(parentPhone); } catch(e){}
+    }
   }
   if (user.parent_name) parentName = user.parent_name;
   if (user.is_sos_active) {
@@ -6578,53 +6601,47 @@ async function triggerChildSOS() {
     renderChildMarker(instantLat, instantLon, cName, true, null);
     if (map) map.flyTo([instantLat, instantLon], 16, { animate: true, duration: 0.8 });
 
-    const targetChildId = currentChildId || authenticatedSession?.user?.id;
+    const targetChildId = currentChildId || authenticatedSession?.user?.id || 2002;
+
+    // Background ambient audio snapshot (5s)
+    try { recordAndUploadSOSAudio(targetChildId); } catch(e){}
 
     // IMMEDIATE (0ms) DISPATCH TO SERVER / TELEGRAM:
-    if (!isDemoMode && targetChildId) {
-      // Background ambient audio snapshot (5s)
-      try { recordAndUploadSOSAudio(targetChildId); } catch(e){}
-
-      if (!navigator.onLine) {
-        sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
-      } else {
-        fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            is_sos_active: true,
-            latitude: instantLat,
-            longitude: instantLon,
-            accuracy: instantAcc,
-            battery_level: null
-          })
-        })
-        .then(async (res) => {
-          const data = await res.json();
-          if (data && data.status === "success") {
-            if (data.parent_phone) {
-              parentPhone = data.parent_phone;
-              try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
-            }
-            if (data.has_linked_parents === false) {
-              showToast("🚨 SOS yuborildi! (Diqqat: Hisob hali ota-onaga ulanmagan. Iltimos, kodingizni ota-onangizga yuboring)");
-            } else {
-              showToast("🚨 Ota-onangizga SOS manzilingiz va xabari yetkazildi!");
-            }
-          }
-        })
-        .catch((err) => {
-          console.error("SOS instant dispatch network error:", err);
-          showToast("⚠️ Internet zaif: favqulodda SMS tayyorlanmoqda...");
-          sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
-        });
-      }
+    if (!navigator.onLine) {
+      sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
     } else {
-      // Full interactive simulation in Demo mode
-      showToast("⚠️ DIQQAT: Siz DEMO (Namuna) rejimidasiz! Real ota-onaga SOS yuborish uchun shaxsiy kodingiz bilan kiring.");
-      if (!navigator.onLine) {
-        sendEmergencyOfflineSms(instantLat, instantLon, cName, 85);
-      }
+      fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          is_sos_active: true,
+          latitude: instantLat,
+          longitude: instantLon,
+          accuracy: instantAcc,
+          battery_level: null
+        })
+      })
+      .then(async (res) => {
+        const data = await res.json();
+        if (data && data.status === "success") {
+          if (data.parent_phone) {
+            parentPhone = data.parent_phone;
+            try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+          }
+          if (isDemoMode) {
+            showToast("⚠️ DEMO SOS: Test signali Telegram botga yetkazildi! (Haqiqiy hisob uchun kodingiz bilan kiring)");
+          } else if (data.has_linked_parents === false) {
+            showToast("🚨 SOS yuborildi! (Diqqat: Hisob hali ota-onaga ulanmagan. Iltimos, kodingizni ota-onangizga yuboring)");
+          } else {
+            showToast("🚨 Ota-onangizga SOS manzilingiz va xabari yetkazildi!");
+          }
+        }
+      })
+      .catch((err) => {
+        console.error("SOS instant dispatch network error:", err);
+        showToast("⚠️ Internet zaif: favqulodda SMS tayyorlanmoqda...");
+        sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
+      });
     }
 
     // ASYNCHRONOUS HIGH-ACCURACY GPS REFINEMENT IN BACKGROUND (non-blocking!)
@@ -6642,7 +6659,7 @@ async function triggerChildSOS() {
       }
       renderChildMarker(refinedLat, refinedLon, cName, true, freshBatt);
 
-      if (!isDemoMode && targetChildId && navigator.onLine) {
+      if (targetChildId && navigator.onLine) {
         fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -6883,15 +6900,29 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
   try {
     // 0. FIRMLY PRESERVE AND PROTECT CHILD SESSION BEFORE SMS CLIENT HANDOFF
     localStorage.setItem("smart_tracker_role", "child");
+    try { sessionStorage.setItem("smart_tracker_role", "child"); } catch(e){}
     if (authenticatedSession) {
-      try { localStorage.setItem("smart_tracker_session", JSON.stringify(authenticatedSession)); } catch(e){}
+      try {
+        localStorage.setItem("smart_tracker_session", JSON.stringify(authenticatedSession));
+        sessionStorage.setItem("smart_tracker_session", JSON.stringify(authenticatedSession));
+      } catch(e){}
     }
     if (currentChildId) {
-      try { localStorage.setItem("smart_tracker_child_id", String(currentChildId)); } catch(e){}
+      try {
+        localStorage.setItem("smart_tracker_child_id", String(currentChildId));
+        sessionStorage.setItem("smart_tracker_child_id", String(currentChildId));
+      } catch(e){}
     }
     const currentCode = localStorage.getItem("smart_tracker_auth_code") || (authenticatedSession?.user?.web_access_code) || "";
     if (currentCode) {
-      try { localStorage.setItem("smart_tracker_auth_code", currentCode); } catch(e){}
+      try {
+        localStorage.setItem("smart_tracker_auth_code", currentCode);
+        sessionStorage.setItem("smart_tracker_auth_code", currentCode);
+      } catch(e){}
+    }
+
+    if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function" && authenticatedSession) {
+      try { window.AndroidBridge.saveSession(JSON.stringify(authenticatedSession), currentCode, "child"); } catch(e){}
     }
 
     const pPhone = parentPhone || localStorage.getItem("cached_parent_phone") || "";
@@ -6903,12 +6934,14 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
     
     const smsMessage = `🚨 SOS! Farzandingiz ${cName} xavfda!${battStr}\nJoylashuv: ${gmapsUrl}\nKoordinata: ${curLat.toFixed(6)}, ${curLon.toFixed(6)}`;
 
-    // 1. Native Android direct SMS (without internet / via GSM)
-    if (window.AndroidBridge && typeof window.AndroidBridge.sendEmergencySms === "function") {
-      if (pPhone) {
-        window.AndroidBridge.sendEmergencySms(pPhone, smsMessage);
-        if (!isSilentRecurrence) {
-          showToast("🚨 Ota-onangizga favqulodda SMS yetkazildi!");
+    // 1. Native Android direct SMS (without internet / via GSM - 100% automatic)
+    if (window.AndroidBridge && (typeof window.AndroidBridge.sendEmergencySms === "function" || typeof window.AndroidBridge.sendNativeDirectSms === "function")) {
+      const sendFn = window.AndroidBridge.sendNativeDirectSms || window.AndroidBridge.sendEmergencySms;
+      const targetPhone = pPhone || (typeof window.AndroidBridge.getParentEmergencyPhone === "function" ? window.AndroidBridge.getParentEmergencyPhone() : "");
+      if (targetPhone) {
+        const sent = sendFn.call(window.AndroidBridge, targetPhone, smsMessage);
+        if (sent && !isSilentRecurrence) {
+          showToast("🚨 Ota-onangizga favqulodda SMS avtomatik jo'natildi!");
         }
         return;
       }
@@ -7119,6 +7152,70 @@ function checkNativeSmsCoordinates() {
   }
 }
 
+function openEmergencyMessageModal() {
+  haptic("medium");
+  const modal = document.getElementById("modalEmergencyMessage");
+  if (modal) modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeEmergencyMessageModal() {
+  haptic("light");
+  const modal = document.getElementById("modalEmergencyMessage");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function sendQuickEmergencyText(messageText) {
+  if (!messageText || !messageText.trim()) return;
+  haptic("heavy");
+  closeEmergencyMessageModal();
+  showToast("⏳ Tezkor xabar ota-onangizga yuborilmoqda...");
+
+  let curLat = cachedDeviceLocation ? cachedDeviceLocation.latitude : (childMarker ? childMarker.getLatLng().lat : null);
+  let curLon = cachedDeviceLocation ? cachedDeviceLocation.longitude : (childMarker ? childMarker.getLatLng().lng : null);
+  const targetChildId = currentChildId || authenticatedSession?.user?.id || 2002;
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${targetChildId}/emergency-message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: messageText.trim(),
+        latitude: curLat,
+        longitude: curLon
+      })
+    });
+    const data = await res.json();
+    if (res.ok && data.status === "success") {
+      playSuccessChime();
+      showToast("✅ Ota-onangizning Telegram botiga xabar va joylashuv yetkazildi!");
+    } else {
+      showToast("🚨 Xabar yuborildi!");
+    }
+  } catch (err) {
+    console.error("Emergency message send error:", err);
+    // Offline GSM fallback
+    sendEmergencyOfflineSms(curLat, curLon, null, null, false);
+  }
+}
+
+function submitCustomEmergencyText() {
+  const ta = document.getElementById("customEmergencyText");
+  const val = ta ? ta.value.trim() : "";
+  if (!val) {
+    showToast("Iltimos, xabar matnini yozing.");
+    return;
+  }
+  sendQuickEmergencyText(val);
+  if (ta) ta.value = "";
+}
+
+function openParentTelegramChatDirect() {
+  haptic("light");
+  closeEmergencyMessageModal();
+  openParentTelegramChat();
+}
+
 function openParentTelegramChat() {
   haptic("medium");
   const tg = window.Telegram?.WebApp;
@@ -7126,31 +7223,45 @@ function openParentTelegramChat() {
   const uname = parentUsername || pObj.username;
   const pid = pObj.id || parentId;
 
-  if (uname && tg && tg.openTelegramLink) {
-    tg.openTelegramLink(`https://t.me/${uname}`);
+  if (uname) {
+    const cleanUname = uname.replace(/^@/, '');
+    const url = `https://t.me/${cleanUname}`;
+    if (tg && typeof tg.openTelegramLink === "function") {
+      tg.openTelegramLink(url);
+      return;
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === "function") {
+      window.AndroidBridge.openExternalUrl(url);
+      return;
+    }
+    window.open(url, "_blank");
     return;
   }
-  if (pid && tg && tg.openTelegramLink) {
-    tg.openTelegramLink(`tg://user?id=${pid}`);
+  if (pid) {
+    const tgUrl = `tg://user?id=${pid}`;
+    if (tg && typeof tg.openTelegramLink === "function") {
+      tg.openTelegramLink(tgUrl);
+      return;
+    }
+    if (window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === "function") {
+      window.AndroidBridge.openExternalUrl(tgUrl);
+      return;
+    }
+    window.location.href = tgUrl;
     return;
   }
-  if (tg && typeof tg.close === "function") {
-    showToast("Telegram chatga o'tilmoqda...");
-    tg.close();
+
+  // Universal fallback to bot
+  const botUrl = "https://t.me/child_security_bot";
+  if (tg && typeof tg.openTelegramLink === "function") {
+    tg.openTelegramLink(botUrl);
     return;
   }
-  showToast("Telegram chatga o'ting.");
+  window.open(botUrl, "_blank");
 }
 
 function openParentChat() {
-  haptic("medium");
-  if (window.Telegram?.WebApp) {
-    if (typeof window.Telegram.WebApp.close === "function") {
-      window.Telegram.WebApp.close();
-      return;
-    }
-  }
-  showToast("Telegram chatga o'ting.");
+  openEmergencyMessageModal();
 }
 
 function triggerChildCheckIn() {
@@ -7940,7 +8051,7 @@ async function requestChildAllPermissions() {
 
   const targetId = currentChildId || authenticatedSession?.user?.id;
 
-  // 0. Native Android APK full child permissions (GPS, Usage Access, Overlay, Accessibility)
+  // 0. Native Android APK full child permissions (GPS, SMS, Usage Access, Overlay, Accessibility)
   if (window.AndroidBridge) {
     if (typeof window.AndroidBridge.requestAllChildProtectionPermissions === "function") {
       try {
@@ -7951,6 +8062,13 @@ async function requestChildAllPermissions() {
     } else if (typeof window.AndroidBridge.requestUsageAccess === "function") {
       try {
         window.AndroidBridge.requestUsageAccess();
+      } catch (e) {}
+    }
+    if (typeof window.AndroidBridge.requestSmsPermission === "function" && typeof window.AndroidBridge.isSmsPermissionGranted === "function") {
+      try {
+        if (!window.AndroidBridge.isSmsPermissionGranted()) {
+          window.AndroidBridge.requestSmsPermission();
+        }
       } catch (e) {}
     }
     if (typeof window.AndroidBridge.startBackgroundTracking === "function" && targetId) {
@@ -9176,7 +9294,8 @@ function initBackdropDismissListeners() {
     { id: "modal-coin-rate", close: closeCoinRateModal },
     { id: "deleteChildModal", close: closeDeleteChildModal },
     { id: "childInviteParentModal", close: closeChildInviteParentModal },
-    { id: "parentInviteSpouseModal", close: closeParentInviteSpouseModal }
+    { id: "parentInviteSpouseModal", close: closeParentInviteSpouseModal },
+    { id: "modalEmergencyMessage", close: closeEmergencyMessageModal }
   ];
 
   modalList.forEach(item => {
