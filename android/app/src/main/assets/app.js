@@ -5,9 +5,15 @@ const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
 const PRODUCTION_WEBAPP_URL = "https://child-security-bot.vercel.app";
 
 function getApiBase() {
-  return (typeof window !== "undefined" && (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null"))
-    ? PRODUCTION_BACKEND_URL
-    : "";
+  if (typeof window !== "undefined" && window.location) {
+    if (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null") {
+      return PRODUCTION_BACKEND_URL;
+    }
+    if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return PRODUCTION_BACKEND_URL;
+    }
+  }
+  return "";
 }
 
 // =========================================================
@@ -2049,7 +2055,7 @@ async function loadChildSelfData(user) {
   if (childZoneStatus) childZoneStatus.textContent = "Kerakli joylar belgilanmagan";
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${user.id}/status`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${user.id}/status`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success" && data.child) {
@@ -2128,7 +2134,7 @@ async function logoutSession() {
     if (confirm("Farzand hisobidan chiqish uchun ota-onangiz ruxsati kerak!\n\nOta-onangizga Telegram orqali ruxsat so'rovi yuborilsinmi?")) {
       try {
         const effChildId = currentChildId || (authenticatedSession?.user?.id);
-        const res = await fetch(`/api/v1/webapp/child/${effChildId}/request-logout`, {
+        const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${effChildId}/request-logout`, {
           method: "POST"
         });
         const data = await res.json();
@@ -2733,7 +2739,7 @@ function toggleMapLayer() {
 // Load real data with persistent caching across server redeployments
 async function loadData() {
   try {
-    const res = await fetch(`/api/v1/webapp/parent/${parentId}/children`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/parent/${parentId}/children`);
     if (!res.ok) throw new Error("API status " + res.status);
     const data = await res.json();
 
@@ -3020,7 +3026,7 @@ async function updateLiveTelemetry(childId) {
   if (isDemoMode) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/status`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/status`);
     const data = await res.json();
     if (data.status !== "success" || !data.child) return;
 
@@ -3379,7 +3385,7 @@ async function loadGeofences(childId) {
   geofencesList = [];
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${targetId}/geofences`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetId}/geofences`);
     const data = await res.json();
     if (data.status !== "success") {
       renderChildDashboardCastles();
@@ -3536,7 +3542,7 @@ async function loadRouteHistory(childId, isSilent = false) {
 
   try {
     lastRouteFetchTime = Date.now();
-    const res = await fetch(`/api/v1/webapp/child/${targetId}/history?limit=500`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetId}/history?limit=500`);
     const data = await res.json();
     if (data.status !== "success") throw new Error("API returned non-success");
 
@@ -4861,7 +4867,7 @@ async function resolveCurrentSos() {
 
   if (!isDemoMode && currentChildId) {
     try {
-      await fetch(`/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
+      await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/sos/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -4978,7 +4984,7 @@ async function requestChildLocationPing() {
   }
   try {
     showToast("Farzand telefoniga joylashuv so'rovi yuborilmoqda...");
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/active-check`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/active-check`, {
       method: "POST"
     });
     if (res.ok) {
@@ -5639,7 +5645,7 @@ async function deleteGeofence(fenceId) {
 
   try {
     const effectiveParentId = parentId || authenticatedSession?.user?.id;
-    const res = await fetch(`/api/v1/webapp/geofence/${fenceId}?parent_id=${effectiveParentId}`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/geofence/${fenceId}?parent_id=${effectiveParentId}`, {
       method: "DELETE",
     });
     const data = await res.json();
@@ -6074,7 +6080,7 @@ async function deleteTask(taskId) {
 
   try {
     const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
-    const res = await fetch(`/api/v1/webapp/task/${taskId}?parent_id=${effectiveParentId || ''}`, { method: "DELETE" });
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/task/${taskId}?parent_id=${effectiveParentId || ''}`, { method: "DELETE" });
     const data = await res.json();
     if (data.status === "success") {
       tasksList = tasksList.filter(t => t.id != taskId);
@@ -6248,7 +6254,7 @@ async function markTaskSeen(taskId) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/seen?child_id=${currentChildId || ''}`, { method: "POST" });
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/task/${taskId}/seen?child_id=${currentChildId || ''}`, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
       showToast("Ota-onangizga xabar ko'rilgani bildirildi!");
@@ -6413,7 +6419,7 @@ async function confirmTaskSchedule(promisedTime) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${activeScheduleTaskId}/schedule?child_id=${currentChildId || ''}`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/task/${activeScheduleTaskId}/schedule?child_id=${currentChildId || ''}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ promised_time: promisedTime })
@@ -6531,7 +6537,7 @@ async function submitTaskProof() {
       return;
     }
 
-    const completeRes = await fetch(`/api/v1/webapp/task/${activeProofTaskId}/complete?child_id=${currentChildId || ''}`, {
+    const completeRes = await fetch(`${getApiBase()}/api/v1/webapp/task/${activeProofTaskId}/complete?child_id=${currentChildId || ''}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ proof_photo_url: upData.file_url })
@@ -6884,7 +6890,7 @@ function callParent() {
 
   // Trigger backend to send native contact card to child's Telegram chat so child can dial in 1 tap!
   if (!isDemoMode && currentChildId) {
-    fetch(`/api/v1/webapp/child/${currentChildId}/call-parent-trigger`, {
+    fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/call-parent-trigger`, {
       method: "POST"
     }).catch(console.warn);
   }
@@ -6979,7 +6985,7 @@ function startSosRecurringBroadcast() {
 
       // 2. Agar internet bo'lsa, server va Telegram bot orqali ota-onaga uzatish
       if (navigator.onLine && !isDemoMode && currentChildId) {
-        fetch(`/api/v1/webapp/child/${currentChildId}/sos`, {
+        fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/sos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -7290,7 +7296,7 @@ async function sendQuickEmergencyText(messageText) {
   const targetChildId = currentChildId || authenticatedSession?.user?.id || 2002;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${targetChildId}/emergency-message`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/emergency-message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7383,7 +7389,7 @@ function triggerChildCheckIn() {
   playSuccessChime();
   showToast("✅ «Men yetib keldim» deb ota-onangizga bildirishnoma yuborildi!");
   if (!isDemoMode && currentChildId) {
-    fetch(`/api/v1/webapp/child/${currentChildId}/checkin`, {
+    fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/checkin`, {
       method: "POST"
     }).catch(console.error);
   }
@@ -7410,7 +7416,7 @@ function navigateChildHome() {
 
 function triggerRemoteSiren() {
   haptic("heavy");
-  playSirenSound();
+  playPingNotificationSound();
   showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
   if (!isDemoMode && currentChildId) {
     const effParentId = getEffectiveParentId() || 6707839718;
@@ -7532,7 +7538,7 @@ async function sendParentDirective(pingType) {
 
   const effParentId = getEffectiveParentId();
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/parent-ping`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/parent-ping`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7584,7 +7590,7 @@ async function toggleParentSchoolMode() {
   showToast(targetState ? "📚 Maktab rejimi yoqilmoqda..." : "✅ Maktab rejimi o'chirilmoqda...");
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/school-mode`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/school-mode`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7761,7 +7767,7 @@ async function confirmDeleteChild() {
     }
 
     const currentParentId = parentId || authenticatedSession?.user?.id;
-    const res = await fetch(`/api/v1/webapp/parent/${currentParentId}/child/${targetId}`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/parent/${currentParentId}/child/${targetId}`, {
       method: "DELETE"
     });
     const data = await res.json();
@@ -7819,7 +7825,7 @@ async function executeSilentCheck() {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/silent-check`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/silent-check`, {
       method: "POST"
     });
     const data = await res.json();
@@ -7871,7 +7877,7 @@ async function executeActiveCheck() {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/active-check`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/active-check`, {
       method: "POST"
     });
     const data = await res.json();
@@ -8002,7 +8008,7 @@ function startChildWebSessionTracker(childId) {
     // Every 60 seconds of active browser usage, upload to backend if native APK isn't already reporting
     if (_webScreenTimeAccumulatedSeconds >= 60 && !window.AndroidBridge) {
       try {
-        await fetch(`/api/v1/webapp/child/${childId}/app-usage`, {
+        await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/app-usage`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -8498,7 +8504,7 @@ async function sendChildLiveTelemetry(childId, payload) {
 
   // 2. Post to backend live location telemetry endpoint
   try {
-    const res = await fetch(`/api/v1/webapp/child/${targetId}/location`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetId}/location`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -8536,7 +8542,7 @@ async function flushOfflineTelemetryBatch(childId) {
     const queue = JSON.parse(raw);
     if (!Array.isArray(queue) || queue.length === 0) return;
 
-    const res = await fetch(`/api/v1/webapp/child/${childId}/location/batch`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/location/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ points: queue })
@@ -8557,7 +8563,7 @@ async function flushOfflineTaskQueue() {
 
     for (const item of queue) {
       try {
-        await fetch(`/api/v1/webapp/task/${item.taskId}/complete?child_id=${currentChildId || ''}`, {
+        await fetch(`${getApiBase()}/api/v1/webapp/task/${item.taskId}/complete?child_id=${currentChildId || ''}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ proof_photo_url: "synced_from_offline_cache" })
@@ -8897,7 +8903,7 @@ function handleIncomingWebSocketMessage(msg) {
   if (msg.type === "child_linked" && currentRole === "parent") {
     showToast(`🎉 Yangi farzand (${msg.full_name || 'Farzand'}) muvaffaqiyatli ulandi!`);
     if (parentId) {
-      fetch(`/api/v1/webapp/parent/${parentId}/children`)
+      fetch(`${getApiBase()}/api/v1/webapp/parent/${parentId}/children`)
         .then((r) => r.json())
         .then((data) => {
           if (data && data.status === "success" && data.children) {
@@ -8976,7 +8982,7 @@ function startChildNotificationPolling(childId) {
 async function checkChildPendingNotifications(childId) {
   if (isDemoMode) return;
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/notifications`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/notifications`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success" && data.notifications && data.notifications.length > 0) {
@@ -8985,6 +8991,14 @@ async function checkChildPendingNotifications(childId) {
             showChildActiveCheckBanner(notif.time || new Date().toLocaleTimeString().slice(0, 5));
             if (typeof window.sendLocationUpdate === "function") {
               try { window.sendLocationUpdate(); } catch(e) {}
+            }
+          } else if (notif.type === "remote_siren") {
+            playSirenSound();
+            haptic("heavy");
+            showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+          } else if (notif.type === "device_policy_update") {
+            if (typeof fetchChildDevicePolicy === "function") {
+              fetchChildDevicePolicy(currentChildId);
             }
           }
         }
@@ -9059,7 +9073,7 @@ async function openChildInviteParentModal() {
   if (demoWarning) demoWarning.classList.add("hidden");
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${realChildId}/invite-info`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${realChildId}/invite-info`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success") {
@@ -9161,7 +9175,7 @@ async function openParentInviteSpouseModal() {
   if (demoWarning) demoWarning.classList.add("hidden");
 
   try {
-    const res = await fetch(`/api/v1/webapp/parent/${realParentId}/coparent-invite-info`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/parent/${realParentId}/coparent-invite-info`);
     if (res.ok) {
       const data = await res.json();
       if (data.status === "success") {
@@ -9601,7 +9615,7 @@ async function confirmStartWalkSafe() {
 
   try {
     if (!isDemoMode && currentChildId) {
-      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/start`, {
+      const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/walk-safe/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -9724,7 +9738,7 @@ async function confirmWalkSafeCheckInModal() {
 
   if (!isDemoMode && currentChildId) {
     try {
-      await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/checkin`, {
+      await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/walk-safe/checkin`, {
         method: "POST"
       });
     } catch (e) {
@@ -9779,7 +9793,7 @@ async function childWalkSafeComplete() {
 
   if (!isDemoMode && currentChildId) {
     try {
-      await fetch(`/api/v1/webapp/child/${currentChildId}/walk-safe/complete`, {
+      await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/walk-safe/complete`, {
         method: "POST"
       });
     } catch (e) {
@@ -9831,7 +9845,7 @@ let currentWishlistData = {
 async function loadWishlist(childId) {
   if (!childId) return;
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/wishlist`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/wishlist`);
     const data = await res.json();
     if (data.status === "success" && data.wishlist) {
       currentWishlistData = data.wishlist;
@@ -9930,7 +9944,7 @@ async function saveWishlistConfirm() {
 
   try {
     if (!isDemoMode && currentChildId) {
-      const res = await fetch(`/api/v1/webapp/child/${currentChildId}/wishlist`, {
+      const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/wishlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, target_som: targetSom })
@@ -9973,7 +9987,7 @@ async function openDailyReportModal() {
   if (!currentChildId) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/daily-report`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/daily-report`);
     const data = await res.json();
     if (data.status === "success" && data.report) {
       renderDailyReportContent(data.report);
@@ -10875,7 +10889,7 @@ async function loadScreenTimeAndPolicy() {
       if (nativeUsageRaw && nativeUsageRaw.length > 5) {
         const parsed = JSON.parse(nativeUsageRaw);
         if (parsed && typeof parsed === "object") {
-          fetch(`/api/v1/webapp/child/${currentChildId}/app-usage`, {
+          fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/app-usage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(parsed)
@@ -10886,7 +10900,7 @@ async function loadScreenTimeAndPolicy() {
   }
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/screen-time`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/screen-time`);
     if (res.ok) {
       const json = await res.json();
       if (json.status === "success" && json.report) {
@@ -11219,7 +11233,7 @@ async function handleMasterLockToggle(isChecked) {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11246,7 +11260,7 @@ async function setLockdownReason(reason) {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11289,7 +11303,7 @@ async function toggleAppBlock(pkg, isBlocked) {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11320,7 +11334,7 @@ async function handleAntiUninstallToggle(isChecked) {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11350,7 +11364,7 @@ async function handleNetworkRestrictedToggle(isChecked) {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11385,7 +11399,7 @@ async function saveBedtimeSchedule() {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -11452,7 +11466,7 @@ async function saveNewParentPin() {
   if (isDemoMode || !currentChildId) return;
 
   try {
-    await fetch(`/api/v1/webapp/child/${currentChildId}/device-policy`, {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

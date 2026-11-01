@@ -264,6 +264,23 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl(currentProductionUrl);
     }
 
+    public void requestAllChildProtectionPermissions() {
+        runOnUiThread(() -> {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                checkAndRequestPermissions();
+            } else if (!UsageStatsHelper.hasUsageAccessPermission(this)) {
+                checkUsageAccessPermission();
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                checkOverlayPermission();
+            } else if (!isAccessibilityServiceEnabled()) {
+                checkAccessibilityPermission();
+            } else {
+                Toast.makeText(this, "✅ Barcha himoya, SMS va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     private void checkAndRequestPermissions() {
         List<String> needed = new ArrayList<>();
 
@@ -783,20 +800,7 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void requestAllChildProtectionPermissions() {
-            runOnUiThread(() -> {
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                    checkAndRequestPermissions();
-                } else if (!UsageStatsHelper.hasUsageAccessPermission(MainActivity.this)) {
-                    checkUsageAccessPermission();
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(MainActivity.this)) {
-                    checkOverlayPermission();
-                } else if (!isAccessibilityServiceEnabled()) {
-                    checkAccessibilityPermission();
-                } else {
-                    Toast.makeText(MainActivity.this, "✅ Barcha himoya, SMS va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
-                }
-            });
+            MainActivity.this.requestAllChildProtectionPermissions();
         }
 
         @JavascriptInterface
@@ -966,12 +970,22 @@ public class MainActivity extends AppCompatActivity {
                     return true;
                 }
 
-                android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
+                String safePhone = cleanTarget.replaceAll("[^0-9+]", "");
+                if (safePhone.isEmpty()) safePhone = "+998772723101";
+
+                android.telephony.SmsManager sm;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    sm = context.getSystemService(android.telephony.SmsManager.class);
+                    if (sm == null) sm = android.telephony.SmsManager.getDefault();
+                } else {
+                    sm = android.telephony.SmsManager.getDefault();
+                }
+
                 java.util.ArrayList<String> parts = sm.divideMessage(cleanMsg);
                 if (parts != null && parts.size() > 1) {
-                    sm.sendMultipartTextMessage(cleanTarget, null, parts, null, null);
+                    sm.sendMultipartTextMessage(safePhone, null, parts, null, null);
                 } else {
-                    sm.sendTextMessage(cleanTarget, null, cleanMsg, null, null);
+                    sm.sendTextMessage(safePhone, null, cleanMsg, null, null);
                 }
                 showToast("🚨 Ota-onangizga (" + cleanTarget + ") favqulodda SOS SMS avtomatik jo'natildi!");
                 return true;

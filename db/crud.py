@@ -81,20 +81,22 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int, force_new
         user, _ = await get_or_create_user(session, parent_id, role="parent")
 
     if not force_new:
-        if user.pairing_code:
+        if user.pairing_code and len(str(user.pairing_code)) >= 8:
             user.web_access_code = user.pairing_code
             await session.commit()
             return user.pairing_code
 
-        if user.web_access_code:
+        if user.web_access_code and len(str(user.web_access_code)) >= 8:
             user.pairing_code = user.web_access_code
             user.pairing_code_created_at = datetime.now(timezone.utc)
             await session.commit()
             return user.web_access_code
 
-    # Generate permanent 6-digit numeric code with cryptographically secure PRNG and collision avoidance
+    # Generate permanent 8-digit cryptographically secure code (100M combinations, hard to guess)
     for _ in range(50):
-        code = "".join(secrets.choice(string.digits) for _ in range(6))
+        first_digit = secrets.choice("123456789")
+        rest_digits = "".join(secrets.choice(string.digits) for _ in range(7))
+        code = first_digit + rest_digits
         existing = await session.execute(
             select(User).where(
                 ((User.pairing_code == code) | (User.web_access_code == code)) & (User.id != parent_id)
@@ -107,8 +109,7 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int, force_new
             await session.commit()
             return code
 
-    # Extremely rare fallback to 8-digit CSPRNG code if 6-digit space is dense
-    code = "".join(secrets.choice(string.digits) for _ in range(8))
+    code = str(secrets.randbelow(90000000) + 10000000)
     user.pairing_code = code
     user.web_access_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
@@ -142,16 +143,18 @@ async def generate_web_access_code(session: AsyncSession, user_id: int, force_ne
     if user.role == "parent":
         return await generate_pairing_code(session, user_id, force_new=force_new)
 
-    # For Child: Check if child already has their distinct code
-    if not force_new and user.web_access_code:
+    # For Child: Check if child already has their distinct 8-digit code
+    if not force_new and user.web_access_code and len(str(user.web_access_code)) >= 8:
         parents = await get_parents_for_child(session, user_id)
         parent_codes = {p.pairing_code for p in parents if p.pairing_code}
         if user.web_access_code not in parent_codes:
             return user.web_access_code
 
-    # Generate unique 6-digit code specifically for this child with secure PRNG and collision avoidance
+    # Generate unique 8-digit code specifically for this child with secure PRNG (first digit 1-9)
     for _ in range(50):
-        code = "".join(secrets.choice(string.digits) for _ in range(6))
+        first_digit = secrets.choice("123456789")
+        rest_digits = "".join(secrets.choice(string.digits) for _ in range(7))
+        code = first_digit + rest_digits
         existing = await session.execute(
             select(User).where(
                 ((User.web_access_code == code) | (User.pairing_code == code)) & (User.id != user_id)
@@ -162,8 +165,7 @@ async def generate_web_access_code(session: AsyncSession, user_id: int, force_ne
             await session.commit()
             return code
 
-    # Fallback using 8-digit CSPRNG
-    code = "".join(secrets.choice(string.digits) for _ in range(8))
+    code = str(secrets.randbelow(90000000) + 10000000)
     user.web_access_code = code
     await session.commit()
     return code
