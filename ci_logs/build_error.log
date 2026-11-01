@@ -1,0 +1,94 @@
+=== WHAT WENT WRONG ===
+> Task :app:compressChildDebugAssets
+> Task :app:processChildDebugJavaRes NO-SOURCE
+> Task :app:processChildDebugResources
+> Task :app:mergeChildDebugJavaResource
+
+> Task :app:compileChildDebugJavaWithJavac
+/home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:876: error: method isSmsPermissionGranted() is already defined in class MainActivity.AndroidBridge
+        public boolean isSmsPermissionGranted() {
+                       ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+> Task :app:compileChildDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileChildDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileChildDebugJavaWithJavac'.
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:149)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:282)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:147)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:135)
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="uz.childsecurity.app" from the source AndroidManifest.xml: /home/runner/work/child-security-bot/child-security-bot/android/app/src/main/AndroidManifest.xml.
+
+> Task :app:processChildDebugManifest
+> Task :app:mergeChildDebugShaders
+> Task :app:compileChildDebugShaders NO-SOURCE
+> Task :app:generateChildDebugAssets UP-TO-DATE
+> Task :app:mergeChildDebugAssets
+> Task :app:processChildDebugManifestForPackage
+> Task :app:compressChildDebugAssets
+> Task :app:processChildDebugJavaRes NO-SOURCE
+> Task :app:processChildDebugResources
+> Task :app:mergeChildDebugJavaResource
+
+> Task :app:compileChildDebugJavaWithJavac
+/home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:876: error: method isSmsPermissionGranted() is already defined in class MainActivity.AndroidBridge
+        public boolean isSmsPermissionGranted() {
+                       ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+> Task :app:compileChildDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileChildDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Task :app:processChildDebugResources
+> Task :app:mergeChildDebugJavaResource
+
+> Task :app:compileChildDebugJavaWithJavac
+/home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:876: error: method isSmsPermissionGranted() is already defined in class MainActivity.AndroidBridge
+        public boolean isSmsPermissionGranted() {
+                       ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 error
+
+> Task :app:compileChildDebugJavaWithJavac FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileChildDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileChildDebugJavaWithJavac'.
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:149)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:282)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:147)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:135)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
