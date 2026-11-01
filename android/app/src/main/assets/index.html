@@ -142,6 +142,22 @@
     </div>
   </div>
 
+  <!-- TOP STICKY OWNER IMPERSONATION BANNER (Ghost Login Admin Mode) -->
+  <div id="globalImpersonationBanner" class="hidden sticky top-0 z-[2700] w-full bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white px-3.5 py-2 flex items-center justify-between gap-2 shadow-2xl border-b-2 border-amber-400 font-sans transition-all duration-300 shrink-0">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="px-2 py-0.5 rounded-lg bg-amber-400 text-slate-950 text-[10px] font-black tracking-widest uppercase shrink-0 shadow">👑 ASOSCHI REJIMI</span>
+      <p class="text-xs font-bold text-white truncate">
+        Siz <b id="impersonationUserName" class="text-amber-300">Foydalanuvchi</b> (ID: <code id="impersonationUserId" class="text-indigo-200">--</code>) hisobini boshqarmoqdasiz.
+      </p>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button onclick="exitImpersonationMode()" class="px-2.5 py-1 bg-red-600/90 hover:bg-red-600 text-white rounded-xl text-xs font-bold transition active:scale-95 shadow flex items-center gap-1 border border-red-400/40">
+        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        <span>Chiqish</span>
+      </button>
+    </div>
+  </div>
+
   <!-- TOP HEADER (APPLE DYNAMIC ISLAND & FROSTED GLASS CAPSULE) -->
   <header id="mainAppHeader" class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top">
     <!-- 0. IOS DYNAMIC ISLAND (Centrally Anchored Floating Capsule) -->

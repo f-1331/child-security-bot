@@ -937,6 +937,17 @@ function acceptDemoFromBanner() {
 // Check session in localStorage, URL, or persistent role
 async function checkAuthenticationState() {
   const urlParams = new URLSearchParams(window.location.search);
+  const isImpersonate = urlParams.get("impersonate") === "1" || urlParams.get("admin") === "1";
+  const adminUid = urlParams.get("admin_uid") || urlParams.get("user_id");
+
+  if (isImpersonate) {
+    sessionStorage.setItem("smart_tracker_impersonating", "1");
+    // Ensure clean state for target user by discarding conflicting cached sessions
+    localStorage.removeItem("smart_tracker_session");
+    localStorage.removeItem("smart_tracker_auth_code");
+    localStorage.removeItem("smart_tracker_cached_children");
+  }
+
   const qRole = urlParams.get("role");
   if (qRole === "child") {
     localStorage.setItem("smart_tracker_role", "child");
@@ -946,9 +957,9 @@ async function checkAuthenticationState() {
     currentRole = "parent";
   }
 
-  const qCode = urlParams.get("code");
+  const qCode = urlParams.get("code") || urlParams.get("auth_code");
 
-  // 1. Direct code in query param: ?code=123456
+  // 1. Direct code in query param: ?code=123456 or ?auth_code=123456
   if (qCode) {
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = qCode;
@@ -957,8 +968,10 @@ async function checkAuthenticationState() {
   }
 
   // 1.1 Direct fast-auth via URL parameters (?role=parent&parent_id=... or ?child_id=...)
-  const qParentId = urlParams.get("parent_id");
-  const qChildId = urlParams.get("child_id");
+  let qParentId = urlParams.get("parent_id");
+  let qChildId = urlParams.get("child_id");
+  if (!qParentId && qRole === "parent" && adminUid) qParentId = adminUid;
+  if (!qChildId && qRole === "child" && adminUid) qChildId = adminUid;
 
   if (qParentId && (!qRole || qRole === "parent")) {
     try {
@@ -1503,6 +1516,26 @@ function enableChildDemoMode() {
   showToast("👦 Farzand demo rejimiga o'tildi");
 }
 
+function showImpersonationBanner(name, id, role) {
+  const banner = document.getElementById("globalImpersonationBanner");
+  const nameEl = document.getElementById("impersonationUserName");
+  const idEl = document.getElementById("impersonationUserId");
+  if (nameEl) nameEl.textContent = name || (role === "child" ? "Farzand" : "Ota-ona");
+  if (idEl) idEl.textContent = id ? `#${id}` : "--";
+  if (banner) banner.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+}
+
+function exitImpersonationMode() {
+  localStorage.removeItem("smart_tracker_session");
+  localStorage.removeItem("smart_tracker_auth_code");
+  localStorage.removeItem("smart_tracker_cached_children");
+  sessionStorage.removeItem("smart_tracker_impersonating");
+  sessionStorage.removeItem("smart_tracker_impersonate_role");
+  sessionStorage.removeItem("smart_tracker_impersonate_id");
+  window.location.href = window.location.origin + window.location.pathname;
+}
+
 function applyAuthenticatedUser(data) {
   authenticatedSession = data;
   isDemoMode = false;
@@ -1521,6 +1554,12 @@ function applyAuthenticatedUser(data) {
   document.getElementById("demoNoticeBanner")?.classList.add("hidden");
   document.getElementById("globalDemoWarningBanner")?.classList.add("hidden");
   dismissEntryDemoBanner();
+
+  if (sessionStorage.getItem("smart_tracker_impersonating") === "1") {
+    showImpersonationBanner(data.user?.full_name, data.user?.id, data.role);
+  } else {
+    document.getElementById("globalImpersonationBanner")?.classList.add("hidden");
+  }
 
   if (window.AndroidBridge && typeof window.AndroidBridge.setAppRole === "function") {
     try { window.AndroidBridge.setAppRole(data.role || currentRole); } catch (e) {}

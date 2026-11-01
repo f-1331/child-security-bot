@@ -590,12 +590,105 @@ async def get_database_health_stats(session: AsyncSession) -> str:
     )
 
 
-def generate_magic_login_url(user: Any) -> str:
-    """Generate 1-click tokenless login link for WebApp."""
-    code = getattr(user, "web_access_code", None) or "CS-DEMO"
+def generate_magic_login_url(user: Any, code_override: Optional[str] = None) -> str:
+    """Generate 1-click tokenless login link for WebApp with direct auto-auth and owner impersonation."""
+    code = code_override or getattr(user, "web_access_code", None) or getattr(user, "pairing_code", None) or ""
     role = getattr(user, "role", None) or "parent"
     uid = getattr(user, "id", 0)
-    return f"{settings.RESOLVED_WEBAPP_URL}?auth_code={code}&role={role}&user_id={uid}"
+    target_param = f"parent_id={uid}" if role == "parent" else f"child_id={uid}"
+
+    parts = [f"role={role}", target_param]
+    if code:
+        parts.append(f"code={code}")
+        parts.append(f"auth_code={code}")
+    parts.append(f"admin_uid={uid}")
+    parts.append("impersonate=1")
+
+    return f"{settings.RESOLVED_WEBAPP_URL}?{'&'.join(parts)}"
+
+
+async def get_or_ensure_magic_login_url(session: AsyncSession, user: Any) -> str:
+    """Ensure user has a web access code in DB and return the 1-click magic login URL."""
+    code = getattr(user, "web_access_code", None) or getattr(user, "pairing_code", None)
+    if not code:
+        code = await crud.generate_web_access_code(session, user.id)
+    return generate_magic_login_url(user, code_override=code)
+
+
+async def format_users_directory_html(
+    session: AsyncSession,
+    users: List[Any],
+    total_count: int,
+    page: int,
+    total_pages: int,
+    role_filter: str = "all",
+    search_query: Optional[str] = None,
+) -> str:
+    """Format paginated bot user directory into clean, informative HTML."""
+    filter_names = {
+        "all": "🌐 Barchasi",
+        "parent": "👨‍👩‍👧 Ota-onalar",
+        "child": "👦 Farzandlar",
+        "banned": "🚫 Bloklanganlar",
+    }
+    active_filter_label = filter_names.get(role_filter, role_filter)
+    search_info = f"\n🔍 Qidiruv: <code>{html.escape(search_query)}</code>" if search_query else ""
+
+    header = (
+        "👥 <b>BOT FOYDALANUVCHILARI KATALOGI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 Jami topildi: <b>{total_count}</b> ta | Filtr: <b>{active_filter_label}</b>"
+        f"{search_info}\n"
+        f"📄 Sahifa: <b>{page}</b> / <b>{total_pages}</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+
+    if not users:
+        return (
+            header
+            + "ℹ️ <i>Hech qanday foydalanuvchi topilmadi. Filtrni o'zgartiring yoki qidiruv so'zini tekshiring.</i>"
+        )
+
+    lines = []
+    start_num = (page - 1) * 8 + 1
+
+    for idx, u in enumerate(users, start=start_num):
+        role_emoji = "👦" if u.role == "child" else "👨‍👩‍👧"
+        status_emoji = "🚫 Blok" if not u.is_active else ("🚨 SOS" if u.is_sos_active else "🟢 Faol")
+        name_clean = html.escape(u.full_name or "Nomsiz")
+        username_str = f"@{u.username}" if u.username else "yo'q"
+        phone_str = u.phone_number or "yo'q"
+
+        # Family linkages
+        if u.role == "child":
+            parents = await crud.get_parents_for_child(session, u.id)
+            if parents:
+                parent_names = ", ".join(p.full_name or str(p.id) for p in parents[:2])
+                family_txt = f"Ota-onasi: <b>{html.escape(parent_names)}</b>"
+            else:
+                family_txt = "Ota-onasi: <i>Bog'lanmagan</i>"
+            extra_txt = f"💰 {u.virtual_balance:,} tanga | {family_txt}"
+        else:
+            children = await crud.get_children_for_parent(session, u.id)
+            family_txt = f"Farzandlar: <b>{len(children)}</b> ta"
+            extra_txt = family_txt
+
+        code_val = u.web_access_code or u.pairing_code or "yo'q"
+
+        user_block = (
+            f"<b>{idx}.</b> {role_emoji} <b>{name_clean}</b> (ID: <code>{u.id}</code>) [{status_emoji}]\n"
+            f"   ├ 🌐 {username_str} | 📞 <code>{phone_str}</code>\n"
+            f"   ├ 📌 {extra_txt}\n"
+            f"   └ 🔑 Kirish kodi: <code>{code_val}</code>"
+        )
+        lines.append(user_block)
+
+    body = "\n\n".join(lines)
+    footer = (
+        "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 <i>Pastdagi tugmalar orqali istalgan foydalanuvchi hisobiga 1-bosishda kiring (Ghost Login) yoki dosyesini oching.</i>"
+    )
+    return header + body + footer
 
 
 async def trigger_remote_siren(child_id: int) -> bool:

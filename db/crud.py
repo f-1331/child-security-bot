@@ -1684,3 +1684,51 @@ async def get_app_usage_report_today(session: AsyncSession, child_id: int) -> di
         }
     }
 
+
+async def get_paginated_users(
+    session: AsyncSession,
+    role_filter: Optional[str] = None,
+    search_query: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 8
+) -> Tuple[List[User], int, int]:
+    """
+    Returns (users_list, total_count, total_pages).
+    Supports role filtering ('all', 'parent', 'child', 'banned') and search queries.
+    """
+    stmt = select(User)
+
+    if role_filter == "parent":
+        stmt = stmt.where(User.role == "parent")
+    elif role_filter == "child":
+        stmt = stmt.where(User.role == "child")
+    elif role_filter == "banned":
+        stmt = stmt.where(User.is_active == False)
+
+    if search_query:
+        clean_q = search_query.strip().lstrip("@")
+        if clean_q.isdigit():
+            stmt = stmt.where(or_(User.id == int(clean_q), User.phone_number.ilike(f"%{clean_q}%")))
+        else:
+            stmt = stmt.where(
+                or_(
+                    User.full_name.ilike(f"%{clean_q}%"),
+                    User.username.ilike(f"%{clean_q}%")
+                )
+            )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total_res = await session.execute(count_stmt)
+    total_count = total_res.scalar() or 0
+
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * per_page
+
+    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(per_page)
+    res = await session.execute(stmt)
+    users = list(res.scalars().all())
+
+    return users, total_count, total_pages
+
+

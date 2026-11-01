@@ -29,10 +29,12 @@ from owner_bot.keyboards import (
     get_shield_management_keyboard,
     get_reset_options_keyboard,
     get_factory_reset_confirm_keyboard,
+    get_users_directory_inline_keyboard,
 )
 from owner_bot.logger_buffer import get_recent_logs
 from owner_bot.service import (
     format_dossier_html,
+    format_users_directory_html,
     get_main_bot,
     get_system_diagnostic_html,
     get_apps_and_screen_time_summary,
@@ -42,6 +44,7 @@ from owner_bot.service import (
     get_live_gps_radar,
     get_database_health_stats,
     generate_magic_login_url,
+    get_or_ensure_magic_login_url,
     trigger_remote_siren,
     trigger_remote_screen_lock,
     perform_global_keyboards_refresh,
@@ -70,6 +73,7 @@ class OwnerBotStates(StatesGroup):
     waiting_for_broadcast_confirm = State()
     waiting_for_airdrop_custom = State()
     waiting_for_magic_id = State()
+    waiting_for_user_directory_search = State()
 
 
 # ==============================================================================
@@ -2073,4 +2077,333 @@ async def handle_broadcast_children_prompt(message: Message, state: FSMContext, 
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML"
     )
+
+
+# ==============================================================================
+# BARCHA FOYDALANUVCHILAR KATALOGI VA GHOST LOGIN (IMPERSONATION)
+# ==============================================================================
+@owner_bot_router.message(
+    F.text.contains("Barcha foydalanuvchilar")
+    | (F.text == "/users")
+    | (F.text == "/foydalanuvchilar")
+    | (F.text == "/all_users")
+)
+async def handle_all_users_catalog_cmd(message: Message, state: FSMContext):
+    """Display paginated interactive directory of all bot users."""
+    await state.clear()
+    async with async_session_maker() as session:
+        users, total_count, total_pages = await crud.get_paginated_users(
+            session, role_filter="all", search_query=None, page=1, per_page=8
+        )
+        user_items = []
+        for u in users:
+            magic_url = await get_or_ensure_magic_login_url(session, u)
+            user_items.append({
+                "id": u.id,
+                "name": u.full_name or "Foydalanuvchi",
+                "role": u.role,
+                "magic_url": magic_url,
+            })
+
+        text = await format_users_directory_html(
+            session=session,
+            users=users,
+            total_count=total_count,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+        )
+        kb = get_users_directory_inline_keyboard(
+            user_items=user_items,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+        )
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("login_as", "kirish", "impersonate"))
+async def handle_login_as_cmd(message: Message, command: CommandObject):
+    """Directly generate 1-click magic login URL to impersonate any user."""
+    if not command.args or not command.args.strip().isdigit():
+        await message.answer(
+            "⚠️ <b>Foydalanish:</b> <code>/login_as &lt;user_id&gt;</code>\n"
+            "<i>Misol: <code>/login_as 6707839718</code></i>",
+            parse_mode="HTML",
+        )
+        return
+    user_id = int(command.args.strip())
+    async with async_session_maker() as session:
+        user = await crud.get_user(session, user_id)
+        if not user:
+            await message.answer(
+                f"❌ ID <code>{user_id}</code> bo'yicha foydalanuvchi topilmadi.",
+                parse_mode="HTML",
+            )
+            return
+        magic_url = await get_or_ensure_magic_login_url(session, user)
+
+    role_ico = "👦 Farzand" if user.role == "child" else "👨‍👩‍👧 Ota-ona"
+    code_val = user.web_access_code or user.pairing_code or "Avtomatik"
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🚀 {user.full_name or 'Foydalanuvchi'} hisobiga kirish",
+                    url=magic_url,
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📋 Dosyeni ochish", callback_data=f"adm_inspect:{user.id}"
+                ),
+                InlineKeyboardButton(
+                    text="👥 Katalogga qaytish", callback_data="usr_page:1:all"
+                ),
+            ],
+        ]
+    )
+
+    await message.answer(
+        f"👑 <b>ASOSCHI GHOST LOGIN (1-bosishda kirish):</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Foydalanuvchi:</b> {user.full_name or 'Foydalanuvchi'}\n"
+        f"🆔 <b>Telegram ID:</b> <code>{user.id}</code>\n"
+        f"🎭 <b>Roli:</b> {role_ico}\n"
+        f"🔑 <b>Kirish kodi:</b> <code>{code_val}</code>\n\n"
+        f"🔗 <b>To'g'ridan-to'g'ri havola:</b>\n<code>{magic_url}</code>\n\n"
+        f"<i>Tugmani bosing — WebApp to'g'ridan-to'g'ri ushbu foydalanuvchi ma'lumotlari, xaritasi va balansi bilan ochiladi!</i>",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.callback_query(F.data.startswith("usr_page:"))
+async def on_user_directory_page_cb(callback: CallbackQuery, state: FSMContext):
+    """Handle user directory pagination."""
+    parts = callback.data.split(":")
+    page = int(parts[1])
+    role_filter = parts[2] if len(parts) > 2 else "all"
+
+    state_data = await state.get_data()
+    search_query = state_data.get("user_search_query")
+
+    async with async_session_maker() as session:
+        users, total_count, total_pages = await crud.get_paginated_users(
+            session,
+            role_filter=role_filter,
+            search_query=search_query,
+            page=page,
+            per_page=8,
+        )
+        user_items = []
+        for u in users:
+            magic_url = await get_or_ensure_magic_login_url(session, u)
+            user_items.append({
+                "id": u.id,
+                "name": u.full_name or "Foydalanuvchi",
+                "role": u.role,
+                "magic_url": magic_url,
+            })
+
+        text = await format_users_directory_html(
+            session=session,
+            users=users,
+            total_count=total_count,
+            page=page,
+            total_pages=total_pages,
+            role_filter=role_filter,
+            search_query=search_query,
+        )
+        kb = get_users_directory_inline_keyboard(
+            user_items=user_items,
+            page=page,
+            total_pages=total_pages,
+            role_filter=role_filter,
+            search_query=search_query,
+        )
+
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data.startswith("usr_flt:"))
+async def on_user_directory_filter_cb(callback: CallbackQuery, state: FSMContext):
+    """Handle role filtering in user directory."""
+    role_filter = callback.data.split(":")[1]
+    state_data = await state.get_data()
+    search_query = state_data.get("user_search_query")
+
+    async with async_session_maker() as session:
+        users, total_count, total_pages = await crud.get_paginated_users(
+            session,
+            role_filter=role_filter,
+            search_query=search_query,
+            page=1,
+            per_page=8,
+        )
+        user_items = []
+        for u in users:
+            magic_url = await get_or_ensure_magic_login_url(session, u)
+            user_items.append({
+                "id": u.id,
+                "name": u.full_name or "Foydalanuvchi",
+                "role": u.role,
+                "magic_url": magic_url,
+            })
+
+        text = await format_users_directory_html(
+            session=session,
+            users=users,
+            total_count=total_count,
+            page=1,
+            total_pages=total_pages,
+            role_filter=role_filter,
+            search_query=search_query,
+        )
+        kb = get_users_directory_inline_keyboard(
+            user_items=user_items,
+            page=1,
+            total_pages=total_pages,
+            role_filter=role_filter,
+            search_query=search_query,
+        )
+
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer(f"Filtr: {role_filter}")
+
+
+@owner_bot_router.callback_query(F.data.startswith("usr_sel:"))
+async def on_user_select_from_directory_cb(callback: CallbackQuery):
+    """Inspect user dossier directly from directory."""
+    user_id = int(callback.data.split(":")[1])
+    async with async_session_maker() as session:
+        dossier = await crud.get_user_full_dossier(session, user_id)
+        if not dossier:
+            await callback.answer("Foydalanuvchi topilmadi!", show_alert=True)
+            return
+        user = dossier["user"]
+        text = format_dossier_html(dossier)
+        kb = get_user_dossier_inline_keyboard(
+            user_id=user.id,
+            is_sos=user.is_sos_active,
+            has_location=bool(dossier.get("latest_location")),
+            role=user.role,
+        )
+    await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "usr_search")
+async def on_user_search_start_cb(callback: CallbackQuery, state: FSMContext):
+    """Prompt owner to enter search query."""
+    await state.set_state(OwnerBotStates.waiting_for_user_directory_search)
+    await callback.message.answer(
+        "🔍 <b>Foydalanuvchilarni qidirish</b>\n\n"
+        "Qidirmoqchi bo'lgan foydalanuvchining <b>Ismi</b>, <b>@username</b>, <b>Telegram ID</b> yoki <b>Telefon raqami</b>ni yuboring:",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@owner_bot_router.message(OwnerBotStates.waiting_for_user_directory_search)
+async def process_user_directory_search_msg(
+    message: Message, state: FSMContext, auth_info: Dict[str, Any]
+):
+    """Process search query and show results."""
+    if not message.text:
+        return
+    query = message.text.strip()
+    await state.update_data(user_search_query=query)
+
+    async with async_session_maker() as session:
+        users, total_count, total_pages = await crud.get_paginated_users(
+            session, role_filter="all", search_query=query, page=1, per_page=8
+        )
+        user_items = []
+        for u in users:
+            magic_url = await get_or_ensure_magic_login_url(session, u)
+            user_items.append({
+                "id": u.id,
+                "name": u.full_name or "Foydalanuvchi",
+                "role": u.role,
+                "magic_url": magic_url,
+            })
+
+        text = await format_users_directory_html(
+            session=session,
+            users=users,
+            total_count=total_count,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+            search_query=query,
+        )
+        kb = get_users_directory_inline_keyboard(
+            user_items=user_items,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+            search_query=query,
+        )
+
+    await message.answer(
+        text,
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+
+@owner_bot_router.callback_query(F.data == "usr_clear_search")
+async def on_user_search_clear_cb(callback: CallbackQuery, state: FSMContext):
+    """Clear active search filter."""
+    await state.clear()
+    async with async_session_maker() as session:
+        users, total_count, total_pages = await crud.get_paginated_users(
+            session, role_filter="all", search_query=None, page=1, per_page=8
+        )
+        user_items = []
+        for u in users:
+            magic_url = await get_or_ensure_magic_login_url(session, u)
+            user_items.append({
+                "id": u.id,
+                "name": u.full_name or "Foydalanuvchi",
+                "role": u.role,
+                "magic_url": magic_url,
+            })
+
+        text = await format_users_directory_html(
+            session=session,
+            users=users,
+            total_count=total_count,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+        )
+        kb = get_users_directory_inline_keyboard(
+            user_items=user_items,
+            page=1,
+            total_pages=total_pages,
+            role_filter="all",
+        )
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer("Qidiruv tozalandi.")
+
+
+@owner_bot_router.callback_query(F.data.startswith("usr_noop:"))
+async def on_user_directory_noop(callback: CallbackQuery):
+    """Page number no-op button."""
+    await callback.answer(f"Hozirgi sahifa: {callback.data.split(':')[1]}")
+
 

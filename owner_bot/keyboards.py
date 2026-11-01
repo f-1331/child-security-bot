@@ -1,3 +1,5 @@
+from typing import Any, Dict, List, Optional
+
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -14,39 +16,42 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="📡 Jonli GPS Radar"),
         ],
         [
+            KeyboardButton(text="👥 Barcha foydalanuvchilar"),
             KeyboardButton(text="👥 Faol foydalanuvchilar"),
+        ],
+        [
             KeyboardButton(text="🔍 ID bo'yicha tekshirish"),
+            KeyboardButton(text="🔑 Magic Login Link"),
         ],
         [
             KeyboardButton(text="🚨 Faol SOS signallari"),
             KeyboardButton(text="🔋 Batareya & Qurilmalar radari"),
         ],
         [
-            KeyboardButton(text="🔑 Magic Login Link"),
             KeyboardButton(text="🏆 TOP Balanslar & Tangalar"),
-        ],
-        [
             KeyboardButton(text="🛡️ Xavfsizlik & Anti-Spam"),
-            KeyboardButton(text="👥 Adminlarni boshqarish"),
         ],
         [
+            KeyboardButton(text="👥 Adminlarni boshqarish"),
             KeyboardButton(text="📢 Hammaga xabar (Broadcast)"),
-            KeyboardButton(text="🎁 Bolalarga bonus (Airdrop)"),
         ],
         [
             KeyboardButton(text="🌐 Server & Diagnostika"),
             KeyboardButton(text="🗄️ Neon DB Holati"),
         ],
         [
+            KeyboardButton(text="🎁 Bolalarga bonus (Airdrop)"),
             KeyboardButton(text="📱 Ilova havolalari (APK)"),
+        ],
+        [
             KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
-        ],
-        [
             KeyboardButton(text="🔄 Barchada botni reset qilish"),
-            KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
         ],
         [
+            KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
             KeyboardButton(text="📑 Server loglari"),
+        ],
+        [
             KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]
@@ -332,4 +337,113 @@ def get_factory_reset_confirm_keyboard() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def get_users_directory_inline_keyboard(
+    user_items: List[Dict[str, Any]],
+    page: int,
+    total_pages: int,
+    role_filter: str = "all",
+    search_query: Optional[str] = None
+) -> InlineKeyboardMarkup:
+    """
+    Build rich inline keyboard for the bot users directory.
+    Includes user selection buttons, 1-tap direct WebApp ghost login,
+    role filters, pagination, and search controls.
+    """
+    buttons = []
+
+    # 1. User selector rows: [Role + Name] and [🚀 Kirish (Ghost Login)]
+    for idx, item in enumerate(user_items, start=1):
+        uid = item.get("id")
+        name = (item.get("name") or "Foydalanuvchi").split()[0][:12]
+        role = item.get("role") or "parent"
+        role_ico = "👦" if role == "child" else "👨‍👩‍👧"
+        magic_url = item.get("magic_url")
+
+        row = [
+            InlineKeyboardButton(
+                text=f"{role_ico} {idx}. {name}",
+                callback_data=f"usr_sel:{uid}"
+            )
+        ]
+        if magic_url:
+            row.append(
+                InlineKeyboardButton(
+                    text="🚀 Kirish (WebApp)",
+                    url=magic_url
+                )
+            )
+        else:
+            row.append(
+                InlineKeyboardButton(
+                    text="🔑 Kirish link",
+                    callback_data=f"usr_magic:{uid}"
+                )
+            )
+        buttons.append(row)
+
+    # 2. Filter tabs: All, Parent, Child, Banned
+    filter_tabs = [
+        InlineKeyboardButton(
+            text="✅ Barcha" if role_filter == "all" else "🌐 Barcha",
+            callback_data="usr_flt:all"
+        ),
+        InlineKeyboardButton(
+            text="✅ Ota-ona" if role_filter == "parent" else "👨‍👩‍👧 Ota-ona",
+            callback_data="usr_flt:parent"
+        ),
+        InlineKeyboardButton(
+            text="✅ Bolalar" if role_filter == "child" else "👦 Bolalar",
+            callback_data="usr_flt:child"
+        ),
+        InlineKeyboardButton(
+            text="✅ Blok" if role_filter == "banned" else "🚫 Blok",
+            callback_data="usr_flt:banned"
+        ),
+    ]
+    buttons.append(filter_tabs)
+
+    # 3. Pagination controls: [◀️ Oldingi] [📄 X/Y] [Keyingi ▶️]
+    nav_row = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="◀️ Oldingi",
+                callback_data=f"usr_page:{page - 1}:{role_filter}"
+            )
+        )
+    nav_row.append(
+        InlineKeyboardButton(
+            text=f"📄 {page}/{total_pages}",
+            callback_data=f"usr_noop:{page}"
+        )
+    )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="Keyingi ▶️",
+                callback_data=f"usr_page:{page + 1}:{role_filter}"
+            )
+        )
+    buttons.append(nav_row)
+
+    # 4. Search and Refresh
+    action_row = [
+        InlineKeyboardButton(text="🔍 Qidirish", callback_data="usr_search"),
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"usr_page:{page}:{role_filter}"),
+    ]
+    if search_query:
+        action_row.append(
+            InlineKeyboardButton(text="❌ Qidiruvni tozalash", callback_data="usr_clear_search")
+        )
+    buttons.append(action_row)
+
+    # 5. Back to Main Dashboard
+    buttons.append([
+        InlineKeyboardButton(text="🔙 Boshqaruv paneli", callback_data="adm_back_main")
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 
