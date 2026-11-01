@@ -1,3 +1,4 @@
+import html
 import os
 import platform
 import sys
@@ -644,4 +645,329 @@ async def trigger_remote_screen_lock(child_id: int, lock: bool) -> bool:
         except Exception:
             pass
     return True
+
+
+async def perform_global_keyboards_refresh(bot: Optional[Bot], session: AsyncSession) -> Tuple[int, int]:
+    """
+    Sends updated reply keyboard to all active parents and children.
+    Returns (success_count, fail_count).
+    """
+    from db.models import User
+    from sqlalchemy import select
+    from bot.keyboards import get_parent_main_keyboard, get_child_main_keyboard, get_role_selection_keyboard
+
+    target_bot = bot or get_main_bot()
+    if not target_bot:
+        return 0, 0
+
+    res = await session.execute(select(User).where(User.is_active == True))
+    users = res.scalars().all()
+    success_count = 0
+    fail_count = 0
+
+    msg = (
+        "🔄 <b>BOT YANGILANDI VA MENYULAR RESET QILINDI!</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Hurmatli foydalanuvchi!\n\n"
+        "Bot xizmatlari muvaffaqiyatli qayta ishga tushirildi. "
+        "Barcha yangi tugmalar, offline SMS va tezkor xabarnomalar faollashtirildi 👇\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    for u in users:
+        if u.role == "parent":
+            kb = get_parent_main_keyboard(u.id)
+        elif u.role == "child":
+            kb = get_child_main_keyboard(u.id)
+        else:
+            kb = get_role_selection_keyboard()
+
+        try:
+            await target_bot.send_message(chat_id=u.id, text=msg, reply_markup=kb, parse_mode="HTML")
+            success_count += 1
+        except Exception:
+            fail_count += 1
+
+    return success_count, fail_count
+
+
+async def perform_global_cache_and_sos_reset(session: AsyncSession) -> dict:
+    """Clear all active SOS alerts and reset transient demo balances."""
+    from db.models import User
+    from sqlalchemy import update
+
+    stmt = update(User).where(User.is_sos_active == True).values(is_sos_active=False)
+    res = await session.execute(stmt)
+    await session.commit()
+    cleared_sos = res.rowcount if hasattr(res, "rowcount") else 0
+
+    return {
+        "cleared_sos": cleared_sos,
+        "status": "success"
+    }
+
+
+async def perform_global_factory_reset(bot: Optional[Bot], session: AsyncSession) -> Tuple[int, int]:
+    """
+    Factory reset: Unlinks all parents and children, resets roles to 'unassigned',
+    clears pairing codes and active SOS, and sends onboarding role selection keyboard to all users.
+    Returns (reset_users_count, notified_count).
+    """
+    from db.models import User, ParentChildLink
+    from sqlalchemy import select, delete, update
+    from bot.keyboards import get_role_selection_keyboard
+
+    # 1. Delete all parent-child connections
+    await session.execute(delete(ParentChildLink))
+
+    # 2. Reset roles, pairing codes, web codes, and SOS
+    stmt = (
+        update(User)
+        .values(
+            role="unassigned",
+            pairing_code=None,
+            pairing_code_created_at=None,
+            web_access_code=None,
+            is_sos_active=False
+        )
+    )
+    res = await session.execute(stmt)
+    await session.commit()
+    reset_count = res.rowcount if hasattr(res, "rowcount") else 0
+
+    # 3. Notify all users with fresh onboarding keyboard
+    target_bot = bot or get_main_bot()
+    notified_count = 0
+    if target_bot:
+        users_res = await session.execute(select(User).where(User.is_active == True))
+        users = users_res.scalars().all()
+        notice_text = (
+            "🔄 <b>TIZIM BOSHLANG'ICH HOLATGA QAYTARILDI!</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Hurmatli foydalanuvchi!\n\n"
+            "Platforma yangilanishi munosabati bilan barcha hisoblar boshlang'ich holatga keltirildi.\n\n"
+            "Iltimos, pastdagi tugmalar orqali qaytadan o'z rolingizni tanlang 👇\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        role_kb = get_role_selection_keyboard()
+        for u in users:
+            try:
+                await target_bot.send_message(chat_id=u.id, text=notice_text, reply_markup=role_kb, parse_mode="HTML")
+                notified_count += 1
+            except Exception:
+                pass
+
+    return reset_count, notified_count
+
+
+async def get_online_activity_summary(session: AsyncSession) -> Tuple[str, InlineKeyboardMarkup]:
+    """Fetch live online user statistics (last 15m, 1h, 24h)."""
+    from db.models import User, LocationLog
+    from sqlalchemy import select, func, desc
+
+    now_utc = datetime.now(timezone.utc)
+    t_15m = now_utc - timedelta(minutes=15)
+    t_1h = now_utc - timedelta(hours=1)
+    t_24h = now_utc - timedelta(hours=24)
+
+    # 1. Locations in last 15m, 1h, 24h
+    res_15m = await session.execute(select(func.count(func.distinct(LocationLog.child_id))).where(LocationLog.recorded_at >= t_15m))
+    active_children_15m = res_15m.scalar() or 0
+
+    res_1h = await session.execute(select(func.count(func.distinct(LocationLog.child_id))).where(LocationLog.recorded_at >= t_1h))
+    active_children_1h = res_1h.scalar() or 0
+
+    res_24h = await session.execute(select(func.count(func.distinct(LocationLog.child_id))).where(LocationLog.recorded_at >= t_24h))
+    active_children_24h = res_24h.scalar() or 0
+
+    # 2. Total user counts
+    tot_p = await session.execute(select(func.count(User.id)).where(User.role == "parent"))
+    total_parents = tot_p.scalar() or 0
+
+    tot_c = await session.execute(select(func.count(User.id)).where(User.role == "child"))
+    total_children = tot_c.scalar() or 0
+
+    # 3. Active children list with recent ping
+    recent_locs = await session.execute(
+        select(LocationLog)
+        .order_by(desc(LocationLog.recorded_at))
+        .limit(8)
+    )
+    latest_logs = recent_locs.scalars().all()
+
+    seen_ids = set()
+    lines = []
+    for log in latest_logs:
+        if log.child_id in seen_ids:
+            continue
+        seen_ids.add(log.child_id)
+        ch = await crud.get_user(session, log.child_id)
+        c_name = ch.full_name if ch else f"Farzand #{log.child_id}"
+        delta_m = int((now_utc - log.recorded_at).total_seconds() / 60) if log.recorded_at else 0
+        ago_str = "Hozirgina" if delta_m < 2 else f"{delta_m} daqiqa oldin"
+        batt = f"{log.battery_level}%" if log.battery_level is not None else "?%"
+        lines.append(f"• <b>{html.escape(c_name)}</b> (ID: <code>{log.child_id}</code>) — 🔋 {batt} ({ago_str})")
+
+    pings_txt = "\n".join(lines) if lines else "<i>Hozircha faol signallar yo'q</i>"
+
+    text = (
+        "👥 <b>FAOL FOYDALANUVCHILAR VA JONLI MONITORING</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🟢 <b>Ayni damda onlayn (so'nggi 15 daqiqa):</b> <code>{active_children_15m}</code> ta farzand\n"
+        f"🕒 <b>So'nggi 1 soatda faol:</b> <code>{active_children_1h}</code> ta farzand\n"
+        f"📅 <b>Bugungi faol qurilmalar (24 soat):</b> <code>{active_children_24h}</code> ta\n\n"
+        f"👨‍👩‍👧 <b>Jami ota-onalar:</b> <code>{total_parents}</code> ta\n"
+        f"👦 <b>Jami farzandlar:</b> <code>{total_children}</code> ta\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📍 <b>So'nggi signal yuborgan qurilmalar:</b>\n{pings_txt}\n\n"
+        "🔄 <i>Ma'lumotlar jonli telemetriya asosida tuzildi.</i>"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔄 Yangilash", callback_data="adm_refresh_online"),
+                InlineKeyboardButton(text="📡 GPS Radar", callback_data="adm_refresh_radar")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")
+            ]
+        ]
+    )
+    return text, kb
+
+
+async def get_top_balances_summary(session: AsyncSession) -> Tuple[str, InlineKeyboardMarkup]:
+    """Fetch economy stats and top-10 richest children by coin balances."""
+    from db.models import User
+    from sqlalchemy import select, func, desc
+
+    res_sum = await session.execute(
+        select(func.sum(User.virtual_balance)).where(User.role == "child")
+    )
+    total_coins = res_sum.scalar() or 0
+
+    res_avg = await session.execute(
+        select(func.avg(User.virtual_balance)).where(User.role == "child")
+    )
+    avg_coins = int(res_avg.scalar() or 0)
+
+    # Top-10
+    res_top = await session.execute(
+        select(User)
+        .where(User.role == "child")
+        .order_by(desc(User.virtual_balance))
+        .limit(10)
+    )
+    top_children = res_top.scalars().all()
+
+    total_som_est = total_coins * 10
+
+    lines = []
+    medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    for i, ch in enumerate(top_children):
+        medal = medals[i] if i < len(medals) else f"{i+1}."
+        bal = ch.virtual_balance or 0
+        som_val = bal * 10
+        u_name = f"@{ch.username}" if ch.username else f"ID: {ch.id}"
+        lines.append(f"{medal} <b>{html.escape(ch.full_name or 'Farzand')}</b> ({u_name})\n   └ 🪙 <b>{bal:,} tanga</b> (~{som_val:,} so'm)")
+
+    top_txt = "\n".join(lines) if lines else "<i>Hali tangalar mavjud emas</i>"
+
+    text = (
+        "🏆 <b>TANGALAR IQTISODIYOTI & TOP REYTING</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🪙 <b>Muomaladagi jami tangalar:</b> <code>{total_coins:,}</code> tanga\n"
+        f"💵 <b>Taxminiy so'm ekvivalenti:</b> ~<code>{total_som_est:,}</code> so'm\n"
+        f"📊 <b>O'rtacha balans:</b> <code>{avg_coins:,}</code> tanga/farzand\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎖 <b>ENG KO'P TANGA TOPGAN BOLALAR (TOP-10):</b>\n\n{top_txt}\n\n"
+        "💡 <i>Tangalarni ko'paytirish uchun <code>/airdrop</code> yoki <code>/add_coins &lt;id&gt; &lt;son&gt;</code> buyruqlaridan foydalaning.</i>"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎁 Hammaga Airdrop", callback_data="ad_amt_custom"),
+                InlineKeyboardButton(text="🔄 Yangilash", callback_data="adm_refresh_coins")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")
+            ]
+        ]
+    )
+    return text, kb
+
+
+def get_app_download_links_html() -> Tuple[str, InlineKeyboardMarkup]:
+    """Return all platform download links and installation options."""
+    apk_url = "https://child-security-bot.vercel.app/app/child-security.apk"
+    webapp_url = "https://child-security-bot.vercel.app"
+    render_api_url = "https://child-security-site.onrender.com"
+
+    text = (
+        "📱 <b>CHILD SECURITY — RASMIY ILOVALAR VA HAVOLALAR</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Platformaning barcha rasmiy distributivlari va xizmatlari:\n\n"
+        f"🤖 <b>Android Ilova (APK):</b>\n"
+        f"└ <a href='{apk_url}'>APK Yuklab Olish (Doimiy 24/7 Fon GPS, Ilovalar tahlili, Bloklash qalqoni)</a>\n\n"
+        f"🌐 <b>Rasmiy WebApp Portali (Vercel):</b>\n"
+        f"└ <a href='{webapp_url}'>{webapp_url}</a>\n\n"
+        f"💻 <b>Noutbuk & Kompyuter (PWA / Desktop):</b>\n"
+        f"└ Brauzer orqali kompyuterga 1-bosishda o'rnatish imkoniyati mavjud\n\n"
+        f"🤖 <b>Asosiy Telegram Boti:</b>\n"
+        f"└ @child_security_bot\n\n"
+        f"⚡ <b>Render Backend Server:</b>\n"
+        f"└ <code>{render_api_url}</code>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "✅ <i>Barcha ilovalar oxirgi xavfsizlik versiyasiga yangilangan.</i>"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🤖 APK Faylini Yuklash", url=apk_url),
+                InlineKeyboardButton(text="🌐 Saytni Ochish", url=webapp_url)
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")
+            ]
+        ]
+    )
+    return text, kb
+
+
+async def perform_add_coins_to_child(session: AsyncSession, child_id: int, amount: int) -> Tuple[bool, int, str]:
+    """Add or subtract virtual coins to a specific child."""
+    child = await crud.get_user(session, child_id)
+    if not child:
+        return False, 0, f"ID: {child_id} bo'yicha farzand topilmadi."
+    new_bal = max(0, (child.virtual_balance or 0) + amount)
+    child.virtual_balance = new_bal
+    await session.commit()
+
+    main_bot = get_main_bot()
+    if main_bot:
+        try:
+            sign = f"+{amount}" if amount > 0 else f"{amount}"
+            await main_bot.send_message(
+                chat_id=child_id,
+                text=f"🎁 <b>ADMINISTRATSIYA SIZGA BONUS BERDI!</b>\n\nHisobingizga <b>{sign} tanga</b> qo'shildi! 🪙\nHozirgi balansingiz: <b>{new_bal:,} tanga</b>.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    return True, new_bal, f"{child.full_name} balansi muvaffaqiyatli o'zgartirildi: {new_bal:,} tanga."
+
+
+async def perform_ban_toggle(session: AsyncSession, user_id: int, ban: bool) -> Tuple[bool, str]:
+    """Ban (deactivate) or unban (reactivate) a user."""
+    user = await crud.get_user(session, user_id)
+    if not user:
+        return False, f"ID: {user_id} bo'yicha foydalanuvchi topilmadi."
+    user.is_active = not ban
+    await session.commit()
+    action_str = "bloklandi" if ban else "blokdan chiqarildi"
+    return True, f"Foydalanuvchi {user.full_name} (ID: {user_id}) muvaffaqiyatli {action_str}!"
 

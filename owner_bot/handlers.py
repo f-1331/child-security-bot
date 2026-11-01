@@ -27,6 +27,8 @@ from owner_bot.keyboards import (
     get_user_dossier_inline_keyboard,
     get_airdrop_preset_keyboard,
     get_shield_management_keyboard,
+    get_reset_options_keyboard,
+    get_factory_reset_confirm_keyboard,
 )
 from owner_bot.logger_buffer import get_recent_logs
 from owner_bot.service import (
@@ -42,6 +44,14 @@ from owner_bot.service import (
     generate_magic_login_url,
     trigger_remote_siren,
     trigger_remote_screen_lock,
+    perform_global_keyboards_refresh,
+    perform_global_cache_and_sos_reset,
+    perform_global_factory_reset,
+    get_online_activity_summary,
+    get_top_balances_summary,
+    get_app_download_links_html,
+    perform_add_coins_to_child,
+    perform_ban_toggle,
 )
 
 logger = logging.getLogger("smart_parental_tracker.owner_bot")
@@ -739,8 +749,8 @@ async def callback_prompt_add_admin(callback: CallbackQuery, state: FSMContext, 
     await state.set_state(OwnerBotStates.waiting_for_add_admin_id)
     await callback.message.answer(
         "➕ <b>Yangi Admin qo'shish</b>\n\n"
-        "Admin qilmoqchi bo'lgan foydalanuvchining <b>Telegram ID</b> raqamini kiriting:\n\n"
-        "<i>(Foydalanuvchi o'z ID raqamini @userinfobot orqali bilishi mumkin)</i>",
+        "Admin qilmoqchi bo'lgan foydalanuvchining <b>Telegram ID</b> raqamini yoki <b>@username</b>ini kiriting:\n\n"
+        "<i>Misol: <code>123456789</code> yoki <code>@admin_username</code></i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML",
     )
@@ -750,21 +760,29 @@ async def callback_prompt_add_admin(callback: CallbackQuery, state: FSMContext, 
 @owner_bot_router.message(OwnerBotStates.waiting_for_add_admin_id)
 async def process_add_admin_id(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
     if not message.text:
-        await message.answer("⚠️ Iltimos, Telegram ID raqamini raqamlar bilan kiriting:")
+        await message.answer("⚠️ Iltimos, Telegram ID raqamini yoki @username'ni yuboring:")
         return
-    text = message.text.strip()
-    if not text.isdigit():
-        await message.answer("❌ Telegram ID faqat raqamlardan iborat bo'lishi kerak. Qaytadan kiriting:")
-        return
-
-    new_admin_id = int(text)
+    query = message.text.strip()
     await state.clear()
 
     async with async_session_maker() as session:
-        # Check if user exists in users table to pull their username/name if possible
-        existing_user = await crud.get_user(session, new_admin_id)
-        uname = existing_user.username if existing_user else None
-        fname = existing_user.full_name if existing_user else f"Admin #{new_admin_id}"
+        target_user = await crud.search_user_by_query(session, query)
+        if target_user:
+            new_admin_id = target_user.id
+            uname = target_user.username
+            fname = target_user.full_name or f"Admin #{new_admin_id}"
+        elif query.isdigit():
+            new_admin_id = int(query)
+            uname = None
+            fname = f"Admin #{new_admin_id}"
+        else:
+            await message.answer(
+                f"❌ <b>'{query}'</b> bo'yicha foydalanuvchi topilmadi.\n\n"
+                "Iltimos, foydalanuvchi avval botga /start bosgan bo'lishi yoki uning raqamli Telegram ID raqamini kiritishingiz kerak.",
+                reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+                parse_mode="HTML"
+            )
+            return
 
         admin = await crud.add_admin_user(
             session=session,
@@ -779,10 +797,74 @@ async def process_add_admin_id(message: Message, state: FSMContext, auth_info: D
         f"👤 Ism: <b>{admin.full_name}</b>\n"
         f"🆔 Telegram ID: <code>{admin.id}</code>\n"
         f"🌐 Username: @{admin.username if admin.username else 'N/A'}\n\n"
-        f"<i>Endi ushbu foydalanuvchi @child_security_owner_bot ga kirib boshqaruvdan foydalanishi mumkin.</i>",
+        f"<i>Endi ushbu foydalanuvchi boshqaruv konsolidan foydalanishi mumkin.</i>",
         reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
         parse_mode="HTML",
     )
+
+
+@owner_bot_router.message(Command("add_admin"))
+async def handle_cmd_add_admin(message: Message, command: CommandObject, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat bosh ega admin qo'sha oladi!")
+        return
+    if not command.args or not command.args.strip():
+        await message.answer("⚠️ Foydalanish: <code>/add_admin &lt;Telegram_ID yoki @username&gt;</code>", parse_mode="HTML")
+        return
+    query = command.args.strip()
+    async with async_session_maker() as session:
+        target_user = await crud.search_user_by_query(session, query)
+        if target_user:
+            new_admin_id = target_user.id
+            uname = target_user.username
+            fname = target_user.full_name or f"Admin #{new_admin_id}"
+        elif query.isdigit():
+            new_admin_id = int(query)
+            uname = None
+            fname = f"Admin #{new_admin_id}"
+        else:
+            await message.answer(
+                f"❌ <b>'{query}'</b> topilmadi.\nFoydalanuvchi botga /start bosgan bo'lishi yoki raqamli Telegram ID kiritilishi kerak.",
+                parse_mode="HTML"
+            )
+            return
+
+        admin = await crud.add_admin_user(
+            session=session,
+            user_id=new_admin_id,
+            username=uname,
+            full_name=fname,
+            added_by=message.from_user.id,
+        )
+    await message.answer(
+        f"✅ <b>Administrator muvaffaqiyatli qo'shildi!</b>\n\n"
+        f"👤 Ism: <b>{admin.full_name}</b>\n"
+        f"🆔 ID: <code>{admin.id}</code>\n"
+        f"🌐 Username: @{admin.username if admin.username else 'N/A'}",
+        parse_mode="HTML"
+    )
+
+
+@owner_bot_router.message(Command("del_admin", "remove_admin"))
+async def handle_cmd_del_admin(message: Message, command: CommandObject, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat bosh ega adminni o'chira oladi!")
+        return
+    if not command.args or not command.args.strip():
+        await message.answer("⚠️ Foydalanish: <code>/del_admin &lt;Telegram_ID yoki @username&gt;</code>", parse_mode="HTML")
+        return
+    query = command.args.strip()
+    async with async_session_maker() as session:
+        target_user = await crud.search_user_by_query(session, query)
+        target_id = target_user.id if target_user else (int(query) if query.isdigit() else None)
+        if not target_id:
+            await message.answer("❌ Admin topilmadi.")
+            return
+        removed = await crud.remove_admin_user(session, target_id)
+        if removed:
+            await message.answer(f"✅ Admin (ID: <code>{target_id}</code>) o'chirildi.", parse_mode="HTML")
+        else:
+            await message.answer("❌ Ushbu admin o'chirilmadi (ehtimol u bosh ega yoki adminlar ro'yxatida yo'q).")
 
 
 @owner_bot_router.callback_query(F.data == "adm_remove_admin_list")
@@ -1058,20 +1140,45 @@ async def handle_owner_clean_chat(message: Message, bot: Bot):
 @owner_bot_router.message(F.text.contains("Yordam") | (F.text == "/help"))
 async def handle_help(message: Message, auth_info: Dict[str, Any]):
     help_text = (
-        "📖 <b>EGA VA ADMIN BOTI BO'YICHA QO'LLANMA</b>\n\n"
+        "👑 <b>EGA VA ADMIN BOTI TO'LIQ QO'LLANMASI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "⚡️ <b>Asosiy buyruqlar:</b>\n"
         "• /start yoki /menu — Asosiy boshqaruv menyusini ochish\n"
         "• /stats — Platforma bo'yicha jonli statistika\n"
-        "• /inspect — ID yoki username bo'yicha foydalanuvchini to'liq tekshirish\n"
-        "• /sos_list — Faol SOS signallari ro'yxati\n"
-        "• /admins — Adminlarni boshqarish (faqat bosh ega uchun)\n"
-        "• /broadcast — Ommaviy xabar yuborish\n"
-        "• /server — Server, xotira, DB va xavfsizlik diagnostikasi\n"
-        "• /recent — So'nggi ro'yxatdan o'tgan foydalanuvchilar\n"
-        "• /logs — Real vaqt rejimida server loglari\n"
-        "• /backup — Ma'lumotlar bazasi zaxirasini Telegramga yuklab olish\n"
-        "• /desktop — Noutbuk & PC versiyasini yuklab olish fayli\n\n"
-        "👑 <b>Bosh ega:</b> @fayzbek1331"
+        "• /online — Ayni damda faol/onlayn farzandlar soni va ro'yxati\n"
+        "• /radar — Jonli GPS radari (harakatdagi farzandlar)\n"
+        "• /find_child &lt;id&gt; — Farzandning aniq GPS koordinatasi va Google/Yandex Maps xaritasi\n\n"
+        "🔍 <b>Foydalanuvchi nazorati:</b>\n"
+        "• /inspect &lt;id&gt; — Foydalanuvchini to'liq tekshirish (dosye, ulanish kodi, telefon)\n"
+        "• /magic &lt;id&gt; — 1-bosishda parolsiz WebApp hisobiga kirish havolasi\n"
+        "• /ban &lt;id&gt; va /unban &lt;id&gt; — Shubhali akkauntni bloklash yoki ochish\n"
+        "• /ban_list — Bloklangan foydalanuvchilar ro'yxati\n\n"
+        "🚨 <b>Favqulodda SOS & Xavfsizlik:</b>\n"
+        "• /sos_list — Hozirda faol SOS signallari ro'yxati\n"
+        "• /sos_resolve_all — Barcha faol SOS signallarini bir bosishda to'xtatish\n"
+        "• /tamper_logs — Buzg'unchilik va qalbaki GPS jurnali (so'nggi hodisalar)\n"
+        "• /siren &lt;id&gt; — Farzand telefonida masofadan baland sirena yoqish\n"
+        "• /lock &lt;id&gt; va /unlock &lt;id&gt; — Ekranni masofadan qulflash/ochish\n\n"
+        "🪙 <b>Tangalar va Iqtisodiyot:</b>\n"
+        "• /top_balances — Eng ko'p tanga topgan bolalar reytingi (TOP-10)\n"
+        "• /airdrop — Barcha bolalarga ommaviy tanga tarqatish\n"
+        "• /add_coins &lt;id&gt; &lt;son&gt; — Farzandga shaxsiy tanga mukofoti berish\n"
+        "• /sub_coins &lt;id&gt; &lt;son&gt; — Farzanddan tanga ayirish\n"
+        "• /reset_demo_balance — Demo/sinov hisobidagi ortiqcha balansni 0 ga tushirish\n\n"
+        "📢 <b>Xabarnomalar va Global Reset:</b>\n"
+        "• /broadcast — Barcha foydalanuvchilarga ommaviy xabar\n"
+        "• /broadcast_parents — Faqat ota-onalarga xabar\n"
+        "• /broadcast_children — Faqat farzandlarga xabar\n"
+        "• /global_reset — Barcha foydalanuvchilarda klaviatura va menyuni yangilash\n\n"
+        "🛠 <b>Server va Baza Boshqaruvi:</b>\n"
+        "• /server yoki /diagnostika — Server CPU, RAM, disk va DB kechikishi (ping)\n"
+        "• /db_stats — Neon PostgreSQL jadvallari va xotira holati\n"
+        "• /optimize — Bazani tozalash va indekslarni tezlashtirish\n"
+        "• /backup — Bazani Telegramga zaxira fayl qilib yuklab olish\n"
+        "• /app_links — Android APK, WebApp va PC rasmiy yuklab olish havolalari\n"
+        "• /logs — So'nggi jonli server xatolari va loglari\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "👑 <b>Bosh ega:</b> @fayzbek1331 (ID: 6707839718)"
     )
     await message.answer(
         help_text,
@@ -1362,6 +1469,121 @@ async def handle_airdrop_custom_submit(message: Message, state: FSMContext, auth
 
 
 # ==============================================================================
+# BARCHADA BOTNI RESET QILISH (GLOBAL RESET)
+# ==============================================================================
+@owner_bot_router.message(F.text.contains("reset qilish") | (F.text == "/reset_all") | (F.text == "/global_reset"))
+async def handle_global_reset_menu(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Ushbu amal faqat Bosh Ega uchun ruxsat etilgan.")
+        return
+    text = (
+        "🔄 <b>BARCHADA BOTNI RESET QILISH VA YANGILASH</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Quyidagi reset darajalaridan birini tanlang:\n\n"
+        "1. <b>🔄 Menyu va tugmalarni yangilash:</b> Barcha faol ota-ona va bolalarga eng so'nggi bot tugmalari va yangilangan menyuni qayta yuboradi.\n"
+        "2. <b>🧹 Kesh va SOS tozalash:</b> Tizimdagi barcha faol SOS signallarini xavfsiz o'chiradi va sessiyalarni normallashtiradi.\n"
+        "3. <b>⚠️ Barchani boshlang'ich holatga qaytarish (Factory Reset):</b> Barcha ulanishlarni uzadi va barcha foydalanuvchilarni /start holatiga qaytaradi.\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    await message.answer(text, reply_markup=get_reset_options_keyboard(), parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:keyboards")
+async def handle_reset_keyboards_callback(callback: CallbackQuery, bot: Bot, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega uchun!", show_alert=True)
+        return
+    await callback.message.edit_text("⏳ <i>Barcha foydalanuvchilarga yangi menyu yuborilmoqda va reset qilinmoqda...</i>", parse_mode="HTML")
+    async with async_session_maker() as session:
+        success, fails = await perform_global_keyboards_refresh(bot, session)
+    await callback.message.edit_text(
+        f"✅ <b>BARCHADA BOT MENYUSI YANGILANDI VA RESET QILINDI!</b>\n\n"
+        f"• 🟢 Yangilangan foydalanuvchilar: <b>{success} ta</b>\n"
+        f"• 🔴 Yetib bormaganlar: <b>{fails} ta</b>\n\n"
+        f"Barcha foydalanuvchilarning chatida so'nggi tugmalar va xavfsizlik menyusi tiklandi.",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Muvaffaqiyatli yangilandi!")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:cache_sos")
+async def handle_reset_cache_sos_callback(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega uchun!", show_alert=True)
+        return
+    async with async_session_maker() as session:
+        res = await perform_global_cache_and_sos_reset(session)
+    await callback.message.edit_text(
+        f"✅ <b>KESH VA SOS SIGNALLARI TOZALANDI!</b>\n\n"
+        f"• O'chirilgan faol SOS signallari: <b>{res['cleared_sos']} ta</b>\n"
+        f"• Tizim sessiyalari to'liq normallashtirildi.",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Tozalandi!")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:ask_factory")
+async def handle_reset_ask_factory_callback(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega uchun!", show_alert=True)
+        return
+    warning_text = (
+        "⚠️ <b>DIQQAT: TIZIMNI TO'LIQ ZAVOD HOLATIGA QAYTARISH (FACTORY RESET)!</b>\n\n"
+        "Ushbu amal:\n"
+        "• Barcha ota-ona va farzandlar o'rtasidagi oilaviy ulanishlarni uzadi;\n"
+        "• Barcha foydalanuvchilarning rolarini 'unassigned' ga o'tkazadi;\n"
+        "• Barcha foydalanuvchilarga boshlang'ich rol tanlash (/start) oynasini jo'natadi.\n\n"
+        "<b>Rostdan ham barchada botni to'liq reset qilmoqchimisiz?</b>"
+    )
+    await callback.message.edit_text(warning_text, reply_markup=get_factory_reset_confirm_keyboard(), parse_mode="HTML")
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:confirm_factory")
+async def handle_reset_confirm_factory_callback(callback: CallbackQuery, bot: Bot, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat bosh ega uchun!", show_alert=True)
+        return
+    await callback.message.edit_text("⏳ <i>Barcha foydalanuvchilar boshlang'ich holatga qaytarilmoqda...</i>", parse_mode="HTML")
+    async with async_session_maker() as session:
+        reset_count, notified = await perform_global_factory_reset(bot, session)
+    await callback.message.edit_text(
+        f"✅ <b>TIZIM TO'LIQ ZAVOD HOLATIGA QAYTARILDI (FACTORY RESET)!</b>\n\n"
+        f"• 👤 Qayta tiklangan hisoblar: <b>{reset_count} ta</b>\n"
+        f"• 📨 /start bildirishnomasi bordi: <b>{notified} ta</b>\n\n"
+        f"Barcha ulanishlar uzildi va foydalanuvchilar qayta ro'yxatdan o'tish holatiga o'tkazildi.",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Factory Reset yakunlandi!")
+
+
+@owner_bot_router.message(Command("reset_user"))
+async def handle_cmd_reset_user(message: Message, command: CommandObject, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat bosh ega uchun!")
+        return
+    if not command.args or not command.args.strip():
+        await message.answer("⚠️ Foydalanish: <code>/reset_user &lt;Telegram_ID yoki @username&gt;</code>", parse_mode="HTML")
+        return
+    query = command.args.strip()
+    async with async_session_maker() as session:
+        target_user = await crud.search_user_by_query(session, query)
+        target_id = target_user.id if target_user else (int(query) if query.isdigit() else None)
+        if not target_id:
+            await message.answer(f"❌ Foydalanuvchi '{query}' topilmadi.")
+            return
+        success, _ = await crud.reset_user_role(session, target_id)
+        await session.commit()
+    if success:
+        await message.answer(f"✅ Foydalanuvchi (ID: <code>{target_id}</code>) roli va ulanishlari to'liq reset qilindi.", parse_mode="HTML")
+    else:
+        await message.answer(f"❌ ID {target_id} topilmadi.")
+
+
+# ==============================================================================
 # PER-CHILD DOSSIER ACTIONS: LOCK, UNLOCK, RESET PIN, SCREEN TIME
 # ==============================================================================
 @owner_bot_router.callback_query(F.data.startswith("adm_lock:"))
@@ -1562,4 +1784,293 @@ async def handle_system_diagnostics_cmd(message: Message):
         "🟢 <i>Barcha xizmatlar (API, Bot, Render, DB) ideal holatda ishlamoqda.</i>"
     )
     await message.answer(msg, parse_mode="HTML")
+
+
+# ==============================================================================
+# GLOBAL RESET VA BOTNI YANGILASH BOSHQARUVI
+# ==============================================================================
+@owner_bot_router.message(F.text.contains("reset qilish") | (F.text == "/global_reset"))
+async def handle_global_reset_menu(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Ushbu bo'lim faqat Bosh Ega uchun ochiq.")
+        return
+    text = (
+        "🔄 <b>GLOBAL RESET VA BOTNI YANGILASH BOSHQARUVI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Kerakli reset operatsiyasini tanlang:\n\n"
+        "1️⃣ <b>Barchada menyu va tugmalarni yangilash:</b>\n"
+        "└ Barcha ota-ona va bolalarga eng so'nggi yangi klaviatura va WebApp havolalarini yuboradi.\n\n"
+        "2️⃣ <b>Kesh va faol SOS larni tozalash:</b>\n"
+        "└ Barcha faol xavf signallarini o'chiradi va vaqtinchalik xotirani tozalaydi.\n\n"
+        "3️⃣ <b>Factory Reset:</b>\n"
+        "└ Barcha hisoblarni boshlang'ich ro'yxatdan o'tish holatiga qaytaradi (ehtiyot bo'ling!)."
+    )
+    await message.answer(text, reply_markup=get_reset_options_keyboard(), parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:keyboards")
+async def cb_global_reset_keyboards(callback: CallbackQuery, bot: Bot, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    await callback.message.edit_text("⏳ <i>Barcha foydalanuvchilarga yangi klaviatura tarqatilmoqda...</i>", parse_mode="HTML")
+    async with async_session_maker() as session:
+        succ, fail = await perform_global_keyboards_refresh(bot, session)
+    await callback.message.edit_text(
+        f"✅ <b>MENYULAR YANGILANDI!</b>\n\n"
+        f"📨 Yetkazildi: <b>{succ} ta foydalanuvchiga</b>\n"
+        f"⚠️ Xatolik: <b>{fail} ta</b> (botni to'xtatganlar)\n\n"
+        f"Barcha ota-ona va bolalarda eng so'nggi WebApp va SOS tugmalari o'rnatildi.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Klaviaturalar yangilandi!")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:cache_sos")
+async def cb_global_reset_cache_sos(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    async with async_session_maker() as session:
+        res = await perform_global_cache_and_sos_reset(session)
+    telemetry.last_sos_alert_map.clear()
+    await callback.message.edit_text(
+        f"🧹 <b>KESH VA SOS TOZALANDI!</b>\n\n"
+        f"🚨 O'chirilgan faol SOS signallari: <b>{res.get('cleared_sos', 0)} ta</b>\n"
+        f"🟢 Barcha tizim kesh xotirasi yangilandi.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Kesh tozalandi!")
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:ask_factory")
+async def cb_ask_factory_reset(callback: CallbackQuery, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "⚠️ <b>DIQQAT! XAVFLI AMALIYOT (FACTORY RESET)</b>\n\n"
+        "Ushbu amal barcha ota-ona va bolalar o'rtasidagi bog'lamalarni uzadi, "
+        "rollarni boshlang'ich holatga tushiradi va barchaga yangidan rolni tanlash taklifini yuboradi.\n\n"
+        "Davom etishni xohlaysizmi?",
+        reply_markup=get_factory_reset_confirm_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@owner_bot_router.callback_query(F.data == "global_reset:confirm_factory")
+async def cb_confirm_factory_reset(callback: CallbackQuery, bot: Bot, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await callback.answer("Faqat Bosh Ega uchun!", show_alert=True)
+        return
+    await callback.message.edit_text("⏳ <i>Factory reset amalga oshirilmoqda...</i>", parse_mode="HTML")
+    async with async_session_maker() as session:
+        res_cnt, notif_cnt = await perform_global_factory_reset(bot, session)
+    await callback.message.edit_text(
+        f"🛑 <b>FACTORY RESET YAKUNLANDI!</b>\n\n"
+        f"👥 Qayta tiklangan hisoblar: <b>{res_cnt} ta</b>\n"
+        f"📨 Xabardor qilinganlar: <b>{notif_cnt} ta</b>\n\n"
+        f"Tizim to'liq boshlang'ich holatga keltirildi.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
+        parse_mode="HTML"
+    )
+    await callback.answer("Factory reset bajarildi!", show_alert=True)
+
+
+# ==============================================================================
+# FAOL FOYDALANUVCHILAR VA JONLI ONLAYN RADAR
+# ==============================================================================
+@owner_bot_router.message(F.text.contains("Faol foydalanuvchilar") | (F.text == "/online"))
+async def handle_online_users_cmd(message: Message):
+    async with async_session_maker() as session:
+        text, kb = await get_online_activity_summary(session)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_online")
+async def cb_refresh_online(callback: CallbackQuery):
+    async with async_session_maker() as session:
+        text, kb = await get_online_activity_summary(session)
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer("Onlayn ma'lumotlar yangilandi!")
+
+
+# ==============================================================================
+# TANGALAR IQTISODIYOTI & TOP REYTING
+# ==============================================================================
+@owner_bot_router.message(F.text.contains("TOP Balanslar") | (F.text == "/top_balances") | (F.text == "/coins"))
+async def handle_top_balances_cmd(message: Message):
+    async with async_session_maker() as session:
+        text, kb = await get_top_balances_summary(session)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data == "adm_refresh_coins")
+async def cb_refresh_coins(callback: CallbackQuery):
+    async with async_session_maker() as session:
+        text, kb = await get_top_balances_summary(session)
+    try:
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer("Tangalar reytingi yangilandi!")
+
+
+@owner_bot_router.message(Command("add_coins"))
+async def handle_add_coins_cmd(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    parts = message.text.split()
+    if len(parts) < 3 or not parts[1].strip().isdigit() or not parts[2].strip().lstrip('-').isdigit():
+        await message.answer("Format: <code>/add_coins &lt;child_id&gt; &lt;amount&gt;</code>\nMasalan: <code>/add_coins 12345678 500</code>", parse_mode="HTML")
+        return
+    child_id = int(parts[1].strip())
+    amount = int(parts[2].strip())
+    async with async_session_maker() as session:
+        ok, new_bal, msg = await perform_add_coins_to_child(session, child_id, amount)
+    await message.answer(f"✅ {msg}" if ok else f"❌ {msg}", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("sub_coins"))
+async def handle_sub_coins_cmd(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    parts = message.text.split()
+    if len(parts) < 3 or not parts[1].strip().isdigit() or not parts[2].strip().isdigit():
+        await message.answer("Format: <code>/sub_coins &lt;child_id&gt; &lt;amount&gt;</code>\nMasalan: <code>/sub_coins 12345678 200</code>", parse_mode="HTML")
+        return
+    child_id = int(parts[1].strip())
+    amount = -abs(int(parts[2].strip()))
+    async with async_session_maker() as session:
+        ok, new_bal, msg = await perform_add_coins_to_child(session, child_id, amount)
+    await message.answer(f"✅ {msg}" if ok else f"❌ {msg}", parse_mode="HTML")
+
+
+# ==============================================================================
+# RASMIY ILOVA HAVOLALARI
+# ==============================================================================
+@owner_bot_router.message(F.text.contains("Ilova havolalari") | (F.text == "/app_links") | (F.text == "/apk"))
+async def handle_app_links_cmd(message: Message):
+    text, kb = get_app_download_links_html()
+    await message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+
+
+# ==============================================================================
+# BLOKLASH VA BLOKDAN CHIQARISH (BAN / UNBAN)
+# ==============================================================================
+@owner_bot_router.message(Command("ban"))
+async def handle_ban_cmd(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("Format: <code>/ban &lt;user_id&gt;</code>\nMasalan: <code>/ban 12345678</code>", parse_mode="HTML")
+        return
+    u_id = int(parts[1].strip())
+    async with async_session_maker() as session:
+        ok, msg = await perform_ban_toggle(session, u_id, ban=True)
+    await message.answer(f"🚫 {msg}", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("unban"))
+async def handle_unban_cmd(message: Message, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("Format: <code>/unban &lt;user_id&gt;</code>\nMasalan: <code>/unban 12345678</code>", parse_mode="HTML")
+        return
+    u_id = int(parts[1].strip())
+    async with async_session_maker() as session:
+        ok, msg = await perform_ban_toggle(session, u_id, ban=False)
+    await message.answer(f"✅ {msg}", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("ban_list", "banned"))
+async def handle_ban_list_cmd(message: Message):
+    async with async_session_maker() as session:
+        from sqlalchemy import select
+        res = await session.execute(select(crud.User).where(crud.User.is_active == False))
+        banned = res.scalars().all()
+    if not banned:
+        await message.answer("🛡 <b>Bloklangan foydalanuvchilar yo'q.</b> Barcha hisoblar faol!", parse_mode="HTML")
+        return
+    lines = [f"• <b>{html.escape(u.full_name or 'Foydalanuvchi')}</b> (ID: <code>{u.id}</code>, @{u.username or 'yoq'})" for u in banned]
+    await message.answer("🚫 <b>BLOKLANGAN FOYDALANUVCHILAR:</b>\n\n" + "\n".join(lines), parse_mode="HTML")
+
+
+# ==============================================================================
+# TEZKOR MASOFADAN QURILMA BUYRUQLARI
+# ==============================================================================
+@owner_bot_router.message(Command("siren"))
+async def handle_quick_siren(message: Message):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("Format: <code>/siren &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    cid = int(parts[1].strip())
+    ok = await trigger_remote_siren(cid)
+    await message.answer(f"🔊 Farzand #{cid} qurilmasiga baland signal yuborildi!" if ok else "⚠️ Signal yuborildi.")
+
+
+@owner_bot_router.message(Command("lock"))
+async def handle_quick_lock(message: Message):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("Format: <code>/lock &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    cid = int(parts[1].strip())
+    ok = await trigger_remote_screen_lock(cid, lock=True)
+    await message.answer(f"🔒 Farzand #{cid} ekrani bloklandi!" if ok else "⚠️ Qulf yuborildi.")
+
+
+@owner_bot_router.message(Command("unlock"))
+async def handle_quick_unlock(message: Message):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("Format: <code>/unlock &lt;child_id&gt;</code>", parse_mode="HTML")
+        return
+    cid = int(parts[1].strip())
+    ok = await trigger_remote_screen_lock(cid, lock=False)
+    await message.answer(f"🔓 Farzand #{cid} ekrani ochildi!" if ok else "⚠️ Ochish yuborildi.")
+
+
+@owner_bot_router.message(Command("broadcast_parents"))
+async def handle_broadcast_parents_prompt(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    await state.set_state(OwnerBotStates.waiting_for_broadcast_content)
+    await state.update_data(target_role="parent")
+    await message.answer(
+        "📢 <b>FAQAT OTA-ONALARGA XABAR YUBORISH</b>\n\n"
+        "Barcha ota-onalarga yubormoqchi bo'lgan xabar matnini kiriting:",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@owner_bot_router.message(Command("broadcast_children"))
+async def handle_broadcast_children_prompt(message: Message, state: FSMContext, auth_info: Dict[str, Any]):
+    if not auth_info["is_owner"]:
+        await message.answer("Faqat Bosh Ega uchun!")
+        return
+    await state.set_state(OwnerBotStates.waiting_for_broadcast_content)
+    await state.update_data(target_role="child")
+    await message.answer(
+        "📢 <b>FAQAT FARZANDLARGA XABAR YUBORISH</b>\n\n"
+        "Barcha farzandlarga yubormoqchi bo'lgan xabar matnini kiriting:",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
 

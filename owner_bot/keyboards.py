@@ -14,12 +14,16 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="📡 Jonli GPS Radar"),
         ],
         [
+            KeyboardButton(text="👥 Faol foydalanuvchilar"),
             KeyboardButton(text="🔍 ID bo'yicha tekshirish"),
-            KeyboardButton(text="🔑 Magic Login Link"),
         ],
         [
             KeyboardButton(text="🚨 Faol SOS signallari"),
             KeyboardButton(text="🔋 Batareya & Qurilmalar radari"),
+        ],
+        [
+            KeyboardButton(text="🔑 Magic Login Link"),
+            KeyboardButton(text="🏆 TOP Balanslar & Tangalar"),
         ],
         [
             KeyboardButton(text="🛡️ Xavfsizlik & Anti-Spam"),
@@ -34,11 +38,15 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🗄️ Neon DB Holati"),
         ],
         [
+            KeyboardButton(text="📱 Ilova havolalari (APK)"),
             KeyboardButton(text="💾 Baza zaxirasi (Backup)"),
-            KeyboardButton(text="📑 Server loglari"),
         ],
         [
+            KeyboardButton(text="🔄 Barchada botni reset qilish"),
             KeyboardButton(text="🧹 Baza tozalash (Optimize)"),
+        ],
+        [
+            KeyboardButton(text="📑 Server loglari"),
             KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]
@@ -270,6 +278,58 @@ def get_shield_management_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🔄 Holatni yangilash", callback_data="adm_refresh_shield"),
                 InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main"),
             ],
+        ]
+    )
+
+
+def get_reset_options_keyboard() -> InlineKeyboardMarkup:
+    """Interactive reset menu for owner."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔄 Barchada menyu va tugmalarni yangilash",
+                    callback_data="global_reset:keyboards"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🧹 Kesh va faol SOS signallarini tozalash",
+                    callback_data="global_reset:cache_sos"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⚠️ Barchani boshlang'ich holatga qaytarish (Factory Reset)",
+                    callback_data="global_reset:ask_factory"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔙 Bekor qilish",
+                    callback_data="adm_back_main"
+                )
+            ]
+        ]
+    )
+
+
+def get_factory_reset_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Confirmation for dangerous global factory reset."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🛑 HA, BARCHANI TO'LIQ RESET QILISH!",
+                    callback_data="global_reset:confirm_factory"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data="adm_back_main"
+                )
+            ]
         ]
     )
 

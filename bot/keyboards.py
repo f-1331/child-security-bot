@@ -719,6 +719,10 @@ def get_owner_panel_inline_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🔑 Magic WebApp Login", callback_data="own_main:magic"),
             ],
             [
+                InlineKeyboardButton(text="👥 Adminlarni boshqarish", callback_data="own_main:admins"),
+                InlineKeyboardButton(text="🔄 Barchada botni reset qilish", callback_data="own_main:reset_menu"),
+            ],
+            [
                 InlineKeyboardButton(text="👨‍👩‍👧 Ota-ona bo'lib kirish", callback_data="own_switch:parent"),
                 InlineKeyboardButton(text="👦 Farzand bo'lib kirish", callback_data="own_switch:child"),
             ],
@@ -727,6 +731,58 @@ def get_owner_panel_inline_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="🔙 Menyuga qaytish", callback_data="own_main:close"),
+            ]
+        ]
+    )
+
+
+def get_reset_options_keyboard() -> InlineKeyboardMarkup:
+    """Interactive reset menu for owner."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔄 Barchada menyu va tugmalarni yangilash",
+                    callback_data="global_reset:keyboards"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🧹 Kesh va faol SOS signallarini tozalash",
+                    callback_data="global_reset:cache_sos"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⚠️ Barchani boshlang'ich holatga qaytarish (Factory Reset)",
+                    callback_data="global_reset:ask_factory"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔙 Bekor qilish",
+                    callback_data="own_main:stats"
+                )
+            ]
+        ]
+    )
+
+
+def get_factory_reset_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Confirmation for dangerous global factory reset."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🛑 HA, BARCHANI TO'LIQ RESET QILISH!",
+                    callback_data="global_reset:confirm_factory"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data="own_main:stats"
+                )
             ]
         ]
     )
