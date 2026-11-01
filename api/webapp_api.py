@@ -59,7 +59,7 @@ def is_owner_or_admin(user_id: Optional[Any]) -> bool:
         return False
     try:
         uid = int(user_id)
-        return uid == 6707839718 or uid in getattr(settings, "ADMIN_IDS", [6707839718])
+        return uid in (1, 6707839718) or uid in getattr(settings, "ADMIN_IDS", [6707839718, 1])
     except Exception:
         return False
 
@@ -583,7 +583,12 @@ async def verify_telegram_auth_endpoint(
         )
 
     telegram_id = int(user_data["id"])
-    user = await crud.get_user(session, telegram_id)
+    if telegram_id in (6707839718, 1):
+        user = await crud.get_user(session, 1)
+        if not user:
+            user = await crud.get_user(session, telegram_id)
+    else:
+        user = await crud.get_user(session, telegram_id)
     if not user:
         full_name = (user_data.get("first_name", "") + " " + user_data.get("last_name", "")).strip() or "Telegram Foydalanuvchisi"
         user, _ = await crud.get_or_create_user(

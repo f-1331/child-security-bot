@@ -653,10 +653,12 @@ async def format_users_directory_html(
     start_num = (page - 1) * 10 + 1
 
     for idx, u in enumerate(users, start=start_num):
-        role_emoji = "👦" if u.role == "child" else "👨‍👩‍👧"
+        is_owner = u.id in (1, 6707839718)
+        role_emoji = "👑" if is_owner else ("👦" if u.role == "child" else "👨‍👩‍👧")
         status_emoji = "🚫 Blok" if not u.is_active else ("🚨 SOS" if u.is_sos_active else "🟢 Faol")
         username_str = f"@{u.username}" if u.username else "yo'q"
-        name_clean = html.escape(u.full_name or (f"@{u.username}" if u.username else f"Foydalanuvchi #{u.id}"))
+        disp_id = 1 if is_owner else u.id
+        name_clean = html.escape(u.full_name or (f"@{u.username}" if u.username else f"Foydalanuvchi #{disp_id}"))
         phone_str = u.phone_number or "yo'q"
 
         # Family linkages
@@ -676,7 +678,7 @@ async def format_users_directory_html(
         code_val = u.web_access_code or u.pairing_code or "yo'q"
 
         user_block = (
-            f"<b>{idx}.</b> {role_emoji} <b>{name_clean}</b> (ID: <code>{u.id}</code>) [{status_emoji}]\n"
+            f"<b>{idx}.</b> {role_emoji} <b>{name_clean}</b> (ID: <code>{disp_id}</code>) [{status_emoji}]\n"
             f"   ├ 🌐 {username_str} | 📞 <code>{phone_str}</code>\n"
             f"   ├ 📌 {extra_txt}\n"
             f"   └ 🔑 Kirish kodi: <code>{code_val}</code>"

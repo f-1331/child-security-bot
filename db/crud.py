@@ -1698,7 +1698,10 @@ async def get_paginated_users(
     Returns (users_list, total_count, total_pages).
     Supports role filtering ('all', 'parent', 'child', 'banned') and search queries.
     """
-    stmt = select(User)
+    from sqlalchemy import case
+
+    # Telegram routing ID is 6707839718; Owner's system ID is 1. Exclude 6707839718 to avoid duplicate.
+    stmt = select(User).where(User.id != 6707839718)
 
     if role_filter == "parent":
         stmt = stmt.where(User.role == "parent")
@@ -1710,7 +1713,10 @@ async def get_paginated_users(
     if search_query:
         clean_q = search_query.strip().lstrip("@")
         if clean_q.isdigit():
-            stmt = stmt.where(or_(User.id == int(clean_q), User.phone_number.ilike(f"%{clean_q}%")))
+            if int(clean_q) in (6707839718, 1):
+                stmt = stmt.where(User.id == 1)
+            else:
+                stmt = stmt.where(or_(User.id == int(clean_q), User.phone_number.ilike(f"%{clean_q}%")))
         else:
             stmt = stmt.where(
                 or_(
@@ -1727,7 +1733,11 @@ async def get_paginated_users(
     page = max(1, min(page, total_pages))
     offset = (page - 1) * per_page
 
-    stmt = stmt.order_by(desc(User.created_at)).offset(offset).limit(per_page)
+    # Order with Owner ID 1 strictly #1 on Page 1
+    stmt = stmt.order_by(
+        case((User.id == 1, 0), else_=1),
+        desc(User.created_at)
+    ).offset(offset).limit(per_page)
     res = await session.execute(stmt)
     users = list(res.scalars().all())
 

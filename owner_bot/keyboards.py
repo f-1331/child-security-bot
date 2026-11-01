@@ -356,10 +356,12 @@ def get_users_directory_inline_keyboard(
     # 1. User selector rows: [Role + Name/Username (ID)] and [🚀 Kirish (Ghost Login)]
     for idx, item in enumerate(user_items, start=1):
         uid = item.get("id")
+        is_owner = uid in (1, 6707839718)
         raw_name = (item.get("name") or "").strip()
         uname = (item.get("username") or "").strip().lstrip("@")
         role = item.get("role") or "parent"
-        role_ico = "👦" if role == "child" else "👨‍👩‍👧"
+        role_ico = "👑" if is_owner else ("👦" if role == "child" else "👨‍👩‍👧")
+        disp_id = 1 if is_owner else uid
         magic_url = item.get("magic_url")
 
         # Format label prioritizing @username or clean full name, never clipped
@@ -370,7 +372,7 @@ def get_users_directory_inline_keyboard(
         else:
             display_label = "Foydalanuvchi"
 
-        btn_title = f"{role_ico} {idx}. {display_label} (ID: {uid})"
+        btn_title = f"{role_ico} {idx}. {display_label} (ID: {disp_id})"
         row = [
             InlineKeyboardButton(
                 text=btn_title,

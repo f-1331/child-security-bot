@@ -255,7 +255,7 @@ async def prompt_magic_link(message: Message, state: FSMContext):
     await message.answer(
         "🔑 <b>VIP / Magic Login Link Generatori</b>\n\n"
         "Qaysi foydalanuvchi hisobiga parolsiz 1-bosishda WebApp orqali kirmoqchisiz? Telegram ID raqamini kiriting:\n\n"
-        "<i>Misol: <code>6707839718</code></i>",
+        "<i>Misol: <code>1</code> yoki <code>997185613</code></i>",
         reply_markup=get_cancel_keyboard(),
         parse_mode="HTML",
     )
@@ -1182,7 +1182,7 @@ async def handle_help(message: Message, auth_info: Dict[str, Any]):
         "• /app_links — Android APK, WebApp va PC rasmiy yuklab olish havolalari\n"
         "• /logs — So'nggi jonli server xatolari va loglari\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "👑 <b>Bosh ega:</b> @fayzbek1331 (ID: 6707839718)"
+        "👑 <b>Bosh ega:</b> @fayzbek1331 (ID: 1)"
     )
     await message.answer(
         help_text,
@@ -2129,7 +2129,7 @@ async def handle_login_as_cmd(message: Message, command: CommandObject):
     if not command.args or not command.args.strip().isdigit():
         await message.answer(
             "⚠️ <b>Foydalanish:</b> <code>/login_as &lt;user_id&gt;</code>\n"
-            "<i>Misol: <code>/login_as 6707839718</code></i>",
+            "<i>Misol: <code>/login_as 1</code></i>",
             parse_mode="HTML",
         )
         return
