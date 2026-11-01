@@ -1884,8 +1884,14 @@ function applyChildUI(user) {
   renderChildDashboardQuests();
   renderChildDashboardCastles();
 
-  if (user.parent_phone) {
-    parentPhone = user.parent_phone;
+  const candidatePhone = user.parent_phone 
+    || (authenticatedSession && authenticatedSession.parent && authenticatedSession.parent.phone_number)
+    || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.parent_phone)
+    || parentPhone
+    || localStorage.getItem("cached_parent_phone")
+    || "";
+  if (candidatePhone) {
+    parentPhone = candidatePhone;
     try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
   }
   if (user.parent_name) parentName = user.parent_name;
@@ -6103,7 +6109,7 @@ async function markTaskSeen(taskId) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${taskId}/seen`, { method: "POST" });
+    const res = await fetch(`/api/v1/webapp/task/${taskId}/seen?child_id=${currentChildId || ''}`, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
       showToast("Ota-onangizga xabar ko'rilgani bildirildi!");
@@ -6268,7 +6274,7 @@ async function confirmTaskSchedule(promisedTime) {
       return;
     }
 
-    const res = await fetch(`/api/v1/webapp/task/${activeScheduleTaskId}/schedule`, {
+    const res = await fetch(`/api/v1/webapp/task/${activeScheduleTaskId}/schedule?child_id=${currentChildId || ''}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ promised_time: promisedTime })
@@ -6386,7 +6392,7 @@ async function submitTaskProof() {
       return;
     }
 
-    const completeRes = await fetch(`/api/v1/webapp/task/${activeProofTaskId}/complete`, {
+    const completeRes = await fetch(`/api/v1/webapp/task/${activeProofTaskId}/complete?child_id=${currentChildId || ''}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ proof_photo_url: upData.file_url })
@@ -7992,7 +7998,7 @@ async function flushOfflineTaskQueue() {
 
     for (const item of queue) {
       try {
-        await fetch(`/api/v1/webapp/task/${item.taskId}/complete`, {
+        await fetch(`/api/v1/webapp/task/${item.taskId}/complete?child_id=${currentChildId || ''}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ proof_photo_url: "synced_from_offline_cache" })

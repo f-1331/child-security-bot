@@ -2,6 +2,7 @@ import html
 import json
 import logging
 import random
+import re
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -974,8 +975,18 @@ async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession
 
 
 @router.post("/task/{task_id}/seen")
-async def mark_task_seen_endpoint(task_id: int, session: AsyncSession = Depends(get_db)):
-    """Child marks task seen via WebApp -> notifies parent in Telegram."""
+async def mark_task_seen_endpoint(
+    task_id: int,
+    child_id: Optional[int] = Query(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """Child marks task seen via WebApp -> notifies parent in Telegram with authorization check."""
+    existing = await crud.get_task_by_id(session, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if child_id and existing.child_id != child_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu topshiriq sizga tegishli emas.")
+
     task = await crud.mark_task_seen(session, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1009,9 +1020,16 @@ class ScheduleTaskRequest(BaseModel):
 async def schedule_task_endpoint(
     task_id: int,
     payload: ScheduleTaskRequest,
+    child_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Child sets promised completion time via WebApp -> notifies parent in Telegram."""
+    """Child sets promised completion time via WebApp -> notifies parent in Telegram with authorization check."""
+    existing = await crud.get_task_by_id(session, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if child_id and existing.child_id != child_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu topshiriq sizga tegishli emas.")
+
     task = await crud.set_task_schedule(session, task_id, payload.promised_time)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1047,9 +1065,16 @@ class CompleteTaskRequest(BaseModel):
 async def complete_task_endpoint(
     task_id: int,
     payload: CompleteTaskRequest,
+    child_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Child submits completed task with mandatory photo proof via WebApp."""
+    """Child submits completed task with mandatory photo proof via WebApp with authorization check."""
+    existing = await crud.get_task_by_id(session, task_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if child_id and existing.child_id != child_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu topshiriq sizga tegishli emas.")
+
     task = await crud.submit_task_completed(session, task_id, proof_photo_url=payload.proof_photo_url)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -1137,8 +1162,11 @@ async def approve_task_endpoint(
     existing_task = await crud.get_task_by_id(session, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if existing_task.parent_id != parent_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
+
+    parents = await crud.get_parents_for_child(session, existing_task.child_id)
+    allowed_parent_ids = {existing_task.parent_id} | {p.id for p in parents}
+    if parent_id not in allowed_parent_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizning oilangizga tegishli emas.")
 
     task = await crud.approve_task(session, task_id)
     if not task:
@@ -1188,8 +1216,11 @@ async def reject_task_endpoint(
     existing_task = await crud.get_task_by_id(session, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if existing_task.parent_id != parent_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
+
+    parents = await crud.get_parents_for_child(session, existing_task.child_id)
+    allowed_parent_ids = {existing_task.parent_id} | {p.id for p in parents}
+    if parent_id not in allowed_parent_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizning oilangizga tegishli emas.")
 
     task = await crud.reject_task(session, task_id)
     if not task:
@@ -1229,8 +1260,12 @@ async def delete_task_endpoint(
     existing_task = await crud.get_task_by_id(session, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Vazifa topilmadi")
-    if existing_task.parent_id != parent_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizga tegishli emas.")
+
+    parents = await crud.get_parents_for_child(session, existing_task.child_id)
+    allowed_parent_ids = {existing_task.parent_id} | {p.id for p in parents}
+    if parent_id not in allowed_parent_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Bu vazifa sizning oilangizga tegishli emas.")
+
     success = await crud.delete_task(session, task_id, parent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Vazifa topilmadi yoki o'chirishga ruxsat yo'q")
@@ -2296,10 +2331,14 @@ async def update_child_wishlist_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Set or update child's dream wishlist and target savings amount."""
+    clean_title = re.sub(r'<[^>]*?>', '', payload.title).strip()
+    if not clean_title:
+        clean_title = "Orzu"
+
     await crud.update_child_wishlist(
         session=session,
         child_id=child_id,
-        title=payload.title,
+        title=clean_title,
         target_som=payload.target_som
     )
     data = await crud.get_child_wishlist(session, child_id)
@@ -2310,7 +2349,7 @@ async def update_child_wishlist_endpoint(
         child_name = child.full_name if child else f"Farzand #{child_id}"
         parents = await crud.get_parents_for_child(session, child_id)
         safe_cname = html.escape(child_name)
-        safe_title = html.escape(payload.title)
+        safe_title = html.escape(clean_title)
         msg = (
             f"🎉🎉 <b>TABRIKLAYMIZ! ORZU USHALDI!</b> 🎉🎉\n\n"
             f"👤 Farzandingiz <b>{safe_cname}</b> bajargan foydali topshiriqlari orqali o'zi orzu qilgan <b>«{safe_title}»</b> ({payload.target_som:,} so'm) uchun kerakli mablag'ni to'liq jamg'ardi!\n\n"

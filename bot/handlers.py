@@ -17,6 +17,7 @@ from aiogram.types import (
     FSInputFile,
     URLInputFile,
     WebAppInfo,
+    ErrorEvent,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -449,20 +450,21 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             children = await crud.get_children_for_parent(session, user.id)
             await state.clear()
 
+            safe_parent_fname = html.escape(full_name or "Ota-ona")
             phone_prompt = ""
             if not user.phone_number:
                 phone_prompt = (
-                    "\n\n⚠️ **Eslatma:** SOS xavf tugmasi bosilganda sizga avtomatik qo'ng'iroq ketishi uchun "
-                    "pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni ulab qo'yishingiz mumkin."
+                    "\n\n⚠️ <b>Eslatma:</b> SOS xavf tugmasi bosilganda sizga avtomatik qo'ng'iroq ketishi uchun "
+                    "pastdagi <b>«📞 Oila kontaktlari»</b> bo'limi orqali telefon raqamingizni ulab qo'yishingiz mumkin."
                 )
 
             start_buttons = []
             demo_hint = ""
             if len(children) == 0:
                 demo_hint = (
-                    "\n\n💡 **Tezkor sinov:** Sizda hali ulangan farzand hisobi yo'q. "
+                    "\n\n💡 <b>Tezkor sinov:</b> Sizda hali ulangan farzand hisobi yo'q. "
                     "Tizimning barcha imkoniyatlarini (jonli xarita, ilovalar tahlili, batareya, topshiriqlar) "
-                    "darhol sinab ko'rish uchun **«🧪 Namuna farzand bilan sinash»** tugmasini bosing!"
+                    "darhol sinab ko'rish uchun <b>«🧪 Namuna farzand bilan sinash»</b> tugmasini bosing!"
                 )
                 start_buttons.append([
                     InlineKeyboardButton(
@@ -501,20 +503,20 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             ])
             start_inline_kb = InlineKeyboardMarkup(inline_keyboard=start_buttons)
             await message.answer(
-                f"Assalomu alaykum, **{clean_md(full_name)}**!\n\n"
-                f"👨‍👩‍👧 Siz **Ota-ona** rejimidasiz.\n"
-                f"Ulangan farzandlar soni: **{len(children)} nafar**.\n\n"
-                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi **«📍 Farzandning hozirgi joylashuvi»** tugmasini bosing.\n\n"
-                f"📲 **Mobil ilovalar:**\n"
-                f"• **👨‍👩‍👧 Ota-ona ilovasi:** O'z telefoningizdan farzandlarni jonli xaritada kuzatish, topshiriq berish va hisobotlarni ko'rish uchun.\n"
-                f"• **👦 Farzand ilovasi:** Farzand telefonida ekran o'chiq bo'lsa ham 24/7 foniy GPS va SOS ishlashi uchun.{phone_prompt}{demo_hint}",
+                f"Assalomu alaykum, <b>{safe_parent_fname}</b>!\n\n"
+                f"👨‍👩‍👧 Siz <b>Ota-ona</b> rejimidasiz.\n"
+                f"Ulangan farzandlar soni: <b>{len(children)} nafar</b>.\n\n"
+                f"📍 Farzandingiz qayerdaligini bilish uchun pastdagi <b>«📍 Farzandning hozirgi joylashuvi»</b> tugmasini bosing.\n\n"
+                f"📲 <b>Mobil ilovalar:</b>\n"
+                f"• <b>👨‍👩‍👧 Ota-ona ilovasi:</b> O'z telefoningizdan farzandlarni jonli xaritada kuzatish, topshiriq berish va hisobotlarni ko'rish uchun.\n"
+                f"• <b>👦 Farzand ilovasi:</b> Farzand telefonida ekran o'chiq bo'lsa ham 24/7 foniy GPS va SOS ishlashi uchun.{phone_prompt}{demo_hint}",
                 reply_markup=get_parent_main_keyboard(user.id),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             await message.answer(
-                "⚡ **Tezkor kirish va Mobil ilova:**",
+                "⚡ <b>Tezkor kirish va Mobil ilova:</b>",
                 reply_markup=start_inline_kb,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             return
 
@@ -559,12 +561,13 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
             return
 
         # If user has no role yet, ask for role selection
+        safe_unassigned_name = html.escape(full_name or "Foydalanuvchi")
         await message.answer(
-            f"Assalomu alaykum, **{clean_md(full_name)}**!\n\n"
-            f"🌟 **Smart Bolalar Nazorati & Joylashuv Tizimi**ga xush kelibsiz!\n\n"
+            f"Assalomu alaykum, <b>{safe_unassigned_name}</b>!\n\n"
+            f"🌟 <b>Smart Bolalar Nazorati & Joylashuv Tizimi</b>ga xush kelibsiz!\n\n"
             f"Iltimos, tizimdan foydalanish uchun o'z rolingizni tanlang:",
             reply_markup=get_role_selection_keyboard(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
 
@@ -1211,11 +1214,11 @@ async def on_battery_status_pressed(message: Message):
         children = await crud.get_children_for_parent(session, parent_id)
         if not children:
             await message.answer(
-                "🔋 **Batareya va Telefon holati:**\n\n"
+                "🔋 <b>Batareya va Telefon holati:</b>\n\n"
                 "⚠️ Sizga hali hech qanday farzand ulanmagan.\n"
-                "Telefon quvvati, quvvatlanish holati va ovoz profilini sinab ko'rish uchun **Namuna farzand**ni ulashingiz mumkin:",
+                "Telefon quvvati, quvvatlanish holati va ovoz profilini sinab ko'rish uchun <b>Namuna farzand</b>ni ulashingiz mumkin:",
                 reply_markup=get_empty_children_kb(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             return
 
@@ -1230,9 +1233,10 @@ async def on_battery_status_pressed(message: Message):
         except Exception:
             pass
 
-        text = "🔋 **Farzandlar telefonining holati:**\n\n"
+        text = "🔋 <b>Farzandlar telefonining holati:</b>\n\n"
 
         for ch in children:
+            safe_name = html.escape(ch.full_name or "Farzand")
             latest = await crud.get_latest_location(session, ch.id)
             if latest and latest.battery_level is not None:
                 lvl = latest.battery_level
@@ -1251,22 +1255,22 @@ async def on_battery_status_pressed(message: Message):
                 elif latest.sound_mode == "silent":
                     sound_mode = "Ovozsiz"
 
-                time_str = format_tashkent_time(latest.recorded_at)
+                time_str = html.escape(format_tashkent_time(latest.recorded_at))
 
                 text += (
-                    f"👤 **{clean_md(ch.full_name)}**\n"
-                    f"• Batareya: **{lvl}%** ({status_emoji})\n"
+                    f"👤 <b>{safe_name}</b>\n"
+                    f"• Batareya: <b>{lvl}%</b> ({status_emoji})\n"
                     f"• Holat: {charging_icon}\n"
-                    f"• Ovoz rejimi: **{sound_mode}**\n"
-                    f"• Oxirgi signal: **{time_str}**\n\n"
+                    f"• Ovoz rejimi: <b>{sound_mode}</b>\n"
+                    f"• Oxirgi signal: <b>{time_str}</b>\n\n"
                 )
             else:
-                text += f"👤 **{clean_md(ch.full_name)}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
+                text += f"👤 <b>{safe_name}</b> — Telemetriya ma'lumotlari hali olinmagan\n\n"
 
         refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
         ])
-        await message.answer(text, reply_markup=refresh_kb, parse_mode="Markdown")
+        await message.answer(text, reply_markup=refresh_kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "refresh_battery_status")
@@ -1291,9 +1295,10 @@ async def on_refresh_battery_callback(callback: CallbackQuery):
         except Exception:
             pass
 
-        text = "🔋 **Farzandlar telefonining holati (Yangilandi):**\n\n"
+        text = "🔋 <b>Farzandlar telefonining holati (Yangilandi):</b>\n\n"
 
         for ch in children:
+            safe_name = html.escape(ch.full_name or "Farzand")
             latest = await crud.get_latest_location(session, ch.id)
             if latest and latest.battery_level is not None:
                 lvl = latest.battery_level
@@ -1312,23 +1317,23 @@ async def on_refresh_battery_callback(callback: CallbackQuery):
                 elif latest.sound_mode == "silent":
                     sound_mode = "Ovozsiz"
 
-                time_str = format_tashkent_time(latest.recorded_at)
+                time_str = html.escape(format_tashkent_time(latest.recorded_at))
 
                 text += (
-                    f"👤 **{clean_md(ch.full_name)}**\n"
-                    f"• Batareya: **{lvl}%** ({status_emoji})\n"
+                    f"👤 <b>{safe_name}</b>\n"
+                    f"• Batareya: <b>{lvl}%</b> ({status_emoji})\n"
                     f"• Holat: {charging_icon}\n"
-                    f"• Ovoz rejimi: **{sound_mode}**\n"
-                    f"• Oxirgi signal: **{time_str}**\n\n"
+                    f"• Ovoz rejimi: <b>{sound_mode}</b>\n"
+                    f"• Oxirgi signal: <b>{time_str}</b>\n\n"
                 )
             else:
-                text += f"👤 **{clean_md(ch.full_name)}** — Telemetriya ma'lumotlari hali olinmagan\n\n"
+                text += f"👤 <b>{safe_name}</b> — Telemetriya ma'lumotlari hali olinmagan\n\n"
 
         refresh_kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Yangilash (Signal yuborish)", callback_data="refresh_battery_status")]
         ])
         try:
-            await callback.message.edit_text(text, reply_markup=refresh_kb, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=refresh_kb, parse_mode="HTML")
         except Exception:
             pass
     await callback.answer("✅ Signal yuborildi va ma'lumot yangilandi!")
@@ -3224,7 +3229,7 @@ async def on_show_pairing_code(message: Message, bot: Bot):
 async def on_refresh_pairing_code(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
-        new_code = await crud.generate_pairing_code(session, parent_id)
+        new_code = await crud.generate_pairing_code(session, parent_id, force_new=True)
         await session.commit()
 
         bot_info = await bot.get_me()
@@ -5098,10 +5103,12 @@ async def on_parent_approve_role_switch(callback: CallbackQuery, bot: Bot):
         await session.commit()
 
         # Update parent message
+        safe_child_name = html.escape(child_name)
+        safe_parent_name = html.escape(parent_name)
         await callback.message.edit_text(
-            f"✅ **Farzandingiz ({child_name}) uchun rolni almashtirish tasdiqlandi.**\n\n"
+            f"✅ <b>Farzandingiz ({safe_child_name}) uchun rolni almashtirish tasdiqlandi.</b>\n\n"
             f"Uning hisobi sizdan uzildi va u o'z Telegramida yangi rolni tanlay oladi.",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
         # Notify child
@@ -5109,12 +5116,12 @@ async def on_parent_approve_role_switch(callback: CallbackQuery, bot: Bot):
             await bot.send_message(
                 chat_id=child_id,
                 text=(
-                    f"🎉 **Ota-onangiz ({parent_name}) rolni almashtirishingizga ruxsat berdi!**\n\n"
+                    f"🎉 <b>Ota-onangiz ({safe_parent_name}) rolni almashtirishingizga ruxsat berdi!</b>\n\n"
                     f"Sizning avvalgi rolingiz bekor qilindi.\n"
                     f"Endi pastdagi tugmalar orqali to'g'ri rolingizni tanlang:"
                 ),
                 reply_markup=get_role_selection_keyboard(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Failed to notify child {child_id} of approval: {e}")
@@ -5137,21 +5144,23 @@ async def on_parent_reject_role_switch(callback: CallbackQuery, bot: Bot):
         child = await crud.get_user(session, child_id)
         child_name = child.full_name if child else f"ID: {child_id}"
 
+    safe_child_name = html.escape(child_name)
+    safe_parent_name = html.escape(parent_name)
     await callback.message.edit_text(
-        f"❌ **Farzandingiz ({child_name}) ning rolni almashtirish so'rovi rad etildi.**\n"
+        f"❌ <b>Farzandingiz ({safe_child_name}) ning rolni almashtirish so'rovi rad etildi.</b>\n"
         f"Farzandingiz o'z hisobida qoldi.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
 
     try:
         await bot.send_message(
             chat_id=child_id,
             text=(
-                f"❌ **Ota-onangiz ({parent_name}) rolni almashtirish so'rovingizni rad etdi.**\n\n"
+                f"❌ <b>Ota-onangiz ({safe_parent_name}) rolni almashtirish so'rovingizni rad etdi.</b>\n\n"
                 f"Siz avvalgidek Farzand hisobida qoldingiz."
             ),
             reply_markup=get_child_main_keyboard(),
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
     except Exception as e:
         logger.warning(f"Failed to notify child of rejection: {e}")
@@ -5784,22 +5793,22 @@ def generate_screen_time_card(child, report, policy, all_children=None):
         filled = max(0, min(width, filled))
         return "█" * filled + "░" * (width - filled)
 
-    child_name = child.full_name or child.username or f"Farzand #{child.id}"
-    total_time = report.get('total_screen_time_formatted', '0 daqiqa')
+    child_name = html.escape(child.full_name or child.username or f"Farzand #{child.id}")
+    total_time = html.escape(report.get('total_screen_time_formatted', '0 daqiqa'))
     total_sec = report.get('total_screen_time_seconds', 0)
     unlock_count = report.get('unlock_count', 0)
 
     if total_sec > 14400:
-        time_badge = "⚠️ **Me'yordan ko'p (4s+)**"
+        time_badge = "⚠️ <b>Me'yordan ko'p (4s+)</b>"
     elif total_sec > 7200:
-        time_badge = "🟡 **O'rtacha me'yorda**"
+        time_badge = "🟡 <b>O'rtacha me'yorda</b>"
     else:
-        time_badge = "🟢 **Me'yorda**"
+        time_badge = "🟢 <b>Me'yorda</b>"
 
-    lock_status_text = "🛑 **BARCHA ILOVALAR BLOKLANGAN!**" if policy.is_all_apps_blocked else "🟢 **Ochiq (Cheklovsiz)**"
-    net_status_text = "📴 **Cheklangan (Offline rejim / Firewall faol)**" if policy.is_network_restricted else "📶 **Ochiq (Normal)**"
-    anti_un_status = "🔒 **Faol** _(Bola sozlamalardan ruxsatlarni o'chira olmaydi)_" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
-    bedtime_info = f"🌙 **Uyqu jadvali:** `{policy.bedtime_start} - {policy.bedtime_end}`\n" if (policy.bedtime_start and policy.bedtime_end) else ""
+    lock_status_text = "🛑 <b>BARCHA ILOVALAR BLOKLANGAN!</b>" if policy.is_all_apps_blocked else "🟢 <b>Ochiq (Cheklovsiz)</b>"
+    net_status_text = "📴 <b>Cheklangan (Offline rejim / Firewall faol)</b>" if policy.is_network_restricted else "📶 <b>Ochiq (Normal)</b>"
+    anti_un_status = "🔒 <b>Faol</b> <i>(Bola sozlamalardan ruxsatlarni o'chira olmaydi)</i>" if policy.anti_uninstall_enabled else "⚠️ O'chiq"
+    bedtime_info = f"🌙 <b>Uyqu jadvali:</b> <code>{html.escape(policy.bedtime_start)} - {html.escape(policy.bedtime_end)}</code>\n" if (policy.bedtime_start and policy.bedtime_end) else ""
 
     apps_list = report.get("apps", [])
     grand_sec = max(1, sum(a.get("usage_seconds", 0) for a in apps_list))
@@ -5808,6 +5817,7 @@ def generate_screen_time_card(child, report, policy, all_children=None):
     if apps_list:
         for i, a in enumerate(apps_list[:6], 1):
             name = a.get("app_name", "Ilova")
+            safe_name = html.escape(str(name))
             sec = a.get("usage_seconds", 0)
             h = sec // 3600
             m = (sec % 3600) // 60
@@ -5817,30 +5827,30 @@ def generate_screen_time_card(child, report, policy, all_children=None):
 
             cat = a.get("category", "")
             icon = "🟥" if "youtube" in name.lower() else ("🎵" if "tiktok" in name.lower() else ("🎮" if cat == "game" or "pubg" in name.lower() or "roblox" in name.lower() else ("✈️" if "telegram" in name.lower() else "📱")))
-            bl = " 🛑 _Bloklangan_" if a.get("is_blocked") else ""
-            apps_lines.append(f"{i}. {icon} **{name}** — `{dur_str}` ({pct}%)\n   `[{bar}]`{bl}")
+            bl = " 🛑 <i>Bloklangan</i>" if a.get("is_blocked") else ""
+            apps_lines.append(f"{i}. {icon} <b>{safe_name}</b> — <code>{dur_str}</code> ({pct}%)\n   <code>[{bar}]</code>{bl}")
     else:
         apps_lines.append(
-            "_Bugun hali ilovalar sarfi qayd etilmagan._\n\n"
-            "💡 **Nega 0 daqiqa ko'rsatmoqda?**\n"
-            "1. **Android ilova (APK):** Boshqa ilovalar sarfini (YouTube, TikTok, o'yinlar) aniqlash uchun bola telefoniga **Android APK** ilovamiz o'rnatilgan bo'lishi lozim (brauzerlar boshqa ilovalarni ko'ra olmaydi);\n"
-            "2. **Maxsus ruxsat:** Farzand telefonida _Sozlamalar ➔ Maxsus kirish ➔ Foydalanish statistikasi (Usage Access)_ ruxsati yoqilgan bo'lishi shart."
+            "<i>Bugun hali ilovalar sarfi qayd etilmagan.</i>\n\n"
+            "💡 <b>Nega 0 daqiqa ko'rsatmoqda?</b>\n"
+            "1. <b>Android ilova (APK):</b> Boshqa ilovalar sarfini (YouTube, TikTok, o'yinlar) aniqlash uchun bola telefoniga <b>Android APK</b> ilovamiz o'rnatilgan bo'lishi lozim (brauzerlar boshqa ilovalarni ko'ra olmaydi);\n"
+            "2. <b>Maxsus ruxsat:</b> Farzand telefonida <i>Sozlamalar ➔ Maxsus kirish ➔ Foydalanish statistikasi (Usage Access)</i> ruxsati yoqilgan bo'lishi shart."
         )
 
     apps_text = "\n".join(apps_lines)
 
     text = (
-        f"📱 **FARZANDINGIZNING TELEFON ISHLATISH TAHLILI (BUGUN)**\n\n"
-        f"👤 Farzand: **{child_name}**\n"
-        f"⏱ Jami ekran vaqti: **{total_time}** ({time_badge})\n"
-        f"🔓 Telefon ochilgan: **{unlock_count} marta**\n\n"
-        f"📊 **Eng ko'p ishlatilgan ilovalar:**\n"
+        f"📱 <b>FARZANDINGIZNING TELEFON ISHLATISH TAHLILI (BUGUN)</b>\n\n"
+        f"👤 Farzand: <b>{child_name}</b>\n"
+        f"⏱ Jami ekran vaqti: <b>{total_time}</b> ({time_badge})\n"
+        f"🔓 Telefon ochilgan: <b>{unlock_count} marta</b>\n\n"
+        f"📊 <b>Eng ko'p ishlatilgan ilovalar:</b>\n"
         f"{apps_text}\n\n"
-        f"🛑 **Ilovalar holati:** {lock_status_text}\n"
-        f"🌐 **Internet holati:** {net_status_text}\n"
+        f"🛑 <b>Ilovalar holati:</b> {lock_status_text}\n"
+        f"🌐 <b>Internet holati:</b> {net_status_text}\n"
         f"{bedtime_info}"
-        f"🛡 **Sozlamalar himoyasi:** {anti_un_status}\n\n"
-        f"ℹ️ _Quyidagi tugmalar orqali ilovalarni yoki internetni bir zumda bloklashingiz, internetsiz SMS buyruqlarni yuborishingiz mumkin:_"
+        f"🛡 <b>Sozlamalar himoyasi:</b> {anti_un_status}\n\n"
+        f"ℹ️ <i>Quyidagi tugmalar orqali ilovalarni yoki internetni bir zumda bloklashingiz, internetsiz SMS buyruqlarni yuborishingiz mumkin:</i>"
     )
 
     buttons = []
@@ -5901,11 +5911,11 @@ async def parent_screen_time_handler(message: Message):
         children = await crud.get_children_for_parent(session, user_id)
         if not children:
             await message.answer(
-                "📱 **Ilovalar va Ekran vaqti tahlili:**\n\n"
+                "📱 <b>Ilovalar va Ekran vaqti tahlili:</b>\n\n"
                 "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
-                "Ilovalar sarfi, ekran vaqti, ilovalarni masofadan bloklash va uxlash rejimi sozlamalarini darhol sinab ko'rish uchun **Namuna farzand**ni ulashingiz mumkin:",
+                "Ilovalar sarfi, ekran vaqti, ilovalarni masofadan bloklash va uxlash rejimi sozlamalarini darhol sinab ko'rish uchun <b>Namuna farzand</b>ni ulashingiz mumkin:",
                 reply_markup=get_empty_children_kb(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             return
 
@@ -5913,7 +5923,7 @@ async def parent_screen_time_handler(message: Message):
         report = await crud.get_app_usage_report_today(session, child.id)
         policy = await crud.get_or_create_device_policy(session, child.id)
         text, kb = generate_screen_time_card(child, report, policy, children)
-        await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+        await message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("st_child:"))
@@ -5931,7 +5941,7 @@ async def st_child_callback_handler(callback: CallbackQuery):
         report = await crud.get_app_usage_report_today(session, target_child.id)
         policy = await crud.get_or_create_device_policy(session, target_child.id)
         text, kb = generate_screen_time_card(target_child, report, policy, children)
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         await callback.answer(f"👦 {target_child.full_name or 'Farzand'} statistikasi")
 
 
@@ -5950,7 +5960,7 @@ async def st_refresh_callback_handler(callback: CallbackQuery):
         policy = await crud.get_or_create_device_policy(session, target_child.id)
         text, kb = generate_screen_time_card(target_child, report, policy, children)
         try:
-            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
             await callback.answer("🔄 Yangilandi!")
         except Exception:
             await callback.answer("O'zgarish yo'q.")
@@ -6002,7 +6012,7 @@ async def toggle_net_lock_callback_handler(callback: CallbackQuery):
         report = await crud.get_app_usage_report_today(session, child_id)
         text, kb = generate_screen_time_card(child, report, updated_policy, children)
         try:
-            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         except Exception:
             pass
 
@@ -6022,23 +6032,25 @@ async def sms_controls_callback_handler(callback: CallbackQuery):
         policy = await crud.get_or_create_device_policy(session, child_id)
         pin_hint = "1234 (standart)" if not policy.parent_pin_hash else "Siz o'rnatgan 4 xonali PIN"
 
+        safe_child_name = html.escape(child_name)
+        safe_pin_hint = html.escape(pin_hint)
         text = (
-            f"✉️ **INTERNETSIZ (OFLAYN) SMS BUYRUQLAR**\n"
+            f"✉️ <b>INTERNETSIZ (OFLAYN) SMS BUYRUQLAR</b>\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 Farzand: **{child_name}**\n"
-            f"🔑 Xavfsizlik PIN-kodi: `{pin_hint}`\n\n"
-            f"Agar bolaning telefonida **internet (Wi-Fi / Mobile Data) butunlay o'chirilgan** bo'lsa, "
+            f"👤 Farzand: <b>{safe_child_name}</b>\n"
+            f"🔑 Xavfsizlik PIN-kodi: <code>{safe_pin_hint}</code>\n\n"
+            f"Agar bolaning telefonida <b>internet (Wi-Fi / Mobile Data) butunlay o'chirilgan</b> bo'lsa, "
             f"siz bolaning telefon raqamiga oddiy SMS yuborish orqali boshqarishingiz mumkin:\n\n"
-            f"• `#LOCK:PIN` — Telefonni internetsiz darhol to'liq bloklash.\n"
-            f"  *Misol:* `#LOCK:1234`\n\n"
-            f"• `#UNLOCK:PIN` — Barcha cheklovlarni yechish va ochish.\n"
-            f"  *Misol:* `#UNLOCK:1234`\n\n"
-            f"• `#GPS:PIN` — Farzand telefonidan internetsiz aniq **GPS koordinatalari** va batareyasini so'rash. "
+            f"• <code>#LOCK:PIN</code> — Telefonni internetsiz darhol to'liq bloklash.\n"
+            f"  <i>Misol:</i> <code>#LOCK:1234</code>\n\n"
+            f"• <code>#UNLOCK:PIN</code> — Barcha cheklovlarni yechish va ochish.\n"
+            f"  <i>Misol:</i> <code>#UNLOCK:1234</code>\n\n"
+            f"• <code>#GPS:PIN</code> — Farzand telefonidan internetsiz aniq <b>GPS koordinatalari</b> va batareyasini so'rash. "
             f"Farzand telefoni darhol javob SMS orqali Google Maps havolasini qaytaradi!\n"
-            f"  *Misol:* `#GPS:1234`\n\n"
-            f"• `#SIREN:PIN` — Farzand telefonida qattiq signal (sirena) chalish.\n"
-            f"  *Misol:* `#SIREN:1234`\n\n"
-            f"ℹ️ _Farzand telefoni SMS ni olishi bilanoq (internetsiz) buyruqni bajaradi va ota-onaga hisobot beradi._"
+            f"  <i>Misol:</i> <code>#GPS:1234</code>\n\n"
+            f"• <code>#SIREN:PIN</code> — Farzand telefonida qattiq signal (sirena) chalish.\n"
+            f"  <i>Misol:</i> <code>#SIREN:1234</code>\n\n"
+            f"ℹ️ <i>Farzand telefoni SMS ni olishi bilanoq (internetsiz) buyruqni bajaradi va ota-onaga hisobot beradi.</i>"
         )
         phone = child.phone_number.strip() if child and child.phone_number else None
         pin_code = "1234"
@@ -6085,10 +6097,10 @@ async def sms_controls_callback_handler(callback: CallbackQuery):
         ])
         kb = InlineKeyboardMarkup(inline_keyboard=kb_rows)
         try:
-            await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
             await callback.answer()
         except Exception:
-            await callback.message.answer(text, reply_markup=kb, parse_mode="Markdown")
+            await callback.message.answer(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("lock_all:"))
@@ -6136,7 +6148,7 @@ async def lock_all_callback_handler(callback: CallbackQuery):
         report = await crud.get_app_usage_report_today(session, child_id)
         policy = await crud.get_or_create_device_policy(session, child_id)
         text, kb = generate_screen_time_card(child, report, policy, children)
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("unlock_all:"))
@@ -6183,7 +6195,7 @@ async def unlock_all_callback_handler(callback: CallbackQuery):
         report = await crud.get_app_usage_report_today(session, child_id)
         policy = await crud.get_or_create_device_policy(session, child_id)
         text, kb = generate_screen_time_card(child, report, policy, children)
-        await callback.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+        await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("st_perm_guide:"))
@@ -6194,35 +6206,36 @@ async def st_perm_guide_callback_handler(callback: CallbackQuery):
         child = await crud.get_user(session, child_id)
         child_name = child.full_name or f"Farzand #{child_id}" if child else "Farzand"
 
+    safe_child_name = html.escape(child_name)
     guide_text = (
-        f"🛡 **FARZAND TELEFONIDA RUXSATLARNI YOQISH QO'LLANMASI**\n\n"
-        f"👤 Farzandingiz: **{child_name}**\n\n"
-        f"Ilovalar tahlili (qancha vaqt o'tirgani) va ularni masofadan bir zumda bloklash ishlashi uchun **bola telefoniga bizning Android APK ilovamiz o'rnatilgan bo'lishi** va quyidagi 3 ta ruxsat yoqilishi shart:\n\n"
-        f"1️⃣ **Foydalanish statistikasi (Usage Access) — Ekran tahlili uchun:**\n"
-        f"• Bola telefonida: _Sozlamalar ➔ Maxsus kirish (Special app access) ➔ Foydalanish ma'lumotlariga kirish (Usage access)_ ga kiring;\n"
-        f"• Ro'yxatdan **Child Security** ilovasini topib, ruxsat bering.\n\n"
-        f"2️⃣ **Boshqa ilovalar ustida ko'rinish (Overlay) — Bloklash ekrani uchun:**\n"
-        f"• _Sozlamalar ➔ Ilovalar ➔ Maxsus kirish ➔ Boshqa ilovalar ustida ko'rinish (Display over other apps)_ ga kiring;\n"
-        f"• **Child Security** ga ruxsat bering.\n\n"
-        f"3️⃣ **Maxsus imkoniyatlar (Accessibility) — Tezkor bloklash uchun:**\n"
-        f"• _Sozlamalar ➔ Maxsus imkoniyatlar (Accessibility) ➔ O'rnatilgan xizmatlar (Downloaded apps)_ ga kiring;\n"
-        f"• **Child Security** xizmatini yoqing.\n\n"
-        f"⚠️ **Android 13, 14 va 15 foydalanuvchilari diqqatiga!**\n"
-        f"Agar tizim _«Cheklangan sozlama» (Restricted setting)_ deb ruxsat bermasa:\n"
-        f"1. Bola telefonida _Sozlamalar ➔ Ilovalar (Apps) ➔ Child Security_ ga kiring;\n"
-        f"2. Yuqori o'ng burchakdagi **3 ta nuqta (⋮)** tugmasini bosing;\n"
-        f"3. **«Cheklangan sozlamalarga ruxsat berish» (Allow restricted settings)** ni bosing va telefon PIN kodini tering;\n"
+        f"🛡 <b>FARZAND TELEFONIDA RUXSATLARNI YOQISH QO'LLANMASI</b>\n\n"
+        f"👤 Farzandingiz: <b>{safe_child_name}</b>\n\n"
+        f"Ilovalar tahlili (qancha vaqt o'tirgani) va ularni masofadan bir zumda bloklash ishlashi uchun <b>bola telefoniga bizning Android APK ilovamiz o'rnatilgan bo'lishi</b> va quyidagi 3 ta ruxsat yoqilishi shart:\n\n"
+        f"1️⃣ <b>Foydalanish statistikasi (Usage Access) — Ekran tahlili uchun:</b>\n"
+        f"• Bola telefonida: <i>Sozlamalar ➔ Maxsus kirish (Special app access) ➔ Foydalanish ma'lumotlariga kirish (Usage access)</i> ga kiring;\n"
+        f"• Ro'yxatdan <b>Child Security</b> ilovasini topib, ruxsat bering.\n\n"
+        f"2️⃣ <b>Boshqa ilovalar ustida ko'rinish (Overlay) — Bloklash ekrani uchun:</b>\n"
+        f"• <i>Sozlamalar ➔ Ilovalar ➔ Maxsus kirish ➔ Boshqa ilovalar ustida ko'rinish (Display over other apps)</i> ga kiring;\n"
+        f"• <b>Child Security</b> ga ruxsat bering.\n\n"
+        f"3️⃣ <b>Maxsus imkoniyatlar (Accessibility) — Tezkor bloklash uchun:</b>\n"
+        f"• <i>Sozlamalar ➔ Maxsus imkoniyatlar (Accessibility) ➔ O'rnatilgan xizmatlar (Downloaded apps)</i> ga kiring;\n"
+        f"• <b>Child Security</b> xizmatini yoqing.\n\n"
+        f"⚠️ <b>Android 13, 14 va 15 foydalanuvchilari diqqatiga!</b>\n"
+        f"Agar tizim <i>«Cheklangan sozlama» (Restricted setting)</i> deb ruxsat bermasa:\n"
+        f"1. Bola telefonida <i>Sozlamalar ➔ Ilovalar (Apps) ➔ Child Security</i> ga kiring;\n"
+        f"2. Yuqori o'ng burchakdagi <b>3 ta nuqta (⋮)</b> tugmasini bosing;\n"
+        f"3. <b>«Cheklangan sozlamalarga ruxsat berish» (Allow restricted settings)</b> ni bosing va telefon PIN kodini tering;\n"
         f"4. Shundan keyin Maxsus imkoniyatlar (Accessibility) bo'limida Child Security bemalol yoqiladi!\n\n"
-        f"💡 _Bola ilovasida «⚡ Ruxsatlarni yoqish» tugmasi orqali ham bularni 1-marta bosib bosqichma-bosqich yoqish mumkin._"
+        f"💡 <i>Bola ilovasida «⚡ Ruxsatlarni yoqish» tugmasi orqali ham bularni 1-marta bosib bosqichma-bosqich yoqish mumkin.</i>"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Ekran tahliliga qaytish", callback_data=f"st_child:{child_id}")]
     ])
     try:
-        await callback.message.edit_text(guide_text, reply_markup=kb, parse_mode="Markdown")
+        await callback.message.edit_text(guide_text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        await callback.message.answer(guide_text, reply_markup=kb, parse_mode="Markdown")
+        await callback.message.answer(guide_text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
 
@@ -6242,17 +6255,17 @@ async def fallback_text_handler(message: Message):
 
         if user.role == "parent":
             await message.answer(
-                "📋 **Menyu yangilandi!**\n\n"
-                "Quyidagi menyu tugmalaridan birini tanlang. Mobil ilovani yuklab olish uchun pastdagi **«📲 Mobil ilova (Android APK)»** tugmasini bosing:",
+                "📋 <b>Menyu yangilandi!</b>\n\n"
+                "Quyidagi menyu tugmalaridan birini tanlang. Mobil ilovani yuklab olish uchun pastdagi <b>«📲 Mobil ilova (Android APK)»</b> tugmasini bosing:",
                 reply_markup=get_parent_main_keyboard(user_id),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         else:
             await message.answer(
-                "📋 **Menyu yangilandi!**\n\n"
+                "📋 <b>Menyu yangilandi!</b>\n\n"
                 "Quyidagi xavfsizlik menyusi tugmalaridan birini tanlang:",
                 reply_markup=get_child_main_keyboard(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
 
 
@@ -6333,3 +6346,23 @@ async def on_child_phone_entered(message: Message, state: FSMContext):
         reply_markup=test_kb,
         parse_mode="HTML"
     )
+
+
+@router.errors()
+async def bot_global_error_handler(event: ErrorEvent):
+    """Global catch-all error handler for Telegram bot updates to prevent silent failures."""
+    logger.error(f"Global bot error intercepted: {event.exception}", exc_info=event.exception)
+    try:
+        update = event.update
+        if update and update.callback_query:
+            try:
+                await update.callback_query.answer("⚠️ Xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.", show_alert=True)
+            except Exception:
+                pass
+        elif update and update.message:
+            try:
+                await update.message.answer("⚠️ Xabar yetkazishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"Error handler dispatch failed: {e}")

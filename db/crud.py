@@ -71,27 +71,44 @@ async def update_user_role(session: AsyncSession, user_id: int, role: str) -> Op
     return user
 
 
-async def generate_pairing_code(session: AsyncSession, parent_id: int) -> str:
+async def generate_pairing_code(session: AsyncSession, parent_id: int, force_new: bool = False) -> str:
     """Generate or retrieve a unique 6-character permanent pairing code for a parent.
     Also synchronizes web_access_code so one code controls the entire family.
+    Includes cryptographic PRNG and collision prevention against other users.
     """
     user = await get_user(session, parent_id)
     if not user:
         user, _ = await get_or_create_user(session, parent_id, role="parent")
 
-    if user.pairing_code:
-        user.web_access_code = user.pairing_code
-        await session.commit()
-        return user.pairing_code
+    if not force_new:
+        if user.pairing_code:
+            user.web_access_code = user.pairing_code
+            await session.commit()
+            return user.pairing_code
 
-    if user.web_access_code:
-        user.pairing_code = user.web_access_code
-        user.pairing_code_created_at = datetime.now(timezone.utc)
-        await session.commit()
-        return user.web_access_code
+        if user.web_access_code:
+            user.pairing_code = user.web_access_code
+            user.pairing_code_created_at = datetime.now(timezone.utc)
+            await session.commit()
+            return user.web_access_code
 
-    # Generate permanent 6-digit numeric code with cryptographically secure PRNG
-    code = "".join(secrets.choice(string.digits) for _ in range(6))
+    # Generate permanent 6-digit numeric code with cryptographically secure PRNG and collision avoidance
+    for _ in range(50):
+        code = "".join(secrets.choice(string.digits) for _ in range(6))
+        existing = await session.execute(
+            select(User).where(
+                ((User.pairing_code == code) | (User.web_access_code == code)) & (User.id != parent_id)
+            )
+        )
+        if not existing.scalars().first():
+            user.pairing_code = code
+            user.web_access_code = code
+            user.pairing_code_created_at = datetime.now(timezone.utc)
+            await session.commit()
+            return code
+
+    # Extremely rare fallback to 8-digit CSPRNG code if 6-digit space is dense
+    code = "".join(secrets.choice(string.digits) for _ in range(8))
     user.pairing_code = code
     user.web_access_code = code
     user.pairing_code_created_at = datetime.now(timezone.utc)
@@ -113,7 +130,7 @@ async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Option
     return result.scalar_one_or_none()
 
 
-async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
+async def generate_web_access_code(session: AsyncSession, user_id: int, force_new: bool = False) -> str:
     """Generate or retrieve a permanent 6-digit access code for website login.
     Parents get their unified family code (pairing_code).
     Children get their OWN DISTINCT personal access code so they can log into their child account.
@@ -123,27 +140,30 @@ async def generate_web_access_code(session: AsyncSession, user_id: int) -> str:
         user, _ = await get_or_create_user(session, user_id)
 
     if user.role == "parent":
-        return await generate_pairing_code(session, user_id)
+        return await generate_pairing_code(session, user_id, force_new=force_new)
 
     # For Child: Check if child already has their distinct code
-    if user.web_access_code:
+    if not force_new and user.web_access_code:
         parents = await get_parents_for_child(session, user_id)
         parent_codes = {p.pairing_code for p in parents if p.pairing_code}
         if user.web_access_code not in parent_codes:
             return user.web_access_code
 
-    # Generate unique 6-digit code specifically for this child with secure PRNG
-    for _ in range(20):
+    # Generate unique 6-digit code specifically for this child with secure PRNG and collision avoidance
+    for _ in range(50):
         code = "".join(secrets.choice(string.digits) for _ in range(6))
         existing = await session.execute(
-            select(User).where((User.web_access_code == code) | (User.pairing_code == code))
+            select(User).where(
+                ((User.web_access_code == code) | (User.pairing_code == code)) & (User.id != user_id)
+            )
         )
         if not existing.scalars().first():
             user.web_access_code = code
             await session.commit()
             return code
 
-    code = str(int(datetime.now().timestamp()))[-6:]
+    # Fallback using 8-digit CSPRNG
+    code = "".join(secrets.choice(string.digits) for _ in range(8))
     user.web_access_code = code
     await session.commit()
     return code
@@ -625,16 +645,26 @@ async def get_geofence(session: AsyncSession, geofence_id: int) -> Optional[Geof
 
 
 async def delete_geofence(session: AsyncSession, geofence_id: int, parent_id: int) -> bool:
-    """Delete a geofence by ID if owned by parent, cleaning up related states."""
+    """Delete a geofence by ID if owned by parent or if parent is linked to the geofence's child, cleaning up related states."""
+    fence = await get_geofence(session, geofence_id)
+    if not fence:
+        return False
+
+    is_authorized = (fence.parent_id == parent_id)
+    if not is_authorized and fence.child_id:
+        parents = await get_parents_for_child(session, fence.child_id)
+        if any(p.id == parent_id for p in parents):
+            is_authorized = True
+
+    if not is_authorized:
+        return False
+
     # Remove associated geofence tracking states first
     await session.execute(
         delete(GeofenceState).where(GeofenceState.geofence_id == geofence_id)
     )
     result = await session.execute(
-        delete(Geofence).where(
-            Geofence.id == geofence_id,
-            Geofence.parent_id == parent_id
-        )
+        delete(Geofence).where(Geofence.id == geofence_id)
     )
     await session.flush()
     return result.rowcount > 0
@@ -856,12 +886,14 @@ async def reject_task(session: AsyncSession, task_id: int) -> Optional[Task]:
 
 
 async def delete_task(session: AsyncSession, task_id: int, parent_id: Optional[int] = None) -> bool:
-    """Delete a task by ID, optionally verifying parent ownership."""
+    """Delete a task by ID, verifying parent or co-parent ownership."""
     task = await get_task_by_id(session, task_id)
     if not task:
         return False
     if parent_id and task.parent_id != parent_id:
-        return False
+        parents = await get_parents_for_child(session, task.child_id)
+        if not any(p.id == parent_id for p in parents):
+            return False
     await session.delete(task)
     await session.flush()
     return True
