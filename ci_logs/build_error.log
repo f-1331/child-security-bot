@@ -1,8 +1,8 @@
 === WHAT WENT WRONG ===
-> Task :app:mapParentDebugSourceSetPaths
-> Task :app:generateParentDebugResources
+> Task :app:mergeChildDebugJavaResource
+> Task :app:checkChildDebugDuplicateClasses
 > Task :app:processChildDebugResources
-> Task :app:mergeParentDebugResources
+> Task :app:desugarChildDebugFileDependencies
 
 > Task :app:compileChildDebugJavaWithJavac FAILED
 /home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:245: error: cannot find symbol
@@ -30,19 +30,19 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:com
 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:282)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:147)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:135)
-> Task :app:validateSigningChildDebug
-> Task :app:writeChildDebugAppMetadata
-> Task :app:writeChildDebugSigningConfigVersions
-> Task :app:preParentDebugBuild UP-TO-DATE
-> Task :app:mergeParentDebugNativeDebugMetadata NO-SOURCE
-> Task :app:generateParentDebugBuildConfig
-> Task :app:javaPreCompileParentDebug
-> Task :app:checkParentDebugAarMetadata
-> Task :app:generateParentDebugResValues
-> Task :app:mapParentDebugSourceSetPaths
-> Task :app:generateParentDebugResources
+
+> Task :app:processChildDebugManifest
+> Task :app:mergeChildDebugShaders
+> Task :app:compileChildDebugShaders NO-SOURCE
+> Task :app:generateChildDebugAssets UP-TO-DATE
+> Task :app:mergeChildDebugAssets
+> Task :app:processChildDebugJavaRes NO-SOURCE
+> Task :app:compressChildDebugAssets
+> Task :app:processChildDebugManifestForPackage
+> Task :app:mergeChildDebugJavaResource
+> Task :app:checkChildDebugDuplicateClasses
 > Task :app:processChildDebugResources
-> Task :app:mergeParentDebugResources
+> Task :app:desugarChildDebugFileDependencies
 
 > Task :app:compileChildDebugJavaWithJavac FAILED
 /home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:245: error: cannot find symbol
@@ -62,7 +62,7 @@ Execution failed for task ':app:compileChildDebugJavaWithJavac'.
 
 * Try:
 > Task :app:processChildDebugResources
-> Task :app:mergeParentDebugResources
+> Task :app:desugarChildDebugFileDependencies
 
 > Task :app:compileChildDebugJavaWithJavac FAILED
 /home/runner/work/child-security-bot/child-security-bot/android/app/src/main/java/uz/childsecurity/app/MainActivity.java:245: error: cannot find symbol
