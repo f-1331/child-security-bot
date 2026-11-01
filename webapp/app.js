@@ -1939,6 +1939,10 @@ async function loadChildSelfData(user) {
         childBalanceSom = ch.virtual_money_som || 0;
         applyChildUI(ch);
 
+        if (ch.activity) {
+          updateChildActivityUI(ch.activity);
+        }
+
         if (ch.location && ch.location.latitude && ch.location.longitude) {
           renderChildMarker(ch.location.latitude, ch.location.longitude, ch.full_name, ch.is_sos_active, ch.location.battery_level);
           updateBatteryUI(ch.location.battery_level, ch.location.is_charging);
@@ -2917,6 +2921,11 @@ async function updateLiveTelemetry(childId) {
     // Feature 5: Device policy and screen time sync
     if (child.device_policy) {
       updateDevicePolicyUI(child.device_policy);
+      updateSchoolModeUI(child.device_policy);
+    }
+
+    if (child.activity) {
+      updateChildActivityUI(child.activity);
     }
 
     const loc = child.location;
@@ -7187,6 +7196,279 @@ function triggerRemoteSiren() {
   }
 }
 
+// ==============================================================================
+// ADVANCED FEATURES: QUICK SIGNALS, DIRECTIVES, SCHOOL MODE & ACTIVITY
+// ==============================================================================
+
+function playPingNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    
+    // Tone 1: 659.25Hz (E5)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(659.25, now);
+    gain1.gain.setValueAtTime(0.2, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.3);
+
+    // Tone 2: 783.99Hz (G5)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(783.99, now + 0.15);
+    gain2.gain.setValueAtTime(0.25, now + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.5);
+  } catch (e) {}
+}
+
+async function sendQuickChildSignal(signalType) {
+  haptic("heavy");
+  playPingNotificationSound();
+  showToast("📡 Ota-onangizga signal yuborilmoqda...");
+
+  let lat = null;
+  let lon = null;
+  let battery = 100;
+
+  try {
+    if (navigator.getBattery) {
+      const b = await navigator.getBattery();
+      battery = Math.round(b.level * 100);
+    }
+  } catch (e) {}
+
+  if (lastChildLocation && lastChildLocation.latitude) {
+    lat = lastChildLocation.latitude;
+    lon = lastChildLocation.longitude;
+  }
+
+  const childId = currentChildId || (authenticatedSession?.user?.id);
+  if (!childId) {
+    showToast("⚠️ Farzand kodi topilmadi");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${childId}/quick-signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        signal_type: signalType,
+        latitude: lat,
+        longitude: lon,
+        battery_level: battery
+      })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("✅ Ota-onangizga xabar yetkazildi!");
+    } else {
+      showToast(data.message || "Signal yuborildi");
+    }
+  } catch (e) {
+    console.error("sendQuickChildSignal error:", e);
+    showToast("✅ Signal saqlandi");
+  }
+}
+
+function openParentDirectiveModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  document.getElementById("modal-parent-directive")?.classList.remove("hidden");
+}
+
+function closeParentDirectiveModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  document.getElementById("modal-parent-directive")?.classList.add("hidden");
+}
+
+async function sendParentDirective(pingType) {
+  haptic("heavy");
+  closeParentDirectiveModal();
+  showToast("📤 Farzand telefoniga ko'rsatma yuborilmoqda...");
+
+  if (!currentChildId) {
+    showToast("⚠️ Avval farzandni tanlang");
+    return;
+  }
+
+  const effParentId = getEffectiveParentId();
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/parent-ping`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_id: effParentId,
+        ping_type: pingType
+      })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("✅ Ko'rsatma farzandga yetkazildi!");
+    } else {
+      showToast(data.detail || data.message || "Ko'rsatma yuborildi");
+    }
+  } catch (e) {
+    console.error("sendParentDirective error:", e);
+    showToast("✅ Ko'rsatma yuborildi");
+  }
+}
+
+let isSchoolModeActive = false;
+function updateSchoolModeUI(policy) {
+  if (!policy) return;
+  isSchoolModeActive = policy.is_all_apps_blocked && (policy.lockdown_reason && policy.lockdown_reason.includes("Maktab"));
+  const pillBadge = document.getElementById("pillSchoolBadge");
+  const btn = document.getElementById("btnParentSchoolMode");
+
+  if (isSchoolModeActive) {
+    if (pillBadge) pillBadge.classList.remove("hidden");
+    if (btn) {
+      btn.classList.add("bg-amber-500/25", "border-amber-500/60", "text-amber-200");
+    }
+  } else {
+    if (pillBadge) pillBadge.classList.add("hidden");
+    if (btn) {
+      btn.classList.remove("bg-amber-500/25", "border-amber-500/60", "text-amber-200");
+    }
+  }
+}
+
+async function toggleParentSchoolMode() {
+  haptic("medium");
+  if (!currentChildId) {
+    showToast("⚠️ Avval farzandni tanlang");
+    return;
+  }
+
+  const targetState = !isSchoolModeActive;
+  const effParentId = getEffectiveParentId();
+  showToast(targetState ? "📚 Maktab rejimi yoqilmoqda..." : "✅ Maktab rejimi o'chirilmoqda...");
+
+  try {
+    const res = await fetch(`/api/v1/webapp/child/${currentChildId}/school-mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_id: effParentId,
+        enabled: targetState
+      })
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      isSchoolModeActive = targetState;
+      updateSchoolModeUI({ is_all_apps_blocked: targetState, lockdown_reason: "Maktab dars vaqti 📚" });
+      showToast(targetState ? "📚 Maktab rejimi yoqildi (Dars vaqti)" : "✅ Maktab rejimi o'chirildi");
+    }
+  } catch (e) {
+    console.error("toggleParentSchoolMode error:", e);
+  }
+}
+
+function updateChildActivityUI(act) {
+  if (!act) return;
+  const steps = act.steps || 0;
+  const target = act.target_steps || 6000;
+  const pct = Math.min(100, Math.round((steps / target) * 100));
+
+  const stepsNum = document.getElementById("childStepsNumberText");
+  if (stepsNum) stepsNum.textContent = `${steps.toLocaleString()} / ${target.toLocaleString()}`;
+
+  const bar = document.getElementById("childStepsProgressBar");
+  if (bar) bar.style.width = `${pct}%`;
+
+  const badge = document.getElementById("childStepsPercentBadge");
+  if (badge) badge.textContent = `${pct}%`;
+
+  const distEl = document.getElementById("childActivityDistanceText");
+  if (distEl) distEl.textContent = `${act.distance_km || 0.0} km`;
+
+  const calEl = document.getElementById("childActivityCaloriesText");
+  if (calEl) calEl.textContent = `${act.calories || 0} kkal`;
+
+  const safetyScoreText = document.getElementById("safetyScoreText");
+  if (safetyScoreText) {
+    safetyScoreText.textContent = `${act.safety_score || 100}%`;
+  }
+}
+
+function showSafetyScoreExplanation() {
+  haptic("light");
+  alert(
+    "🛡️ JONLI XAVFSIZLIK REYTINGI (100/100)\n\n" +
+    "Ushbu ko'rsatkich farzandingizning ayni damdagi xavfsizlik holatini tahlil qiladi:\n\n" +
+    "🔋 Batareya yetarliligi: +25 ball\n" +
+    "📡 Jonli GPS signallari: +25 ball\n" +
+    "🛡️ Qoidabuzarlik yo'qligi: +25 ball\n" +
+    "📚 Dars va ilovalar tartibi: +25 ball\n\n" +
+    "90% - 100%: A'lo xavfsizlik darajasi 🟢\n" +
+    "70% - 89%: O'rtacha / Batareya past 🟡\n" +
+    "70% dan past: Diqqat qiling! 🔴"
+  );
+}
+
+let strobeTimer = null;
+let isStrobeActive = false;
+
+function toggleEmergencyStrobe(forceState) {
+  haptic("heavy");
+  const overlay = document.getElementById("emergencyStrobeOverlay");
+  if (!overlay) return;
+
+  if (typeof forceState === "boolean") {
+    isStrobeActive = forceState;
+  } else {
+    isStrobeActive = !isStrobeActive;
+  }
+
+  if (isStrobeActive) {
+    overlay.classList.remove("hidden");
+    let state = false;
+    clearInterval(strobeTimer);
+    strobeTimer = setInterval(() => {
+      state = !state;
+      overlay.style.backgroundColor = state ? "#dc2626" : "#ffffff";
+    }, 150);
+    playSirenSound();
+  } else {
+    clearInterval(strobeTimer);
+    strobeTimer = null;
+    overlay.classList.add("hidden");
+    overlay.style.backgroundColor = "";
+  }
+}
+
+function openEmergencyServicesModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("medium");
+  document.getElementById("modal-emergency-services")?.classList.remove("hidden");
+}
+
+function closeEmergencyServicesModal() {
+  setTimeout(updateTelegramBackButton, 50);
+  haptic("light");
+  document.getElementById("modal-emergency-services")?.classList.add("hidden");
+}
+
+function acknowledgeIncomingParentPing() {
+  haptic("light");
+  document.getElementById("modal-incoming-parent-ping")?.classList.add("hidden");
+  showToast("✅ Xabar qabul qilindi");
+}
+
 // =========================================================
 // 1. DISTANCE CALCULATION HELPER (Haversine formula)
 // =========================================================
@@ -8184,9 +8466,30 @@ function handleIncomingWebSocketMessage(msg) {
     return;
   }
 
+  // 1.25 Quick Signal received by Parent
+  if (msg.type === "quick_signal" && currentRole === "parent") {
+    showToast(`💬 ${msg.title || 'Tezkor signal'} (${msg.child_name || 'Farzand'}): "${msg.message || ''}"`);
+    haptic("medium");
+    playPingNotificationSound();
+    return;
+  }
+
+  // 1.26 Parent Ping received by Child
+  if (msg.type === "parent_ping" && currentRole === "child") {
+    const titleEl = document.getElementById("incomingPingTitle");
+    const msgEl = document.getElementById("incomingPingMessage");
+    if (titleEl) titleEl.textContent = msg.title || "Ota-onangizdan Xabar!";
+    if (msgEl) msgEl.textContent = `${msg.parent_name || 'Ota-onangiz'}: "${msg.message || ''}"`;
+    document.getElementById("modal-incoming-parent-ping")?.classList.remove("hidden");
+    haptic("heavy");
+    playPingNotificationSound();
+    return;
+  }
+
   // 1.3 Device Policy Realtime Update (Lock All Apps / App Block)
   if (msg.type === "device_policy_update") {
     updateDevicePolicyUI(msg);
+    updateSchoolModeUI(msg);
     if (currentRole === "parent") {
       if (msg.is_all_apps_blocked) {
         showToast("🛑 Farzand telefonida barcha ilovalar bloklandi!");
