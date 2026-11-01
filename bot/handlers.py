@@ -520,7 +520,8 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
 
         elif user.role == "child":
             parents = await crud.get_parents_for_child(session, user.id)
-            parent_names = ", ".join([p.full_name or str(p.id) for p in parents]) if parents else "Ulangan ota-ona yo'q"
+            parent_names = ", ".join([html.escape(p.full_name or str(p.id)) for p in parents]) if parents else "Ulangan ota-ona yo'q"
+            safe_child_name = html.escape(full_name or "Farzand")
             child_inline_kb = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
@@ -542,18 +543,18 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 ]
             )
             await message.answer(
-                f"Salom, **{clean_md(full_name)}**!\n\n"
-                f"👦 Siz **Farzand** rejimidasiz.\n"
-                f"Ulangan ota-ona: **{parent_names}**.\n\n"
-                f"Har qanday favqulodda vaziyatda darhol **'🚨 SOS'** tugmasini bosing!\n\n"
-                f"📲 **Child Security Android APK** ilovasini o'rnatish uchun pastdagi **«📲 Android APK Yuklab Olish»** tugmasini bosing.",
+                f"Salom, <b>{safe_child_name}</b>!\n\n"
+                f"👦 Siz <b>Farzand</b> rejimidasiz.\n"
+                f"Ulangan ota-ona: <b>{parent_names}</b>.\n\n"
+                f"Har qanday favqulodda vaziyatda darhol <b>'🚨 SOS'</b> tugmasini bosing!\n\n"
+                f"📲 <b>Child Security Android APK</b> ilovasini o'rnatish uchun pastdagi <b>«📲 Android APK Yuklab Olish»</b> tugmasini bosing.",
                 reply_markup=get_child_main_keyboard(),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             await message.answer(
-                "⚡ **Tezkor kirish va Mobil ilova:**",
+                "⚡ <b>Tezkor kirish va Mobil ilova:</b>",
                 reply_markup=child_inline_kb,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             return
 
@@ -657,13 +658,24 @@ async def on_child_code_entered(message: Message, state: FSMContext, bot: Bot):
         )
         return
 
+    # If user pressed a known bottom menu button while waiting for code, release the state
+    if message.text.startswith("/") or message.text in [
+        "📍 Jonli joylashuvimni yuborish", "🚨 SOS (Xavf tugmasi)",
+        "📱 Web App (Sayt)", "🤖 Android ilovasi (APK)", "🍎 iPhone / iOS (O'rnatish)",
+        "⚙️ Sozlamalar / Chiqish", "🔄 Rolni o'zgartirish", "ℹ️ Yordam",
+        "📱 Telefon uchun ilova (Android & iOS)", "💻 Noutbuk uchun dastur",
+        "📞 Ota-onamga qo'ng'iroq", "🔑 Saytga kirish kodi", "📋 Vazifalarim va Tangalar"
+    ]:
+        await state.clear()
+        return
+
     async with AsyncSessionLocal() as session:
         parent = await crud.get_parent_by_pairing_code(session, code)
         if not parent:
             await message.answer(
-                "❌ **Kiritilgan kod noto'g'ri yoki mavjud emas!**\n\n"
-                "Iltimos, ota-onangizdan kodni qayta so'rab, tekshirib kiriting:",
-                parse_mode="Markdown"
+                "❌ <b>Kiritilgan kod noto'g'ri yoki mavjud emas!</b>\n\n"
+                "Iltimos, ota-onangiz bergan 6 xonali ulanish kodini qayta tekshirib kiriting:",
+                parse_mode="HTML"
             )
             return
 
@@ -3169,6 +3181,7 @@ async def on_show_pairing_code(message: Message, bot: Bot):
 
         bot_info = await bot.get_me()
         deep_link = f"https://t.me/{bot_info.username}?start=pair_{code}"
+        safe_link = html.escape(deep_link)
         share_kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -3192,18 +3205,18 @@ async def on_show_pairing_code(message: Message, bot: Bot):
             ]
         )
         await message.answer(
-            f"🔑 **YAGONA OILA VA SAYT KODINGIZ:** ` {code} `\n\n"
-            f"🔗 **1-bosishda ulash havolasi:**\n"
-            f"{deep_link}\n\n"
-            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
-            f"1️⃣ **Farzandlarni ulash:**\n"
-            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib ` {code} ` kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
-            f"2️⃣ **Saytga (Web App) kirish:**\n"
-            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
-            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
-            f"💡 _Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:_",
+            f"🔑 <b>YAGONA OILA VA SAYT KODINGIZ:</b> <code>{code}</code>\n\n"
+            f"🔗 <b>1-bosishda ulash havolasi:</b>\n"
+            f"{safe_link}\n\n"
+            f"👨‍👩‍👧 <b>Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!</b>\n\n"
+            f"1️⃣ <b>Farzandlarni ulash:</b>\n"
+            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib <code>{code}</code> kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
+            f"2️⃣ <b>Saytga (Web App) kirish:</b>\n"
+            f"🌐 Manzil: {html.escape(settings.WEBAPP_BASE_URL)}\n"
+            f"Saytga ham xuddi shu <code>{code}</code> kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
+            f"💡 <i>Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:</i>",
             reply_markup=share_kb,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
 
 
@@ -3216,26 +3229,26 @@ async def on_refresh_pairing_code(callback: CallbackQuery, bot: Bot):
 
         bot_info = await bot.get_me()
         new_text = (
-            f"🔑 **YANGILANGAN YAGONA OILA VA SAYT KODINGIZ:** ` {new_code} `\n\n"
-            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
-            f"1️⃣ **Farzandlarni ulash:**\n"
-            f"Farzandingiz botga kirib ushbu yangi ` {new_code} ` kodini kiritadi.\n\n"
-            f"2️⃣ **Saytga (Web App) kirish:**\n"
-            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
-            f"Saytga ham shu ` {new_code} ` kodini kiritib boshqarishingiz mumkin.\n\n"
+            f"🔑 <b>YANGILANGAN YAGONA OILA VA SAYT KODINGIZ:</b> <code>{new_code}</code>\n\n"
+            f"👨‍👩‍👧 <b>Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!</b>\n\n"
+            f"1️⃣ <b>Farzandlarni ulash:</b>\n"
+            f"Farzandingiz botga kirib ushbu yangi <code>{new_code}</code> kodini kiritadi.\n\n"
+            f"2️⃣ <b>Saytga (Web App) kirish:</b>\n"
+            f"🌐 Manzil: {html.escape(settings.WEBAPP_BASE_URL)}\n"
+            f"Saytga ham shu <code>{new_code}</code> kodini kiritib boshqarishingiz mumkin.\n\n"
             f"Ulashish uchun quyidagi tugmani bosing:"
         )
         try:
             await callback.message.edit_text(
                 new_text,
                 reply_markup=get_pairing_share_keyboard(bot_info.username, new_code),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         except Exception:
             await callback.message.answer(
                 new_text,
                 reply_markup=get_pairing_share_keyboard(bot_info.username, new_code),
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
     await callback.answer("✅ Yangi ulanish kodi yaratildi!")
 
@@ -3490,6 +3503,7 @@ async def on_show_pairing_code_callback(callback: CallbackQuery, bot: Bot):
 
         bot_info = await bot.get_me()
         deep_link = f"https://t.me/{bot_info.username}?start=pair_{code}"
+        safe_link = html.escape(deep_link)
         share_kb = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -3513,21 +3527,21 @@ async def on_show_pairing_code_callback(callback: CallbackQuery, bot: Bot):
             ]
         )
         msg_text = (
-            f"🔑 **YAGONA OILA VA SAYT KODINGIZ:** ` {code} `\n\n"
-            f"🔗 **1-bosishda ulash havolasi:**\n"
-            f"{deep_link}\n\n"
-            f"👨‍👩‍👧 **Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!**\n\n"
-            f"1️⃣ **Farzandlarni ulash:**\n"
-            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib ` {code} ` kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
-            f"2️⃣ **Saytga (Web App) kirish:**\n"
-            f"🌐 Manzil: {settings.WEBAPP_BASE_URL}\n"
-            f"Saytga ham xuddi shu ` {code} ` kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
-            f"💡 _Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:_"
+            f"🔑 <b>YAGONA OILA VA SAYT KODINGIZ:</b> <code>{code}</code>\n\n"
+            f"🔗 <b>1-bosishda ulash havolasi:</b>\n"
+            f"{safe_link}\n\n"
+            f"👨‍👩‍👧 <b>Bu bitta kod barcha farzandlaringiz uchun umumiy va doimiydir!</b>\n\n"
+            f"1️⃣ <b>Farzandlarni ulash:</b>\n"
+            f"Ushbu havolani farzandingizga yuboring yoki uning telefonida botga kirib <code>{code}</code> kodini kiriting. Barcha farzandlaringiz bitta profilga ulanadi.\n\n"
+            f"2️⃣ <b>Saytga (Web App) kirish:</b>\n"
+            f"🌐 Manzil: {html.escape(settings.WEBAPP_BASE_URL)}\n"
+            f"Saytga ham xuddi shu <code>{code}</code> kodini kiritasiz — barcha ulangan farzandlaringiz bir vaqtda chiqadi va bitta ekranda kuzata olasiz!\n\n"
+            f"💡 <i>Tizimni ikkinchi telefonsiz hoziroq sinab ko'rmoqchi bo'lsangiz, quyidagi «🧪 Namuna farzand bilan sinash» tugmasini bosing:</i>"
         )
         try:
-            await callback.message.edit_text(msg_text, reply_markup=share_kb, parse_mode="Markdown")
+            await callback.message.edit_text(msg_text, reply_markup=share_kb, parse_mode="HTML")
         except Exception:
-            await callback.message.answer(msg_text, reply_markup=share_kb, parse_mode="Markdown")
+            await callback.message.answer(msg_text, reply_markup=share_kb, parse_mode="HTML")
     await callback.answer()
 
 
@@ -3906,9 +3920,9 @@ async def on_reset_all_data_command(message: Message, state: FSMContext, bot: Bo
     )
 
 
-@router.message(F.text == "⚙️ Sozlamalar / Chiqish")
+@router.message(F.text.in_(["⚙️ Sozlamalar / Chiqish", "🔄 Rolni o'zgartirish"]))
 @router.message(Command("logout", "chiqish", "reset_role", "sozlamalar"))
-async def on_settings_logout_pressed(message: Message, state: FSMContext):
+async def on_settings_logout_pressed(message: Message, state: FSMContext, bot: Bot):
     """Show settings menu with option to logout/change role."""
     await state.clear()
     user_id = message.from_user.id
@@ -3920,6 +3934,37 @@ async def on_settings_logout_pressed(message: Message, state: FSMContext):
                 reply_markup=get_role_selection_keyboard()
             )
             return
+
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if parents:
+                child_ask_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="🔔 Ota-onamdan chiqishga ruxsat so'rash",
+                                callback_data="logout_start"
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="❌ Bekor qilish",
+                                callback_data="logout_cancel"
+                            )
+                        ]
+                    ]
+                )
+                safe_name = html.escape(user.full_name or message.from_user.full_name or "")
+                await message.answer(
+                    f"🔒 <b>HIMOYALANGAN FARZAND HISOBI</b>\n\n"
+                    f"👤 <b>Farzand:</b> {safe_name}\n"
+                    f"🛡 <b>Holat:</b> Ota-onangizga ulangansiz.\n\n"
+                    f"Farzand hisobidan chiqish va rolni almashtirish faqat <b>ota-onangiz ruxsati bilan</b> amalga oshiriladi.\n\n"
+                    f"Chiqish so'rovini ota-onangizga yuborish uchun quyidagi tugmani bosing:",
+                    reply_markup=child_ask_kb,
+                    parse_mode="HTML"
+                )
+                return
 
         role_display = "👨‍👩‍👧 Ota-ona" if user.role == "parent" else "👦 Farzand"
 
@@ -3962,6 +4007,18 @@ async def on_webapp_requested(message: Message):
         user = await crud.get_user(session, user_id)
         role = user.role if user else "parent"
 
+        if user and user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if not parents:
+                await message.answer(
+                    "⚠️ <b>Siz hali ota-onangizga ulanmagansiz!</b>\n\n"
+                    "Saytga (Web App) kirish kodi ota-onangiz profilingizga ulangandan so'ng beriladi.\n\n"
+                    "Iltimos, avval ota-onangiz bergan 6 xonali ulanish kodini kiritib hisobingizni ulang.",
+                    reply_markup=get_child_main_keyboard(),
+                    parse_mode="HTML"
+                )
+                return
+
         access_code = None
         if user:
             access_code = await crud.generate_web_access_code(session, user_id)
@@ -3984,20 +4041,19 @@ async def on_webapp_requested(message: Message):
             ]
         )
 
-        code_text = f"🔑 **Sizning saytga kirish kodingiz:** ` {access_code} `\n\n*(Sayt ochilganda ushbu 6 xonali kodni kiriting)*\n\n" if access_code else ""
-
+        code_text = f"🔑 <b>Sizning saytga kirish kodingiz:</b> <code>{access_code}</code>\n\n<i>(Sayt ochilganda ushbu 6 xonali kodni kiriting)</i>\n\n" if access_code else ""
         reply_kb = get_parent_main_keyboard(user_id) if role == "parent" else get_child_main_keyboard()
 
         await message.answer(
-            f"🌐 **Child Security — Rasmiy Web App (Sayt):**\n\n"
-            f"🔗 **Rasmiy havola:** {webapp_url}\n\n"
+            f"🌐 <b>Child Security — Rasmiy Web App (Sayt):</b>\n\n"
+            f"🔗 <b>Rasmiy havola:</b> {html.escape(webapp_url)}\n\n"
             f"{code_text}"
             f"Saytni ochish uchun quyidagi tugmalardan birini tanlang:",
             reply_markup=kb,
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
         await message.answer(
-            "📋 **Klaviaturangiz yangilandi!** Pastdagi **«📱 Web App (Sayt)»** tugmasi orqali ham istalgan payt ochishingiz mumkin.",
+            "📋 Klaviaturangiz yangilandi! Pastdagi «📱 Web App (Sayt)» tugmasi orqali ham istalgan payt ochishingiz mumkin.",
             reply_markup=reply_kb
         )
 
@@ -5104,22 +5160,150 @@ async def on_parent_reject_role_switch(callback: CallbackQuery, bot: Bot):
 
 
 @router.callback_query(F.data == "logout_start")
-async def on_logout_start(callback: CallbackQuery, state: FSMContext):
-    """Level 1 confirmation for account logout."""
+async def on_logout_start(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    """Level 1 confirmation for account logout or child approval request."""
     user_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         user = await crud.get_user(session, user_id)
+        if user and user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if parents:
+                safe_cname = html.escape(user.full_name or callback.from_user.full_name or f"Farzand #{user_id}")
+                perm_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="✅ Ruxsat berish (Chiqarish)",
+                                callback_data=f"approve_child_logout:{user_id}"
+                            ),
+                            InlineKeyboardButton(
+                                text="❌ Rad etish",
+                                callback_data=f"reject_child_logout:{user_id}"
+                            )
+                        ]
+                    ]
+                )
+                for p in parents:
+                    try:
+                        await bot.send_message(
+                            chat_id=p.id,
+                            text=(
+                                f"🔔 <b>DIQQAT: Farzandingiz hisobdan chiqishga ruxsat so'ramoqda!</b>\n\n"
+                                f"👤 Farzand: <b>{safe_cname}</b> (ID: <code>{user_id}</code>)\n\n"
+                                f"Farzandingiz o'z hisobidan chiqib, rolni almashtirmoqchi.\n"
+                                f"Agar bu sizning roziligingiz bilan bo'layotgan bo'lsa, quyidagi «Ruxsat berish» tugmasini bosing:"
+                            ),
+                            reply_markup=perm_kb,
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to notify parent {p.id} of child logout request: {e}")
+
+                try:
+                    await callback.message.edit_text(
+                        "⏳ <b>Hisobdan chiqish uchun ota-onangiz ruxsati kerak!</b>\n\n"
+                        "Ota-onangizga hisobdan chiqishingiz bo'yicha ruxsat so'rovi yuborildi. "
+                        "Ota-onangiz tasdiqlagach, profilingizdan chiqiladi va yangi rol tanlashingiz mumkin bo'ladi.",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    await callback.message.answer(
+                        "⏳ <b>Hisobdan chiqish uchun ota-onangiz ruxsati kerak!</b>\n\n"
+                        "Ota-onangizga hisobdan chiqishingiz bo'yicha ruxsat so'rovi yuborildi. "
+                        "Ota-onangiz tasdiqlagach, profilingizdan chiqiladi va yangi rol tanlashingiz mumkin bo'ladi.",
+                        parse_mode="HTML"
+                    )
+                await callback.answer("Ota-onangizga ruxsat so'rovi yuborildi.")
+                return
+
         role_display = "👨‍👩‍👧 Ota-ona" if (user and user.role == "parent") else "👦 Farzand"
 
     text = (
-        f"⚠️ **1-BOSQICH: HISOBDAN CHIQISHNI TASDIQLASH (1/2)**\n\n"
-        f"Siz hozirda: **{role_display}** hisobidasiz.\n\n"
+        f"⚠️ <b>1-BOSQICH: HISOBDAN CHIQISHNI TASDIQLASH (1/2)</b>\n\n"
+        f"Siz hozirda: <b>{role_display}</b> hisobidasiz.\n\n"
         f"Agar rolingizni adashib tanlagan bo'lsangiz, hisobdan chiqib to'g'ri rolni tanlashingiz mumkin.\n\n"
-        f"❗️ **Ogohlantirish:** Chiqsangiz, joriy rolingiz va barcha ulanishlar bekor qilinadi.\n\n"
+        f"❗️ <b>Ogohlantirish:</b> Chiqsangiz, joriy rolingiz va barcha ulanishlar bekor qilinadi.\n\n"
         f"Chiqishni davom ettirishni xohlaysizmi?"
     )
-    await callback.message.edit_text(text, reply_markup=get_logout_step1_keyboard(), parse_mode="Markdown")
+    await callback.message.edit_text(text, reply_markup=get_logout_step1_keyboard(), parse_mode="HTML")
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("approve_child_logout:"))
+async def on_parent_approve_child_logout(callback: CallbackQuery, bot: Bot):
+    """Parent approves child's request to logout / switch role."""
+    parent_id = callback.from_user.id
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not any(p.id == parent_id for p in parents):
+            await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
+            return
+
+        child_user = await crud.get_user(session, child_id)
+        child_name = html.escape(child_user.full_name) if child_user and child_user.full_name else f"Farzand #{child_id}"
+
+        # Perform complete reset for the child
+        await crud.reset_user_role(session, child_id)
+        await session.commit()
+
+        try:
+            await callback.message.edit_text(
+                f"✅ <b>Farzand ({child_name}) hisobdan chiqishiga ruxsat berildi!</b>\n\n"
+                f"Farzand hisobi muvaffaqiyatli uzildi.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+        try:
+            await bot.send_message(
+                chat_id=child_id,
+                text=(
+                    f"✅ <b>Ota-onangiz hisobdan chiqishga ruxsat berdi!</b>\n\n"
+                    f"Avvalgi hisobingiz yakunlandi. Endi yangi rol tanlashingiz mumkin:"
+                ),
+                reply_markup=get_role_selection_keyboard(),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify child {child_id} after approved logout: {e}")
+
+    await callback.answer("Ruxsat berildi.")
+
+
+@router.callback_query(F.data.startswith("reject_child_logout:"))
+async def on_parent_reject_child_logout(callback: CallbackQuery, bot: Bot):
+    """Parent rejects child's request to logout."""
+    parent_id = callback.from_user.id
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child_user = await crud.get_user(session, child_id)
+        child_name = html.escape(child_user.full_name) if child_user and child_user.full_name else f"Farzand #{child_id}"
+
+        try:
+            await callback.message.edit_text(
+                f"❌ <b>Farzand ({child_name}) hisobdan chiqish so'rovi rad etildi.</b>\n\n"
+                f"Farzand hisobda xavfsiz qoldi.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+        try:
+            await bot.send_message(
+                chat_id=child_id,
+                text=(
+                    f"❌ <b>Ota-onangiz hisobdan chiqish so'rovingizni rad etdi!</b>\n\n"
+                    f"Siz farzand hisobida qolasiz va xavfsizlik nazorati davom etadi."
+                ),
+                reply_markup=get_child_main_keyboard(),
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
+
+    await callback.answer("So'rov rad etildi.")
 
 
 @router.callback_query(F.data == "logout_step1")
@@ -5274,19 +5458,33 @@ async def on_show_web_access_code(event: Message | CallbackQuery):
                 await event.answer()
             return
 
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if not parents:
+                await message.answer(
+                    "⚠️ <b>Siz hali ota-onangizga ulanmagansiz!</b>\n\n"
+                    "Saytga (Web App) kirish kodi ota-onangiz profilingizga ulangandan so'ng beriladi.\n\n"
+                    "Iltimos, avval ota-onangiz bergan 6 xonali ulanish kodini kiritib hisobingizni ulang.",
+                    reply_markup=get_child_main_keyboard(),
+                    parse_mode="HTML"
+                )
+                if isinstance(event, CallbackQuery):
+                    await event.answer()
+                return
+
         web_code = await crud.generate_web_access_code(session, user_id)
         await session.commit()
 
         if user.role == "parent":
             rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
             text = (
-                f"🔑 **YAGONA OILA VA SAYT (WEB APP) KODINGIZ:**\n\n"
-                f"🏷 Kodingiz: ` {web_code} `\n\n"
-                f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
-                f"✨ **Bu bitta kod barcha farzandlaringiz uchun yagona va doimiydir!**\n"
+                f"🔑 <b>YAGONA OILA VA SAYT (WEB APP) KODINGIZ:</b>\n\n"
+                f"🏷 Kodingiz: <code>{web_code}</code>\n\n"
+                f"🌐 <b>Sayt manzili:</b> {html.escape(settings.WEBAPP_BASE_URL)}\n\n"
+                f"✨ <b>Bu bitta kod barcha farzandlaringiz uchun yagona va doimiydir!</b>\n"
                 f"• Saytga ushbu kodni bir marta kiritsangiz, barcha ulangan farzandlaringiz bir vaqtda chiqadi.\n"
                 f"• Akkauntdan chiqib boshqa bola kodini kiritish umuman shart emas!\n\n"
-                f"👨‍👩‍👧 **Ota-ona imkoniyatlari:**\n"
+                f"👨‍👩‍👧 <b>Ota-ona imkoniyatlari:</b>\n"
                 f"• Barcha farzandlaringiz joylashuvini jonli xaritada kuzatish\n"
                 f"• Boladan bolaga bir bosish bilan osongina o'tish\n"
                 f"• Yangi topshiriqlar yuklash (foto/video biriktirish bilan)\n"
@@ -5298,19 +5496,19 @@ async def on_show_web_access_code(event: Message | CallbackQuery):
             rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user_id)
             money_som = crud.calculate_som_from_coins(user.virtual_balance, rate_coins, rate_som)
             text = (
-                f"🔑 **FARZANDNING SHAXSIY SAYT (WEB APP) KODINGIZ:**\n\n"
-                f"🏷 Kodingiz: ` {web_code} `\n\n"
-                f"🌐 **Sayt manzili:** {settings.WEBAPP_BASE_URL}\n\n"
-                f"👦 **Farzand imkoniyatlari:**\n"
+                f"🔑 <b>FARZANDNING SHAXSIY SAYT (WEB APP) KODINGIZ:</b>\n\n"
+                f"🏷 Kodingiz: <code>{web_code}</code>\n\n"
+                f"🌐 <b>Sayt manzili:</b> {html.escape(settings.WEBAPP_BASE_URL)}\n\n"
+                f"👦 <b>Farzand imkoniyatlari:</b>\n"
                 f"• Saytga ushbu 6 xonali shaxsiy kodingiz bilan kirasiz\n"
                 f"• O'zingizning topshiriqlaringiz, xazinangiz va sarguzasht profilingiz ochiladi\n"
                 f"• 'Ko'rdim' va 'Shu vaqtda bajaraman' deb vaqt belgilash\n"
                 f"• Topshiriqni bajarib rasm yuborish va tangalarga ega bo'lish\n"
-                f"• Sizda hozir: **{user.virtual_balance:,} tanga** ({money_som:,} so'm) mavjud\n\n"
+                f"• Sizda hozir: <b>{user.virtual_balance:,} tanga</b> ({money_som:,} so'm) mavjud\n\n"
                 f"📌 Saytimizga kirganda ushbu kodingizni kiriting!"
             )
 
-        await message.answer(text, parse_mode="Markdown")
+        await message.answer(text, parse_mode="HTML")
         if isinstance(event, CallbackQuery):
             await event.answer()
 

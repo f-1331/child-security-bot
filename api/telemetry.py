@@ -39,6 +39,11 @@ discipline_bonus_awarded: set[str] = set()
 last_known_speed_tracker: dict[int, tuple[float, float]] = {}
 last_impact_alert_map: dict[int, float] = {}
 
+# Battery alert maps for < 10% and charging at < 10%
+last_low_10_alert_map: dict[int, datetime] = {}
+last_charging_low_alert_map: dict[int, datetime] = {}
+last_known_charging_state: dict[int, bool] = {}
+
 
 def set_bot_instance(bot: Bot):
     global telegram_bot
@@ -90,34 +95,96 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         source="api_telemetry"
     )
 
-    # 2. Battery Alert Check (< 20%)
+    # 2. Battery Alert Check (<= 10% critical drop & charging while <= 10%)
     battery_alert_triggered = False
-    if payload.battery_level is not None and payload.battery_level <= 20 and not payload.is_charging:
-        should_alert = await crud.check_and_update_battery_alert(
-            session=session,
-            child_id=payload.child_id,
-            battery_level=payload.battery_level
-        )
-        if should_alert and telegram_bot:
-            parents = await crud.get_parents_for_child(session, payload.child_id)
-            child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
-            alert_msg = (
-                f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
-                f"👤 Farzandingiz: <b>{child_name}</b>\n"
-                f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
-                f"⚡ Holat: Quvvatlanmayapti\n\n"
-                f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
-            )
-            for p in parents:
-                try:
-                    await telegram_bot.send_message(
-                        chat_id=p.id,
-                        text=alert_msg,
-                        parse_mode="HTML"
+    now_utc = datetime.now(timezone.utc)
+    if payload.battery_level is not None:
+        parents = None
+        child_name = None
+
+        # A. Critical low battery alert (<= 10% and not charging)
+        if payload.battery_level <= 10 and not payload.is_charging:
+            last_alert_time = last_low_10_alert_map.get(payload.child_id)
+            if not last_alert_time or (now_utc - last_alert_time) > timedelta(minutes=20):
+                if telegram_bot:
+                    parents = await crud.get_parents_for_child(session, payload.child_id)
+                    child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
+                    alert_msg = (
+                        f"🪫 <b>DIQQAT: QUVVAT 10% DAN KAM QOLDI!</b>\n\n"
+                        f"👤 Farzand: <b>{child_name}</b>\n"
+                        f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
+                        f"⚡ Holat: <b>Quvvatlanmayapti</b>\n\n"
+                        f"⚠️ Farzandingiz bilan aloqa uzilib qolmasligi uchun darhol telefonini zaryadkaga qo'yishini ayting!"
                     )
-                    battery_alert_triggered = True
-                except Exception as e:
-                    logger.error(f"Failed to dispatch battery alert to parent {p.id}: {e}")
+                    for p in parents:
+                        try:
+                            await telegram_bot.send_message(
+                                chat_id=p.id,
+                                text=alert_msg,
+                                parse_mode="HTML"
+                            )
+                            battery_alert_triggered = True
+                        except Exception as e:
+                            logger.error(f"Failed to dispatch 10% battery alert to parent {p.id}: {e}")
+                    last_low_10_alert_map[payload.child_id] = now_utc
+
+        # B. Plugged into charger while battery <= 10%
+        was_charging = last_known_charging_state.get(payload.child_id, False)
+        if payload.is_charging and payload.battery_level <= 10:
+            if not was_charging:
+                last_chg_time = last_charging_low_alert_map.get(payload.child_id)
+                if not last_chg_time or (now_utc - last_chg_time) > timedelta(minutes=15):
+                    if telegram_bot:
+                        if parents is None:
+                            parents = await crud.get_parents_for_child(session, payload.child_id)
+                            child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
+                        charging_msg = (
+                            f"⚡ <b>FARZANDINGIZ TELEFONI ZARYADKAGA QO'YILDI!</b>\n\n"
+                            f"👤 Farzand: <b>{child_name}</b>\n"
+                            f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b> (Zaryad olmoqda ⚡)\n\n"
+                            f"✅ Telefon 10% dan kam quvvatdaligida elektr manbaiga muvaffaqiyatli ulandi."
+                        )
+                        for p in parents:
+                            try:
+                                await telegram_bot.send_message(
+                                    chat_id=p.id,
+                                    text=charging_msg,
+                                    parse_mode="HTML"
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to dispatch charging alert to parent {p.id}: {e}")
+                        last_charging_low_alert_map[payload.child_id] = now_utc
+
+        last_known_charging_state[payload.child_id] = bool(payload.is_charging)
+
+        # Standard battery check (< 20%)
+        if payload.battery_level <= 20 and not payload.is_charging and payload.battery_level > 10:
+            should_alert = await crud.check_and_update_battery_alert(
+                session=session,
+                child_id=payload.child_id,
+                battery_level=payload.battery_level
+            )
+            if should_alert and telegram_bot:
+                if parents is None:
+                    parents = await crud.get_parents_for_child(session, payload.child_id)
+                    child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
+                alert_msg = (
+                    f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
+                    f"👤 Farzandingiz: <b>{child_name}</b>\n"
+                    f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
+                    f"⚡ Holat: Quvvatlanmayapti\n\n"
+                    f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
+                )
+                for p in parents:
+                    try:
+                        await telegram_bot.send_message(
+                            chat_id=p.id,
+                            text=alert_msg,
+                            parse_mode="HTML"
+                        )
+                        battery_alert_triggered = True
+                    except Exception as e:
+                        logger.error(f"Failed to dispatch battery alert to parent {p.id}: {e}")
 
     # 2.5 Speed Alert Check (Transport movement >= 30 km/h)
     speed_alert_triggered = False

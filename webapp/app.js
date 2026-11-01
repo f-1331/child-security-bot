@@ -1313,6 +1313,12 @@ function promptRoleSwitch(targetRole) {
     return;
   }
 
+  // Child protection: prevent child from switching to parent account without parent approval
+  if (currentRole === "child" && !isDemoMode && targetRole === "parent") {
+    alert("⚠️ Farzand hisobidan ota-ona rejimiga ruxsatsiz o'tish taqiqlangan!\nOta-onangiz roziligi kerak.");
+    return;
+  }
+
   // Open the code prompt specifically asking for the code for the target role!
   showAuthGateModal(targetRole);
 }
@@ -1813,6 +1819,22 @@ function applyChildUI(user) {
   const heroName = document.getElementById("childHeroName");
   if (heroName) heroName.textContent = user.full_name || youngHeroFallback;
 
+  const heroBadge = document.getElementById("childHeroLevelBadge");
+  const heroGreeting = document.getElementById("childHeroStatusText");
+  if (isDemoMode) {
+    if (heroBadge) {
+      heroBadge.className = "text-2xs bg-amber-500/30 text-amber-300 border border-amber-400/50 px-2 py-0.5 rounded-full font-black shrink-0 animate-pulse";
+      heroBadge.textContent = "🧪 Demo Rejim";
+    }
+    if (heroGreeting) heroGreeting.textContent = "⚠️ Sinov rejimi (Ota-onaga ulanmagan)";
+  } else {
+    if (heroBadge) {
+      heroBadge.className = "text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0";
+      heroBadge.textContent = "🛡️ Haqiqiy hisob (Jonli)";
+    }
+    if (heroGreeting) heroGreeting.textContent = "🛡️ Xavfsizligingiz ota-onangiz nazoratida";
+  }
+
   const heroMoneyText = document.getElementById("childHeroMoneyText");
   if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} so'm`;
 
@@ -1923,8 +1945,31 @@ async function loadChildSelfData(user) {
   await loadWishlist(user.id);
 }
 
-function logoutSession() {
+async function logoutSession() {
   haptic("medium");
+
+  // Child protection: send parental approval request before allowing child account logout
+  if (currentRole === "child" && !isDemoMode) {
+    if (confirm("Farzand hisobidan chiqish uchun ota-onangiz ruxsati kerak!\n\nOta-onangizga Telegram orqali ruxsat so'rovi yuborilsinmi?")) {
+      try {
+        const effChildId = currentChildId || (authenticatedSession?.user?.id);
+        const res = await fetch(`/api/v1/webapp/child/${effChildId}/request-logout`, {
+          method: "POST"
+        });
+        const data = await res.json();
+        if (data && data.needs_parent_approval) {
+          showToast("⏳ Ota-onangizga ruxsat so'rovi yuborildi. Ota-onangiz tasdiqlagach hisobdan chiqiladi.");
+          alert("Ota-onangizga ruxsat so'rovi yuborildi!\nOta-onangiz Telegram orqali tasdiqlaganidan so'ng hisobingizdan chiqiladi.");
+          return;
+        }
+      } catch (e) {
+        console.warn("Child logout request note:", e);
+      }
+    } else {
+      return;
+    }
+  }
+
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
     if (window.AndroidBridge && typeof window.AndroidBridge.clearSavedSession === "function") {
       try { window.AndroidBridge.clearSavedSession(); } catch (e) {}
@@ -2440,6 +2485,11 @@ function initMap() {
     tap: false,
     touchZoom: true,
   }).setView([DEFAULT_LAT, DEFAULT_LON], 14);
+
+  // Track map interactions to prevent snapping back when user moves the map to explore!
+  map.on("dragstart zoomstart movestart", () => {
+    map._userHasPanned = true;
+  });
 
   // Instantly acquire real device location to center map on user's real city/street
   getDeviceLocation().then((loc) => {
@@ -3106,17 +3156,12 @@ function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offl
     childMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
   }
 
-  // Auto-fly to child if far away (> 3km e.g. Navoiy vs Tashkent is 400km) or not yet centered
-  if (map) {
+  // Auto-center on child only once on initial load. NEVER forcibly snap back if user moved map to explore!
+  if (map && !map._hasAutoCenteredChild && !map._userHasPanned) {
     try {
-      const center = map.getCenter();
-      const dist = map.distance(center, [lat, lon]);
-      if (dist > 3000 || !map._hasAutoCenteredChild) {
-        map.flyTo([lat, lon], 15, { animate: true, duration: 1.2 });
-        map._hasAutoCenteredChild = true;
-      }
-    } catch (e) {
       map.setView([lat, lon], 15);
+      map._hasAutoCenteredChild = true;
+    } catch (e) {
       map._hasAutoCenteredChild = true;
     }
   }
@@ -3138,6 +3183,9 @@ function renderChildMarker(lat, lon, name, isSos, battery, isOnline = true, offl
 // Center view on child or user's real GPS position
 async function centerOnChild() {
   haptic("light");
+  if (map) {
+    map._userHasPanned = false;
+  }
   if (currentRole === "child" || isDemoMode) {
     const loc = await getDeviceLocation();
     if (loc && typeof loc.latitude === "number" && !loc.fallback) {
@@ -3423,6 +3471,13 @@ async function loadRouteHistory(childId, isSilent = false) {
 
 function renderHistoryToMapAndList(points) {
   if (!points || !Array.isArray(points)) return;
+
+  // Chronological sort: oldest to newest so route animation, replay and checkpoints always flow forward in time!
+  points.sort((a, b) => {
+    const tA = a.recorded_at ? new Date(String(a.recorded_at).endsWith("Z") ? a.recorded_at : a.recorded_at + "Z").getTime() : 0;
+    const tB = b.recorded_at ? new Date(String(b.recorded_at).endsWith("Z") ? b.recorded_at : b.recorded_at + "Z").getTime() : 0;
+    return tA - tB;
+  });
 
   // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed and layer is on map!
   const lastPt = points[points.length - 1];
@@ -4503,19 +4558,18 @@ async function toggleRepeatedPlaces(forceState) {
   updateRouteButtonsState();
 }
 
-// Clear today's route history from map and local cache
+// Clear today's route history from map and local cache (1-alohida funksiya)
 function clearRouteHistory() {
   haptic("medium");
-  if (!confirm("Bugungi harakat yo'li va qayta yurilgan joylar tarixini tozalashni xohlaysizmi?")) return;
+  if (!confirm("Bugungi harakat yo'lini xaritadan o'chirishni xohlaysizmi?")) return;
 
   if (routeLayerGroup && map) {
     try { map.removeLayer(routeLayerGroup); } catch (e) {}
   }
-  if (repeatsLayerGroup && map) {
-    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+  if (routePolyline && map) {
+    try { map.removeLayer(routePolyline); } catch (e) {}
   }
   isRouteVisible = false;
-  isRepeatedPlacesVisible = false;
   routePointsCache = [];
   window._lastRenderedRouteSig = null;
   hideRoutePlaybackHud();
@@ -4527,11 +4581,26 @@ function clearRouteHistory() {
 
   const container = document.getElementById("historyListContainer");
   if (container) {
-    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Harakatlar tarixi tozalandi.</p>`;
+    container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugungi harakat yo'li xaritadan o'chirildi.</p>`;
   }
   updateRouteButtonsState();
-  showToast("🗑 Bugungi harakat yo'li va qayta joylar xaritadan tozalandi");
+  showToast("🗑 Bugungi harakat yo'li xaritadan o'chirildi");
 }
+window.clearRouteHistory = clearRouteHistory;
+
+// Clear repeated places from map (2-alohida funksiya)
+function clearRepeatedPlaces() {
+  haptic("medium");
+  if (!confirm("Qayta-qayta yurilgan joylar belgilarini xaritadan o'chirishni xohlaysizmi?")) return;
+
+  if (repeatsLayerGroup && map) {
+    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+  }
+  isRepeatedPlacesVisible = false;
+  updateRouteButtonsState();
+  showToast("🗑 Qayta-qayta yurilgan joylar xaritadan o'chirildi");
+}
+window.clearRepeatedPlaces = clearRepeatedPlaces;
 
 // Battery UI styling (with anti-flicker persistent level cache)
 let lastKnownBatteryLevel = null;
@@ -6760,11 +6829,11 @@ function startSosRecurringBroadcast() {
       if (statusEl) {
         statusEl.textContent = `${_sosRecurringCount}-xabar jo'natildi (${new Date().toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })})`;
       }
-      console.log(`[Recurring SOS 20s] Sent #${_sosRecurringCount}: ${curLat}, ${curLon} (${curBatt}%)`);
+      console.log(`[Recurring SOS 15s] Sent #${_sosRecurringCount}: ${curLat}, ${curLon} (${curBatt}%)`);
     } catch (err) {
       console.warn("Recurring SOS broadcast error:", err);
     }
-  }, 20000); // 20 soniya (har 20 sekundda)
+  }, 15000); // 15 soniya (har 15 sekundda jonli uzatish)
 }
 
 function stopSosRecurringBroadcast() {
@@ -6818,14 +6887,25 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
         const cleanPhone = pPhone.replace(/[\s\-]/g, "");
         const smsUri = `sms:${cleanPhone}?body=${encodeURIComponent(smsMessage)}`;
         
-        // SAFE SMS HANDOFF: Do NOT use target="_blank" which causes orphaned blank tabs and WebApp reset!
-        const link = document.createElement("a");
-        link.href = smsUri;
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          try { link.remove(); } catch(e){}
-        }, 300);
+        // SAFE SMS HANDOFF: Use hidden iframe to trigger SMS client without navigating the host page or unloading state!
+        try {
+          let iframe = document.getElementById("_sms_handoff_frame");
+          if (!iframe) {
+            iframe = document.createElement("iframe");
+            iframe.id = "_sms_handoff_frame";
+            iframe.style.display = "none";
+            document.body.appendChild(iframe);
+          }
+          iframe.src = smsUri;
+        } catch (e) {
+          const link = document.createElement("a");
+          link.href = smsUri;
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            try { link.remove(); } catch(e){}
+          }, 300);
+        }
         showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
       }
     } else {
@@ -9811,17 +9891,24 @@ function toggleHelpFaq(id) {
 // ==============================================================================
 
 function getEffectiveParentId() {
-  if (parentId) return parentId;
+  if (parentId) {
+    const p = parseInt(parentId, 10);
+    if (!isNaN(p)) return p;
+  }
   if (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) {
-    return authenticatedSession.user.id;
+    const p = parseInt(authenticatedSession.user.id, 10);
+    if (!isNaN(p)) return p;
   }
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-  if (tgUser && tgUser.id) return tgUser.id;
+  if (tgUser && tgUser.id) {
+    const p = parseInt(tgUser.id, 10);
+    if (!isNaN(p)) return p;
+  }
   try {
     const saved = localStorage.getItem("parent_user_id");
     if (saved) {
       const parsed = parseInt(saved, 10);
-      return !isNaN(parsed) ? parsed : saved;
+      if (!isNaN(parsed)) return parsed;
     }
   } catch (e) {}
   return null;
@@ -10157,6 +10244,23 @@ async function loadScreenTimeAndPolicy() {
     return;
   }
 
+  // Auto-sync native Android screen time telemetry if available on device
+  if (window.AndroidBridge && typeof window.AndroidBridge.getTodayScreenTimeJson === "function" && currentChildId && !isDemoMode) {
+    try {
+      const nativeUsageRaw = window.AndroidBridge.getTodayScreenTimeJson();
+      if (nativeUsageRaw && nativeUsageRaw.length > 5) {
+        const parsed = JSON.parse(nativeUsageRaw);
+        if (parsed && typeof parsed === "object") {
+          fetch(`/api/v1/webapp/child/${currentChildId}/app-usage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(parsed)
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {}
+  }
+
   try {
     const res = await fetch(`/api/v1/webapp/child/${currentChildId}/screen-time`);
     if (res.ok) {
@@ -10466,6 +10570,19 @@ async function handleMasterLockToggle(isChecked) {
   currentDevicePolicy.is_all_apps_blocked = isChecked;
   updateDevicePolicyUI(currentDevicePolicy);
 
+  // Sync with native Android device bridge immediately
+  if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
+    try {
+      window.AndroidBridge.setLocalDevicePolicy(JSON.stringify({
+        is_all_apps_blocked: isChecked,
+        lockdown_reason: currentDevicePolicy.lockdown_reason,
+        blocked_packages: currentDevicePolicy.blocked_packages,
+        anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
+        is_network_restricted: currentDevicePolicy.is_network_restricted
+      }));
+    } catch (e) {}
+  }
+
   if (isChecked) {
     showToast(`🛑 Barcha ilovalar bloklandi (${currentDevicePolicy.lockdown_reason || "Dars vaqti"})`);
   } else {
@@ -10528,6 +10645,19 @@ async function toggleAppBlock(pkg, isBlocked) {
   }
   currentDevicePolicy.blocked_packages = blocked;
   updateDevicePolicyUI(currentDevicePolicy);
+
+  // Sync with native Android device bridge immediately
+  if (window.AndroidBridge && typeof window.AndroidBridge.setLocalDevicePolicy === "function") {
+    try {
+      window.AndroidBridge.setLocalDevicePolicy(JSON.stringify({
+        is_all_apps_blocked: currentDevicePolicy.is_all_apps_blocked,
+        lockdown_reason: currentDevicePolicy.lockdown_reason,
+        blocked_packages: blocked,
+        anti_uninstall_enabled: currentDevicePolicy.anti_uninstall_enabled,
+        is_network_restricted: currentDevicePolicy.is_network_restricted
+      }));
+    } catch (e) {}
+  }
 
   renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
 

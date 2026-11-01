@@ -347,7 +347,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                         last_hourly_slot = current_hour_slot
                         _save_last_hourly_sent_slot(current_hour_slot)
 
-            # 1.6 Active SOS 20-Second Recurring Broadcast (When SOS is active, alerts parents every 20s)
+            # 1.6 Active SOS 15-Second Recurring Broadcast (When SOS is active, alerts parents every 15s)
             async with AsyncSessionLocal() as session:
                 from sqlalchemy import select
                 from db.models import User
@@ -359,8 +359,8 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                 now_utc = datetime.now(timezone.utc)
                 for ch in active_sos_children:
                     last_sos_time = telemetry.last_sos_alert_map.get(ch.id)
-                    # Check if at least 20 seconds passed since last SOS broadcast
-                    if not last_sos_time or (now_utc - last_sos_time) >= timedelta(seconds=20):
+                    # Check if at least 15 seconds passed since last SOS broadcast
+                    if not last_sos_time or (now_utc - last_sos_time) >= timedelta(seconds=15):
                         telemetry.last_sos_alert_map[ch.id] = now_utc
                         parents = await crud.get_parents_for_child(session, ch.id)
                         if parents:
@@ -389,7 +389,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                 f"Joylashuv: {maps_url}\n"
                                 f"Koordinata: <code>{coord_str}</code>\n"
                                 f"🕒 Vaqt: <b>{now_time_str}</b>\n\n"
-                                f"⚠️ <i>Xavf holati o'chirilmaguncha har 20 sekundda jo'natilmoqda!</i>"
+                                f"⚠️ <i>Xavf holati o'chirilmaguncha har 15 sekundda jo'natilmoqda!</i>"
                             )
                             for p in parents:
                                 try:
@@ -402,7 +402,7 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                                     if lat and lon:
                                         await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
                                 except Exception as e:
-                                    logger.error(f"Failed to send 20s recurring SOS for child {ch.id} to parent {p.id}: {e}")
+                                    logger.error(f"Failed to send 15s recurring SOS for child {ch.id} to parent {p.id}: {e}")
 
             # 2. Walk Safe Deadline Monitoring
             async with AsyncSessionLocal() as session:

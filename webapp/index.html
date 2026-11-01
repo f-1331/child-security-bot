@@ -345,16 +345,10 @@
 
       <!-- Child Quick Controls: Switch to Parent + Piggy Bank + Palette + Logout -->
       <div class="flex items-center gap-1.5 shrink-0">
-        <!-- Kod kiritish / Hisobni almashtirish -->
+        <!-- Kod kiritish / Hisobni yangilash -->
         <button onclick="showAuthGateModal('child')" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Kodni kiritish yoki yangilash">
           <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i>
           <span class="hidden xs:inline sm:inline">Kod</span>
-        </button>
-
-        <!-- Ota-ona rejimiga o'tish -->
-        <button onclick="promptRoleSwitch('parent')" class="flex items-center gap-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Ota-ona rejimiga o'tish">
-          <span>👨‍👩‍👧</span>
-          <span class="hidden xs:inline sm:inline">Ota-ona</span>
         </button>
 
         <!-- Piggy Bank Vault Pill -->
@@ -1164,7 +1158,19 @@
         </button>
       </div>
 
-      <!-- Route Playback Control, Fullscreen Map & Clear -->
+      <!-- Ikkala funksiya uchun alohida O'chirish / Tozalash tugmalari -->
+      <div class="mb-3 grid grid-cols-2 gap-2">
+        <button onclick="clearRouteHistory()" class="py-2 px-2.5 bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/30 text-amber-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95" title="Bugungi harakat yo'lini xaritadan o'chirish">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>Yo'lni o'chirish</span>
+        </button>
+        <button onclick="clearRepeatedPlaces()" class="py-2 px-2.5 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95" title="Qayta-qayta yurilgan joylarni xaritadan o'chirish">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+          <span>Qayta joylarni o'chirish</span>
+        </button>
+      </div>
+
+      <!-- Route Playback Control, Fullscreen Map & Report -->
       <div class="mb-3 flex gap-2">
         <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md">
           <i data-lucide="play" class="w-3.5 h-3.5"></i>
@@ -1173,10 +1179,6 @@
         <button onclick="closeModal('history'); toggleRouteHistory(true);" class="py-2.5 px-3 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Xaritani to'liq ko'rish rejimida ochish">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
           <span>Xaritada</span>
-        </button>
-        <button onclick="clearRouteHistory()" class="py-2.5 px-3 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/30 text-rose-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition shadow-sm active:scale-95 shrink-0" title="Tarixni tozalash">
-          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          <span>Tozalash</span>
         </button>
         <button id="btnOpenDailyReportFromHistory" onclick="openDailyReportModal()" class="py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>

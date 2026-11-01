@@ -1605,36 +1605,100 @@ async def update_child_live_location_endpoint(
         except Exception as geofence_err:
             logger.error(f"Geofence evaluation error: {geofence_err}")
 
-        # 2. Battery alert check (< 20%)
-        if payload.battery_level is not None and payload.battery_level <= 20 and not payload.is_charging:
-            try:
-                should_alert = await crud.check_and_update_battery_alert(
-                    session=session,
-                    child_id=child_id,
-                    battery_level=payload.battery_level
-                )
-                if should_alert:
-                    parents = await crud.get_parents_for_child(session, child_id)
-                    child_name = child.full_name or f"Farzand ID:{child.id}"
-                    safe_cname = html.escape(child_name)
-                    alert_msg = (
-                        f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
-                        f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
-                        f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
-                        f"⚡ Holat: Quvvatlanmayapti\n\n"
-                        f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
-                    )
-                    for p in parents:
+        # 2. Battery alert check (<= 10% critical drop & charging while <= 10%)
+        if payload.battery_level is not None:
+            now_utc = datetime.now(timezone.utc)
+            # A. Critical low battery alert (<= 10% and not charging)
+            if payload.battery_level <= 10 and not payload.is_charging:
+                last_alert_time = telemetry.last_low_10_alert_map.get(child_id)
+                if not last_alert_time or (now_utc - last_alert_time) > timedelta(minutes=20):
+                    if telemetry.telegram_bot:
                         try:
-                            await telemetry.telegram_bot.send_message(
-                                chat_id=p.id,
-                                text=alert_msg,
-                                parse_mode="HTML"
+                            parents = await crud.get_parents_for_child(session, child_id)
+                            child_name = child.full_name or f"Farzand ID:{child.id}"
+                            safe_cname = html.escape(child_name)
+                            alert_msg = (
+                                f"🪫 <b>DIQQAT: QUVVAT 10% DAN KAM QOLDI!</b>\n\n"
+                                f"👤 Farzand: <b>{safe_cname}</b>\n"
+                                f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
+                                f"⚡ Holat: <b>Quvvatlanmayapti</b>\n\n"
+                                f"⚠️ Farzandingiz bilan aloqa uzilib qolmasligi uchun darhol telefonini zaryadkaga qo'yishini ayting!"
                             )
-                        except Exception:
-                            pass
-            except Exception as batt_err:
-                logger.error(f"Battery alert check error: {batt_err}")
+                            for p in parents:
+                                try:
+                                    await telemetry.telegram_bot.send_message(
+                                        chat_id=p.id,
+                                        text=alert_msg,
+                                        parse_mode="HTML"
+                                    )
+                                except Exception:
+                                    pass
+                            telemetry.last_low_10_alert_map[child_id] = now_utc
+                        except Exception as e:
+                            logger.error(f"10% battery alert error: {e}")
+
+            # B. Plugged into charger while battery <= 10%
+            was_charging = telemetry.last_known_charging_state.get(child_id, False)
+            if payload.is_charging and payload.battery_level <= 10:
+                if not was_charging:
+                    last_chg_time = telemetry.last_charging_low_alert_map.get(child_id)
+                    if not last_chg_time or (now_utc - last_chg_time) > timedelta(minutes=15):
+                        if telemetry.telegram_bot:
+                            try:
+                                parents = await crud.get_parents_for_child(session, child_id)
+                                child_name = child.full_name or f"Farzand ID:{child.id}"
+                                safe_cname = html.escape(child_name)
+                                charging_msg = (
+                                    f"⚡ <b>FARZANDINGIZ TELEFONI ZARYADKAGA QO'YILDI!</b>\n\n"
+                                    f"👤 Farzand: <b>{safe_cname}</b>\n"
+                                    f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b> (Zaryad olmoqda ⚡)\n\n"
+                                    f"✅ Telefon 10% dan kam quvvatdaligida elektr manbaiga muvaffaqiyatli ulandi."
+                                )
+                                for p in parents:
+                                    try:
+                                        await telemetry.telegram_bot.send_message(
+                                            chat_id=p.id,
+                                            text=charging_msg,
+                                            parse_mode="HTML"
+                                        )
+                                    except Exception:
+                                        pass
+                                telemetry.last_charging_low_alert_map[child_id] = now_utc
+                            except Exception as e:
+                                logger.error(f"Charging alert error: {e}")
+
+            telemetry.last_known_charging_state[child_id] = bool(payload.is_charging)
+
+            # Standard battery alert (< 20%)
+            if payload.battery_level <= 20 and not payload.is_charging and payload.battery_level > 10:
+                try:
+                    should_alert = await crud.check_and_update_battery_alert(
+                        session=session,
+                        child_id=child_id,
+                        battery_level=payload.battery_level
+                    )
+                    if should_alert and telemetry.telegram_bot:
+                        parents = await crud.get_parents_for_child(session, child_id)
+                        child_name = child.full_name or f"Farzand ID:{child.id}"
+                        safe_cname = html.escape(child_name)
+                        alert_msg = (
+                            f"🪫 <b>OGOHLANTIRISH: QUVVAT KAM QOLDI!</b>\n\n"
+                            f"👤 Farzandingiz: <b>{safe_cname}</b>\n"
+                            f"🔋 Batareya darajasi: <b>{payload.battery_level}%</b>\n"
+                            f"⚡ Holat: Quvvatlanmayapti\n\n"
+                            f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
+                        )
+                        for p in parents:
+                            try:
+                                await telemetry.telegram_bot.send_message(
+                                    chat_id=p.id,
+                                    text=alert_msg,
+                                    parse_mode="HTML"
+                                )
+                            except Exception:
+                                pass
+                except Exception as batt_err:
+                    logger.error(f"Battery alert check error: {batt_err}")
 
         # 2.5. Last Breath emergency alert check (is_last_breath or battery <= 5%)
         if payload.is_last_breath and telemetry.telegram_bot:
@@ -2440,15 +2504,20 @@ async def update_child_device_policy_endpoint(
     parent_ids = [p.id for p in parents]
 
     effective_parent_id = payload.parent_id
-    if not effective_parent_id and len(parent_ids) == 1:
-        effective_parent_id = parent_ids[0]
+    if effective_parent_id is not None:
+        try:
+            effective_parent_id = int(effective_parent_id)
+        except Exception:
+            pass
 
     if parent_ids:
-        if not effective_parent_id or effective_parent_id not in parent_ids:
+        if not effective_parent_id:
+            effective_parent_id = parent_ids[0]
+        elif effective_parent_id not in parent_ids:
             logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {effective_parent_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz yoki ota-ona identifikatori berilmagan."
+                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
             )
     elif effective_parent_id:
         parent_user = await crud.get_user(session, effective_parent_id)
@@ -2615,6 +2684,57 @@ async def verify_child_parent_pin_endpoint(
         "valid": is_valid,
         "message": "PIN-kod to'g'ri" if is_valid else "PIN-kod noto'g'ri kiritildi!"
     }
+
+
+@router.post("/child/{child_id}/request-logout")
+async def request_child_logout_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child requests parental permission from WebApp to logout."""
+    parents = await crud.get_parents_for_child(session, child_id)
+    if not parents:
+        return {"status": "success", "needs_parent_approval": False}
+
+    ch_user = await crud.get_user(session, child_id)
+    c_name = html.escape(ch_user.full_name) if ch_user and ch_user.full_name else f"Farzand #{child_id}"
+
+    if telemetry.telegram_bot:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        perm_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="✅ Ruxsat berish (Chiqarish)",
+                        callback_data=f"approve_child_logout:{child_id}"
+                    ),
+                    InlineKeyboardButton(
+                        text="❌ Rad etish",
+                        callback_data=f"reject_child_logout:{child_id}"
+                    )
+                ]
+            ]
+        )
+        msg_text = (
+            f"🔔 <b>DIQQAT: Farzandingiz hisobdan chiqishga ruxsat so'ramoqda!</b>\n\n"
+            f"👤 Farzand: <b>{c_name}</b> (ID: <code>{child_id}</code>)\n"
+            f"🌐 Manba: <b>Web App (Sayt / Ilova)</b>\n\n"
+            f"Farzandingiz o'z hisobidan chiqib, rolni almashtirmoqchi.\n"
+            f"Agar bu sizning roziligingiz bilan bo'layotgan bo'lsa, quyidagi «Ruxsat berish» tugmasini bosing:"
+        )
+        for p in parents:
+            try:
+                await telemetry.telegram_bot.send_message(
+                    chat_id=p.id,
+                    text=msg_text,
+                    reply_markup=perm_kb,
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send WebApp logout request to parent {p.id}: {e}")
+
+    return {"status": "success", "needs_parent_approval": True}
+
 
 # APK Download Endpoints (Fail-safe direct redirects)
 # ---------------------------------------------------------

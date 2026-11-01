@@ -139,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme();
-                if ("tel".equals(scheme) || "mailto".equals(scheme) || "tg".equals(scheme)) {
+                if ("tel".equals(scheme) || "sms".equals(scheme) || "smsto".equals(scheme) || "mailto".equals(scheme) || "tg".equals(scheme)) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                         startActivity(intent);
