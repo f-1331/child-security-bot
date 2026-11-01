@@ -16,16 +16,21 @@ import android.provider.Settings;
 import android.util.Log;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
+import android.webkit.JsPromptResult;
+import android.webkit.JsResult;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -50,19 +55,16 @@ public class MainActivity extends AppCompatActivity {
             SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
             String savedRole = prefs.getString("saved_role", null);
             if (savedRole != null && !savedRole.isEmpty()) {
-                appRole = savedRole;
+                appRole = savedRole.toLowerCase();
             }
         } catch (Exception ignored) {}
 
-        // 1. Try BuildConfig APP_ROLE reflection
+        // 1. Try BuildConfig APP_ROLE directly
         try {
-            Class<?> clazz = Class.forName(getPackageName() + ".BuildConfig");
-            java.lang.reflect.Field field = clazz.getField("APP_ROLE");
-            String r = (String) field.get(null);
-            if (r != null && !r.isEmpty()) {
-                appRole = r;
+            if (BuildConfig.APP_ROLE != null && !BuildConfig.APP_ROLE.isEmpty()) {
+                appRole = BuildConfig.APP_ROLE.toLowerCase();
             }
-        } catch (Exception ignored) {}
+        } catch (Throwable ignored) {}
 
         // 2. Try assets/app_role.json
         try {
@@ -73,16 +75,27 @@ public class MainActivity extends AppCompatActivity {
             is.close();
             org.json.JSONObject obj = new org.json.JSONObject(new String(buf, "UTF-8"));
             if (obj.has("role")) {
-                appRole = obj.getString("role");
+                appRole = obj.getString("role").toLowerCase();
             }
         } catch (Exception ignored) {}
 
-        // 3. Fallback package name check
-        if (getPackageName().endsWith(".child")) {
+        // 3. Fallback package name check (contains "child" or "parent")
+        String pkg = getPackageName().toLowerCase();
+        if (pkg.contains("child")) {
             appRole = "child";
-        } else if (getPackageName().endsWith(".parent")) {
+        } else if (pkg.contains("parent")) {
             appRole = "parent";
         }
+
+        // 4. Intent extra check
+        try {
+            if (getIntent() != null && getIntent().hasExtra("role")) {
+                String ir = getIntent().getStringExtra("role");
+                if (ir != null && !ir.isEmpty()) {
+                    appRole = ir.toLowerCase();
+                }
+            }
+        } catch (Exception ignored) {}
 
         boolean isChild = "child".equalsIgnoreCase(appRole);
         currentProductionUrl = isChild
@@ -130,11 +143,60 @@ public class MainActivity extends AppCompatActivity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
-        // Auto-grant Geolocation without browser prompt popups
+        // Auto-grant Geolocation and Media (Microphone/Camera for SOS audio) without blocking popups
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
+            }
+
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                runOnUiThread(() -> {
+                    try {
+                        request.grant(request.getResources());
+                    } catch (Exception e) {
+                        Log.e(TAG, "onPermissionRequest error: " + e.getMessage());
+                    }
+                });
+            }
+
+            @Override
+            public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Child Security")
+                        .setMessage(message)
+                        .setPositiveButton("OK", (dialog, which) -> result.confirm())
+                        .setCancelable(false)
+                        .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsConfirm(WebView view, String url, String message, JsResult result) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Child Security")
+                        .setMessage(message)
+                        .setPositiveButton("Ha", (dialog, which) -> result.confirm())
+                        .setNegativeButton("Yo'q", (dialog, which) -> result.cancel())
+                        .setCancelable(false)
+                        .show();
+                return true;
+            }
+
+            @Override
+            public boolean onJsPrompt(WebView view, String url, String message, String defaultValue, JsPromptResult result) {
+                final EditText input = new EditText(MainActivity.this);
+                if (defaultValue != null) input.setText(defaultValue);
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Child Security")
+                        .setMessage(message)
+                        .setView(input)
+                        .setPositiveButton("OK", (dialog, which) -> result.confirm(input.getText().toString()))
+                        .setNegativeButton("Bekor qilish", (dialog, which) -> result.cancel())
+                        .setCancelable(false)
+                        .show();
+                return true;
             }
         });
 
@@ -180,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (isChild) {
             // Farzand telefoni: 24/7 foniy GPS, Accessibility, Device Admin va Batareya optimallashtirish
-            checkAndRequestPermissions();
+            requestAllChildProtectionPermissions();
             requestBatteryOptimization();
 
             SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
@@ -496,7 +558,7 @@ public class MainActivity extends AppCompatActivity {
 
                 if ("child".equalsIgnoreCase(role)) {
                     runOnUiThread(() -> {
-                        checkAndRequestPermissions();
+                        requestAllChildProtectionPermissions();
                         requestBatteryOptimization();
                     });
                 }
@@ -517,7 +579,7 @@ public class MainActivity extends AppCompatActivity {
                 if ("child".equalsIgnoreCase(role)) {
                     appRole = "child";
                     runOnUiThread(() -> {
-                        checkAndRequestPermissions();
+                        requestAllChildProtectionPermissions();
                         requestBatteryOptimization();
                     });
                 }
@@ -870,6 +932,60 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public boolean sendNativeDirectSms(String recipientPhone, String messageText) {
             return sendEmergencySms(recipientPhone, messageText);
+        }
+
+        @JavascriptInterface
+        public boolean triggerNativeSos(int childId, double lat, double lon, String message) {
+            Log.i("AndroidBridge", "triggerNativeSos called for childId: " + childId + " at " + lat + ", " + lon);
+
+            try {
+                playNativeSiren();
+            } catch (Exception ignored) {}
+
+            String phone = getParentEmergencyPhone();
+            if (phone != null && !phone.trim().isEmpty()) {
+                String smsText = (message != null && !message.trim().isEmpty())
+                        ? message
+                        : ("🚨 SOS! Farzandingiz xavfda!\nJoylashuv: https://maps.google.com/?q=" + lat + "," + lon + "\nKoordinata: " + lat + ", " + lon);
+                sendEmergencySms(phone, smsText);
+            } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread(() -> ActivityCompat.requestPermissions(MainActivity.this, new String[]{
+                        Manifest.permission.SEND_SMS,
+                        Manifest.permission.RECEIVE_SMS,
+                        Manifest.permission.READ_PHONE_STATE
+                }, PERMISSION_REQUEST_CODE + 2));
+            }
+
+            new Thread(() -> {
+                try {
+                    java.net.URL url = new java.net.URL(BACKEND_API_URL + "/api/v1/webapp/child/" + childId + "/sos");
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setDoOutput(true);
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(8000);
+
+                    org.json.JSONObject payload = new org.json.JSONObject();
+                    payload.put("is_sos_active", true);
+                    payload.put("latitude", lat);
+                    payload.put("longitude", lon);
+                    payload.put("accuracy", 15);
+                    payload.put("battery_level", getBatteryLevel());
+
+                    byte[] postData = payload.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    try (java.io.OutputStream os = conn.getOutputStream()) {
+                        os.write(postData);
+                    }
+                    int code = conn.getResponseCode();
+                    Log.i("AndroidBridge", "Native SOS HTTP dispatch response: " + code);
+                    conn.disconnect();
+                } catch (Exception e) {
+                    Log.e("AndroidBridge", "Native SOS HTTP dispatch failed: " + e.getMessage());
+                }
+            }).start();
+
+            return true;
         }
 
         @JavascriptInterface

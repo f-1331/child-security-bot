@@ -16,6 +16,9 @@ from urllib.parse import parse_qsl
 from config import settings
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.types import FSInputFile
 
 from db.database import get_db
@@ -32,6 +35,25 @@ from bot.keyboards import (
 logger = logging.getLogger(__name__)
 
 TASHKENT_TZ = timezone(timedelta(hours=5))
+
+_owner_bot_instance: Optional[Bot] = None
+
+
+def get_owner_bot() -> Optional[Bot]:
+    """Lazy initialize and retrieve the @child_security_owner_bot instance."""
+    global _owner_bot_instance
+    if _owner_bot_instance is not None:
+        return _owner_bot_instance
+    try:
+        if settings.OWNER_BOT_TOKEN:
+            _owner_bot_instance = Bot(
+                token=settings.OWNER_BOT_TOKEN,
+                default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+            )
+            return _owner_bot_instance
+    except Exception as e:
+        logger.error(f"Failed to initialize owner bot in webapp_api: {e}")
+    return None
 
 router = APIRouter(prefix="/api/v1/webapp", tags=["WebApp"])
 
@@ -1436,15 +1458,34 @@ async def child_sos_endpoint(
                         )
                 except Exception as e:
                     logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
+
+            # Also notify Owner Bot for global admin oversight
+            owner_bot = get_owner_bot()
+            if owner_bot:
+                try:
+                    await owner_bot.send_message(
+                        chat_id=6707839718,
+                        text=f"🚨 <b>[PLATFORMA SOS OGOHLANTIRISHI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS tugmasini bosdi!\nOta-onasiga xabar yuborildi.\n\n" + parent_alert,
+                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                        parse_mode="HTML"
+                    )
+                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                        await owner_bot.send_location(
+                            chat_id=6707839718,
+                            latitude=lat,
+                            longitude=lon
+                        )
+                except Exception as oe:
+                    logger.warning(f"Could not dispatch SOS copy to owner bot: {oe}")
         else:
             # Fallback for unlinked child accounts or admin testing: notify owner
             owner_id = 6707839718
+            owner_alert = (
+                f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS]</b>\n"
+                f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
+                + parent_alert
+            )
             try:
-                owner_alert = (
-                    f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS]</b>\n"
-                    f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
-                    + parent_alert
-                )
                 await bot.send_message(
                     chat_id=owner_id,
                     text=owner_alert,
@@ -1457,9 +1498,28 @@ async def child_sos_endpoint(
                         latitude=lat,
                         longitude=lon
                     )
-                logger.info(f"Dispatched fallback SOS alert to owner {owner_id} for unlinked child {child_id}")
             except Exception as e:
-                logger.warning(f"Could not dispatch fallback SOS to owner {owner_id}: {e}")
+                logger.warning(f"Could not dispatch fallback SOS to owner {owner_id} via main bot: {e}")
+
+            # Send via OWNER BOT directly to @fayzbek1331 so it is GUARANTEED to be received!
+            owner_bot = get_owner_bot()
+            if owner_bot:
+                try:
+                    await owner_bot.send_message(
+                        chat_id=owner_id,
+                        text=owner_alert,
+                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                        parse_mode="HTML"
+                    )
+                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                        await owner_bot.send_location(
+                            chat_id=owner_id,
+                            latitude=lat,
+                            longitude=lon
+                        )
+                    logger.info(f"Dispatched fallback SOS alert via OWNER BOT to {owner_id}")
+                except Exception as oe:
+                    logger.warning(f"Could not dispatch fallback SOS via owner bot: {oe}")
 
     parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
@@ -1486,15 +1546,17 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     parents = await crud.get_parents_for_child(session, child_id)
     await session.commit()
 
+    safe_cname = html.escape(child_name)
+    cancel_text = f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\nFarzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi."
+
     bot = telemetry.get_telegram_bot()
     if bot:
         if parents:
             for p in parents:
                 try:
-                    safe_cname = html.escape(child_name)
                     await bot.send_message(
                         chat_id=p.id,
-                        text=f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\nFarzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.",
+                        text=cancel_text,
                         parse_mode="HTML"
                     )
                 except Exception as e:
@@ -1502,7 +1564,6 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
         else:
             owner_id = 6707839718
             try:
-                safe_cname = html.escape(child_name)
                 await bot.send_message(
                     chat_id=owner_id,
                     text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.",
@@ -1510,6 +1571,17 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
                 )
             except Exception:
                 pass
+
+    owner_bot = get_owner_bot()
+    if owner_bot:
+        try:
+            await owner_bot.send_message(
+                chat_id=6707839718,
+                text=f"✅ <b>[SOS BEKOR QILINDI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
 
         if child:
             try:

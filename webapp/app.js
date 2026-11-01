@@ -1799,6 +1799,28 @@ function applyChildUI(user) {
   document.body.classList.remove("role-parent");
   document.body.classList.add("role-child");
 
+  // Proactively ensure native child protection permissions (GPS, SMS, Usage, Overlay, Accessibility) are active
+  if (window.AndroidBridge) {
+    if (typeof window.AndroidBridge.setAppRole === "function") {
+      try { window.AndroidBridge.setAppRole("child"); } catch(e){}
+    }
+    if (typeof window.AndroidBridge.requestAllChildProtectionPermissions === "function") {
+      try { window.AndroidBridge.requestAllChildProtectionPermissions(); } catch(e){}
+    }
+  } else if (navigator.geolocation && navigator.geolocation.getCurrentPosition) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        cachedDeviceLocation = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy || 15
+        };
+      },
+      (err) => console.warn("Geolocation prompt error:", err),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  }
+
   // Show child adventure hub view, hide parent tactical map
   const parentSection = document.getElementById("parentViewSection");
   const childSection = document.getElementById("childViewSection");
@@ -6641,15 +6663,29 @@ async function triggerChildSOS() {
     if (map) map.flyTo([instantLat, instantLon], 16, { animate: true, duration: 0.8 });
 
     const targetChildId = currentChildId || authenticatedSession?.user?.id || 2002;
+    const smsMsg = `🚨 SOS! Farzandingiz ${cName} xavfda!\nJoylashuv: https://maps.google.com/?q=${instantLat.toFixed(6)},${instantLon.toFixed(6)}\nKoordinata: ${instantLat.toFixed(6)}, ${instantLon.toFixed(6)}`;
+
+    // 0. Native Android instant hardware SOS (loud siren, SMS dispatch, native background POST)
+    if (window.AndroidBridge && typeof window.AndroidBridge.triggerNativeSos === "function") {
+      try {
+        window.AndroidBridge.triggerNativeSos(parseInt(targetChildId, 10), instantLat, instantLon, smsMsg);
+      } catch (e) {
+        console.warn("triggerNativeSos error:", e);
+      }
+    }
 
     // Background ambient audio snapshot (5s)
     try { recordAndUploadSOSAudio(targetChildId); } catch(e){}
+
+    const apiBase = (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null")
+      ? PRODUCTION_BACKEND_URL
+      : "";
 
     // IMMEDIATE (0ms) DISPATCH TO SERVER / TELEGRAM:
     if (!navigator.onLine) {
       sendEmergencyOfflineSms(instantLat, instantLon, cName, null);
     } else {
-      fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
+      fetch(`${apiBase}/api/v1/webapp/child/${targetChildId}/sos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6666,6 +6702,9 @@ async function triggerChildSOS() {
           if (data.parent_phone) {
             parentPhone = data.parent_phone;
             try { localStorage.setItem("cached_parent_phone", parentPhone); } catch(e){}
+            if (window.AndroidBridge && typeof window.AndroidBridge.setParentEmergencyPhone === "function") {
+              try { window.AndroidBridge.setParentEmergencyPhone(parentPhone); } catch(e){}
+            }
           }
           if (isDemoMode) {
             showToast("⚠️ DEMO SOS: Test signali Telegram botga yetkazildi! (Haqiqiy hisob uchun kodingiz bilan kiring)");
@@ -6699,7 +6738,7 @@ async function triggerChildSOS() {
       renderChildMarker(refinedLat, refinedLon, cName, true, freshBatt);
 
       if (targetChildId && navigator.onLine) {
-        fetch(`/api/v1/webapp/child/${targetChildId}/sos`, {
+        fetch(`${apiBase}/api/v1/webapp/child/${targetChildId}/sos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -6743,7 +6782,10 @@ async function cancelChildSOS() {
   const targetChildId = currentChildId || authenticatedSession?.user?.id;
   if (!isDemoMode && targetChildId) {
     try {
-      await fetch(`/api/v1/webapp/child/${targetChildId}/sos/cancel`, {
+      const apiBase = (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null")
+        ? PRODUCTION_BACKEND_URL
+        : "";
+      await fetch(`${apiBase}/api/v1/webapp/child/${targetChildId}/sos/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -9401,9 +9443,12 @@ async function recordAndUploadSOSAudio(childId) {
       // Exponential backoff retry (up to 3 attempts with 1s, 2s, 4s delay)
       let uploadSuccess = false;
       let delay = 1000;
+      const apiBase = (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null")
+        ? PRODUCTION_BACKEND_URL
+        : "";
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const resp = await fetch(`/api/v1/webapp/child/${childId}/sos/media`, {
+          const resp = await fetch(`${apiBase}/api/v1/webapp/child/${childId}/sos/media`, {
             method: "POST",
             body: formData,
           });

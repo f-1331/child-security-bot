@@ -7,7 +7,7 @@ import hashlib
 import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple
-from sqlalchemy import desc, select, and_, or_, delete
+from sqlalchemy import desc, select, and_, or_, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import settings
 from db.models import (
