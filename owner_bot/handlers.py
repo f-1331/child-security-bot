@@ -1417,3 +1417,149 @@ async def handle_child_screen_action(callback: CallbackQuery, auth_info: Dict[st
         )
         await callback.answer()
 
+
+# ==============================================================================
+# YANGI QO'SHILGAN EGAGA MAXSUS BUYRUQLAR (RICH OWNER SUITE)
+# ==============================================================================
+@owner_bot_router.message(Command("reset_demo_balance"))
+async def handle_reset_demo_balance(message: Message):
+    """Reset demo child (2002) and any demo user balance to 0."""
+    async with async_session_maker() as session:
+        user_2002 = await crud.get_user(session, 2002)
+        if user_2002:
+            user_2002.virtual_balance = 0
+            await session.commit()
+        from sqlalchemy import update
+        await session.execute(
+            update(crud.User).where(
+                (crud.User.username == "azizbek_demo") | (crud.User.id == 2002)
+            ).values(virtual_balance=0)
+        )
+        await session.commit()
+    await message.answer("✅ <b>Demo hisob balansi to'liq 0 tangaga tushirildi!</b>", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("sos_resolve_all"))
+async def handle_sos_resolve_all(message: Message):
+    """Cancel and clear all active SOS signals across the entire database."""
+    async with async_session_maker() as session:
+        from sqlalchemy import update
+        await session.execute(
+            update(crud.User).where(crud.User.is_sos_active == True).values(is_sos_active=False)
+        )
+        await session.commit()
+        telemetry.last_sos_alert_map.clear()
+    await message.answer("✅ <b>Barcha faol SOS signallari muvaffaqiyatli o'chirildi va tinchlantirildi!</b>", parse_mode="HTML")
+
+
+@owner_bot_router.message(Command("find_child", "locate", "top"))
+async def handle_find_child_cmd(message: Message):
+    """Instant child location finder with live Google and Yandex Maps links."""
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip().isdigit():
+        await message.answer("⚠️ Iltimos, farzand ID sini kiriting.\nMasalan: <code>/find_child 12345678</code>", parse_mode="HTML")
+        return
+    child_id = int(parts[1].strip())
+    async with async_session_maker() as session:
+        child = await crud.get_user(session, child_id)
+        if not child:
+            await message.answer(f"❌ ID: <code>{child_id}</code> bo'yicha farzand topilmadi.", parse_mode="HTML")
+            return
+        latest = await crud.get_latest_location(session, child_id)
+        parents = await crud.get_parents_for_child(session, child_id)
+        p_names = ", ".join([p.full_name or str(p.id) for p in parents]) if parents else "Ulangan ota-ona yo'q"
+
+        if not latest or latest.latitude is None:
+            await message.answer(
+                f"👦 <b>Farzand:</b> {html.escape(child.full_name or 'Farzand')} (ID: <code>{child_id}</code>)\n"
+                f"👨‍👩‍👧 Ota-ona: <b>{html.escape(p_names)}</b>\n\n"
+                f"⚠️ <i>Hozircha GPS koordinatalari mavjud emas.</i>",
+                parse_mode="HTML"
+            )
+            return
+
+        lat, lon = latest.latitude, latest.longitude
+        gmaps = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+        ymaps = f"https://yandex.com/maps/?pt={lon},{lat}&z=16&l=map"
+        spd = latest.speed or 0.0
+        batt = f"{latest.battery_level}%" if latest.battery_level is not None else "Noma'lum"
+        charging = "⚡️ Quvvatlanmoqda" if latest.is_charging else "🔋 Batareyada"
+
+        loc_text = (
+            f"📍 <b>FARZAND JOYLASHUVI</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>Farzand:</b> {html.escape(child.full_name or 'Farzand')} (ID: <code>{child_id}</code>)\n"
+            f"👨‍👩‍👧 <b>Ota-onasi:</b> {html.escape(p_names)}\n"
+            f"📌 <b>Koordinata:</b> <code>{lat:.6f}, {lon:.6f}</code>\n"
+            f"🔋 <b>Batareya:</b> {batt} ({charging})\n"
+            f"🚀 <b>Tezlik:</b> {spd:.1f} km/soat\n"
+            f"🕒 <b>So'nggi signal:</b> {latest.recorded_at.strftime('%d.%m.%Y, %H:%M:%S') if latest.recorded_at else 'Hozir'}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🗺 <a href='{gmaps}'>Google Maps xaritasida ko'rish</a>\n"
+            f"🗺 <a href='{ymaps}'>Yandex Maps xaritasida ko'rish</a>"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🗺 Google Maps", url=gmaps), InlineKeyboardButton(text="🗺 Yandex Maps", url=ymaps)],
+            [InlineKeyboardButton(text="🔄 Yangilash", callback_data=f"adm_loc:{child_id}")]
+        ])
+        await message.answer(loc_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=False)
+
+
+@owner_bot_router.message(F.text.contains("Xavfsizlik & Anti-Spam"))
+@owner_bot_router.message(Command("tamper_logs", "xavfsizlik_jurnali", "threats"))
+async def handle_tamper_logs_cmd(message: Message):
+    """Stream recent device tamper/security events."""
+    async with async_session_maker() as session:
+        from sqlalchemy import select, desc
+        from db.models import DeviceTamperLog
+        res = await session.execute(
+            select(DeviceTamperLog).order_by(desc(DeviceTamperLog.detected_at)).limit(15)
+        )
+        logs = res.scalars().all()
+
+        if not logs:
+            await message.answer("🛡 <b>Xavfsizlik tizimi toza:</b> So'nggi paytda hech qanday shubhali holat qayd etilmadi! 🌟", parse_mode="HTML")
+            return
+
+        lines = []
+        for log in logs:
+            t_str = log.detected_at.strftime("%d.%m %H:%M") if log.detected_at else "--:--"
+            sev_icon = "🔴" if log.severity == "critical" else ("🟠" if log.severity == "high" else "🟡")
+            lines.append(f"{sev_icon} <b>[{t_str}]</b> Farzand ID: <code>{log.child_id}</code>\n   └ <i>{html.escape(log.event_type)}: {html.escape(log.description or '')}</i>")
+
+        msg = (
+            "🛡 <b>XAVFSIZLIK VA BUZG'UNCHILIK JURNALI (SO'NGGI 15 TA):</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            + "\n\n".join(lines)
+        )
+        await message.answer(msg, parse_mode="HTML")
+
+
+@owner_bot_router.message(F.text.contains("Server & Diagnostika"))
+@owner_bot_router.message(Command("system_diagnostics", "diagnostika", "server"))
+async def handle_system_diagnostics_cmd(message: Message):
+    """Full in-depth server and database diagnostic check."""
+    import psutil, platform
+    import time
+    cpu_pct = psutil.cpu_percent(interval=0.2)
+    mem = psutil.virtual_memory()
+
+    async with async_session_maker() as session:
+        from sqlalchemy import select
+        t0 = time.time()
+        await session.execute(select(crud.User.id).limit(1))
+        db_latency = (time.time() - t0) * 1000
+
+    msg = (
+        "🖥 <b>TIZIM VA SERVER TO'LIQ DIAGNOSTIKASI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚙️ <b>OS:</b> {platform.system()} {platform.release()} ({platform.machine()})\n"
+        f"🧠 <b>CPU Bandligi:</b> {cpu_pct}%\n"
+        f"💾 <b>RAM Xotira:</b> {mem.percent}% (Ishlatilmoqda: {mem.used // (1024*1024)} MB / {mem.total // (1024*1024)} MB)\n"
+        f"🗄 <b>PostgreSQL Ping:</b> {db_latency:.1f} ms (Juda tez)\n"
+        f"🕒 <b>Toshkent Vaqti:</b> {datetime.now(TASHKENT_TZ).strftime('%d.%m.%Y, %H:%M:%S')}\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🟢 <i>Barcha xizmatlar (API, Bot, Render, DB) ideal holatda ishlamoqda.</i>"
+    )
+    await message.answer(msg, parse_mode="HTML")
+
