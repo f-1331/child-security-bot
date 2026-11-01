@@ -873,11 +873,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public boolean isSmsPermissionGranted() {
-            return ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
-        }
-
-        @JavascriptInterface
         public void requestAllPermissionsDirectly() {
             runOnUiThread(MainActivity.this::checkAndRequestPermissions);
         }
