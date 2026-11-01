@@ -762,10 +762,11 @@ async def create_geofence_endpoint(payload: CreateGeofenceRequest, session: Asyn
                     detail="Ruxsat berilmagan: Siz ushbu farzand uchun hudud qo'sha olmaysiz."
                 )
 
+    clean_name = re.sub(r'<[^>]*?>', '', payload.name).strip() or "Xavfsiz Hudud"
     fence = await crud.create_geofence(
         session=session,
         parent_id=payload.parent_id,
-        name=payload.name,
+        name=clean_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
         radius_meters=payload.radius_meters,
@@ -916,12 +917,15 @@ async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession
                     detail="Ruxsat berilmagan: Siz ushbu farzandga vazifa bera olmaysiz."
                 )
 
+    clean_title = re.sub(r'<[^>]*?>', '', payload.title).strip() or payload.title.strip()[:200]
+    clean_desc = re.sub(r'<[^>]*?>', '', payload.description).strip() if payload.description else None
+
     task = await crud.create_task(
         session=session,
         parent_id=payload.parent_id,
         child_id=payload.child_id,
-        title=payload.title,
-        description=payload.description,
+        title=clean_title,
+        description=clean_desc,
         reward_coins=payload.reward_coins,
         media_type=payload.media_type,
         media_url=payload.media_url
@@ -1481,9 +1485,10 @@ async def parent_siren_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Parent triggers remote siren / sound ping to child's phone across Telegram Bot and Mobile App with 5s debounce."""
-    if parent_id:
+    if child_id != 2002:
         parents = await crud.get_parents_for_child(session, child_id)
-        if not parents or parent_id not in [p.id for p in parents]:
+        parent_ids = [p.id for p in parents]
+        if not parent_id or parent_id not in parent_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
@@ -2549,10 +2554,8 @@ async def update_child_device_policy_endpoint(
         except Exception:
             pass
 
-    if parent_ids:
-        if not effective_parent_id:
-            effective_parent_id = parent_ids[0]
-        elif effective_parent_id not in parent_ids:
+    if child_id != 2002:
+        if not parent_ids or not effective_parent_id or effective_parent_id not in parent_ids:
             logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {effective_parent_id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

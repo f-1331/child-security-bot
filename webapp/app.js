@@ -1951,6 +1951,46 @@ async function loadChildSelfData(user) {
   await loadWishlist(user.id);
 }
 
+function forceLogoutSession(reasonMessage) {
+  if (window.AndroidBridge && typeof window.AndroidBridge.clearSavedSession === "function") {
+    try { window.AndroidBridge.clearSavedSession(); } catch (e) {}
+  }
+  localStorage.removeItem("smart_tracker_session");
+  localStorage.removeItem("smart_tracker_auth_code");
+  localStorage.removeItem("smart_tracker_role");
+  sessionStorage.removeItem("smart_tracker_demo_role");
+  authenticatedSession = null;
+  isDemoMode = false;
+  currentChildId = null;
+  parentId = null;
+  childrenList = [];
+  tasksList = [];
+  geofencesList = [];
+  document.getElementById("demoBadge")?.classList.add("hidden");
+  document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
+  document.getElementById("demoNoticeBanner")?.classList.add("hidden");
+  if (childWatchId !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(childWatchId);
+    childWatchId = null;
+  }
+  if (appWebSocket) {
+    try { appWebSocket.close(); } catch (e) {}
+    appWebSocket = null;
+  }
+  clearInterval(childNotificationPollTimer);
+  if (window._tgLocationPollInterval) {
+    clearInterval(window._tgLocationPollInterval);
+    window._tgLocationPollInterval = null;
+  }
+  if (window.AndroidBridge && typeof window.AndroidBridge.stopBackgroundTracking === "function") {
+    try { window.AndroidBridge.stopBackgroundTracking(); } catch (e) {}
+  }
+  const input = document.getElementById("inputAuthCode");
+  if (input) input.value = "";
+  showAuthGateModal();
+  showToast(reasonMessage || "🚪 Hisobdan chiqildi");
+}
+
 async function logoutSession() {
   haptic("medium");
 
@@ -1977,43 +2017,7 @@ async function logoutSession() {
   }
 
   if (confirm("Haqiqatan ham sayt hisobidan chiqmoqchimisiz?")) {
-    if (window.AndroidBridge && typeof window.AndroidBridge.clearSavedSession === "function") {
-      try { window.AndroidBridge.clearSavedSession(); } catch (e) {}
-    }
-    localStorage.removeItem("smart_tracker_session");
-    localStorage.removeItem("smart_tracker_auth_code");
-    localStorage.removeItem("smart_tracker_role");
-    sessionStorage.removeItem("smart_tracker_demo_role");
-    authenticatedSession = null;
-    isDemoMode = false;
-    currentChildId = null;
-    parentId = null;
-    childrenList = [];
-    tasksList = [];
-    geofencesList = [];
-    document.getElementById("demoBadge")?.classList.add("hidden");
-    document.getElementById("btnTopDemoAuth")?.classList.add("hidden");
-    document.getElementById("demoNoticeBanner")?.classList.add("hidden");
-    if (childWatchId !== null && navigator.geolocation) {
-      navigator.geolocation.clearWatch(childWatchId);
-      childWatchId = null;
-    }
-    if (appWebSocket) {
-      try { appWebSocket.close(); } catch (e) {}
-      appWebSocket = null;
-    }
-    clearInterval(childNotificationPollTimer);
-    if (window._tgLocationPollInterval) {
-      clearInterval(window._tgLocationPollInterval);
-      window._tgLocationPollInterval = null;
-    }
-    if (window.AndroidBridge && typeof window.AndroidBridge.stopBackgroundTracking === "function") {
-      try { window.AndroidBridge.stopBackgroundTracking(); } catch (e) {}
-    }
-    const input = document.getElementById("inputAuthCode");
-    if (input) input.value = "";
-    showAuthGateModal();
-    showToast("🚪 Hisobdan chiqildi");
+    forceLogoutSession("🚪 Hisobdan chiqildi");
   }
 }
 
@@ -7161,7 +7165,9 @@ function triggerRemoteSiren() {
   playSirenSound();
   showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
   if (!isDemoMode && currentChildId) {
-    fetch(`/api/v1/webapp/child/${currentChildId}/siren`, {
+    const effParentId = getEffectiveParentId();
+    const query = effParentId ? `?parent_id=${effParentId}` : "";
+    fetch(`/api/v1/webapp/child/${currentChildId}/siren${query}`, {
       method: "POST"
     }).catch(console.error);
   }
@@ -8115,6 +8121,19 @@ function handleIncomingWebSocketMessage(msg) {
     playSirenSound();
     haptic("heavy");
     showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+    return;
+  }
+
+  // 1.15 Child logout approval / rejection from Parent Telegram Bot
+  if (msg.type === "child_logout_approved" && currentRole === "child") {
+    showToast("✅ Ota-onangiz hisobdan chiqishga ruxsat berdi!");
+    alert("✅ Ota-onangiz hisobdan chiqishga ruxsat berdi.\nHisobingiz muvaffaqiyatli yakunlandi.");
+    forceLogoutSession("✅ Hisobdan chiqildi");
+    return;
+  }
+  if (msg.type === "child_logout_rejected" && currentRole === "child") {
+    showToast("❌ Ota-onangiz hisobdan chiqish so'rovingizni rad etdi.");
+    alert("❌ Ota-onangiz hisobdan chiqish so'rovingizni rad etdi!\nXavfsizlik nazorati faol qoladi.");
     return;
   }
 

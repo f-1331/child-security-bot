@@ -267,10 +267,10 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     primary_parent_id = int(args.replace("coparent_", "").replace("parent_", "").strip())
                     if primary_parent_id == user_id:
                         await message.answer(
-                            "ℹ️ **Bu sizning ikkinchi ota-onani taklif qilish havolangiz!**\n\n"
+                            "ℹ️ <b>Bu sizning ikkinchi ota-onani taklif qilish havolangiz!</b>\n\n"
                             "Turmush o'rtog'ingiz (dada yoki oyi) ham bolalarni birga kuzatishi uchun ushbu havolani unga yuboring.",
                             reply_markup=get_parent_main_keyboard(user_id),
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                         return
 
@@ -282,52 +282,55 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     current_children_ids = {c.id for c in await crud.get_children_for_parent(session, user_id)}
                     primary_children_ids = {c.id for c in existing_children}
 
+                    safe_pname = html.escape(primary_parent.full_name) if primary_parent and primary_parent.full_name else "Ota-ona"
+
                     if primary_children_ids and primary_children_ids.issubset(current_children_ids):
-                        child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in existing_children]) or "barcha farzandlar"
+                        child_names = ", ".join([html.escape(c.full_name or f"Farzand #{c.id}") for c in existing_children]) or "barcha farzandlar"
                         await message.answer(
-                            f"ℹ️ **Siz allaqachon ushbu oila guruhiga ulangansiz!**\n\n"
-                            f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
-                            f"👶 Biriktirilgan farzandlar: **{child_names}**\n\n"
-                            f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
+                            f"ℹ️ <b>Siz allaqachon ushbu oila guruhiga ulangansiz!</b>\n\n"
+                            f"👤 Hamkor ota-ona: <b>{safe_pname}</b>\n"
+                            f"👶 Biriktirilgan farzandlar: <b>{child_names}</b>\n\n"
+                            f"🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code>{co_parent_code}</code>\n"
                             f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}",
                             reply_markup=get_parent_main_keyboard(user_id),
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                         return
 
                     linked_children = await crud.link_co_parent(session, primary_parent_id, user_id)
                     await session.commit()
 
-                    child_names = ", ".join([c.full_name or f"Farzand #{c.id}" for c in linked_children]) or "barcha farzandlar"
+                    child_names = ", ".join([html.escape(c.full_name or f"Farzand #{c.id}") for c in linked_children]) or "barcha farzandlar"
 
                     await message.answer(
-                        f"🎉 **Ajoyib! Siz oilaviy monitoring guruhiga muvaffaqiyatli qo'shildingiz!**\n\n"
-                        f"👤 Hamkor ota-ona: **{primary_parent.full_name if primary_parent else 'Ota-ona'}**\n"
-                        f"👶 Biriktirilgan farzandlar ({len(linked_children)} nafar): **{child_names}**\n\n"
-                        f"🔑 **Sizning shaxsiy sayt kodingiz:** ` {co_parent_code} `\n"
+                        f"🎉 <b>Ajoyib! Siz oilaviy monitoring guruhiga muvaffaqiyatli qo'shildingiz!</b>\n\n"
+                        f"👤 Hamkor ota-ona: <b>{safe_pname}</b>\n"
+                        f"👶 Biriktirilgan farzandlar ({len(linked_children)} nafar): <b>{child_names}</b>\n\n"
+                        f"🔑 <b>Sizning shaxsiy sayt kodingiz:</b> <code>{co_parent_code}</code>\n"
                         f"🌐 Sayt manzili: {settings.WEBAPP_BASE_URL}\n\n"
                         f"Endi siz ham barcha farzandlaringiz joylashuvini birgalikda kuzatishingiz va topshiriqlar berishingiz mumkin.",
                         reply_markup=get_parent_main_keyboard(user_id),
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
 
                     if not user.phone_number:
                         await message.answer(
-                            "⚠️ **Eslatma:** Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
-                            "istalgan paytda pastdagi **«📞 Oila kontaktlari»** bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
-                            parse_mode="Markdown"
+                            "⚠️ <b>Eslatma:</b> Farzandingiz SOS tugmasini bosganida sizga avtomatik qo'ng'iroq ketishi uchun "
+                            "istalgan paytda pastdagi <b>«📞 Oila kontaktlari»</b> bo'limi orqali telefon raqamingizni kiritib qo'yishingiz mumkin.",
+                            parse_mode="HTML"
                         )
 
                     try:
+                        safe_full_name = html.escape(full_name or "Hamkor")
                         await bot.send_message(
                             chat_id=primary_parent_id,
                             text=(
-                                f"🎉 **Oilangizga ikkinchi ota-ona qo'shildi!**\n\n"
-                                f"👤 Hamkor: **{clean_md(full_name)}**\n\n"
+                                f"🎉 <b>Oilangizga ikkinchi ota-ona qo'shildi!</b>\n\n"
+                                f"👤 Hamkor: <b>{safe_full_name}</b>\n\n"
                                 f"Endi ikkalangiz ham farzandlaringiz xavfsizligini birgalikda kuzatishingiz mumkin. 🛡️"
                             ),
                             reply_markup=get_parent_main_keyboard(primary_parent_id),
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                     except Exception as e:
                         logger.error(f"Failed to notify primary parent: {e}")
@@ -342,12 +345,12 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     # O'zining kodi orqali o'ziga ulanishga urinishdan himoya
                     if parent.id == user_id:
                         await message.answer(
-                            "ℹ️ **Bu sizning shaxsiy oilaviy kodingiz!**\n\n"
+                            "ℹ️ <b>Bu sizning shaxsiy oilaviy kodingiz!</b>\n\n"
                             "Ushbu kodni farzandingiz telefonida botga kiritishingiz kerak.\n\n"
                             "💡 Agar hozircha ikkinchi telefoningiz bo'lmasa yoki tizim imkoniyatlarini darhol sinab ko'rmoqchi bo'lsangiz, "
-                            "pastdagi **«🧪 Namuna farzand bilan sinash»** tugmasini bosing:",
+                            "pastdagi <b>«🧪 Namuna farzand bilan sinash»</b> tugmasini bosing:",
                             reply_markup=get_empty_children_kb(),
-                            parse_mode="Markdown"
+                            parse_mode="HTML"
                         )
                         return
 
@@ -5257,6 +5260,15 @@ async def on_parent_approve_child_logout(callback: CallbackQuery, bot: Bot):
         await session.commit()
 
         try:
+            from api.webapp_api import ws_manager
+            await ws_manager.send_to_user(child_id, {
+                "type": "child_logout_approved",
+                "message": "Ota-onangiz hisobdan chiqishga ruxsat berdi."
+            })
+        except Exception:
+            pass
+
+        try:
             await callback.message.edit_text(
                 f"✅ <b>Farzand ({child_name}) hisobdan chiqishiga ruxsat berildi!</b>\n\n"
                 f"Farzand hisobi muvaffaqiyatli uzildi.",
@@ -5287,8 +5299,22 @@ async def on_parent_reject_child_logout(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     child_id = int(callback.data.split(":")[1])
     async with AsyncSessionLocal() as session:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if not any(p.id == parent_id for p in parents):
+            await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
+            return
+
         child_user = await crud.get_user(session, child_id)
         child_name = html.escape(child_user.full_name) if child_user and child_user.full_name else f"Farzand #{child_id}"
+
+        try:
+            from api.webapp_api import ws_manager
+            await ws_manager.send_to_user(child_id, {
+                "type": "child_logout_rejected",
+                "message": "Ota-onangiz hisobdan chiqish so'rovingizni rad etdi."
+            })
+        except Exception:
+            pass
 
         try:
             await callback.message.edit_text(
