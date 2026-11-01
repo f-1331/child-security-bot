@@ -1690,7 +1690,7 @@ async def get_paginated_users(
     role_filter: Optional[str] = None,
     search_query: Optional[str] = None,
     page: int = 1,
-    per_page: int = 8
+    per_page: int = 10
 ) -> Tuple[List[User], int, int]:
     """
     Returns (users_list, total_count, total_pages).

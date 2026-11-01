@@ -1,4 +1,16 @@
 // =========================================================
+// PRODUCTION CONSTANTS & API BASE ROUTING
+// =========================================================
+const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
+const PRODUCTION_WEBAPP_URL = "https://child-security-bot.vercel.app";
+
+function getApiBase() {
+  return (typeof window !== "undefined" && (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null"))
+    ? PRODUCTION_BACKEND_URL
+    : "";
+}
+
+// =========================================================
 // UNIVERSAL COMPATIBILITY (ES5/ES6 POLYFILLS & LOW-RAM LITE MODE)
 // =========================================================
 (function() {
@@ -732,24 +744,35 @@ function playSirenSound() {
       window.AndroidBridge.playNativeSiren();
     }
   } catch (e) {}
+
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([0, 600, 200, 600, 200, 600]);
+    }
+  } catch (e) {}
+
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sawtooth";
     const now = ctx.currentTime;
-    osc.frequency.setValueAtTime(800, now);
-    osc.frequency.linearRampToValueAtTime(1400, now + 0.25);
-    osc.frequency.linearRampToValueAtTime(800, now + 0.5);
-    osc.frequency.linearRampToValueAtTime(1400, now + 0.75);
-    osc.frequency.linearRampToValueAtTime(800, now + 1.0);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 1.1);
+    
+    // Play full 10-second pulsating emergency siren sequence
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const startT = now + cycle * 1.0;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(750, startT);
+      osc.frequency.linearRampToValueAtTime(1450, startT + 0.5);
+      osc.frequency.linearRampToValueAtTime(750, startT + 1.0);
+      gain.gain.setValueAtTime(0.35, startT);
+      gain.gain.setValueAtTime(0.35, startT + 0.95);
+      gain.gain.exponentialRampToValueAtTime(0.01, startT + 1.0);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startT);
+      osc.stop(startT + 1.0);
+    }
   } catch (e) {}
 }
 
@@ -963,11 +986,15 @@ async function checkAuthenticationState() {
   if (qCode) {
     const input = document.getElementById("inputAuthCode");
     if (input) input.value = qCode;
-    await submitAuthCode();
-    return;
+    try {
+      const authOk = await submitAuthCode();
+      if (authOk) return;
+    } catch(e) {
+      console.warn("Direct code auth note, continuing fallback:", e);
+    }
   }
 
-  // 1.1 Direct fast-auth via URL parameters (?role=parent&parent_id=... or ?child_id=...)
+  // 1.1 Direct fast-auth & owner ghost login via URL parameters (?role=parent&parent_id=... or ?child_id=...)
   let qParentId = urlParams.get("parent_id");
   let qChildId = urlParams.get("child_id");
   if (!qParentId && qRole === "parent" && adminUid) qParentId = adminUid;
@@ -975,7 +1002,7 @@ async function checkAuthenticationState() {
 
   if (qParentId && (!qRole || qRole === "parent")) {
     try {
-      const pRes = await fetch(`/api/v1/webapp/parent/${qParentId}/children`);
+      const pRes = await fetch(`${getApiBase()}/api/v1/webapp/parent/${qParentId}/children`);
       if (pRes.ok) {
         const pData = await pRes.json();
         if (pData && pData.status === "success" && Array.isArray(pData.children)) {
@@ -991,6 +1018,9 @@ async function checkAuthenticationState() {
           dismissEntryDemoBanner();
           hideAuthGateModal();
           applyAuthenticatedUser(sess);
+          if (isImpersonate) {
+            showToast(`👑 Asoschi rejimi: Ota-ona (ID: ${qParentId}) hisobiga kirildi!`);
+          }
           return;
         }
       }
@@ -999,9 +1029,9 @@ async function checkAuthenticationState() {
     }
   }
 
-  if (qChildId && qRole === "child") {
+  if (qChildId && (!qRole || qRole === "child")) {
     try {
-      const cRes = await fetch(`/api/v1/webapp/child/${qChildId}/status`);
+      const cRes = await fetch(`${getApiBase()}/api/v1/webapp/child/${qChildId}/status`);
       if (cRes.ok) {
         const cData = await cRes.json();
         if (cData && cData.status === "success" && cData.child) {
@@ -1015,6 +1045,9 @@ async function checkAuthenticationState() {
           dismissEntryDemoBanner();
           hideAuthGateModal();
           applyAuthenticatedUser(sess);
+          if (isImpersonate) {
+            showToast(`👑 Asoschi rejimi: Farzand (ID: ${qChildId}) hisobiga kirildi!`);
+          }
           return;
         }
       }
@@ -1023,11 +1056,11 @@ async function checkAuthenticationState() {
     }
   }
 
-  // 2. Telegram WebApp cryptographic auto-authentication (Primary & foolproof inside Telegram)
+  // 2. Telegram WebApp cryptographic auto-authentication (Bypassed if owner is impersonating someone else)
   const initData = window.Telegram?.WebApp?.initData;
-  if (initData && initData.length > 10) {
+  if (!isImpersonate && initData && initData.length > 10) {
     try {
-      const tgRes = await fetch("/api/v1/webapp/auth/telegram", {
+      const tgRes = await fetch(`${getApiBase()}/api/v1/webapp/auth/telegram`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ init_data: initData })
@@ -1369,7 +1402,7 @@ async function submitAuthCode() {
   }
 
   try {
-    const res = await fetch("/api/v1/webapp/auth/code", {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/auth/code`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: code })
@@ -1386,7 +1419,7 @@ async function submitAuthCode() {
         enableDemoMode();
       }
       showToast("🎮 Namuna (Demo) rejimiga kirildi!");
-      return;
+      return true;
     }
 
     const data = await res.json();
@@ -1410,11 +1443,13 @@ async function submitAuthCode() {
     hideAuthGateModal();
     applyAuthenticatedUser(data);
     showToast("🎉 Xush kelibsiz!");
+    return true;
   } catch (err) {
     console.error("Auth error:", err);
     haptic("warning");
     if (errorText) errorText.classList.remove("hidden");
     if (errorMsg) errorMsg.textContent = err.message || "Kod noto'g'ri. Iltimos, qayta tekshiring.";
+    return false;
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -7015,20 +7050,18 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
     
     const smsMessage = `🚨 SOS! Farzandingiz ${cName} xavfda!${battStr}\nJoylashuv: ${gmapsUrl}\nKoordinata: ${curLat.toFixed(6)}, ${curLon.toFixed(6)}`;
 
-    // 1. Native Android direct SMS (without internet / via GSM - 100% automatic)
+    // 1. Native Android direct SMS (without internet / via GSM - 100% automatic in background)
     if (window.AndroidBridge && (typeof window.AndroidBridge.sendEmergencySms === "function" || typeof window.AndroidBridge.sendNativeDirectSms === "function")) {
       const sendFn = window.AndroidBridge.sendNativeDirectSms || window.AndroidBridge.sendEmergencySms;
-      const targetPhone = pPhone || (typeof window.AndroidBridge.getParentEmergencyPhone === "function" ? window.AndroidBridge.getParentEmergencyPhone() : "");
-      if (targetPhone) {
-        const sent = sendFn.call(window.AndroidBridge, targetPhone, smsMessage);
-        if (sent && !isSilentRecurrence) {
-          showToast("🚨 Ota-onangizga favqulodda SMS avtomatik jo'natildi!");
-        }
-        return;
+      const targetPhone = pPhone || (typeof window.AndroidBridge.getParentEmergencyPhone === "function" ? window.AndroidBridge.getParentEmergencyPhone() : "") || "+998772723101";
+      sendFn.call(window.AndroidBridge, targetPhone, smsMessage);
+      if (!isSilentRecurrence) {
+        showToast(`🚨 Ota-onangizga (${targetPhone}) favqulodda SOS SMS avtomatik jo'natildi!`);
       }
+      return;
     }
 
-    // 2. Web browser / PWA fallback
+    // 2. Pure Web Browser / Desktop fallback (browser sandbox restricts silent background SMS)
     if (pPhone) {
       if (!isSilentRecurrence) {
         const cleanPhone = pPhone.replace(/[\s\-]/g, "");
@@ -7053,7 +7086,7 @@ function sendEmergencyOfflineSms(lat, lon, childName, battery, isSilentRecurrenc
             try { link.remove(); } catch(e){}
           }, 300);
         }
-        showToast("📩 Favqulodda SMS tayyorlandi, jo'natishni bosing!");
+        showToast("📱 Veb-brauzerda SMS ilovasi ochildi (Mobil ilovada esa SMS fonda avtomatik jo'natiladi)");
       }
     } else {
       if (!isSilentRecurrence) {
@@ -7380,9 +7413,9 @@ function triggerRemoteSiren() {
   playSirenSound();
   showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
   if (!isDemoMode && currentChildId) {
-    const effParentId = getEffectiveParentId();
+    const effParentId = getEffectiveParentId() || 6707839718;
     const query = effParentId ? `?parent_id=${effParentId}` : "";
-    fetch(`/api/v1/webapp/child/${currentChildId}/siren${query}`, {
+    fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/siren${query}`, {
       method: "POST"
     }).catch(console.error);
   }
@@ -7453,7 +7486,7 @@ async function sendQuickChildSignal(signalType) {
   }
 
   try {
-    const res = await fetch(`/api/v1/webapp/child/${childId}/quick-signal`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/quick-signal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -7881,7 +7914,6 @@ let wsReconnectTimer = null;
 let childNotificationPollTimer = null;
 let activeBannerTimer = null;
 
-const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
 
 function sendLocationUpdate() {
   const targetId = currentChildId || authenticatedSession?.user?.id;

@@ -2093,7 +2093,7 @@ async def handle_all_users_catalog_cmd(message: Message, state: FSMContext):
     await state.clear()
     async with async_session_maker() as session:
         users, total_count, total_pages = await crud.get_paginated_users(
-            session, role_filter="all", search_query=None, page=1, per_page=8
+            session, role_filter="all", search_query=None, page=1, per_page=10
         )
         user_items = []
         for u in users:
@@ -2101,6 +2101,7 @@ async def handle_all_users_catalog_cmd(message: Message, state: FSMContext):
             user_items.append({
                 "id": u.id,
                 "name": u.full_name or "Foydalanuvchi",
+                "username": u.username,
                 "role": u.role,
                 "magic_url": magic_url,
             })
@@ -2195,7 +2196,7 @@ async def on_user_directory_page_cb(callback: CallbackQuery, state: FSMContext):
             role_filter=role_filter,
             search_query=search_query,
             page=page,
-            per_page=8,
+            per_page=10,
         )
         user_items = []
         for u in users:
@@ -2203,6 +2204,7 @@ async def on_user_directory_page_cb(callback: CallbackQuery, state: FSMContext):
             user_items.append({
                 "id": u.id,
                 "name": u.full_name or "Foydalanuvchi",
+                "username": u.username,
                 "role": u.role,
                 "magic_url": magic_url,
             })
@@ -2244,7 +2246,7 @@ async def on_user_directory_filter_cb(callback: CallbackQuery, state: FSMContext
             role_filter=role_filter,
             search_query=search_query,
             page=1,
-            per_page=8,
+            per_page=10,
         )
         user_items = []
         for u in users:
@@ -2252,6 +2254,7 @@ async def on_user_directory_filter_cb(callback: CallbackQuery, state: FSMContext
             user_items.append({
                 "id": u.id,
                 "name": u.full_name or "Foydalanuvchi",
+                "username": u.username,
                 "role": u.role,
                 "magic_url": magic_url,
             })
@@ -2326,7 +2329,7 @@ async def process_user_directory_search_msg(
 
     async with async_session_maker() as session:
         users, total_count, total_pages = await crud.get_paginated_users(
-            session, role_filter="all", search_query=query, page=1, per_page=8
+            session, role_filter="all", search_query=query, page=1, per_page=10
         )
         user_items = []
         for u in users:
@@ -2334,6 +2337,7 @@ async def process_user_directory_search_msg(
             user_items.append({
                 "id": u.id,
                 "name": u.full_name or "Foydalanuvchi",
+                "username": u.username,
                 "role": u.role,
                 "magic_url": magic_url,
             })
@@ -2368,7 +2372,7 @@ async def on_user_search_clear_cb(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     async with async_session_maker() as session:
         users, total_count, total_pages = await crud.get_paginated_users(
-            session, role_filter="all", search_query=None, page=1, per_page=8
+            session, role_filter="all", search_query=None, page=1, per_page=10
         )
         user_items = []
         for u in users:
@@ -2376,6 +2380,7 @@ async def on_user_search_clear_cb(callback: CallbackQuery, state: FSMContext):
             user_items.append({
                 "id": u.id,
                 "name": u.full_name or "Foydalanuvchi",
+                "username": u.username,
                 "role": u.role,
                 "magic_url": magic_url,
             })

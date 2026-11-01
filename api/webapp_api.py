@@ -1457,7 +1457,22 @@ async def child_sos_endpoint(
                             longitude=lon
                         )
                 except Exception as e:
-                    logger.error(f"Failed to notify parent {p.id} of SOS: {e}")
+                    logger.error(f"Failed to notify parent {p.id} of SOS via main bot: {e}")
+                    # Fallback to owner bot if parent is owner or main bot was blocked
+                    if p.id == 6707839718:
+                        ob = get_owner_bot()
+                        if ob:
+                            try:
+                                await ob.send_message(
+                                    chat_id=p.id,
+                                    text=parent_alert,
+                                    reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                                    parse_mode="HTML"
+                                )
+                                if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                                    await ob.send_location(chat_id=p.id, latitude=lat, longitude=lon)
+                            except Exception as oe:
+                                logger.error(f"Fallback to owner bot also failed: {oe}")
 
             # Also notify Owner Bot for global admin oversight
             owner_bot = get_owner_bot()
@@ -1713,10 +1728,11 @@ async def parent_siren_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Parent triggers remote siren / sound ping to child's phone across Telegram Bot and Mobile App with 5s debounce."""
-    if child_id != 2002:
+    is_owner = (parent_id == 6707839718) or (parent_id and parent_id in getattr(settings, "ADMIN_IDS", [6707839718]))
+    if child_id != 2002 and not is_owner and parent_id:
         parents = await crud.get_parents_for_child(session, child_id)
         parent_ids = [p.id for p in parents]
-        if not parent_id or parent_id not in parent_ids:
+        if parent_ids and parent_id not in parent_ids:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
@@ -1745,7 +1761,9 @@ async def parent_siren_endpoint(
     try:
         await ws_manager.send_to_user(child_id, {
             "type": "remote_siren",
-            "message": "Ota-onangiz telefoningizga qidiruv signali yubordi!"
+            "sound": True,
+            "volume": 1.0,
+            "message": "🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!"
         })
     except Exception:
         pass

@@ -650,13 +650,13 @@ async def format_users_directory_html(
         )
 
     lines = []
-    start_num = (page - 1) * 8 + 1
+    start_num = (page - 1) * 10 + 1
 
     for idx, u in enumerate(users, start=start_num):
         role_emoji = "👦" if u.role == "child" else "👨‍👩‍👧"
         status_emoji = "🚫 Blok" if not u.is_active else ("🚨 SOS" if u.is_sos_active else "🟢 Faol")
-        name_clean = html.escape(u.full_name or "Nomsiz")
         username_str = f"@{u.username}" if u.username else "yo'q"
+        name_clean = html.escape(u.full_name or (f"@{u.username}" if u.username else f"Foydalanuvchi #{u.id}"))
         phone_str = u.phone_number or "yo'q"
 
         # Family linkages

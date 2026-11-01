@@ -425,6 +425,24 @@ public class MainActivity extends AppCompatActivity {
             checkUsageAccessPermission();
         } else if (requestCode == PERMISSION_REQUEST_CODE + 2) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                try {
+                    SharedPreferences prefs = getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                    String pendingPhone = prefs.getString("pending_emergency_phone", "");
+                    String pendingSms = prefs.getString("pending_emergency_sms", "");
+                    if (!pendingPhone.isEmpty() && !pendingSms.isEmpty()) {
+                        android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
+                        java.util.ArrayList<String> parts = sm.divideMessage(pendingSms);
+                        if (parts != null && parts.size() > 1) {
+                            sm.sendMultipartTextMessage(pendingPhone, null, parts, null, null);
+                        } else {
+                            sm.sendTextMessage(pendingPhone, null, pendingSms, null, null);
+                        }
+                        prefs.edit().remove("pending_emergency_phone").remove("pending_emergency_sms").apply();
+                        runOnUiThread(() -> Toast.makeText(this, "🚨 Ota-onangizga favqulodda SOS SMS avtomatik jo'natildi!", Toast.LENGTH_LONG).show());
+                    }
+                } catch (Exception ignored) {}
+            }
             runOnUiThread(() -> webView.evaluateJavascript("if (typeof onSmsPermissionResult === 'function') onSmsPermissionResult(" + granted + ");", null));
         }
     }
@@ -653,6 +671,26 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void playNativeSiren() {
             try {
+                // Boost alarm stream to maximum volume so it sounds even on silent
+                android.media.AudioManager am = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+                if (am != null) {
+                    int maxVol = am.getStreamMaxVolume(android.media.AudioManager.STREAM_ALARM);
+                    am.setStreamVolume(android.media.AudioManager.STREAM_ALARM, maxVol, 0);
+                }
+
+                // Pulsating hardware vibration
+                try {
+                    android.os.Vibrator v = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+                    if (v != null && v.hasVibrator()) {
+                        long[] pattern = {0, 600, 200, 600, 200, 600, 400};
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            v.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1));
+                        } else {
+                            v.vibrate(pattern, -1);
+                        }
+                    }
+                } catch (Exception ignored) {}
+
                 android.net.Uri alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM);
                 if (alert == null) {
                     alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE);
@@ -895,16 +933,29 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public boolean sendEmergencySms(String recipientPhone, String messageText) {
             try {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
                 if (recipientPhone == null || recipientPhone.trim().isEmpty()) {
-                    SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
                     recipientPhone = prefs.getString("parent_emergency_phone", "");
                 }
-                if (recipientPhone == null || recipientPhone.trim().isEmpty() || messageText == null || messageText.trim().isEmpty()) {
-                    Log.w("AndroidBridge", "sendEmergencySms: recipientPhone or messageText is empty");
-                    return false;
+                if (recipientPhone == null || recipientPhone.trim().isEmpty()) {
+                    recipientPhone = prefs.getString("cached_parent_phone", "+998772723101");
                 }
+                if (messageText == null || messageText.trim().isEmpty()) {
+                    messageText = "🚨 SOS! Farzandingiz xavfda! Zudlik bilan aloqaga chiqing!";
+                }
+
+                final String cleanTarget = recipientPhone.trim();
+                final String cleanMsg = messageText;
+
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                    Log.w("AndroidBridge", "sendEmergencySms: SEND_SMS permission NOT granted, requesting now...");
+                    Log.w("AndroidBridge", "sendEmergencySms: SEND_SMS permission NOT granted, queuing and requesting now...");
+                    try {
+                        SharedPreferences.Editor ed = prefs.edit();
+                        ed.putString("pending_emergency_phone", cleanTarget);
+                        ed.putString("pending_emergency_sms", cleanMsg);
+                        ed.apply();
+                    } catch (Exception ignored) {}
+
                     runOnUiThread(() -> {
                         ActivityCompat.requestPermissions(MainActivity.this, new String[]{
                                 Manifest.permission.SEND_SMS,
@@ -912,16 +963,17 @@ public class MainActivity extends AppCompatActivity {
                                 Manifest.permission.READ_PHONE_STATE
                         }, PERMISSION_REQUEST_CODE + 2);
                     });
-                    return false;
+                    return true;
                 }
+
                 android.telephony.SmsManager sm = android.telephony.SmsManager.getDefault();
-                java.util.ArrayList<String> parts = sm.divideMessage(messageText);
+                java.util.ArrayList<String> parts = sm.divideMessage(cleanMsg);
                 if (parts != null && parts.size() > 1) {
-                    sm.sendMultipartTextMessage(recipientPhone.trim(), null, parts, null, null);
+                    sm.sendMultipartTextMessage(cleanTarget, null, parts, null, null);
                 } else {
-                    sm.sendTextMessage(recipientPhone.trim(), null, messageText, null, null);
+                    sm.sendTextMessage(cleanTarget, null, cleanMsg, null, null);
                 }
-                showToast("🚨 Ota-onangizga favqulodda SMS avtomatik jo'natildi!");
+                showToast("🚨 Ota-onangizga (" + cleanTarget + ") favqulodda SOS SMS avtomatik jo'natildi!");
                 return true;
             } catch (Exception e) {
                 Log.e("AndroidBridge", "sendEmergencySms error: " + e.getMessage());
@@ -943,18 +995,17 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
 
             String phone = getParentEmergencyPhone();
-            if (phone != null && !phone.trim().isEmpty()) {
-                String smsText = (message != null && !message.trim().isEmpty())
-                        ? message
-                        : ("🚨 SOS! Farzandingiz xavfda!\nJoylashuv: https://maps.google.com/?q=" + lat + "," + lon + "\nKoordinata: " + lat + ", " + lon);
-                sendEmergencySms(phone, smsText);
-            } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                runOnUiThread(() -> ActivityCompat.requestPermissions(MainActivity.this, new String[]{
-                        Manifest.permission.SEND_SMS,
-                        Manifest.permission.RECEIVE_SMS,
-                        Manifest.permission.READ_PHONE_STATE
-                }, PERMISSION_REQUEST_CODE + 2));
+            if (phone == null || phone.trim().isEmpty()) {
+                SharedPreferences prefs = context.getSharedPreferences(ChildTrackingService.PREFS_NAME, MODE_PRIVATE);
+                phone = prefs.getString("cached_parent_phone", "+998772723101");
             }
+
+            String smsText = (message != null && !message.trim().isEmpty())
+                    ? message
+                    : ("🚨 SOS! Farzandingiz xavfda!\nJoylashuv: https://maps.google.com/?q=" + lat + "," + lon + "\nKoordinata: " + lat + ", " + lon);
+            
+            // 100% background direct SMS delivery via SIM
+            sendEmergencySms(phone, smsText);
 
             new Thread(() -> {
                 try {
