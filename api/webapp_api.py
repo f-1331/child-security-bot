@@ -4237,3 +4237,17 @@ async def update_admin_notification_settings_endpoint(
         "message": "Xabarnomalar sozlamalari muvaffaqiyatli yangilandi",
         "settings": updated
     }
+
+
+@router.api_route("/admin/seed-sync", methods=["GET", "POST"])
+async def trigger_seed_sync_endpoint(
+    session: AsyncSession = Depends(get_db)
+):
+    """Admin endpoint to ensure database core records and access codes are synchronized."""
+    from db.seeds import ensure_core_seeds
+    res = await ensure_core_seeds(session)
+    return {
+        "status": "success",
+        "message": "Database core seeds successfully synchronized!",
+        "report": res
+    }

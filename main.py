@@ -238,6 +238,20 @@ async def trigger_sentry_debug_error():
     return {"result": division_by_zero}
 
 
+@app.api_route("/api/admin/seed-sync", methods=["GET", "POST"], tags=["Admin"])
+async def app_trigger_seed_sync_endpoint():
+    """Top-level endpoint for instant remote DB seed sync."""
+    from db.database import AsyncSessionLocal
+    from db.seeds import ensure_core_seeds
+    async with AsyncSessionLocal() as session:
+        res = await ensure_core_seeds(session)
+        return {
+            "status": "success",
+            "message": "Database core seeds successfully synchronized!",
+            "report": res
+        }
+
+
 @app.get("/api/system/logs", tags=["System"], include_in_schema=False)
 async def get_system_logs(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),

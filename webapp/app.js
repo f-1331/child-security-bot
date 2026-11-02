@@ -1,16 +1,19 @@
 // =========================================================
 // PRODUCTION CONSTANTS & API BASE ROUTING
 // =========================================================
-const PRODUCTION_BACKEND_URL = "https://child-security-site.onrender.com";
+const PRODUCTION_BACKEND_URL = "https://child-security-bot.vercel.app";
 const PRODUCTION_WEBAPP_URL = "https://child-security-bot.vercel.app";
 
 function getApiBase() {
   if (typeof window !== "undefined" && window.location) {
     if (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null") {
-      return PRODUCTION_BACKEND_URL;
+      return "https://child-security-bot.vercel.app";
     }
-    if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return PRODUCTION_BACKEND_URL;
+    if (window.location.hostname.includes("vercel.app")) {
+      return "";
+    }
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "";
     }
   }
   return "";
@@ -79,7 +82,7 @@ const UniversalNativeBridge = {
 window.UniversalNativeBridge = UniversalNativeBridge;
 
 // Universal API Base Resolver (Supports Web, Telegram Mini App, and Native Android APK)
-const REMOTE_API_HOST = "https://child-security-site.onrender.com";
+const REMOTE_API_HOST = "https://child-security-bot.vercel.app";
 const _nativeFetch = window.fetch;
 window.fetch = function (resource, init) {
   if (typeof resource === "string" && resource.startsWith("/api/")) {

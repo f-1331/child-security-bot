@@ -184,6 +184,15 @@ async def init_db() -> None:
         except Exception as e:
             logger.debug(f"Auto-migration check notice: {e}")
 
+    # Ensure core production parent, child, links and policies exist unconditionally
+    try:
+        from db.seeds import ensure_core_seeds
+        async with AsyncSessionLocal() as session:
+            seed_report = await ensure_core_seeds(session)
+            logger.info(f"Database core seeds verified: {seed_report}")
+    except Exception as e:
+        logger.warning(f"Core seeds initialization notice: {e}")
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for FastAPI endpoints and standalone scripts."""

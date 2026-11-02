@@ -2329,6 +2329,12 @@ async def on_parent_school_mode_command(message: Message, bot: Optional[Bot] = N
     try:
         async with AsyncSessionLocal() as session:
             children = await crud.get_children_for_parent(session, parent_id)
+            if not children and parent_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+                from db.models import User
+                from sqlalchemy import select
+                all_ch = (await session.execute(select(User).where(User.role == "child"))).scalars().all()
+                children = list(all_ch)
+
             if not children:
                 await message.answer(
                     "⚠️ Sizga hali hech qanday farzand biriktirilmagan.",
@@ -6221,6 +6227,12 @@ async def parent_screen_time_handler(message: Message, bot: Optional[Bot] = None
                 return
 
             children = await crud.get_children_for_parent(session, user_id)
+            if not children and user_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+                from db.models import User
+                from sqlalchemy import select
+                all_ch = (await session.execute(select(User).where(User.role == "child"))).scalars().all()
+                children = list(all_ch)
+
             if not children:
                 await message.answer(
                     "📱 <b>Ilovalar va Ekran vaqti tahlili:</b>\n\n"
