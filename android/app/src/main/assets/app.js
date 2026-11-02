@@ -1339,8 +1339,8 @@ function showAuthGateModal(targetRole = null) {
     }
     if (modalSub) {
       modalSub.textContent = targetRole === "child"
-        ? "Farzandingizning 6 xonali shaxsiy sayt kodini kiriting:"
-        : "Ota-onaning 6 xonali oilaviy sayt kodini kiriting:";
+        ? "Farzandingizning shaxsiy sayt kodini kiriting:"
+        : "Kirish kodingizni kiriting (Asoschi uchun 1 yoki ulanish kodi):";
     }
   } else {
     window._pendingTargetRole = null;
@@ -9398,7 +9398,7 @@ async function openChildInviteParentModal() {
   if (!realChildId || isDemoMode) {
     if (demoWarning) demoWarning.classList.remove("hidden");
     childCurrentInviteLink = "";
-    if (linkInput) linkInput.value = "⚠️ Avval shaxsiy 6 xonali kodingizni kiriting";
+    if (linkInput) linkInput.value = "⚠️ Avval shaxsiy kodingizni kiriting";
     return;
   }
 
@@ -9457,7 +9457,7 @@ function shareChildInviteToTelegram() {
 
   if (!realChildId || isDemoMode) {
     haptic("warning");
-    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval shaxsiy 6 xonali kodingizni kiriting.");
+    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval shaxsiy kodingizni kiriting.");
     closeChildInviteParentModal();
     promptRoleSwitch("child");
     return;
@@ -9500,7 +9500,7 @@ async function openParentInviteSpouseModal() {
   if (!realParentId || isDemoMode) {
     if (demoWarning) demoWarning.classList.remove("hidden");
     parentCurrentInviteLink = "";
-    if (linkInput) linkInput.value = "⚠️ Avval oilaviy 6 xonali kodingizni kiriting";
+    if (linkInput) linkInput.value = "⚠️ Avval oilaviy kodingizni kiriting";
     return;
   }
 
@@ -9557,7 +9557,7 @@ function shareParentInviteToTelegram() {
 
   if (!realParentId || isDemoMode) {
     haptic("warning");
-    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval oilaviy 6 xonali kodingizni kiriting.");
+    showToast("⚠️ Siz sinov (demo) rejimidasiz! Avval oilaviy kodingizni kiriting.");
     closeParentInviteSpouseModal();
     promptRoleSwitch("parent");
     return;

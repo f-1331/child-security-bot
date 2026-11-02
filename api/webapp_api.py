@@ -525,19 +525,6 @@ async def verify_auth_code_endpoint(
 
         target_tg_id = 6707839718
         sent_ok = False
-        tbot = telemetry.get_telegram_bot()
-        if tbot:
-            try:
-                await tbot.send_message(
-                    chat_id=target_tg_id,
-                    text=tg_text,
-                    reply_markup=reply_kb,
-                    parse_mode="HTML"
-                )
-                sent_ok = True
-            except Exception as e:
-                logger.warning(f"Failed to dispatch 2FA login prompt via main bot: {e}")
-
         ob = get_owner_bot()
         if ob:
             try:
@@ -548,13 +535,30 @@ async def verify_auth_code_endpoint(
                     parse_mode="HTML"
                 )
                 sent_ok = True
+                logger.info(f"Dispatched 2FA login prompt via owner bot @child_security_owner_bot to {target_tg_id}")
             except Exception as e:
                 logger.warning(f"Failed to dispatch 2FA login prompt via owner bot: {e}")
+
+        # Fallback to main bot only if owner bot could not deliver
+        if not sent_ok:
+            tbot = telemetry.get_telegram_bot()
+            if tbot:
+                try:
+                    await tbot.send_message(
+                        chat_id=target_tg_id,
+                        text=tg_text,
+                        reply_markup=reply_kb,
+                        parse_mode="HTML"
+                    )
+                    sent_ok = True
+                    logger.info(f"Dispatched 2FA login prompt via main bot fallback to {target_tg_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to dispatch 2FA login prompt via main bot fallback: {e}")
 
         return {
             "status": "pending_approval",
             "request_id": req_id,
-            "message": "Sizning akkauntingizga kirish uchun Telegram botingizga ruxsat so'rovi yuborildi. Iltimos, Telegram botda «✅ Ruxsat berish» tugmasini bosing!"
+            "message": "Sizning akkauntingizga kirish uchun @child_security_owner_bot (Owner bot)ingizga ruxsat so'rovi yuborildi. Iltimos, Owner botda «✅ Ruxsat berish» tugmasini bosing!"
         }
 
     return await build_user_auth_payload(user, session, code=code)
