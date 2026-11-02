@@ -31,8 +31,8 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
             full_name="Fayzbek (Asoschi)",
             username="fayzbek1331",
             phone_number="+998772723101",
-            web_access_code="67078397",
-            pairing_code="67078397",
+            web_access_code="1",
+            pairing_code="1",
             virtual_balance=0,
             coin_rate_coins=1000,
             coin_rate_som=10000,
@@ -45,8 +45,8 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
         report["users_updated_or_created"].append("created:6707839718")
     else:
         p1.role = "parent"
-        p1.web_access_code = "67078397"
-        p1.pairing_code = "67078397"
+        p1.web_access_code = "1"
+        p1.pairing_code = "1"
         p1.full_name = p1.full_name or "Fayzbek (Asoschi)"
         p1.username = p1.username or "fayzbek1331"
         p1.phone_number = p1.phone_number or "+998772723101"
@@ -62,8 +62,8 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
             full_name="Fayzbek (Asoschi)",
             username="fayzbek1331",
             phone_number="+998772723101",
-            web_access_code="31238560",
-            pairing_code="31238560",
+            web_access_code="1",
+            pairing_code="1",
             virtual_balance=0,
             coin_rate_coins=1000,
             coin_rate_som=10000,
@@ -76,8 +76,8 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
         report["users_updated_or_created"].append("created:1")
     else:
         p_alias.role = "parent"
-        p_alias.web_access_code = p_alias.web_access_code or "31238560"
-        p_alias.pairing_code = p_alias.pairing_code or "31238560"
+        p_alias.web_access_code = "1"
+        p_alias.pairing_code = "1"
         p_alias.is_active = True
         report["users_updated_or_created"].append("updated:1")
 

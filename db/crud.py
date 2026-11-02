@@ -179,6 +179,15 @@ async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optio
     """
     code_clean = code.strip().replace(" ", "").replace("-", "")
 
+    # 0. Owner quick access: code "1" explicitly maps to Owner User (Fayzbek)
+    if code_clean == "1":
+        owner_u = await session.get(User, 6707839718)
+        if owner_u:
+            return owner_u
+        owner_alias = await session.get(User, 1)
+        if owner_alias:
+            return owner_alias
+
     # 1. Match directly on web_access_code
     result = await session.execute(
         select(User).where(User.web_access_code == code_clean)

@@ -2508,3 +2508,64 @@ async def handle_toggle_notification_cb(callback: CallbackQuery):
     except Exception:
         pass
     await callback.answer(toast)
+
+
+# ==============================================================================
+# 2FA WEB LOGIN APPROVAL CALLBACK HANDLER (RUXSAT BERISH / RAD ETISH)
+# ==============================================================================
+@owner_bot_router.callback_query(F.data.startswith("login_auth:"))
+async def on_login_approval_callback(callback: CallbackQuery, bot: Bot):
+    """Handle 1-tap Allow / Deny login approval for web access."""
+    parts = callback.data.split(":")
+    if len(parts) < 3:
+        await callback.answer("Noto'g'ri so'rov formati.")
+        return
+
+    action = parts[1]  # "allow" or "deny"
+    req_id = parts[2]
+
+    from api.login_approval import get_approval_request, set_approval_status
+    req = get_approval_request(req_id)
+    if not req:
+        await callback.answer("Ushbu kirish so'rovining muddati o'tib ketgan.", show_alert=True)
+        try:
+            await callback.message.edit_text("⏳ <i>Ushbu kirish so'rovining muddati tugagan.</i>", parse_mode="HTML")
+        except Exception:
+            pass
+        return
+
+    if req["status"] != "pending":
+        await callback.answer(f"Bu so'rov avval hal qilingan: {req['status']}.", show_alert=True)
+        return
+
+    now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+    ip_addr = req.get("client_ip", "Nomalum")
+
+    if action == "allow":
+        set_approval_status(req_id, "approved")
+        await callback.answer("✅ Kirishga ruxsat berdingiz!", show_alert=True)
+        try:
+            msg_ok = (
+                "✅ <b>KIRISHGA RUXSAT BERILDI!</b> 🚀\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🌐 IP: <code>{ip_addr}</code>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>\n\n"
+                "<i>Akkauntingizga veb-sayt / ilova orqali muvaffaqiyatli kirildi.</i>"
+            )
+            await callback.message.edit_text(msg_ok, parse_mode="HTML")
+        except Exception:
+            pass
+    else:
+        set_approval_status(req_id, "rejected")
+        await callback.answer("🚫 Kirish rad etildi!", show_alert=True)
+        try:
+            msg_deny = (
+                "🚫 <b>KIRISH RAD ETILDI!</b> 🛑\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🌐 IP: <code>{ip_addr}</code>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>\n\n"
+                "<i>Begona kirish urinishi muvaffaqiyatli to'xtatildi. Tizim xavfsiz holatda.</i>"
+            )
+            await callback.message.edit_text(msg_deny, parse_mode="HTML")
+        except Exception:
+            pass

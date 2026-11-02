@@ -1265,6 +1265,13 @@ async function generateWebCodeAction() {
     });
 
     const data = await res.json();
+
+    if (data && data.status === "pending_approval") {
+      showPendingApprovalModal(data.request_id, data.message);
+      startApprovalPolling(data.request_id, code);
+      return true;
+    }
+
     if (!res.ok || data.status !== "success") {
       throw new Error(data.detail || "Kod yaratishda xatolik yuz berdi.");
     }
@@ -1398,9 +1405,9 @@ async function submitAuthCode() {
   const errorMsg = document.getElementById("authErrorMsg");
   const btn = document.getElementById("btnSubmitAuthCode");
 
-  if (!code || code.length < 4) {
+  if (!code || code.length < 1) {
     if (errorText) errorText.classList.remove("hidden");
-    if (errorMsg) errorMsg.textContent = "Iltimos, 6 xonali kodni kiriting.";
+    if (errorMsg) errorMsg.textContent = "Iltimos, kirish kodini kiriting.";
     return;
   }
 

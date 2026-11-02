@@ -494,7 +494,108 @@ async def verify_auth_code_endpoint(
         )
 
     rate_limiter.reset_auth_failures(client_ip)
+
+    # 2FA Login Approval Check for Owner (User 6707839718, User 1) or when code is "1"
+    if user.id in (6707839718, 1) or code == "1":
+        from api.login_approval import create_approval_request
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+        ua = request.headers.get("user-agent", "Brauzer / Mobil ilova")
+        device_type = "📱 Telefon" if any(w in ua for w in ["Mobile", "Android", "iPhone"]) else "💻 Kompyuter"
+        req_id = create_approval_request(user.id, code, client_ip, ua)
+        now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M, %d.%m.%Y")
+
+        tg_text = (
+            "🔐 <b>DIQQAT: AKKAUNTINGIZGA KIRISH SO'ROVI!</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>Akkaunt:</b> {html.escape(user.full_name or 'Asoschi')}\n"
+            f"🌐 <b>IP manzil:</b> <code>{client_ip}</code>\n"
+            f"📱 <b>Qurilma:</b> {device_type}\n"
+            f"🕒 <b>Vaqt:</b> {now_time}\n"
+            f"🔑 <b>Kiritilgan kod:</b> <code>{code}</code>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "❓ <b>Sizning akkauntingizga veb-sayt / ilova orqali kirishmoqchi. Ruxsat berasizmi?</b>"
+        )
+        reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Ruxsat berish", callback_data=f"login_auth:allow:{req_id}"),
+                InlineKeyboardButton(text="❌ Rad etish", callback_data=f"login_auth:deny:{req_id}")
+            ]
+        ])
+
+        target_tg_id = 6707839718
+        sent_ok = False
+        tbot = telemetry.get_telegram_bot()
+        if tbot:
+            try:
+                await tbot.send_message(
+                    chat_id=target_tg_id,
+                    text=tg_text,
+                    reply_markup=reply_kb,
+                    parse_mode="HTML"
+                )
+                sent_ok = True
+            except Exception as e:
+                logger.warning(f"Failed to dispatch 2FA login prompt via main bot: {e}")
+
+        ob = get_owner_bot()
+        if ob:
+            try:
+                await ob.send_message(
+                    chat_id=target_tg_id,
+                    text=tg_text,
+                    reply_markup=reply_kb,
+                    parse_mode="HTML"
+                )
+                sent_ok = True
+            except Exception as e:
+                logger.warning(f"Failed to dispatch 2FA login prompt via owner bot: {e}")
+
+        return {
+            "status": "pending_approval",
+            "request_id": req_id,
+            "message": "Sizning akkauntingizga kirish uchun Telegram botingizga ruxsat so'rovi yuborildi. Iltimos, Telegram botda «✅ Ruxsat berish» tugmasini bosing!"
+        }
+
     return await build_user_auth_payload(user, session, code=code)
+
+
+@router.get("/auth/approval-status")
+async def check_login_approval_status_endpoint(
+    request_id: str = Query(...),
+    session: AsyncSession = Depends(get_db)
+):
+    """Check whether Telegram bot user has approved or denied the login request."""
+    from api.login_approval import get_approval_request
+    req = get_approval_request(request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Kirish so'rovi topilmadi yoki muddati tugagan.")
+
+    st = req.get("status")
+    if st == "pending":
+        return {
+            "status": "pending",
+            "message": "Telegram botingizdan tasdiqlash kutilmoqda..."
+        }
+    elif st == "rejected":
+        return {
+            "status": "rejected",
+            "message": "Akkaunt egasi tomonidan kirish rad etildi!"
+        }
+    elif st == "expired":
+        return {
+            "status": "expired",
+            "message": "Tasdiqlash vaqti tugadi (120 soniya). Iltimos, qaytadan urinib ko'ring."
+        }
+    elif st == "approved":
+        # Successfully authorized! Generate full authenticated session
+        user_id = req["user_id"]
+        user = await crud.get_user(session, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Foydalanuvchi topilmadi.")
+        return await build_user_auth_payload(user, session, code=req.get("code", "1"))
+
+    return {"status": "pending"}
 
 
 @router.post("/auth/generate-code")
