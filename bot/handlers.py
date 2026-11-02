@@ -6716,6 +6716,15 @@ async def on_owner_main_callback(callback: CallbackQuery, bot: Bot, state: FSMCo
             )
             await callback.message.edit_text(text, reply_markup=get_reset_options_keyboard(), parse_mode="HTML")
             await callback.answer()
+        elif action == "notifications":
+            settings = await crud.get_notification_settings(session)
+            from owner_bot.handlers import format_notification_settings_html
+            from owner_bot.keyboards import get_notifications_settings_inline_keyboard
+            html_text = format_notification_settings_html(settings)
+            kb = get_notifications_settings_inline_keyboard(settings)
+            await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+            await callback.answer()
+            return
         elif action == "close":
             user = await crud.get_user(session, user_id)
             role = user.role if user else "parent"
@@ -6756,6 +6765,68 @@ async def on_owner_switch_role_callback(callback: CallbackQuery):
             parse_mode="HTML"
         )
     await callback.answer("Rol muvaffaqiyatli o'zgartirildi!")
+
+
+@router.message(F.text.in_({"🔔 Xabarnomalar Boshqaruvi", "/notifications", "/xabarlar"}))
+async def on_main_bot_notifications_cmd(message: Message):
+    if not is_bot_owner(message.from_user.id, message.from_user.username):
+        return
+    async with AsyncSessionLocal() as session:
+        notif_settings = await crud.get_notification_settings(session)
+    from owner_bot.handlers import format_notification_settings_html
+    from owner_bot.keyboards import get_notifications_settings_inline_keyboard
+    html_text = format_notification_settings_html(notif_settings)
+    kb = get_notifications_settings_inline_keyboard(notif_settings)
+    await message.answer(html_text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("toggle_notif:"))
+async def on_main_bot_toggle_notification_cb(callback: CallbackQuery):
+    if not is_bot_owner(callback.from_user.id, callback.from_user.username):
+        await callback.answer("⛔ Ruxsat berilmagan!", show_alert=True)
+        return
+    action = callback.data.split(":")[1]
+    async with AsyncSessionLocal() as session:
+        if action == "parents":
+            await crud.toggle_notification_setting("notify_parents", session)
+            toast = "👨‍👩‍👧 Ota-ona xabarlari o'zgartirildi!"
+        elif action == "children":
+            await crud.toggle_notification_setting("notify_children", session)
+            toast = "👦 Bola signallari o'zgartirildi!"
+        elif action == "owner":
+            await crud.toggle_notification_setting("notify_owner", session)
+            toast = "👑 Owner nusxalari o'zgartirildi!"
+        elif action == "all_on":
+            await crud.set_all_notification_settings(True, session)
+            toast = "🟢 Barcha xabarnomalar yoqildi!"
+        elif action == "all_off":
+            await crud.set_all_notification_settings(False, session)
+            toast = "🔴 Barcha xabarnomalar o'chirildi!"
+        elif action == "back_owner":
+            from bot.keyboards import get_owner_panel_inline_keyboard
+            text = (
+                "👑 <b>ASOSCHI (OWNER) BOSHQARUV PANELI</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Asoschi: <b>@{settings.OWNER_USERNAME}</b>\n\n"
+                "<i>Quyidagi tugmalar orqali platformani boshqarishingiz mumkin:</i>"
+            )
+            await callback.message.edit_text(text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+            await callback.answer()
+            return
+        else:
+            toast = "Yangilandi!"
+
+        notif_settings = await crud.get_notification_settings(session)
+
+    from owner_bot.handlers import format_notification_settings_html
+    from owner_bot.keyboards import get_notifications_settings_inline_keyboard
+    html_text = format_notification_settings_html(notif_settings)
+    kb = get_notifications_settings_inline_keyboard(notif_settings)
+    try:
+        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer(toast)
 
 
 @router.message(OwnerActionState.waiting_for_inspect_query, F.text)

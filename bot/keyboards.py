@@ -724,6 +724,9 @@ def get_owner_panel_inline_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="👥 Adminlarni boshqarish", callback_data="own_main:admins"),
+                InlineKeyboardButton(text="🔔 Xabarnomalar nazorati", callback_data="own_main:notifications"),
+            ],
+            [
                 InlineKeyboardButton(text="🔄 Barchada botni reset qilish", callback_data="own_main:reset_menu"),
             ],
             [

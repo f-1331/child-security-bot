@@ -8840,6 +8840,24 @@ async function sendChildLiveTelemetry(childId, payload) {
       body: JSON.stringify(payload)
     });
     if (res.ok) {
+      try {
+        const resData = await res.json();
+        if (resData) {
+          if (resData.policy && typeof updateSchoolModeUI === 'function') {
+            updateSchoolModeUI(resData.policy);
+          }
+          const cmds = resData.commands || resData.notifications;
+          if (Array.isArray(cmds)) {
+            cmds.forEach(cmd => {
+              if (typeof handleIncomingWebSocketMessage === 'function') {
+                handleIncomingWebSocketMessage(cmd);
+              }
+            });
+          }
+        }
+      } catch (pollErr) {
+        console.warn('Telemetry response parse warning:', pollErr);
+      }
       // Successfully sent online: flush any pending offline-buffered points
       flushOfflineTelemetryBatch(targetId);
       return;
@@ -8878,6 +8896,19 @@ async function flushOfflineTelemetryBatch(childId) {
       body: JSON.stringify({ points: queue })
     });
     if (res.ok) {
+      try {
+        const batchData = await res.json();
+        if (batchData) {
+          const cmds = batchData.commands || batchData.notifications;
+          if (Array.isArray(cmds)) {
+            cmds.forEach(cmd => {
+              if (typeof handleIncomingWebSocketMessage === 'function') {
+                handleIncomingWebSocketMessage(cmd);
+              }
+            });
+          }
+        }
+      } catch (bErr) {}
       localStorage.removeItem(key);
       console.log(`Successfully synced ${queue.length} offline GPS points.`);
     }
