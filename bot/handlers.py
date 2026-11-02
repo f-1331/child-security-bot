@@ -7386,157 +7386,6 @@ async def on_child_phone_entered(message: Message, state: FSMContext):
 
 
 # ==============================================================================
-# FALLBACK TEXT HANDLER WITH TWO-WAY WALKIE-TALKIE DISPATCH
-# ==============================================================================
-@router.message(StateFilter(None), F.text)
-async def fallback_text_handler(message: Message, bot: Bot):
-    """
-    Intelligent two-way text dispatcher:
-    - If Owner (@fayzbek1331) -> routes owner commands & panels
-    - If Child -> forwards message INSTANTLY to all linked parents (Telegram + WebApp WebSocket)
-    - If Parent -> forwards message INSTANTLY to child (Telegram + WebApp WebSocket)
-    """
-    user_id = message.from_user.id
-    raw_text = (message.text or "").strip()
-
-    # 1. Check if Owner command was sent
-    if is_bot_owner(user_id, message.from_user.username):
-        if raw_text in {"👑 Asoschi (Owner) Boshqaruv", "/owner", "/panel", "/stats", "📊 Umumiy Statistika", "Statistika", "statistika"}:
-            await on_owner_dashboard_command(message, bot)
-            return
-
-    async with AsyncSessionLocal() as session:
-        user = await crud.get_user(session, user_id)
-        if not user or not user.role:
-            await message.answer(
-                "Iltimos, avval rolingizni tanlang:",
-                reply_markup=get_role_selection_keyboard()
-            )
-            return
-
-        now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
-        safe_text = html.escape(raw_text)
-
-        # 2. CHILD SENDS TEXT -> Deliver to parents
-        if user.role == "child":
-            parents = await crud.get_parents_for_child(session, user_id)
-            if not parents:
-                await message.answer(
-                    "⚠️ <b>Siz hali birorta ham ota-onaga ulanmagansiz.</b>\n\n"
-                    "Ota-onangizga ulanish uchun <b>«👨‍👩‍👧 Ota-onamni taklif qilish»</b> tugmasini bosing va kodni bering.",
-                    reply_markup=get_child_main_keyboard(user_id),
-                    parse_mode="HTML"
-                )
-                return
-
-            child_name = html.escape(user.full_name or "Farzand")
-            latest_loc = await crud.get_latest_location(session, user_id)
-            loc_str = ""
-            if latest_loc and latest_loc.latitude and latest_loc.longitude:
-                maps_url = f"https://maps.google.com/?q={latest_loc.latitude:.6f},{latest_loc.longitude:.6f}"
-                batt_str = f" (🔋 {latest_loc.battery_level}%)" if latest_loc.battery_level is not None else ""
-                loc_str = f"\n📍 <b>Joylashuv:</b> <a href=\"{maps_url}\">Xaritada ochish</a>{batt_str}"
-
-            parent_alert = (
-                f"💬 <b>FARZANDINGIZDAN TEZKOR XABAR!</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 Farzand: <b>{child_name}</b>\n"
-                f"💬 Xabar: <b>«{safe_text}»</b>\n"
-                f"🕒 Vaqt: <b>{now_time}</b>"
-                f"{loc_str}\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>Javob berish uchun pastdagi tugmani bosing:</i>"
-            )
-            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"p_reply:{user_id}")],
-                [InlineKeyboardButton(text="📍 Xaritada ko'rish", callback_data=f"child_view:{user_id}")]
-            ])
-
-            for p in parents:
-                try:
-                    await bot.send_message(chat_id=p.id, text=parent_alert, reply_markup=reply_kb, parse_mode="HTML")
-                except Exception as e:
-                    logger.warning(f"Failed to forward child message to parent {p.id}: {e}")
-
-            try:
-                from api.webapp_api import ws_manager
-                for p in parents:
-                    await ws_manager.send_to_user(p.id, {
-                        "type": "child_direct_message",
-                        "child_id": user_id,
-                        "child_name": user.full_name or "Farzand",
-                        "text": raw_text,
-                        "time": now_time
-                    })
-            except Exception:
-                pass
-
-            await message.answer(
-                f"✅ <b>Xabaringiz ota-onangizga darhol yetkazildi!</b> 🚀\n\n"
-                f"💬 <i>«{safe_text}»</i>\n\n"
-                f"Ota-onangiz javob yozishi bilan bu yerda ko'rinadi.",
-                reply_markup=get_child_main_keyboard(user_id),
-                parse_mode="HTML"
-            )
-            return
-
-        # 3. PARENT SENDS TEXT -> Deliver to child
-        if user.role == "parent":
-            children = await crud.get_children_for_parent(session, user_id)
-            if not children:
-                await message.answer(
-                    "⚠️ <b>Sizga hali farzand biriktirilmagan.</b>\n\n"
-                    "Farzand telefonini ulash uchun <b>«➕ Farzand ulash (Kodi)»</b> tugmasini bosing.",
-                    reply_markup=get_parent_main_keyboard(user_id),
-                    parse_mode="HTML"
-                )
-                return
-
-            parent_name = html.escape(user.full_name or "Ota-onangiz")
-            child_alert = (
-                f"💬 <b>OTA-ONANGIZDAN TEZKOR XABAR!</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👤 Yuboruvchi: <b>{parent_name}</b>\n"
-                f"💬 Xabar: <b>«{safe_text}»</b>\n"
-                f"🕒 Vaqt: <b>{now_time}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"<i>Javob yozish uchun to'g'ridan-to'g'ri botga yozing yoki pastdagi tugmani bosing:</i>"
-            )
-            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"c_reply:{user_id}")]
-            ])
-
-            for ch in children:
-                try:
-                    await bot.send_message(chat_id=ch.id, text=child_alert, reply_markup=reply_kb, parse_mode="HTML")
-                except Exception as e:
-                    logger.warning(f"Failed to forward parent message to child {ch.id}: {e}")
-
-            try:
-                from api.webapp_api import ws_manager
-                for ch in children:
-                    await ws_manager.send_to_user(ch.id, {
-                        "type": "parent_direct_message",
-                        "parent_id": user_id,
-                        "parent_name": user.full_name or "Ota-onangiz",
-                        "text": raw_text,
-                        "time": now_time
-                    })
-            except Exception:
-                pass
-
-            target_names = ", ".join([html.escape(c.full_name or "Farzand") for c in children])
-            await message.answer(
-                f"✅ <b>Xabaringiz {target_names}ga darhol yetkazildi!</b> 🚀\n\n"
-                f"💬 <i>«{safe_text}»</i>",
-                reply_markup=get_parent_main_keyboard(user_id),
-                parse_mode="HTML"
-            )
-            return
-
-
-
-# ==============================================================================
 # "ZVUK VOKRUG" / AMBIENT SOUND MONITORING HANDLERS (KILLER BENCHMARK FEATURE)
 # ==============================================================================
 
@@ -7723,6 +7572,164 @@ async def on_do_siren_cb(callback: CallbackQuery):
         await callback.answer("Baland signal yuborildi!", show_alert=True)
     except Exception as e:
         await callback.answer(f"Xatolik: {e}", show_alert=True)
+
+
+# ==============================================================================
+# FALLBACK TEXT HANDLER WITH TWO-WAY WALKIE-TALKIE DISPATCH
+# ==============================================================================
+@router.message(StateFilter(None), F.text)
+async def fallback_text_handler(message: Message, bot: Bot):
+    """
+    Intelligent two-way text dispatcher:
+    - If Owner (@fayzbek1331) -> routes owner commands & panels
+    - If Child -> forwards message INSTANTLY to all linked parents (Telegram + WebApp WebSocket)
+    - If Parent -> forwards message INSTANTLY to child (Telegram + WebApp WebSocket)
+    """
+    user_id = message.from_user.id
+    raw_text = (message.text or "").strip()
+
+    # Ignore system command buttons so they are never forwarded as child messages
+    if raw_text in {
+        "🎙 Atrof ovozi («Звук вокруг»)", "Atrof ovozi («Звук вокруг»)", "🎙 Atrof ovozi", "Atrof ovozi", "Звук вокруг",
+        "🚨 Masofaviy Siren (Qidiruv)", "Masofaviy Siren (Qidiruv)", "🚨 Baland Siren (Qidiruv)", "Baland Siren (Qidiruv)",
+        "Siren", "Signal"
+    }:
+        return
+
+    # 1. Check if Owner command was sent
+    if is_bot_owner(user_id, message.from_user.username):
+        if raw_text in {"👑 Asoschi (Owner) Boshqaruv", "/owner", "/panel", "/stats", "📊 Umumiy Statistika", "Statistika", "statistika"}:
+            await on_owner_dashboard_command(message, bot)
+            return
+
+    async with AsyncSessionLocal() as session:
+        user = await crud.get_user(session, user_id)
+        if not user or not user.role:
+            await message.answer(
+                "Iltimos, avval rolingizni tanlang:",
+                reply_markup=get_role_selection_keyboard()
+            )
+            return
+
+        now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M")
+        safe_text = html.escape(raw_text)
+
+        # 2. CHILD SENDS TEXT -> Deliver to parents
+        if user.role == "child":
+            parents = await crud.get_parents_for_child(session, user_id)
+            if not parents:
+                await message.answer(
+                    "⚠️ <b>Siz hali birorta ham ota-onaga ulanmagansiz.</b>\n\n"
+                    "Ota-onangizga ulanish uchun <b>«👨‍👩‍👧 Ota-onamni taklif qilish»</b> tugmasini bosing va kodni bering.",
+                    reply_markup=get_child_main_keyboard(user_id),
+                    parse_mode="HTML"
+                )
+                return
+
+            child_name = html.escape(user.full_name or "Farzand")
+            latest_loc = await crud.get_latest_location(session, user_id)
+            loc_str = ""
+            if latest_loc and latest_loc.latitude and latest_loc.longitude:
+                maps_url = f"https://maps.google.com/?q={latest_loc.latitude:.6f},{latest_loc.longitude:.6f}"
+                batt_str = f" (🔋 {latest_loc.battery_level}%)" if latest_loc.battery_level is not None else ""
+                loc_str = f"\n📍 <b>Joylashuv:</b> <a href=\"{maps_url}\">Xaritada ochish</a>{batt_str}"
+
+            parent_alert = (
+                f"💬 <b>FARZANDINGIZDAN TEZKOR XABAR!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Farzand: <b>{child_name}</b>\n"
+                f"💬 Xabar: <b>«{safe_text}»</b>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>"
+                f"{loc_str}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Javob berish uchun pastdagi tugmani bosing:</i>"
+            )
+            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"p_reply:{user_id}")],
+                [InlineKeyboardButton(text="📍 Xaritada ko'rish", callback_data=f"child_view:{user_id}")]
+            ])
+
+            for p in parents:
+                try:
+                    await bot.send_message(chat_id=p.id, text=parent_alert, reply_markup=reply_kb, parse_mode="HTML")
+                except Exception as e:
+                    logger.warning(f"Failed to forward child message to parent {p.id}: {e}")
+
+            try:
+                from api.webapp_api import ws_manager
+                for p in parents:
+                    await ws_manager.send_to_user(p.id, {
+                        "type": "child_direct_message",
+                        "child_id": user_id,
+                        "child_name": user.full_name or "Farzand",
+                        "text": raw_text,
+                        "time": now_time
+                    })
+            except Exception:
+                pass
+
+            await message.answer(
+                f"✅ <b>Xabaringiz ota-onangizga darhol yetkazildi!</b> 🚀\n\n"
+                f"💬 <i>«{safe_text}»</i>\n\n"
+                f"Ota-onangiz javob yozishi bilan bu yerda ko'rinadi.",
+                reply_markup=get_child_main_keyboard(user_id),
+                parse_mode="HTML"
+            )
+            return
+
+        # 3. PARENT SENDS TEXT -> Deliver to child
+        if user.role == "parent":
+            children = await crud.get_children_for_parent(session, user_id)
+            if not children:
+                await message.answer(
+                    "⚠️ <b>Sizga hali farzand biriktirilmagan.</b>\n\n"
+                    "Farzand telefonini ulash uchun <b>«➕ Farzand ulash (Kodi)»</b> tugmasini bosing.",
+                    reply_markup=get_parent_main_keyboard(user_id),
+                    parse_mode="HTML"
+                )
+                return
+
+            parent_name = html.escape(user.full_name or "Ota-onangiz")
+            child_alert = (
+                f"💬 <b>OTA-ONANGIZDAN TEZKOR XABAR!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Yuboruvchi: <b>{parent_name}</b>\n"
+                f"💬 Xabar: <b>«{safe_text}»</b>\n"
+                f"🕒 Vaqt: <b>{now_time}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Javob yozish uchun to'g'ridan-to'g'ri botga yozing yoki pastdagi tugmani bosing:</i>"
+            )
+            reply_kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✍️ Javob yozish", callback_data=f"c_reply:{user_id}")]
+            ])
+
+            for ch in children:
+                try:
+                    await bot.send_message(chat_id=ch.id, text=child_alert, reply_markup=reply_kb, parse_mode="HTML")
+                except Exception as e:
+                    logger.warning(f"Failed to forward parent message to child {ch.id}: {e}")
+
+            try:
+                from api.webapp_api import ws_manager
+                for ch in children:
+                    await ws_manager.send_to_user(ch.id, {
+                        "type": "parent_direct_message",
+                        "parent_id": user_id,
+                        "parent_name": user.full_name or "Ota-onangiz",
+                        "text": raw_text,
+                        "time": now_time
+                    })
+            except Exception:
+                pass
+
+            target_names = ", ".join([html.escape(c.full_name or "Farzand") for c in children])
+            await message.answer(
+                f"✅ <b>Xabaringiz {target_names}ga darhol yetkazildi!</b> 🚀\n\n"
+                f"💬 <i>«{safe_text}»</i>",
+                reply_markup=get_parent_main_keyboard(user_id),
+                parse_mode="HTML"
+            )
+            return
 
 
 
