@@ -2180,6 +2180,8 @@ async def update_child_live_location_endpoint(
     except Exception:
         blocked_packages = []
 
+    pending_cmds = pending_child_notifications.pop(child_id, [])
+
     return {
         "status": "success",
         "child_id": child_id,
@@ -2193,7 +2195,9 @@ async def update_child_live_location_endpoint(
             "bedtime_start": getattr(policy, "bedtime_start", None),
             "bedtime_end": getattr(policy, "bedtime_end", None),
             "has_parent_pin": bool(policy.parent_pin_hash),
-        }
+        },
+        "commands": pending_cmds,
+        "notifications": pending_cmds
     }
 
 
@@ -2226,6 +2230,8 @@ async def update_child_batch_location_endpoint(
     except Exception:
         blocked_packages = []
 
+    pending_cmds = pending_child_notifications.pop(child_id, [])
+
     return {
         "status": "success",
         "child_id": child_id,
@@ -2239,7 +2245,9 @@ async def update_child_batch_location_endpoint(
             "bedtime_start": getattr(policy, "bedtime_start", None),
             "bedtime_end": getattr(policy, "bedtime_end", None),
             "has_parent_pin": bool(policy.parent_pin_hash),
-        }
+        },
+        "commands": pending_cmds,
+        "notifications": pending_cmds
     }
 
 
@@ -2585,6 +2593,76 @@ async def request_ambient_sound_endpoint(
     }
 
 
+async def send_audio_safely_to_telegram(
+    bot_inst,
+    chat_id: int,
+    file_path: Path,
+    caption: str,
+    duration: int = 20,
+    title: str = "Atrof ovozi («Звук вокруг»)"
+) -> bool:
+    """Send audio file to Telegram chat with format-aware dispatch and full multi-level fallback."""
+    if not bot_inst or not file_path.exists():
+        return False
+
+    ext = file_path.suffix.lower()
+
+    # 1. If format is OGG / OGA, prioritize native Telegram Voice Note
+    if ext in (".ogg", ".oga"):
+        try:
+            await bot_inst.send_voice(
+                chat_id=chat_id,
+                voice=FSInputFile(str(file_path)),
+                caption=caption,
+                duration=duration,
+                parse_mode="HTML"
+            )
+            return True
+        except Exception as ve:
+            logger.warning(f"send_voice direct attempt failed for {chat_id}: {ve}")
+
+    # 2. Try send_audio (renders native playable audio message in Telegram chat)
+    try:
+        await bot_inst.send_audio(
+            chat_id=chat_id,
+            audio=FSInputFile(str(file_path)),
+            caption=caption,
+            duration=duration,
+            title=title,
+            performer="Child Security",
+            parse_mode="HTML"
+        )
+        return True
+    except Exception as ae:
+        logger.warning(f"send_audio attempt failed for {chat_id}: {ae}")
+
+    # 3. Fallback to send_voice
+    try:
+        await bot_inst.send_voice(
+            chat_id=chat_id,
+            voice=FSInputFile(str(file_path)),
+            caption=caption,
+            duration=duration,
+            parse_mode="HTML"
+        )
+        return True
+    except Exception as ve2:
+        logger.warning(f"send_voice fallback failed for {chat_id}: {ve2}")
+
+    # 4. Final safety fallback: send_document (guaranteed to deliver the file to chat)
+    try:
+        await bot_inst.send_document(
+            chat_id=chat_id,
+            document=FSInputFile(str(file_path)),
+            caption=caption,
+            parse_mode="HTML"
+        )
+        return True
+    except Exception as de:
+        logger.error(f"send_document fallback failed for {chat_id}: {de}")
+        return False
+
+
 @router.post("/child/{child_id}/ambient-sound/upload")
 async def upload_ambient_sound_endpoint(
     child_id: int,
@@ -2673,33 +2751,53 @@ async def upload_ambient_sound_endpoint(
     notify_parents_allowed = await crud.is_notify_parents_enabled(session)
     notify_owner_allowed = await crud.is_notify_owner_enabled(session)
 
-    # Deliver to parents
-    delivered_count = 0
-    if parents and notify_parents_allowed and tbot:
-        for p in parents:
-            target_chat = 6707839718 if p.id in (1, 6707839718) else p.id
-            try:
-                await tbot.send_voice(
-                    chat_id=target_chat,
-                    voice=FSInputFile(str(file_path)),
-                    caption=caption,
-                    parse_mode="HTML"
-                )
-                delivered_count += 1
-            except Exception as e:
-                logger.error(f"Failed to send ambient voice to parent {p.id}: {e}")
+    clean_parent_id = None
+    if isinstance(parent_id, int) and parent_id > 0:
+        clean_parent_id = parent_id
+    elif isinstance(parent_id, str) and parent_id.isdigit():
+        clean_parent_id = int(parent_id)
 
-    # Deliver to Owner if enabled
-    if notify_owner_allowed and ob:
-        try:
-            await ob.send_voice(
-                chat_id=6707839718,
-                voice=FSInputFile(str(file_path)),
-                caption=f"👑 <b>[OWNER NUSXA]</b> " + caption,
-                parse_mode="HTML"
+    clean_duration = 20
+    if isinstance(duration_seconds, int) and duration_seconds > 0:
+        clean_duration = duration_seconds
+    elif isinstance(duration_seconds, str) and duration_seconds.isdigit():
+        clean_duration = int(duration_seconds)
+
+    # Determine recipient chats (parents + requester)
+    target_chats = set()
+    if notify_parents_allowed:
+        for p in parents:
+            target_chats.add(6707839718 if p.id in (1, 6707839718) else p.id)
+    if clean_parent_id:
+        target_chats.add(6707839718 if clean_parent_id in (1, 6707839718) else clean_parent_id)
+    if not target_chats:
+        target_chats.add(6707839718)
+
+    delivered_count = 0
+
+    if tbot:
+        for chat_id in target_chats:
+            ok = await send_audio_safely_to_telegram(
+                bot_inst=tbot,
+                chat_id=chat_id,
+                file_path=file_path,
+                caption=caption,
+                duration=clean_duration,
+                title=f"Atrof ovozi - {safe_cname}"
             )
-        except Exception as oe:
-            logger.warning(f"Failed to send ambient voice to owner: {oe}")
+            if ok:
+                delivered_count += 1
+
+    # Deliver to Owner copy if enabled and distinct
+    if notify_owner_allowed and ob and 6707839718 not in target_chats:
+        await send_audio_safely_to_telegram(
+            bot_inst=ob,
+            chat_id=6707839718,
+            file_path=file_path,
+            caption=f"👑 <b>[OWNER NUSXA]</b>\n" + caption,
+            duration=clean_duration,
+            title=f"[Owner] Atrof ovozi - {safe_cname}"
+        )
 
     # Broadcast to WebApp parents viewing live map
     try:

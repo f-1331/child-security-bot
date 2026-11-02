@@ -731,13 +731,18 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        @JavascriptInterface
         public void recordAmbientSound(final int durationSeconds, final String requestId) {
+            recordAmbientSound(durationSeconds, requestId, 0);
+        }
+
+        @JavascriptInterface
+        public void recordAmbientSound(final int durationSeconds, final String requestId, final long parentId) {
             try {
                 Intent serviceIntent = new Intent(context, ChildTrackingService.class);
                 serviceIntent.setAction("ACTION_RECORD_AMBIENT_SOUND");
                 serviceIntent.putExtra("duration_seconds", durationSeconds);
                 serviceIntent.putExtra("request_id", requestId);
+                serviceIntent.putExtra("parent_id", parentId);
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent);
                 } else {

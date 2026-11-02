@@ -177,7 +177,8 @@ public class ChildTrackingService extends Service implements LocationListener {
             if ("ACTION_RECORD_AMBIENT_SOUND".equals(intent.getAction())) {
                 int duration = intent.getIntExtra("duration_seconds", 20);
                 String reqId = intent.getStringExtra("request_id");
-                recordAndUploadAmbientSound(duration, reqId);
+                long parentId = intent.getLongExtra("parent_id", 0);
+                recordAndUploadAmbientSound(duration, reqId, parentId);
             }
 
             // Check for emergency Last Breath pulse from WatchdogReceiver
@@ -826,7 +827,8 @@ public class ChildTrackingService extends Service implements LocationListener {
                 if ("record_ambient_sound".equals(type)) {
                     int duration = cmd.optInt("duration_seconds", 20);
                     String reqId = cmd.optString("request_id", "");
-                    recordAndUploadAmbientSound(duration, reqId);
+                    long parentId = cmd.optLong("parent_id", 0);
+                    recordAndUploadAmbientSound(duration, reqId, parentId);
                 } else if ("remote_siren".equals(type)) {
                     triggerRemoteSirenLoud();
                 }
@@ -859,7 +861,7 @@ public class ChildTrackingService extends Service implements LocationListener {
         }
     }
 
-    private synchronized void recordAndUploadAmbientSound(final int durationSeconds, final String requestId) {
+    private synchronized void recordAndUploadAmbientSound(final int durationSeconds, final String requestId, final long parentId) {
         new Thread(() -> {
             java.io.File audioFile = null;
             android.media.MediaRecorder recorder = null;
@@ -892,7 +894,7 @@ public class ChildTrackingService extends Service implements LocationListener {
                 String serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL);
 
                 if (childId != null && !childId.trim().isEmpty() && audioFile.exists() && audioFile.length() > 0) {
-                    uploadAmbientAudioFile(serverUrl, childId, audioFile, duration, requestId);
+                    uploadAmbientAudioFile(serverUrl, childId, audioFile, duration, requestId, parentId);
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Failed native ambient sound recording: " + e.getMessage());
@@ -907,7 +909,7 @@ public class ChildTrackingService extends Service implements LocationListener {
         }).start();
     }
 
-    private void uploadAmbientAudioFile(String baseUrl, String childId, java.io.File audioFile, int duration, String requestId) {
+    private void uploadAmbientAudioFile(String baseUrl, String childId, java.io.File audioFile, int duration, String requestId, long parentId) {
         HttpURLConnection conn = null;
         try {
             String cleanBase = (baseUrl != null && !baseUrl.trim().isEmpty()) ? baseUrl.trim() : DEFAULT_SERVER_URL;
@@ -944,6 +946,15 @@ public class ChildTrackingService extends Service implements LocationListener {
                     writer.append("Content-Disposition: form-data; name=\"request_id\"").append(LINE_FEED);
                     writer.append("Content-Type: text/plain; charset=UTF-8").append(LINE_FEED);
                     writer.append(LINE_FEED).append(requestId).append(LINE_FEED);
+                    writer.flush();
+                }
+
+                // Parameter: parent_id
+                if (parentId > 0) {
+                    writer.append("--").append(boundary).append(LINE_FEED);
+                    writer.append("Content-Disposition: form-data; name=\"parent_id\"").append(LINE_FEED);
+                    writer.append("Content-Type: text/plain; charset=UTF-8").append(LINE_FEED);
+                    writer.append(LINE_FEED).append(String.valueOf(parentId)).append(LINE_FEED);
                     writer.flush();
                 }
 

@@ -7651,14 +7651,14 @@ async function loadAmbientSoundHistory() {
 // Child device ambient sound recorder (Web & Android Bridge)
 let isAmbientRecordingActive = false;
 
-async function startChildAmbientSoundRecording(durationSeconds, requestId) {
+async function startChildAmbientSoundRecording(durationSeconds, requestId, parentId) {
   if (isAmbientRecordingActive) return;
   const duration = (durationSeconds && durationSeconds > 0 && durationSeconds <= 60) ? durationSeconds : 20;
 
   // 1. If Native Android Bridge exists, delegate directly to native MediaRecorder
   if (window.AndroidBridge && typeof window.AndroidBridge.recordAmbientSound === "function") {
     try {
-      window.AndroidBridge.recordAmbientSound(duration, requestId || "");
+      window.AndroidBridge.recordAmbientSound(duration, requestId || "", parentId || 0);
       return;
     } catch (bridgeErr) {
       console.warn("Native AndroidBridge recordAmbientSound error:", bridgeErr);
@@ -7712,6 +7712,7 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId) {
       formData.append("audio_file", audioBlob, `ambient_${childId}_${Date.now()}.${ext}`);
       formData.append("duration_seconds", String(duration));
       if (requestId) formData.append("request_id", String(requestId));
+      if (parentId) formData.append("parent_id", String(parentId));
 
       try {
         await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/upload`, {
@@ -9014,7 +9015,7 @@ function handleIncomingWebSocketMessage(msg) {
 
   // 1.12 Remote ambient sound recording for Child ("Звук вокруг")
   if (msg.type === "record_ambient_sound" && currentRole === "child") {
-    startChildAmbientSoundRecording(msg.duration_seconds || 20, msg.request_id);
+    startChildAmbientSoundRecording(msg.duration_seconds || 20, msg.request_id, msg.parent_id);
     return;
   }
 
@@ -9332,7 +9333,7 @@ async function checkChildPendingNotifications(childId) {
             haptic("heavy");
             showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
           } else if (notif.type === "record_ambient_sound") {
-            startChildAmbientSoundRecording(notif.duration_seconds || 20, notif.request_id);
+            startChildAmbientSoundRecording(notif.duration_seconds || 20, notif.request_id, notif.parent_id);
           } else if (notif.type === "device_policy_update") {
             if (typeof fetchChildDevicePolicy === "function") {
               fetchChildDevicePolicy(currentChildId);
