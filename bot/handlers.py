@@ -2323,31 +2323,35 @@ async def on_checkin_pressed(message: Message, bot: Bot):
 # ---------------------------------------------------------
 
 @router.message(F.text.startswith("📚 Maktab rejimi") | (F.text == "/school"))
-async def on_parent_school_mode_command(message: Message, bot: Bot):
+async def on_parent_school_mode_command(message: Message, bot: Optional[Bot] = None):
     """Parent toggles school mode to block games and social media during class hours."""
     parent_id = message.from_user.id
-    async with AsyncSessionLocal() as session:
-        children = await crud.get_children_for_parent(session, parent_id)
-        if not children:
-            await message.answer(
-                "⚠️ Sizga hali hech qanday farzand biriktirilmagan.",
-                reply_markup=get_empty_children_kb(),
-                parse_mode="HTML"
-            )
-            return
+    try:
+        async with AsyncSessionLocal() as session:
+            children = await crud.get_children_for_parent(session, parent_id)
+            if not children:
+                await message.answer(
+                    "⚠️ Sizga hali hech qanday farzand biriktirilmagan.",
+                    reply_markup=get_empty_children_kb(),
+                    parse_mode="HTML"
+                )
+                return
 
-        for ch in children:
-            policy = await crud.get_or_create_device_policy(session, ch.id)
-            c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
-            status_desc = "🟢 <b>FAOL (Ilovalar cheklangan)</b>" if policy.is_all_apps_blocked else "⚪ <b>O'chiq (Cheklovlar yo'q)</b>"
-            await message.answer(
-                f"📚 <b>MAKTAB REJIMI (Dars vaqti)</b>\n\n"
-                f"👤 Farzand: <b>{c_name}</b>\n"
-                f"📊 Joriy holat: {status_desc}\n\n"
-                f"Ushbu rejim yoqilganda farzand telefonidagi chalg'ituvchi o'yinlar va ijtimoiy tarmoqlar dars davomida avtomatik bloklanadi.",
-                reply_markup=get_school_mode_inline_keyboard(ch.id, policy.is_all_apps_blocked),
-                parse_mode="HTML"
-            )
+            for ch in children:
+                policy = await crud.get_or_create_device_policy(session, ch.id)
+                c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
+                status_desc = "🟢 <b>FAOL (Ilovalar cheklangan)</b>" if policy.is_all_apps_blocked else "⚪ <b>O'chiq (Cheklovlar yo'q)</b>"
+                await message.answer(
+                    f"📚 <b>MAKTAB REJIMI (Dars vaqti)</b>\n\n"
+                    f"👤 Farzand: <b>{c_name}</b>\n"
+                    f"📊 Joriy holat: {status_desc}\n\n"
+                    f"Ushbu rejim yoqilganda farzand telefonidagi chalg'ituvchi o'yinlar va ijtimoiy tarmoqlar dars davomida avtomatik bloklanadi.",
+                    reply_markup=get_school_mode_inline_keyboard(ch.id, policy.is_all_apps_blocked),
+                    parse_mode="HTML"
+                )
+    except Exception as e:
+        logger.error(f"Error in on_parent_school_mode_command: {e}", exc_info=True)
+        await message.answer("⚠️ Maktab rejimini ochishda texnik xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
 
 
 @router.callback_query(F.data.startswith("toggle_school:"))
@@ -6204,28 +6208,32 @@ def generate_screen_time_card(child, report, policy, all_children=None):
 async def parent_screen_time_handler(message: Message):
     """View child screen time, daily app usage stats, and master lock toggle."""
     user_id = message.from_user.id
-    async with AsyncSessionLocal() as session:
-        user = await crud.get_user(session, user_id)
-        if not user or user.role != "parent":
-            await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
-            return
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await crud.get_user(session, user_id)
+            if not user or user.role != "parent":
+                await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
+                return
 
-        children = await crud.get_children_for_parent(session, user_id)
-        if not children:
-            await message.answer(
-                "📱 <b>Ilovalar va Ekran vaqti tahlili:</b>\n\n"
-                "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
-                "Ilovalar sarfi, ekran vaqti, ilovalarni masofadan bloklash va uxlash rejimi sozlamalarini darhol sinab ko'rish uchun <b>Namuna farzand</b>ni ulashingiz mumkin:",
-                reply_markup=get_empty_children_kb(),
-                parse_mode="HTML"
-            )
-            return
+            children = await crud.get_children_for_parent(session, user_id)
+            if not children:
+                await message.answer(
+                    "📱 <b>Ilovalar va Ekran vaqti tahlili:</b>\n\n"
+                    "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
+                    "Ilovalar sarfi, ekran vaqti, ilovalarni masofadan bloklash va uxlash rejimi sozlamalarini darhol sinab ko'rish uchun <b>Namuna farzand</b>ni ulashingiz mumkin:",
+                    reply_markup=get_empty_children_kb(),
+                    parse_mode="HTML"
+                )
+                return
 
-        child = children[0]
-        report = await crud.get_app_usage_report_today(session, child.id)
-        policy = await crud.get_or_create_device_policy(session, child.id)
-        text, kb = generate_screen_time_card(child, report, policy, children)
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+            child = children[0]
+            report = await crud.get_app_usage_report_today(session, child.id)
+            policy = await crud.get_or_create_device_policy(session, child.id)
+            text, kb = generate_screen_time_card(child, report, policy, children)
+            await message.answer(text, reply_markup=kb, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error in parent_screen_time_handler: {e}", exc_info=True)
+        await message.answer("⚠️ Ilovalar va ekran tahlilini yuklashda texnik xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
 
 
 @router.callback_query(F.data.startswith("st_child:"))
@@ -7588,12 +7596,39 @@ async def fallback_text_handler(message: Message, bot: Bot):
     user_id = message.from_user.id
     raw_text = (message.text or "").strip()
 
-    # Ignore system command buttons so they are never forwarded as child messages
+    # Explicit fallback router for known feature buttons
+    if raw_text.startswith("🎙 Atrof ovozi") or "Звук вокруг" in raw_text:
+        await parent_ambient_sound_handler(message, bot)
+        return
+    if raw_text.startswith("🚨 Masofaviy Siren") or raw_text.startswith("🚨 Baland Siren") or raw_text in {"Siren", "Signal"}:
+        await parent_siren_trigger_handler(message, bot)
+        return
     if raw_text in {
+        "📱 Ilovalar & Ekran tahlili", "Ilovalar & Ekran tahlili", "📱 Ekran vaqti va Bloklash",
+        "Ekran vaqti va Bloklash", "📱 Ekran vaqti", "Ekran vaqti", "📱 Ilovalar nazorati",
+        "Ilovalar nazorati", "Ilovalar", "ilovalar", "bloklash"
+    }:
+        await parent_screen_time_handler(message)
+        return
+    if raw_text.startswith("📚 Maktab rejimi") or raw_text == "/school":
+        await on_parent_school_mode_command(message, bot)
+        return
+
+    # Ignore system command buttons so they are never forwarded as messages
+    KNOWN_SYSTEM_BUTTONS = {
         "🎙 Atrof ovozi («Звук вокруг»)", "Atrof ovozi («Звук вокруг»)", "🎙 Atrof ovozi", "Atrof ovozi", "Звук вокруг",
         "🚨 Masofaviy Siren (Qidiruv)", "Masofaviy Siren (Qidiruv)", "🚨 Baland Siren (Qidiruv)", "Baland Siren (Qidiruv)",
-        "Siren", "Signal"
-    }:
+        "Siren", "Signal",
+        "📱 Telefon uchun ilova (Android & iOS)", "💻 Noutbuk uchun dastur",
+        "🤖 Android ilovasi (APK)", "🍎 iPhone / iOS (O'rnatish)",
+        "📍 Farzandning hozirgi joylashuvi", "🔋 Batareya va Holat",
+        "💬 Farzandga ko'rsatma", "📍 Kerakli joylar",
+        "📋 Vazifalar va Tangalar", "👶 Farzandlarim", "➕ Farzand ulash (Kodi)",
+        "👑 Asoschi (Owner) Boshqaruv", "🚨 SOS (Xavf tugmasi)", "SOS", "sos",
+        "✅ Yetib keldim (Check-in)", "📞 Ota-onamga qo'ng'iroq",
+        "💬 Ota-onaga tezkor xabar", "📍 Jonli joylashuvimni yuborish", "📱 Web App (Sayt)"
+    }
+    if raw_text in KNOWN_SYSTEM_BUTTONS:
         return
 
     # 1. Check if Owner command was sent
@@ -7746,7 +7781,7 @@ async def bot_global_error_handler(event: ErrorEvent):
                 pass
         elif update and update.message:
             try:
-                await update.message.answer("⚠️ Xabar yetkazishda xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring.")
+                await update.message.answer("⚠️ Buyruqni bajarishda texnik xatolik yuz berdi. Iltimos, bir ozdan so'ng qayta urinib ko'ring.")
             except Exception:
                 pass
     except Exception as e:

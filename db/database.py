@@ -99,7 +99,9 @@ async def init_db() -> None:
             ("anti_uninstall_enabled", f"BOOLEAN DEFAULT {bool_true_default}"),
             ("bedtime_start", "VARCHAR(10)"),
             ("bedtime_end", "VARCHAR(10)"),
-            ("daily_limit_minutes", "INTEGER")
+            ("daily_limit_minutes", "INTEGER"),
+            ("daily_walking_goal_km", "FLOAT DEFAULT 3.0"),
+            ("daily_walking_goal_steps", "INTEGER DEFAULT 5000")
         ]
 
         new_user_columns = [
