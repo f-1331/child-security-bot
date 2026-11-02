@@ -167,8 +167,14 @@ async def handle_cancel(message: Message, state: FSMContext, auth_info: Dict[str
 @owner_bot_router.callback_query(F.data == "adm_back_main")
 async def handle_back_main(callback: CallbackQuery, state: FSMContext, auth_info: Dict[str, Any]):
     await state.clear()
-    await callback.message.edit_text(
-        "Boshqaruv konsoli bosh menyusiga qaytdingiz. Kerakli bo'limni tanlang:",
+    is_owner = auth_info.get("is_owner", True)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(
+        "👑 <b>Boshqaruv konsoli bosh menyusiga qaytdingiz:</b>\nKerakli bo'limni tanlang:",
+        reply_markup=get_owner_main_keyboard(is_owner),
         parse_mode="HTML",
     )
     await callback.answer()

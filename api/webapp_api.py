@@ -2832,7 +2832,7 @@ async def upload_ambient_sound_endpoint(
 
     # Get latest known location if not provided
     if latitude is None or longitude is None:
-        last_loc = await crud.get_child_latest_location(session, child_id)
+        last_loc = await crud.get_latest_location(session, child_id)
         if last_loc:
             latitude = last_loc.latitude
             longitude = last_loc.longitude

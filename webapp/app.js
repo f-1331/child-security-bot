@@ -4730,15 +4730,35 @@ async function toggleRouteHistory(forceState) {
       showToast("📍 Bugungi joylashuv nuqtasi xaritada ko'rsatildi");
     }
   } else {
-    // Reliably turn OFF without destroying cached geometry
-    if (routeLayerGroup && map && map.hasLayer(routeLayerGroup)) {
-      try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    // Reliably turn OFF and completely erase route layers from map
+    if (replayMarker && map) {
+      try { map.removeLayer(replayMarker); } catch (e) {}
+      replayMarker = null;
     }
-    if (routePolyline && map && map.hasLayer(routePolyline)) {
-      try { map.removeLayer(routePolyline); } catch (e) {}
+    clearInterval(replayTimer);
+    replayTimer = null;
+    isReplayPlaying = false;
+
+    if (routeLayerGroup) {
+      try {
+        if (map && map.hasLayer(routeLayerGroup)) {
+          map.removeLayer(routeLayerGroup);
+        }
+        routeLayerGroup.clearLayers();
+      } catch (e) {}
+      routeLayerGroup = null;
     }
+    if (routePolyline) {
+      try {
+        if (map && map.hasLayer(routePolyline)) {
+          map.removeLayer(routePolyline);
+        }
+      } catch (e) {}
+      routePolyline = null;
+    }
+    window._lastRenderedRouteSig = null;
     hideRoutePlaybackHud();
-    showToast("🗺️ Bugungi harakat yo'li yashirildi (o'chirildi)");
+    showToast("🗺️ Bugungi harakat yo'li yashirildi");
   }
   updateRouteButtonsState();
 }
@@ -4785,11 +4805,17 @@ async function toggleRepeatedPlaces(forceState) {
       showToast("ℹ️ Bugun hali qayta-qayta yurilgan alohida joylar qayd etilmagan");
     }
   } else {
-    // Reliably turn OFF without destroying cached geometry
-    if (repeatsLayerGroup && map && map.hasLayer(repeatsLayerGroup)) {
-      try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+    // Reliably turn OFF and completely erase repeated places from map
+    if (repeatsLayerGroup) {
+      try {
+        if (map && map.hasLayer(repeatsLayerGroup)) {
+          map.removeLayer(repeatsLayerGroup);
+        }
+        repeatsLayerGroup.clearLayers();
+      } catch (e) {}
+      repeatsLayerGroup = null;
     }
-    showToast("🔁 Qayta-qayta yurilgan joylar yashirildi (o'chirildi)");
+    showToast("🔁 Qayta-qayta yurilgan joylar yashirildi");
   }
   updateRouteButtonsState();
 }
@@ -4822,6 +4848,8 @@ function clearRouteHistory() {
   updateRouteButtonsState();
   showToast("🗑 Bugungi harakat yo'li xaritadan o'chirildi");
 }
+window.toggleRouteHistory = toggleRouteHistory;
+window.toggleRepeatedPlaces = toggleRepeatedPlaces;
 window.clearRouteHistory = clearRouteHistory;
 
 // Clear repeated places from map (2-alohida funksiya)
@@ -10755,7 +10783,8 @@ function triggerUsageAccessRequest() {
   if (window.AndroidBridge && typeof window.AndroidBridge.requestUsageAccess === "function") {
     window.AndroidBridge.requestUsageAccess();
   } else {
-    showToast("Foydalanish statistikasi ruxsati faqat Android ilovada ishlaydi");
+    openInstallAppModal();
+    showToast("ℹ️ Bu ruxsat faqat Android APK ilovamiz o'rnatilganda yoqiladi");
   }
 }
 
@@ -10763,7 +10792,8 @@ function triggerOverlayRequest() {
   if (window.AndroidBridge && typeof window.AndroidBridge.requestOverlayPermission === "function") {
     window.AndroidBridge.requestOverlayPermission();
   } else {
-    showToast("Overlay ruxsati faqat Android ilovada ishlaydi");
+    openInstallAppModal();
+    showToast("ℹ️ Bu ruxsat faqat Android APK ilovamiz o'rnatilganda yoqiladi");
   }
 }
 
@@ -10771,7 +10801,8 @@ function triggerAccessibilityRequest() {
   if (window.AndroidBridge && typeof window.AndroidBridge.requestAccessibility === "function") {
     window.AndroidBridge.requestAccessibility();
   } else {
-    showToast("Maxsus imkoniyatlar ruxsati faqat Android ilovada ishlaydi");
+    openInstallAppModal();
+    showToast("ℹ️ Bu ruxsat faqat Android APK ilovamiz o'rnatilganda yoqiladi");
   }
 }
 

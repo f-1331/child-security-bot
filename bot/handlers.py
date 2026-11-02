@@ -1731,22 +1731,45 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
         parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
         telemetry.last_sos_alert_map[child_id] = datetime.now(timezone.utc)
+        from owner_bot import get_owner_bot
+        ob = get_owner_bot()
+        notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+        sent_chats = set()
+
         for parent in parents:
+            target_chat_id = 6707839718 if parent.id in (1, 6707839718) else parent.id
+            if target_chat_id in sent_chats:
+                continue
+            sent_chats.add(target_chat_id)
             try:
                 await bot.send_message(
-                    chat_id=parent.id,
+                    chat_id=target_chat_id,
                     text=parent_alert,
                     reply_markup=get_sos_alert_parent_keyboard(child_id, latest_loc.latitude if latest_loc else None, latest_loc.longitude if latest_loc else None),
                     parse_mode="Markdown"
                 )
                 if latest_loc:
                     await bot.send_location(
-                        chat_id=parent.id,
+                        chat_id=target_chat_id,
                         latitude=latest_loc.latitude,
                         longitude=latest_loc.longitude
                     )
             except Exception as e:
-                logger.error(f"Failed to send SOS to parent {parent.id}: {e}")
+                logger.error(f"Failed to send SOS to parent {parent.id} (chat: {target_chat_id}): {e}")
+
+        # Deliver to owner bot as well
+        if ob and notify_owner_allowed:
+            try:
+                await ob.send_message(
+                    chat_id=6707839718,
+                    text=f"👑 <b>[OWNER SOS OGOHLANTIRISHI]</b>\n\n" + parent_alert,
+                    reply_markup=get_sos_alert_parent_keyboard(child_id, latest_loc.latitude if latest_loc else None, latest_loc.longitude if latest_loc else None),
+                    parse_mode="Markdown"
+                )
+                if latest_loc:
+                    await ob.send_location(chat_id=6707839718, latitude=latest_loc.latitude, longitude=latest_loc.longitude)
+            except Exception as e_ob:
+                logger.warning(f"Failed to send SOS to owner bot: {e_ob}")
 
         # Broadcast SOS alert to parents connected to WebApp
         try:
@@ -1791,12 +1814,17 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
         parents = await crud.get_parents_for_child(session, child_id)
         await session.commit()
 
+        sent_cancel_chats = set()
         for p in parents:
+            target_chat = 6707839718 if p.id in (1, 6707839718) else p.id
+            if target_chat in sent_cancel_chats:
+                continue
+            sent_cancel_chats.add(target_chat)
             try:
                 await bot.send_message(
-                    chat_id=p.id,
-                    text=f"✅ Farzandingiz ({callback.from_user.full_name}) xavf bartaraf bo'lganini xabar qildi.",
-                    parse_mode="Markdown"
+                    chat_id=target_chat,
+                    text=f"✅ Farzandingiz (<b>{html.escape(callback.from_user.full_name or 'Farzand')}</b>) xavf bartaraf bo'lganini xabar qildi.",
+                    parse_mode="HTML"
                 )
             except Exception:
                 pass
@@ -2369,8 +2397,9 @@ async def on_toggle_school_callback(callback: CallbackQuery, bot: Bot):
     enable = bool(int(parts[2]))
 
     async with AsyncSessionLocal() as session:
+        is_owner = is_bot_owner(parent_id, callback.from_user.username) or (parent_id in (1, 6707839718, getattr(settings, "OWNER_ID", 1)))
         parents = await crud.get_parents_for_child(session, child_id)
-        if not any(p.id == parent_id for p in parents):
+        if not is_owner and not any(p.id == parent_id for p in parents):
             await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
             return
 
@@ -2462,8 +2491,9 @@ async def on_parent_directive_callback(callback: CallbackQuery, bot: Bot):
     title, desc = directives.get(ping_type, ("💬 Ota-onangizdan xabar!", "Yangi xabarnoma"))
 
     async with AsyncSessionLocal() as session:
+        is_owner = is_bot_owner(parent_id, callback.from_user.username) or (parent_id in (1, 6707839718, getattr(settings, "OWNER_ID", 1)))
         parents = await crud.get_parents_for_child(session, child_id)
-        if not any(p.id == parent_id for p in parents):
+        if not is_owner and not any(p.id == parent_id for p in parents):
             await callback.answer("❌ Siz bu farzandning ota-onasi emassiz!", show_alert=True)
             return
 
@@ -6846,6 +6876,36 @@ async def on_main_bot_toggle_notification_cb(callback: CallbackQuery):
     await callback.answer(toast)
 
 
+@router.callback_query(F.data == "adm_back_main")
+async def on_owner_back_main_cb(callback: CallbackQuery, bot: Bot):
+    user_id = callback.from_user.id
+    if not is_bot_owner(user_id, callback.from_user.username):
+        await callback.answer("⛔ Ruxsat berilmagan!", show_alert=True)
+        return
+    async with AsyncSessionLocal() as session:
+        stats = await crud.get_system_overview_stats(session)
+    text = (
+        "👑 <b>ASOSCHI (OWNER) BOSHQARUV PANELI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Asoschi: <b>@{settings.OWNER_USERNAME}</b> (ID: <code>{user_id}</code>)\n\n"
+        "📊 <b>PLATFORMA BO'YICHA JONLI STATISTIKA:</b>\n"
+        f"• 👥 Jami foydalanuvchilar: <b>{stats['total_users']}</b> ta\n"
+        f"  ├ 👨‍👩‍👧 Ota-onalar: <b>{stats['total_parents']}</b> ta\n"
+        f"  └ 👦 Farzandlar: <b>{stats['total_children']}</b> ta\n"
+        f"• 📅 Bugungi a'zolar: <b>{stats['today_users']}</b> ta\n"
+        f"• 🚨 Faol SOS signallari: <b>{stats['active_sos']}</b> ta\n"
+        f"• 🛡 Geofence hududlar: <b>{stats['total_geofences']}</b> ta\n"
+        f"• 📍 GPS koordinatalar: <b>{stats['total_location_logs']}</b> ta\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>Quyidagi tugmalar orqali platformani to'liq boshqarishingiz yoki oddiy mijoz (ota-ona/farzand) sifatida kirib sinashingiz mumkin:</i>"
+    )
+    try:
+        await callback.message.edit_text(text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_owner_panel_inline_keyboard(), parse_mode="HTML")
+    await callback.answer()
+
+
 @router.message(OwnerActionState.waiting_for_inspect_query, F.text)
 async def on_owner_inspect_entered(message: Message, state: FSMContext):
     await state.clear()
@@ -7583,10 +7643,17 @@ async def on_record_ambient_cb(callback: CallbackQuery):
     except Exception:
         pass
 
+    is_child_online = bool(ws_manager.active_connections.get(child_id))
+    online_status = (
+        "🟢 <b>Qurilma onlayn:</b> Buyruq yetkazildi, audio yozish boshlandi."
+        if is_child_online else
+        "📡 <b>Qurilma holati:</b> Bola telefoni hozirda fon rejimida / oflayn. Buyruq navbatga qo'yildi va bola ilovani ochishi yoki Android xizmati uyg'onishi bilanoq yozib olinadi."
+    )
     await callback.message.edit_text(
         f"⏳ <b>BUYRUQ YUBORILDI!</b>\n\n"
         f"Farzandingiz telefoniga <b>{duration} soniyalik</b> atrof ovozini yozish buyrug'i jo'natildi.\n\n"
-        f"<i>📡 Bola telefoni mikrofon orqali yozib olgach, ovozli xabar (Voice) ushbu chatga avtomatik yetkaziladi...</i>",
+        f"{online_status}\n\n"
+        f"<i>📡 Audio yozib olingach, ovozli xabar (Voice) ushbu chatga avtomatik yetkaziladi...</i>",
         parse_mode="HTML"
     )
     await callback.answer(f"{duration} soniyalik yozish boshlandi!", show_alert=True)
