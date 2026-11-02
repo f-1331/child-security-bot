@@ -1837,7 +1837,7 @@ body.theme-titanium {
 }
 
 /* ==========================================================================
-   MOBILE & SMALL SCREEN RESPONSIVE RESILIENCE (NO OVERFLOW, NO CLIPPING)
+   MOBILE & SMALL SCREEN RESPONSIVE RESILIENCE
    ========================================================================== */
 html, body {
   max-width: 100vw;
@@ -1848,68 +1848,30 @@ html, body {
   box-sizing: border-box;
 }
 
-/* Text Wrapping & Overlap Defense */
-.ios-glass-card, .tab-panel, .modal-dialog, button, div, p, span, h1, h2, h3, h4, h5, h6 {
-  overflow-wrap: break-word;
-  word-break: break-word;
+/* Ensure flex containers and cards never break horizontal layout */
+.ios-glass-card {
+  max-width: 100%;
 }
 
-/* Responsive Mobile Tuning (< 480px) */
+/* Allow text paragraphs to wrap naturally without breaking words into single letters */
+.ios-glass-card p,
+.modal-dialog p {
+  overflow-wrap: break-word;
+}
+
+/* Keep button contents and badges horizontally aligned */
+button, .badge-pill {
+  white-space: normal;
+}
+
+/* Responsive Mobile Header & Island Tuning (< 480px) */
 @media (max-width: 480px) {
   header#mainAppHeader {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-    padding-top: 6px !important;
-    padding-bottom: 6px !important;
+    padding-left: 10px;
+    padding-right: 10px;
   }
   .dynamic-island {
-    padding: 3px 8px !important;
-    font-size: 10px !important;
-  }
-  #parentUtilityBar {
-    gap: 4px !important;
-    padding-top: 4px !important;
-  }
-  #parentUtilityBar button,
-  #parentUtilityBar div {
-    padding: 3px 6px !important;
-    font-size: 10px !important;
-  }
-  .ios-glass-card {
-    padding: 10px !important;
-    border-radius: 16px !important;
-  }
-  .modal-dialog, .tab-panel > div {
-    max-width: calc(100vw - 16px) !important;
-    padding: 12px !important;
-    border-radius: 20px !important;
-  }
-  .grid-cols-3 {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 6px !important;
-  }
-  .grid-cols-3 button {
-    padding: 6px 4px !important;
-    font-size: 10px !important;
-  }
-}
-
-/* Ultra-Compact Phone Screens (< 380px, e.g. iPhone SE, small Galaxy) */
-@media (max-width: 380px) {
-  h3, h4 {
-    font-size: 12px !important;
-  }
-  p, span, button {
-    font-size: 10.5px !important;
-  }
-  .grid-cols-3 {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-  .grid-cols-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 4px !important;
-  }
-  #parentUtilityBar button span.truncate {
-    max-width: 55px !important;
+    padding: 3px 8px;
+    font-size: 11px;
   }
 }
