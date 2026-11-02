@@ -105,6 +105,7 @@ from bot.keyboards import (
     get_owner_panel_inline_keyboard,
     get_reset_options_keyboard,
     get_factory_reset_confirm_keyboard,
+    get_ambient_sound_inline_keyboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -7532,6 +7533,189 @@ async def fallback_text_handler(message: Message, bot: Bot):
                 parse_mode="HTML"
             )
             return
+
+
+
+# ==============================================================================
+# "ZVUK VOKRUG" / AMBIENT SOUND MONITORING HANDLERS (KILLER BENCHMARK FEATURE)
+# ==============================================================================
+
+@router.message(Command("listen", "zvuk", "audio"))
+@router.message(F.text.in_({
+    "🎙 Atrof ovozi («Звук вокруг»)",
+    "Atrof ovozi («Звук вокруг»)",
+    "🎙 Atrof ovozi",
+    "Atrof ovozi",
+    "Звук вокруг"
+}))
+async def parent_ambient_sound_handler(message: Message):
+    """Parent triggers remote ambient sound recording on child device."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, user_id)
+        if not children:
+            await message.answer(
+                "🎙 <b>Atrof ovozini eshitish («Звук вокруг»):</b>\n\n"
+                "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.\n"
+                "Iltimos, avval farzandingizni ulang yoki botni sinab ko'rish uchun namuna bolani tanlang.",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="HTML"
+            )
+            return
+
+        if len(children) == 1:
+            child = children[0]
+            c_name = html.escape(child.full_name or f"Farzand #{child.id}")
+            kb = get_ambient_sound_inline_keyboard(child.id)
+            await message.answer(
+                f"🎙 <b>ATROF OVOZINI ESHITISH («ЗВУК ВОКРУГ»)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Farzand: <b>{c_name}</b> (ID: <code>{child.id}</code>)\n\n"
+                f"<i>Bolangiz atrofidagi suhbatlar va vaziyatni yozib olish uchun vaqtni tanlang:</i>",
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+        else:
+            buttons = [
+                [InlineKeyboardButton(text=f"👦 {c.full_name or c.id}", callback_data=f"sel_ambient:{c.id}")]
+                for c in children
+            ]
+            buttons.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")])
+            await message.answer(
+                "🎙 <b>Qaysi farzandingizning atrof ovozini eshitmoqchisiz?</b>\n\n"
+                "Kerakli farzandni tanlang:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                parse_mode="HTML"
+            )
+
+
+@router.callback_query(F.data.startswith("sel_ambient:"))
+async def on_select_ambient_child_cb(callback: CallbackQuery):
+    child_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        child = await crud.get_user(session, child_id)
+    c_name = html.escape(child.full_name or f"Farzand #{child.id}") if child else f"Farzand #{child_id}"
+    kb = get_ambient_sound_inline_keyboard(child_id)
+    await callback.message.edit_text(
+        f"🎙 <b>ATROF OVOZINI ESHITISH («ЗВУК ВОКРУГ»)</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 Farzand: <b>{c_name}</b>\n\n"
+        f"<i>Yozib olish davomiyligini tanlang:</i>",
+        reply_markup=kb,
+        parse_mode="HTML"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("rec_ambient:"))
+async def on_record_ambient_cb(callback: CallbackQuery):
+    parts = callback.data.split(":")
+    child_id = int(parts[1])
+    duration = int(parts[2]) if len(parts) > 2 else 20
+    parent_id = callback.from_user.id
+
+    from api.webapp_api import pending_child_notifications, ws_manager
+    import uuid
+
+    cmd = {
+        "type": "record_ambient_sound",
+        "duration_seconds": duration,
+        "parent_id": parent_id,
+        "request_id": uuid.uuid4().hex[:8],
+        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
+    }
+
+    if child_id not in pending_child_notifications:
+        pending_child_notifications[child_id] = []
+    pending_child_notifications[child_id].append(cmd)
+
+    try:
+        await ws_manager.send_to_user(child_id, cmd)
+    except Exception:
+        pass
+
+    await callback.message.edit_text(
+        f"⏳ <b>BUYRUQ YUBORILDI!</b>\n\n"
+        f"Farzandingiz telefoniga <b>{duration} soniyalik</b> atrof ovozini yozish buyrug'i jo'natildi.\n\n"
+        f"<i>📡 Bola telefoni mikrofon orqali yozib olgach, ovozli xabar (Voice) ushbu chatga avtomatik yetkaziladi...</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer(f"{duration} soniyalik yozish boshlandi!", show_alert=True)
+
+
+# ==============================================================================
+# REMOTE SIREN (LOUD ALARM SEARCH / OVERRIDE SILENT MODE)
+# ==============================================================================
+
+@router.message(Command("siren", "signal", "chalish"))
+@router.message(F.text.in_({
+    "🚨 Masofaviy Siren (Qidiruv)",
+    "Masofaviy Siren (Qidiruv)",
+    "🚨 Baland Siren (Qidiruv)",
+    "Baland Siren (Qidiruv)",
+    "Siren",
+    "Signal"
+}))
+async def parent_siren_trigger_handler(message: Message):
+    """Parent triggers loud search siren on child device, overriding silent mode."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, user_id)
+        if not children:
+            await message.answer(
+                "🚨 <b>Baland ovozli signal (Siren):</b>\n\n"
+                "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.",
+                reply_markup=get_empty_children_kb(),
+                parse_mode="HTML"
+            )
+            return
+
+        if len(children) == 1:
+            child = children[0]
+            c_name = html.escape(child.full_name or f"Farzand #{child.id}")
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔊 Ha, baland signal chalish!", callback_data=f"do_siren:{child.id}")],
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")]
+            ])
+            await message.answer(
+                f"🚨 <b>MASOFAVIY BALAND SIGNAL (SIREN)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👤 Farzand: <b>{c_name}</b>\n\n"
+                f"<i>Telefon ovozsiz (silent/bez zvuk) rejimda bo'lsa ham maksimal balandlikda ovoz chiqariladi. Qidiruv signalini yoqasizmi?</i>",
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+        else:
+            buttons = [
+                [InlineKeyboardButton(text=f"👦 {c.full_name or c.id}", callback_data=f"do_siren:{c.id}")]
+                for c in children
+            ]
+            buttons.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")])
+            await message.answer(
+                "🚨 <b>Qaysi farzandingizning telefoniga baland signal yubormoqchisiz?</b>",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+                parse_mode="HTML"
+            )
+
+
+@router.callback_query(F.data.startswith("do_siren:"))
+async def on_do_siren_cb(callback: CallbackQuery):
+    child_id = int(callback.data.split(":")[1])
+    parent_id = callback.from_user.id
+
+    from api.webapp_api import parent_siren_endpoint
+    try:
+        async with AsyncSessionLocal() as session:
+            res = await parent_siren_endpoint(child_id=child_id, parent_id=parent_id, session=session)
+        await callback.message.edit_text(
+            "🔊 <b>BALAND SIREN CHALINDI!</b>\n\n"
+            "Farzandingiz telefoniga maksimal ovozli qidiruv signali yuborildi. Telefon ovozsiz rejimda bo'lsa ham yangraydi!",
+            parse_mode="HTML"
+        )
+        await callback.answer("Baland signal yuborildi!", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"Xatolik: {e}", show_alert=True)
+
 
 
 @router.errors()

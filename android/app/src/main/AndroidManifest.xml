@@ -38,8 +38,9 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <!-- Emergency SOS 5-second Audio Snapshot Recording -->
+    <!-- Emergency SOS & Ambient Sound Remote Audio Monitoring ("Звук вокруг") -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <application
         android:allowBackup="true"
@@ -80,12 +81,12 @@
             android:excludeFromRecents="true"
             android:theme="@style/Theme.ChildSecurity.NoActionBar" />
 
-        <!-- 24/7 Background GPS Tracking Foreground Service -->
+        <!-- 24/7 Background GPS Tracking & Remote Audio Monitoring Foreground Service -->
         <service
             android:name="uz.childsecurity.app.ChildTrackingService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location|microphone" />
 
         <!-- Accessibility Service: Real-time App Blocker & Anti-Uninstall Shield -->
         <service

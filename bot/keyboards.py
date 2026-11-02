@@ -68,6 +68,10 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🗺️ Jonli Xarita (Web App)", web_app=WebAppInfo(url=f"{settings.RESOLVED_WEBAPP_URL}?role=parent&parent_id={parent_id}"))
         ],
         [
+            KeyboardButton(text="🎙 Atrof ovozi («Звук вокруг»)"),
+            KeyboardButton(text="🚨 Masofaviy Siren (Qidiruv)"),
+        ],
+        [
             KeyboardButton(text="📱 Ilovalar & Ekran tahlili"),
             KeyboardButton(text="🔋 Batareya va Holat")
         ],
@@ -787,3 +791,21 @@ def get_factory_reset_confirm_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
+
+
+def get_ambient_sound_inline_keyboard(child_id: int) -> InlineKeyboardMarkup:
+    """Inline keyboard for selecting ambient sound duration."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⚡ 15 soniya", callback_data=f"rec_ambient:{child_id}:15"),
+                InlineKeyboardButton(text="⏱ 30 soniya", callback_data=f"rec_ambient:{child_id}:30"),
+            ],
+            [
+                InlineKeyboardButton(text="🎧 60 soniya", callback_data=f"rec_ambient:{child_id}:60"),
+            ],
+            [
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")
+            ]
+        ]
+    )

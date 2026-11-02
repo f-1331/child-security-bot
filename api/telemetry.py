@@ -315,16 +315,21 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         "has_parent_pin": bool(policy.parent_pin_hash),
     }
 
+    from api.webapp_api import pending_child_notifications
+    pending_cmds = pending_child_notifications.pop(payload.child_id, [])
+
     return {
         "status": "success",
         "message": "Telemetry processed successfully",
         "policy": policy_data,
+        "commands": pending_cmds,
         "data": {
             "log_id": loc_entry.id,
             "child_id": payload.child_id,
             "battery_alert_triggered": battery_alert_triggered,
             "geofence_events": geofence_events,
             "is_sos_active": child.is_sos_active,
+            "commands": pending_cmds,
             "policy": policy_data
         }
     }

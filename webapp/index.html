@@ -572,6 +572,11 @@
           <i data-lucide="bell-ring" class="w-4 h-4"></i>
         </button>
 
+        <!-- 2.1 Remote Ambient Sound ("Звук вокруг" - Findmykids / Kid Security Signature Feature) -->
+        <button id="btnParentAmbientSound" onclick="openAmbientSoundModal(); closeExtraMapToolsOnMobile();" class="text-amber-400 hover:text-amber-300 active:scale-95 transition" title="Atrof ovozi («Звук вокруг»)">
+          <i data-lucide="mic" class="w-4 h-4"></i>
+        </button>
+
         <!-- 3. Toggle Map Layer (Yo'ldosh/Ko'cha) -->
         <button id="btnMapLayer" onclick="toggleMapLayer(); closeExtraMapToolsOnMobile();" class="text-emerald-400 hover:text-emerald-300 active:scale-95 transition" title="Xarita turini o'zgartirish (Yo'ldosh/Ko'cha)">
           <i data-lucide="layers" class="w-4 h-4"></i>
@@ -4004,6 +4009,86 @@
           <div class="min-w-0">
             <p id="childAdventureZoneTitle" class="text-xs font-black text-white truncate">Xavfsiz hududlar faol</p>
             <p id="childAdventureZoneDesc" class="text-[10px] text-slate-300 font-medium truncate">Uy, maktab va stadion xaritada belgilangan</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Masofaviy Atrof Ovozi ("Звук вокруг" / Remote Ambient Audio Monitoring) -->
+  <div id="modalAmbientSound" class="hidden fixed inset-0 z-[2500] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+    <div class="bg-gradient-to-b from-slate-900 to-slate-950 border border-amber-500/30 rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <button onclick="closeAmbientSoundModal()" class="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 active:scale-95 transition" title="Yopish">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
+          <i data-lucide="mic" class="w-6 h-6 animate-pulse"></i>
+        </div>
+        <div>
+          <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+            Atrof ovozi <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">«Звук вокруг»</span>
+          </h3>
+          <p class="text-xs text-slate-400">Farzandingiz atrofidagi suhbatlarni masofadan yozib olish</p>
+        </div>
+      </div>
+
+      <!-- Superior Benchmark Comparison Callout -->
+      <div class="p-3 rounded-2xl bg-gradient-to-r from-amber-950/40 to-slate-900/60 border border-amber-500/25 mb-4 text-2xs text-slate-300 leading-relaxed">
+        <div class="flex items-center gap-1.5 font-bold text-amber-300 mb-1">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>Findmykids va Kid Security ilovalaridan ustun:</span>
+        </div>
+        Findmykids ilovasida «Звук вокруг» oyiga <b>$5-$10</b> pullik. Bizda esa <b>mutlaqo bepul</b>, cheklovlarsiz va yozib olingan ovoz to'g'ridan-to'g'ri Telegram botingizga ham <b>Ovozli xabar (Voice memo)</b> sifatida yetkaziladi!
+      </div>
+
+      <!-- Action: Choose Duration to Record -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold text-slate-300 mb-2">Davomiylikni tanlang va yozishni boshlang:</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="requestRemoteAmbientSound(15)" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-amber-600/20 border border-slate-700/60 hover:border-amber-500/50 flex flex-col items-center justify-center gap-1 text-center transition active:scale-95 group">
+            <span class="text-base font-black text-amber-400 group-hover:scale-110 transition">15 soniya</span>
+            <span class="text-[10px] text-slate-400">Tezkor tekshiruv</span>
+          </button>
+          <button onclick="requestRemoteAmbientSound(30)" class="p-3 rounded-2xl bg-gradient-to-b from-amber-500/15 to-slate-800/80 hover:from-amber-500/25 border border-amber-500/40 flex flex-col items-center justify-center gap-1 text-center transition active:scale-95 group ring-1 ring-amber-500/20">
+            <span class="text-base font-black text-amber-300 group-hover:scale-110 transition">30 soniya</span>
+            <span class="text-[10px] text-amber-200/80">Tavsiya etiladi</span>
+          </button>
+          <button onclick="requestRemoteAmbientSound(60)" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-amber-600/20 border border-slate-700/60 hover:border-amber-500/50 flex flex-col items-center justify-center gap-1 text-center transition active:scale-95 group">
+            <span class="text-base font-black text-amber-400 group-hover:scale-110 transition">60 soniya</span>
+            <span class="text-[10px] text-slate-400">To'liq monitoring</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Status / Recording In Progress Indicator -->
+      <div id="ambientSoundRecordingStatus" class="hidden mb-4 p-3 rounded-2xl bg-amber-950/50 border border-amber-500/40 flex items-center gap-3 animate-pulse">
+        <div class="w-8 h-8 rounded-xl bg-amber-500/30 flex items-center justify-center text-amber-300">
+          <i data-lucide="radio" class="w-4 h-4 animate-spin"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-bold text-amber-200" id="ambientSoundStatusText">Buyruq yuborildi... Ovoz yozilmoqda</p>
+          <p class="text-[10px] text-amber-300/70">Ovoz tayyor bo'lishi bilan quyida paydo bo'ladi</p>
+        </div>
+      </div>
+
+      <!-- Recent Ambient Audio Records History -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="history" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>So'nggi yozib olingan ovozlar</span>
+          </h4>
+          <button onclick="loadAmbientSoundHistory()" class="text-[11px] text-amber-400 hover:text-amber-300 active:scale-95 flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            <span>Yangilash</span>
+          </button>
+        </div>
+        <div id="ambientSoundHistoryContainer" class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+          <div class="text-center py-6 text-slate-400 text-xs">
+            <i data-lucide="loader-2" class="w-5 h-5 animate-spin mx-auto mb-2 text-slate-500"></i>
+            Ovozlar tarixi yuklanmoqda...
           </div>
         </div>
       </div>

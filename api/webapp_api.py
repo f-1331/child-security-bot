@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Any, Dict, Tuple
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, WebSocket, WebSocketDisconnect, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 import hashlib
 import hmac
 import time
@@ -2527,6 +2527,238 @@ async def upload_sos_snapshot_media(
         "file_url": file_url,
         "is_audio": is_audio,
         "notified_parents": len(parents)
+    }
+
+
+# ==============================================================================
+# "ZVUK VOKRUG" / AMBIENT SOUND MONITORING (KILLER FEATURE TO BEAT FINDMYKIDS)
+# ==============================================================================
+
+class AmbientSoundRequestPayload(BaseModel):
+    parent_id: int
+    duration_seconds: int = Field(20, ge=5, le=120)
+
+
+@router.post("/child/{child_id}/ambient-sound/request")
+async def request_ambient_sound_endpoint(
+    child_id: int,
+    payload: AmbientSoundRequestPayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Parent or Owner requests remote ambient audio recording ("Звук вокруг").
+    Dispatches command to child's device via WebSocket and pending notification queue.
+    """
+    is_owner = is_owner_or_admin(payload.parent_id)
+    if not is_owner and child_id != 2002:
+        parents = await crud.get_parents_for_child(session, child_id)
+        if payload.parent_id not in [p.id for p in parents]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Ruxsat etilmagan: Siz ushbu bolaning ota-onasi emassiz."
+            )
+
+    cmd = {
+        "type": "record_ambient_sound",
+        "duration_seconds": payload.duration_seconds,
+        "parent_id": payload.parent_id,
+        "request_id": uuid.uuid4().hex[:8],
+        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
+    }
+
+    if child_id not in pending_child_notifications:
+        pending_child_notifications[child_id] = []
+    pending_child_notifications[child_id].append(cmd)
+
+    # Broadcast via WebSocket directly to child device
+    try:
+        await ws_manager.send_to_user(child_id, cmd)
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "message": f"{payload.duration_seconds} soniyalik atrof ovozi yozish buyrug'i yuborildi",
+        "child_id": child_id,
+        "duration_seconds": payload.duration_seconds,
+        "request_id": cmd["request_id"]
+    }
+
+
+@router.post("/child/{child_id}/ambient-sound/upload")
+async def upload_ambient_sound_endpoint(
+    child_id: int,
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+    audio_file: Optional[UploadFile] = File(None),
+    duration_seconds: Optional[int] = Form(None),
+    parent_id: Optional[int] = Form(None),
+    request_id: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    battery_level: Optional[int] = Form(None),
+    session: AsyncSession = Depends(get_db)
+):
+    """
+    Child device uploads recorded ambient audio.
+    Saves file and delivers Telegram Voice Message to linked parents (and Owner if copy is enabled).
+    """
+    upload_file = file if isinstance(file, UploadFile) else (audio_file if isinstance(audio_file, UploadFile) else None)
+    if not upload_file:
+        raise HTTPException(status_code=400, detail="Audio fayl topilmadi")
+
+    client_ip = get_client_ip(request)
+    if not rate_limiter.check_upload_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Fayl yuklash so'rovlari chegarasi oshdi."
+        )
+
+    child = await crud.get_user(session, child_id)
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    ALLOWED_AUDIO_EXT = {".webm", ".ogg", ".wav", ".mp3", ".m4a", ".aac"}
+    ext = Path(upload_file.filename or "").suffix.lower()
+    if not ext or ext not in ALLOWED_AUDIO_EXT:
+        ext = ".ogg" if "ogg" in (upload_file.content_type or "") else ".webm"
+
+    upload_dir = Path("uploads/ambient_sounds")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    contents = await upload_file.read()
+    if len(contents) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio fayl hajmi 20 MB dan oshmasligi kerak")
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Fayl bo'sh bo'lishi mumkin emas")
+
+    safe_filename = f"ambient_{child_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = upload_dir / safe_filename
+
+    with open(file_path, "wb") as f_out:
+        f_out.write(contents)
+
+    file_url = f"/uploads/ambient_sounds/{safe_filename}"
+    parents = await crud.get_parents_for_child(session, child_id)
+    child_name = child.full_name or f"Farzand #{child_id}"
+    safe_cname = html.escape(child_name)
+    now_str = datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
+
+    # Get latest known location if not provided
+    if latitude is None or longitude is None:
+        last_loc = await crud.get_child_latest_location(session, child_id)
+        if last_loc:
+            latitude = last_loc.latitude
+            longitude = last_loc.longitude
+
+    loc_str = ""
+    if latitude and longitude and (abs(latitude) > 0.1 or abs(longitude) > 0.1):
+        maps_url = f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+        loc_str = f"\n📍 <b>Joylashuv:</b> <a href=\"{maps_url}\">Xaritada ochish</a> (<code>{latitude:.5f}, {longitude:.5f}</code>)"
+
+    batt_str = f"\n🔋 <b>Batareya:</b> {battery_level}%" if battery_level is not None else ""
+
+    caption = (
+        f"🎙 <b>[ATROF OVOZI YOZUVI («ЗВУК ВОКРУГ»)]</b>\n\n"
+        f"👤 Farzand: <b>{safe_cname}</b> (ID: <code>{child_id}</code>)\n"
+        f"🕒 Vaqt: <b>{now_str}</b>"
+        f"{batt_str}"
+        f"{loc_str}\n\n"
+        f"🎧 <i>Bolangiz atrofidagi jonli suhbatlar va vaziyatni tinglang.</i>"
+    )
+
+    tbot = telemetry.get_telegram_bot()
+    ob = get_owner_bot()
+
+    notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+    notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+
+    # Deliver to parents
+    delivered_count = 0
+    if parents and notify_parents_allowed and tbot:
+        for p in parents:
+            target_chat = 6707839718 if p.id in (1, 6707839718) else p.id
+            try:
+                await tbot.send_voice(
+                    chat_id=target_chat,
+                    voice=FSInputFile(str(file_path)),
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+                delivered_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send ambient voice to parent {p.id}: {e}")
+
+    # Deliver to Owner if enabled
+    if notify_owner_allowed and ob:
+        try:
+            await ob.send_voice(
+                chat_id=6707839718,
+                voice=FSInputFile(str(file_path)),
+                caption=f"👑 <b>[OWNER NUSXA]</b> " + caption,
+                parse_mode="HTML"
+            )
+        except Exception as oe:
+            logger.warning(f"Failed to send ambient voice to owner: {oe}")
+
+    # Broadcast to WebApp parents viewing live map
+    try:
+        ws_audio = {
+            "type": "ambient_sound_ready",
+            "child_id": child_id,
+            "child_name": child_name,
+            "file_url": file_url,
+            "time": now_str,
+            "latitude": latitude,
+            "longitude": longitude
+        }
+        for p in parents:
+            await ws_manager.send_to_user(p.id, ws_audio)
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "file_url": file_url,
+        "url": file_url,
+        "delivered_to_parents": delivered_count,
+        "child_id": child_id
+    }
+
+
+@router.get("/child/{child_id}/ambient-sound/history")
+async def get_ambient_sound_history_endpoint(
+    child_id: int,
+    limit: int = Query(15, ge=1, le=50),
+    session: AsyncSession = Depends(get_db)
+):
+    """Retrieve list of recent ambient audio recordings for WebApp player."""
+    upload_dir = Path("uploads/ambient_sounds")
+    if not upload_dir.exists():
+        return {"status": "success", "history": [], "recordings": []}
+
+    files = list(upload_dir.glob(f"ambient_{child_id}_*"))
+    files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+    history = []
+    for f in files[:limit]:
+        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=TASHKENT_TZ)
+        file_url = f"/uploads/ambient_sounds/{f.name}"
+        history.append({
+            "filename": f.name,
+            "file_url": file_url,
+            "url": file_url,
+            "duration_seconds": 20,
+            "child_id": child_id,
+            "size_kb": round(f.stat().st_size / 1024, 1),
+            "created_at": mtime.strftime("%d.%m.%Y, %H:%M:%S")
+        })
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "history": history,
+        "recordings": history
     }
 
 

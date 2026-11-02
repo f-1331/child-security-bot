@@ -1671,6 +1671,7 @@ function applyParentUI(data) {
   document.getElementById("btnCoinRateCorner")?.classList.remove("hidden");
   document.getElementById("childFloatingActions")?.classList.add("hidden");
   document.getElementById("btnParentSiren")?.classList.remove("hidden");
+  document.getElementById("btnParentAmbientSound")?.classList.remove("hidden");
   document.getElementById("btnAddZoneMap")?.classList.remove("hidden");
   document.getElementById("btnAddZoneSection")?.classList.remove("hidden");
   document.getElementById("parentTaskActionSection")?.classList.remove("hidden");
@@ -1884,6 +1885,7 @@ function applyChildUI(user) {
   document.getElementById("btnCoinRateCorner")?.classList.add("hidden");
   document.getElementById("childFloatingActions")?.classList.remove("hidden");
   document.getElementById("btnParentSiren")?.classList.add("hidden");
+  document.getElementById("btnParentAmbientSound")?.classList.add("hidden");
   document.getElementById("btnAddZoneMap")?.classList.add("hidden");
   document.getElementById("btnAddZoneSection")?.classList.add("hidden");
   document.getElementById("parentTaskActionSection")?.classList.add("hidden");
@@ -7503,6 +7505,249 @@ function triggerRemoteSiren() {
 }
 
 // ==============================================================================
+// AMBIENT SOUND MONITORING ("ЗВУК ВОКРУГ" - KILLER BENCHMARK FEATURE)
+// ==============================================================================
+
+function openAmbientSoundModal() {
+  const modal = document.getElementById("modalAmbientSound");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  if (window.lucide) window.lucide.createIcons();
+  loadAmbientSoundHistory();
+}
+
+function closeAmbientSoundModal() {
+  const modal = document.getElementById("modalAmbientSound");
+  if (modal) modal.classList.add("hidden");
+}
+
+let ambientSoundRequestInProgress = false;
+
+async function requestRemoteAmbientSound(durationSeconds) {
+  if (ambientSoundRequestInProgress) {
+    showToast("⚠️ Ovoz yozish jarayoni allaqachon boshlangan, iltimos kuting...");
+    return;
+  }
+  const childId = currentChildId;
+  if (!childId) {
+    showToast("⚠️ Avval farzandni tanlang!");
+    return;
+  }
+
+  const duration = durationSeconds || 30;
+  haptic("medium");
+  ambientSoundRequestInProgress = true;
+
+  const statusEl = document.getElementById("ambientSoundRecordingStatus");
+  const statusText = document.getElementById("ambientSoundStatusText");
+  if (statusEl) statusEl.classList.remove("hidden");
+  if (statusText) statusText.textContent = `Farzand telefoniga ${duration}s ovoz yozish buyrug'i yuborildi...`;
+
+  showToast(`🎙 Farzand telefonidan ${duration} soniyalik ovoz yozish buyrug'i jo'natildi!`);
+
+  try {
+    const effParentId = getEffectiveParentId() || 6707839718;
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        duration_seconds: duration,
+        parent_id: effParentId
+      })
+    });
+    const data = await res.json();
+    if (data.status !== "success") {
+      showToast(`⚠️ Xatolik: ${data.message || 'Buyruq yetkazilmadi'}`);
+      if (statusEl) statusEl.classList.add("hidden");
+      ambientSoundRequestInProgress = false;
+      return;
+    }
+
+    // Countdown and check history after completion
+    let remaining = duration + 5;
+    const countdownTimer = setInterval(() => {
+      remaining -= 1;
+      if (statusText && remaining > 0) {
+        statusText.textContent = `Farzand telefoni mikrofon orqali yozmoqda... (${remaining}s qoldi)`;
+      }
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        ambientSoundRequestInProgress = false;
+        if (statusEl) statusEl.classList.add("hidden");
+        loadAmbientSoundHistory();
+        showToast("✅ Ovoz tayyor bo'ldi! Telegram botingizga ham ovozli xabar yetkazildi.");
+      }
+    }, 1000);
+
+  } catch (err) {
+    console.error("Ambient sound request error:", err);
+    showToast("⚠️ Tarmoq xatosi: Buyruq yuborilmadi");
+    ambientSoundRequestInProgress = false;
+    if (statusEl) statusEl.classList.add("hidden");
+  }
+}
+
+async function loadAmbientSoundHistory() {
+  const container = document.getElementById("ambientSoundHistoryContainer");
+  if (!container) return;
+  const childId = currentChildId;
+  if (!childId) {
+    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">Farzand tanlanmagan</div>';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/history?limit=15`);
+    if (!res.ok) throw new Error("Yuklab bo'lmadi");
+    const data = await res.json();
+
+    if (!data.recordings || data.recordings.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-8 px-4 rounded-2xl bg-slate-900/40 border border-dashed border-slate-800 text-slate-400 text-xs">
+          <i data-lucide="mic-off" class="w-7 h-7 mx-auto mb-2 text-slate-600"></i>
+          <p class="font-bold text-slate-300">Hozircha yozib olingan ovozlar yo'q</p>
+          <p class="text-[11px] text-slate-500 mt-1">Yuqoridagi 15s, 30s yoki 60s tugmasini bosib atrof ovozini eshiting</p>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+      return;
+    }
+
+    let html = "";
+    for (const rec of data.recordings) {
+      const createdStr = rec.created_at ? new Date(rec.created_at).toLocaleString("uz-UZ", {
+        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
+      }) : "Yaqinda";
+      const dur = rec.duration_seconds || 20;
+      const audioUrl = rec.url.startsWith("http") ? rec.url : `${getApiBase()}${rec.url}`;
+
+      html += `
+        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 hover:border-amber-500/40 transition flex flex-col gap-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-200 flex items-center gap-1.5">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>${createdStr}</span>
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              ${dur} soniya
+            </span>
+          </div>
+          <audio controls preload="none" class="w-full h-8 rounded-lg accent-amber-500" style="outline: none;">
+            <source src="${audioUrl}">
+            Brauzeringiz audio pleerni qo'llab-quvvatlamaydi.
+          </audio>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+  } catch (e) {
+    console.error("loadAmbientSoundHistory error:", e);
+    container.innerHTML = '<div class="text-center py-4 text-rose-400 text-xs">Tarixni yuklashda xatolik yuz berdi</div>';
+  }
+}
+
+// Child device ambient sound recorder (Web & Android Bridge)
+let isAmbientRecordingActive = false;
+
+async function startChildAmbientSoundRecording(durationSeconds, requestId) {
+  if (isAmbientRecordingActive) return;
+  const duration = (durationSeconds && durationSeconds > 0 && durationSeconds <= 60) ? durationSeconds : 20;
+
+  // 1. If Native Android Bridge exists, delegate directly to native MediaRecorder
+  if (window.AndroidBridge && typeof window.AndroidBridge.recordAmbientSound === "function") {
+    try {
+      window.AndroidBridge.recordAmbientSound(duration, requestId || "");
+      return;
+    } catch (bridgeErr) {
+      console.warn("Native AndroidBridge recordAmbientSound error:", bridgeErr);
+    }
+  }
+
+  // 2. Web MediaRecorder fallback
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.warn("getUserMedia is not supported on this device/browser");
+    return;
+  }
+
+  isAmbientRecordingActive = true;
+  let stream = null;
+  let mediaRecorder = null;
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const chunks = [];
+    
+    // Choose optimal mimeType
+    let mimeType = "audio/webm";
+    if (typeof MediaRecorder.isTypeSupported === "function") {
+      if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        mimeType = "audio/mp4";
+      } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
+        mimeType = "audio/ogg; codecs=opus";
+      }
+    }
+
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      try {
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+        }
+      } catch (e) {}
+
+      const blobType = mediaRecorder.mimeType || mimeType;
+      const audioBlob = new Blob(chunks, { type: blobType });
+      const ext = blobType.includes("mp4") ? "m4a" : (blobType.includes("ogg") ? "ogg" : "webm");
+
+      const childId = currentChildId;
+      if (!childId) return;
+
+      const formData = new FormData();
+      formData.append("audio_file", audioBlob, `ambient_${childId}_${Date.now()}.${ext}`);
+      formData.append("duration_seconds", String(duration));
+      if (requestId) formData.append("request_id", String(requestId));
+
+      try {
+        await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/upload`, {
+          method: "POST",
+          body: formData
+        });
+      } catch (uploadErr) {
+        console.error("Ambient sound upload failed:", uploadErr);
+      } finally {
+        isAmbientRecordingActive = false;
+      }
+    };
+
+    mediaRecorder.start();
+
+    // Auto-stop after specified duration
+    setTimeout(() => {
+      try {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+      } catch (stopErr) {
+        isAmbientRecordingActive = false;
+      }
+    }, duration * 1000);
+
+  } catch (err) {
+    console.warn("Failed to record ambient sound via web MediaRecorder:", err);
+    isAmbientRecordingActive = false;
+    if (stream) {
+      try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    }
+  }
+}
+
+// ==============================================================================
 // ADVANCED FEATURES: QUICK SIGNALS, DIRECTIVES, SCHOOL MODE & ACTIVITY
 // ==============================================================================
 
@@ -8767,6 +9012,12 @@ function handleIncomingWebSocketMessage(msg) {
     return;
   }
 
+  // 1.12 Remote ambient sound recording for Child ("Звук вокруг")
+  if (msg.type === "record_ambient_sound" && currentRole === "child") {
+    startChildAmbientSoundRecording(msg.duration_seconds || 20, msg.request_id);
+    return;
+  }
+
   // 1.15 Child logout approval / rejection from Parent Telegram Bot
   if (msg.type === "child_logout_approved" && currentRole === "child") {
     showToast("✅ Ota-onangiz hisobdan chiqishga ruxsat berdi!");
@@ -9080,6 +9331,8 @@ async function checkChildPendingNotifications(childId) {
             playSirenSound();
             haptic("heavy");
             showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+          } else if (notif.type === "record_ambient_sound") {
+            startChildAmbientSoundRecording(notif.duration_seconds || 20, notif.request_id);
           } else if (notif.type === "device_policy_update") {
             if (typeof fetchChildDevicePolicy === "function") {
               fetchChildDevicePolicy(currentChildId);
