@@ -685,9 +685,9 @@ async def verify_telegram_auth_endpoint(
 
     telegram_id = int(user_data["id"])
     if telegram_id in (6707839718, 1):
-        user = await crud.get_user(session, 1)
+        user = await crud.get_user(session, 6707839718)
         if not user:
-            user = await crud.get_user(session, telegram_id)
+            user = await crud.get_user(session, 1)
     else:
         user = await crud.get_user(session, telegram_id)
     if not user:

@@ -1266,12 +1266,6 @@ async function generateWebCodeAction() {
 
     const data = await res.json();
 
-    if (data && data.status === "pending_approval") {
-      showPendingApprovalModal(data.request_id, data.message);
-      startApprovalPolling(data.request_id, code);
-      return true;
-    }
-
     if (!res.ok || data.status !== "success") {
       throw new Error(data.detail || "Kod yaratishda xatolik yuz berdi.");
     }
@@ -1439,6 +1433,13 @@ async function submitAuthCode() {
     }
 
     const data = await res.json();
+
+    if (data && data.status === "pending_approval") {
+      showPendingApprovalModal(data.request_id, data.message);
+      startApprovalPolling(data.request_id, code);
+      return true;
+    }
+
     if (!res.ok || data.status !== "success") {
       throw new Error(data.detail || "Kiritilgan kod noto'g'ri yoki mavjud emas.");
     }
@@ -12151,3 +12152,110 @@ function updateChildLockScreenOverlay(policy) {
   }
 }
 window.updateChildLockScreenOverlay = updateChildLockScreenOverlay;
+
+// ==============================================================================
+// 2FA LOGIN APPROVAL MODAL & POLLING
+// ==============================================================================
+let _approvalPollTimer = null;
+let _approvalCountdownTimer = null;
+let _approvalActiveRequestId = null;
+
+function showPendingApprovalModal(requestId, message) {
+  const modal = document.getElementById("modalPendingApproval");
+  if (!modal) return;
+  _approvalActiveRequestId = requestId;
+  modal.classList.remove("hidden");
+  if (window.lucide) lucide.createIcons();
+}
+window.showPendingApprovalModal = showPendingApprovalModal;
+
+function hidePendingApprovalModal() {
+  const modal = document.getElementById("modalPendingApproval");
+  if (modal) modal.classList.add("hidden");
+  if (_approvalPollTimer) {
+    clearInterval(_approvalPollTimer);
+    _approvalPollTimer = null;
+  }
+  if (_approvalCountdownTimer) {
+    clearInterval(_approvalCountdownTimer);
+    _approvalCountdownTimer = null;
+  }
+  _approvalActiveRequestId = null;
+}
+window.hidePendingApprovalModal = hidePendingApprovalModal;
+
+function cancelApprovalPolling() {
+  hidePendingApprovalModal();
+  showToast("Kirish so'rovi bekor qilindi.");
+}
+window.cancelApprovalPolling = cancelApprovalPolling;
+
+function startApprovalPolling(requestId, code) {
+  if (_approvalPollTimer) clearInterval(_approvalPollTimer);
+  if (_approvalCountdownTimer) clearInterval(_approvalCountdownTimer);
+
+  let timeLeft = 120;
+  const countdownEl = document.getElementById("approvalCountdownText");
+  if (countdownEl) countdownEl.textContent = `Ruxsat kutilmoqda... (${timeLeft}s)`;
+
+  _approvalCountdownTimer = setInterval(() => {
+    timeLeft -= 1;
+    if (countdownEl) {
+      countdownEl.textContent = `Ruxsat kutilmoqda... (${Math.max(0, timeLeft)}s)`;
+    }
+    if (timeLeft <= 0) {
+      clearInterval(_approvalCountdownTimer);
+      _approvalCountdownTimer = null;
+    }
+  }, 1000);
+
+  _approvalPollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/v1/webapp/auth/approval-status?request_id=${encodeURIComponent(requestId)}`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          hidePendingApprovalModal();
+          showToast("⚠️ So'rov muddati tugadi yoki topilmadi.");
+        }
+        return;
+      }
+      const data = await res.json();
+      if (data.status === "rejected") {
+        hidePendingApprovalModal();
+        haptic("warning");
+        showToast("❌ Akkaunt egasi tomonidan kirish rad etildi!");
+        const errorText = document.getElementById("authErrorText");
+        const errorMsg = document.getElementById("authErrorMsg");
+        if (errorText) errorText.classList.remove("hidden");
+        if (errorMsg) errorMsg.textContent = "Akkaunt egasi tomonidan kirish rad etildi.";
+      } else if (data.status === "expired") {
+        hidePendingApprovalModal();
+        haptic("warning");
+        showToast("⏳ Tasdiqlash vaqti tugadi (120s). Qaytadan urinib ko'ring.");
+      } else if (data.status === "success" || data.status === "approved" || data.user || data.role) {
+        // Successfully approved!
+        hidePendingApprovalModal();
+
+        // Save session & code persistently
+        localStorage.setItem("smart_tracker_session", JSON.stringify(data));
+        localStorage.setItem("smart_tracker_auth_code", code);
+        localStorage.setItem("smart_tracker_role", data.role || "parent");
+
+        if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
+          try {
+            window.AndroidBridge.saveSession(JSON.stringify(data), code, data.role || "parent");
+          } catch (e) {}
+        }
+
+        haptic("success");
+        dismissEntryDemoBanner();
+        hideAuthGateModal();
+        applyAuthenticatedUser(data);
+        showToast("🎉 Ruxsat berildi! Xush kelibsiz!");
+      }
+    } catch (err) {
+      console.warn("Approval polling error:", err);
+    }
+  }, 1500);
+}
+window.startApprovalPolling = startApprovalPolling;
