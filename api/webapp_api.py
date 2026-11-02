@@ -1487,9 +1487,13 @@ async def child_sos_endpoint(
         notify_parents_allowed = await crud.is_notify_parents_enabled(session)
         notify_owner_allowed = await crud.is_notify_owner_enabled(session)
 
+        sent_target_chats = set()
         if parents:
             for p in parents:
                 target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+                if target_chat_id in sent_target_chats:
+                    continue
+                sent_target_chats.add(target_chat_id)
                 if notify_parents_allowed:
                     try:
                         sent_m = await bot.send_message(
@@ -1628,13 +1632,8 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     cur_lon = latest_loc.longitude if latest_loc else None
     await session.commit()
 
-    # Clean up / delete all intermediate recurring SOS messages from chat
-    old_messages = sos_chat_messages_map.pop(child_id, [])
-    for b_inst, c_id, m_id in old_messages:
-        try:
-            await b_inst.delete_message(chat_id=c_id, message_id=m_id)
-        except Exception as del_err:
-            logger.debug(f"Could not delete SOS message {m_id} from chat {c_id}: {del_err}")
+    # Keep SOS alert messages in chat history for audit trail (do not delete!)
+    sos_chat_messages_map.pop(child_id, None)
 
     # Reset sequence counter
     sos_sequence_counter.pop(child_id, None)
@@ -1645,7 +1644,7 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     cancel_text = (
         f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\n"
         f"Farzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.\n\n"
-        f"🧹 <i>Oldingi barcha oraliq SOS xabarlari chatdan tozalandi.</i>\n"
+        f""
     )
     if has_live_loc:
         cancel_text += "📍 <b>Farzandning keyingi harakatini real vaqtda kuzatishingiz uchun pastda 30 daqiqalik jonli (Live) lokatsiya yoqildi:</b>"
@@ -1658,8 +1657,12 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     if bot:
         if parents:
             if notify_parents_allowed:
+                sent_cancel_chats = set()
                 for p in parents:
                     target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+                    if target_chat_id in sent_cancel_chats:
+                        continue
+                    sent_cancel_chats.add(target_chat_id)
                     try:
                         await bot.send_message(
                             chat_id=target_chat_id,
@@ -3201,9 +3204,13 @@ async def send_child_quick_signal(
     notify_owner_allowed = await crud.is_notify_owner_enabled(session)
     tbot = telemetry.get_telegram_bot()
     ob = get_owner_bot()
+    notified_chats = set()
     if parents:
         for p in parents:
             target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+            if target_chat_id in notified_chats:
+                continue
+            notified_chats.add(target_chat_id)
             if notify_parents_allowed and tbot:
                 try:
                     await tbot.send_message(

@@ -92,15 +92,18 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🔑 Saytga kirish kodi")
         ],
         [
-            KeyboardButton(text="📊 Bugungi hisobot"),
-            KeyboardButton(text="💰 Tangalar kursini sozlash")
+            KeyboardButton(text="👟 Kunlik harakat maqsadi"),
+            KeyboardButton(text="📊 Bugungi hisobot")
         ],
         [
-            KeyboardButton(text="📞 Oila kontaktlari"),
-            KeyboardButton(text="🔄 Rolni o'zgartirish")
+            KeyboardButton(text="💰 Tangalar kursini sozlash"),
+            KeyboardButton(text="📞 Oila kontaktlari")
         ],
         [
-            KeyboardButton(text="ℹ️ Yordam"),
+            KeyboardButton(text="🔄 Rolni o'zgartirish"),
+            KeyboardButton(text="ℹ️ Yordam")
+        ],
+        [
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]

@@ -4090,21 +4090,9 @@ function calculateRouteStats(points) {
       continue;
     }
 
-    // High-Precision Stationary Deadband:
-    // When speed >= 1.8 km/h, count movement if d >= 12m.
-    // When stationary (speed is 0 or absent), require true displacement >= 45m with accuracy <= 30m.
-    let isMoving = false;
-    if (pt.speed && pt.speed >= 1.8) {
-      isMoving = (d >= 12);
-    } else {
-      const acc = pt.accuracy || 15;
-      if (acc <= 30) {
-        const deadband = Math.max(45, acc * 1.5);
-        isMoving = (d >= deadband);
-      }
-    }
-
-    if (isMoving) {
+    // Realistic Walking & Commute Displacement Calculation:
+    // Filter stationary GPS flutter (< 4.0 meters), accumulate genuine pedestrian/vehicle distance!
+    if (d >= 4.0) {
       totalDistM += d;
       lastAnchor = pt;
     }
@@ -4731,9 +4719,15 @@ async function toggleRouteHistory(forceState) {
       showToast("📍 Bugungi joylashuv nuqtasi xaritada ko'rsatildi");
     }
   } else {
-    clearRouteFromMap();
+    // Reliably turn OFF without destroying cached geometry
+    if (routeLayerGroup && map && map.hasLayer(routeLayerGroup)) {
+      try { map.removeLayer(routeLayerGroup); } catch (e) {}
+    }
+    if (routePolyline && map && map.hasLayer(routePolyline)) {
+      try { map.removeLayer(routePolyline); } catch (e) {}
+    }
     hideRoutePlaybackHud();
-    showToast("🗺️ Bugungi harakat yo'li o'chirildi (yashirildi)");
+    showToast("🗺️ Bugungi harakat yo'li yashirildi (o'chirildi)");
   }
   updateRouteButtonsState();
 }
@@ -4780,8 +4774,11 @@ async function toggleRepeatedPlaces(forceState) {
       showToast("ℹ️ Bugun hali qayta-qayta yurilgan alohida joylar qayd etilmagan");
     }
   } else {
-    clearRepeatedFromMap();
-    showToast("🔁 Qayta-qayta yurilgan joylar o'chirildi (yashirildi)");
+    // Reliably turn OFF without destroying cached geometry
+    if (repeatsLayerGroup && map && map.hasLayer(repeatsLayerGroup)) {
+      try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+    }
+    showToast("🔁 Qayta-qayta yurilgan joylar yashirildi (o'chirildi)");
   }
   updateRouteButtonsState();
 }
@@ -5233,50 +5230,7 @@ function switchTab(tabName) {
   }
 }
 
-function openChildMapModal() {
-  haptic("medium");
-  const childSec = document.getElementById("childViewSection");
-  const parentSec = document.getElementById("parentViewSection");
-  if (childSec) childSec.classList.add("hidden");
-  if (parentSec) parentSec.classList.remove("hidden");
-
-  let backBtn = document.getElementById("btnChildBackFromMap");
-  if (!backBtn && parentSec) {
-    backBtn = document.createElement("button");
-    backBtn.id = "btnChildBackFromMap";
-    backBtn.className = "absolute top-3.5 left-3.5 z-20 px-3 py-2 bg-gradient-to-r from-purple-700 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-xl border border-purple-400/50 flex items-center gap-1.5 active:scale-95 transition backdrop-blur";
-    backBtn.innerHTML = `<i data-lucide="arrow-left" class="w-4 h-4"></i> <span>Sarguzashtga qaytish</span>`;
-    backBtn.onclick = () => {
-      haptic("light");
-      switchTab("map");
-    };
-    parentSec.appendChild(backBtn);
-  }
-  if (backBtn) backBtn.classList.remove("hidden");
-
-  if (map) {
-    setTimeout(() => {
-      map.invalidateSize();
-      centerOnChild();
-    }, 100);
-  }
-  if (window.lucide) lucide.createIcons();
-}
-
-function closeChildMapModal() {
-  haptic("light");
-  const childSec = document.getElementById("childViewSection");
-  const parentSec = document.getElementById("parentViewSection");
-  if (childSec) childSec.classList.remove("hidden");
-  if (parentSec) parentSec.classList.add("hidden");
-
-  const backBtn = document.getElementById("btnChildBackFromMap");
-  if (backBtn) backBtn.classList.add("hidden");
-
-  updateTelegramBackButton();
-  if (window.lucide) lucide.createIcons();
-}
-window.closeChildMapModal = closeChildMapModal;
+// Duplicate old child map stub removed in favor of dedicated modalChildAdventureMap
 
 function renderChildDashboardQuests() {
   const container = document.getElementById("childDashboardTasksList");
@@ -6795,9 +6749,7 @@ async function triggerChildSOS() {
     // Background ambient audio snapshot (5s)
     try { recordAndUploadSOSAudio(targetChildId); } catch(e){}
 
-    const apiBase = (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null")
-      ? PRODUCTION_BACKEND_URL
-      : "";
+    const apiBase = getApiBase();
 
     // IMMEDIATE (0ms) DISPATCH TO SERVER / TELEGRAM:
     if (!navigator.onLine) {
@@ -12172,3 +12124,20 @@ function toggleChildAdventureTileLayer() {
   }
 }
 window.toggleChildAdventureTileLayer = toggleChildAdventureTileLayer;
+
+function updateChildLockScreenOverlay(policy) {
+  if (currentRole !== "child") return;
+  const overlay = document.getElementById("modal-child-lockdown");
+  if (!overlay) return;
+  const isLocked = policy && (policy.is_all_apps_blocked || policy.school_mode_enabled);
+  if (isLocked) {
+    overlay.classList.remove("hidden");
+    const reasonText = document.getElementById("childLockdownReasonText");
+    if (reasonText) {
+      reasonText.textContent = policy.is_all_apps_blocked ? "Maktab dars vaqti yoki ota-ona cheklovi faol 📚" : "Ilovalar vaqtincha cheklandi ⏳";
+    }
+  } else {
+    overlay.classList.add("hidden");
+  }
+}
+window.updateChildLockScreenOverlay = updateChildLockScreenOverlay;

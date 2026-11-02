@@ -2545,11 +2545,16 @@ async def on_child_quick_signal_callback(callback: CallbackQuery, bot: Bot):
             maps_url = f"https://www.google.com/maps/search/?api=1&query={latest_loc.latitude},{latest_loc.longitude}"
             tg_msg += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
 
+        sent_chats = set()
         for p in parents:
+            target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+            if target_chat_id in sent_chats:
+                continue
+            sent_chats.add(target_chat_id)
             try:
-                await bot.send_message(chat_id=p.id, text=tg_msg, parse_mode="HTML")
-            except Exception:
-                pass
+                await bot.send_message(chat_id=target_chat_id, text=tg_msg, parse_mode="HTML")
+            except Exception as e:
+                logger.error(f"Failed to forward quick signal to parent {target_chat_id}: {e}")
 
         try:
             from api.webapp_api import ws_manager
@@ -6205,7 +6210,7 @@ def generate_screen_time_card(child, report, policy, all_children=None):
     "ilovalar",
     "bloklash"
 }))
-async def parent_screen_time_handler(message: Message):
+async def parent_screen_time_handler(message: Message, bot: Optional[Bot] = None):
     """View child screen time, daily app usage stats, and master lock toggle."""
     user_id = message.from_user.id
     try:
@@ -7476,7 +7481,7 @@ async def on_child_phone_entered(message: Message, state: FSMContext):
     "Atrof ovozi",
     "Звук вокруг"
 }))
-async def parent_ambient_sound_handler(message: Message):
+async def parent_ambient_sound_handler(message: Message, bot: Optional[Bot] = None):
     """Parent triggers remote ambient sound recording on child device."""
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
@@ -7588,7 +7593,7 @@ async def on_record_ambient_cb(callback: CallbackQuery):
     "Siren",
     "Signal"
 }))
-async def parent_siren_trigger_handler(message: Message):
+async def parent_siren_trigger_handler(message: Message, bot: Optional[Bot] = None):
     """Parent triggers loud search siren on child device, overriding silent mode."""
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
@@ -7683,6 +7688,9 @@ async def fallback_text_handler(message: Message, bot: Bot):
         return
     if raw_text.startswith("📚 Maktab rejimi") or raw_text == "/school":
         await on_parent_school_mode_command(message, bot)
+        return
+    if raw_text.startswith("👟 Kunlik harakat maqsadi") or raw_text in {"/goal", "/walking_goal", "/qadam", "Harakat maqsadi"}:
+        await on_parent_walking_goal_command(message, bot)
         return
 
     # Ignore system command buttons so they are never forwarded as messages
@@ -7857,3 +7865,96 @@ async def bot_global_error_handler(event: ErrorEvent):
                 pass
     except Exception as e:
         logger.warning(f"Error handler dispatch failed: {e}")
+
+# ==============================================================================
+# PARENT WALKING GOAL COMMAND & HANDLER (KUNLIK HARAKAT MAQSADI)
+# ==============================================================================
+@router.message(Command("goal", "walking_goal", "qadam", "masofa"))
+async def on_parent_walking_goal_command(message: Message, bot: Optional[Bot] = None):
+    """Parent sets custom daily walking distance / step goal for child."""
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        children = await crud.get_children_for_parent(session, user_id)
+        if not children and user_id in (getattr(settings, "OWNER_ID", 1), 1, 6707839718):
+            from db.models import User
+            from sqlalchemy import select
+            all_ch = (await session.execute(select(User).where(User.role == "child"))).scalars().all()
+            children = list(all_ch)
+
+        if not children:
+            await message.answer(
+                "👟 <b>Kunlik Harakat Maqsadi:</b>\n\n"
+                "⚠️ Sizga hali hech qanday farzand hisobi ulanmagan.",
+                parse_mode="HTML"
+            )
+            return
+
+        child = children[0]
+        policy = await crud.get_or_create_device_policy(session, child.id)
+        cur_km = getattr(policy, "daily_walking_goal_km", 3.0) or 3.0
+        cur_steps = getattr(policy, "daily_walking_goal_steps", 5000) or int(cur_km * 1428)
+
+        c_name = html.escape(child.full_name or f"Farzand #{child.id}")
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎯 2.0 km (~2,800 qadam)", callback_data=f"set_wgoal:{child.id}:2.0:2856"),
+                InlineKeyboardButton(text="🎯 3.0 km (~4,300 qadam)", callback_data=f"set_wgoal:{child.id}:3.0:4284")
+            ],
+            [
+                InlineKeyboardButton(text="🎯 5.0 km (~7,100 qadam)", callback_data=f"set_wgoal:{child.id}:5.0:7140"),
+                InlineKeyboardButton(text="🎯 8.0 km (~11,400 qadam)", callback_data=f"set_wgoal:{child.id}:8.0:11424")
+            ],
+            [
+                InlineKeyboardButton(text="📱 Saytda to'liq sozlash", web_app=WebAppInfo(url=settings.RESOLVED_WEBAPP_URL)),
+                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")
+            ]
+        ])
+
+        await message.answer(
+            f"👟 <b>KUNLIK HARAKAT MAQSADI (FAVOLLIK REJASI)</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 Farzand: <b>{c_name}</b>\n"
+            f"📊 Joriy maqsad: <b>{cur_km} km ({cur_steps:,} qadam)</b>\n\n"
+            f"<i>Farzandingiz bugun sog'lom faollik uchun qancha masofa bosib o'tishi kerakligini belgilang:</i>",
+            reply_markup=kb,
+            parse_mode="HTML"
+        )
+
+
+@router.callback_query(F.data.startswith("set_wgoal:"))
+async def on_set_walking_goal_cb(callback: CallbackQuery):
+    """Save selected walking goal."""
+    parts = callback.data.split(":")
+    child_id = int(parts[1])
+    km = float(parts[2])
+    steps = int(parts[3])
+
+    async with AsyncSessionLocal() as session:
+        policy = await crud.get_or_create_device_policy(session, child_id)
+        policy.daily_walking_goal_km = km
+        policy.daily_walking_goal_steps = steps
+        await session.commit()
+
+        # Broadcast via WebSocket to WebApp and Child App
+        try:
+            from api.webapp_api import ws_manager
+            parents = await crud.get_parents_for_child(session, child_id)
+            ws_msg = {
+                "type": "walking_goal_update",
+                "child_id": child_id,
+                "target_km": km,
+                "target_steps": steps
+            }
+            for p in parents:
+                await ws_manager.send_to_user(p.id, ws_msg)
+            await ws_manager.send_to_user(child_id, ws_msg)
+        except Exception:
+            pass
+
+    await callback.message.edit_text(
+        f"✅ <b>KUNLIK MAQSAD SAQLANDI!</b>\n\n"
+        f"Farzandingiz uchun bugungi harakat normasi: <b>{km} km ({steps:,} qadam)</b> qilib belgilandi. 🎯🏃‍♂️\n\n"
+        f"<i>Farzand ushbu masofani bosib o'tgach, tizim uni avtomatik rag'batlantiradi va sizga xabar beradi.</i>",
+        parse_mode="HTML"
+    )
+    await callback.answer(f"Maqsad: {km} km qilib belgilandi!")
