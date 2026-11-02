@@ -99,7 +99,8 @@ async def evaluate_geofences_and_notify(
             if fence.parent_id:
                 notify_ids.add(fence.parent_id)
 
-            if bot and notify_ids:
+            notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+            if bot and notify_ids and notify_parents_allowed:
                 for pid in notify_ids:
                     try:
                         await bot.send_message(
@@ -135,7 +136,8 @@ async def evaluate_geofences_and_notify(
             if fence.parent_id:
                 notify_ids.add(fence.parent_id)
 
-            if bot and notify_ids:
+            notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+            if bot and notify_ids and notify_parents_allowed:
                 for pid in notify_ids:
                     try:
                         await bot.send_message(

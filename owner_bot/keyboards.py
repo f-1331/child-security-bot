@@ -32,6 +32,7 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="🛡️ Xavfsizlik & Anti-Spam"),
         ],
         [
+            KeyboardButton(text="🔔 Xabarnomalar Boshqaruvi"),
             KeyboardButton(text="👥 Adminlarni boshqarish"),
             KeyboardButton(text="📢 Hammaga xabar (Broadcast)"),
         ],
@@ -459,3 +460,38 @@ def get_users_directory_inline_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+
+
+def get_notifications_settings_inline_keyboard(settings_dict: Dict[str, bool]) -> InlineKeyboardMarkup:
+    """Inline keyboard for toggling global notifications for parents, children, and owner."""
+    p_on = settings_dict.get("notify_parents", True)
+    c_on = settings_dict.get("notify_children", True)
+    o_on = settings_dict.get("notify_owner", True)
+
+    btn_parents = InlineKeyboardButton(
+        text=f"{'🟢 YOQILGAN' if p_on else '🔴 OʻCHIRILGAN'} | 👨‍👩‍👧 Ota-ona xabarlari",
+        callback_data="toggle_notif:parents",
+    )
+    btn_children = InlineKeyboardButton(
+        text=f"{'🟢 YOQILGAN' if c_on else '🔴 OʻCHIRILGAN'} | 👦 Bola signallari",
+        callback_data="toggle_notif:children",
+    )
+    btn_owner = InlineKeyboardButton(
+        text=f"{'🟢 YOQILGAN' if o_on else '🔴 OʻCHIRILGAN'} | 👑 Owner nusxalari",
+        callback_data="toggle_notif:owner",
+    )
+
+    btn_all_on = InlineKeyboardButton(text="🟢 Barchasini yoqish", callback_data="toggle_notif:all_on")
+    btn_all_off = InlineKeyboardButton(text="🔴 Barchasini oʻchirish", callback_data="toggle_notif:all_off")
+    btn_refresh = InlineKeyboardButton(text="🔄 Yangilash", callback_data="toggle_notif:refresh")
+    btn_back = InlineKeyboardButton(text="🔙 Boshqaruv paneli", callback_data="adm_back_main")
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [btn_parents],
+            [btn_children],
+            [btn_owner],
+            [btn_all_on, btn_all_off],
+            [btn_refresh, btn_back],
+        ]
+    )

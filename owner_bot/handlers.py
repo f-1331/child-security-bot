@@ -30,6 +30,7 @@ from owner_bot.keyboards import (
     get_reset_options_keyboard,
     get_factory_reset_confirm_keyboard,
     get_users_directory_inline_keyboard,
+    get_notifications_settings_inline_keyboard,
 )
 from owner_bot.logger_buffer import get_recent_logs
 from owner_bot.service import (
@@ -2435,3 +2436,75 @@ async def callback_resolve_sos_owner(callback: CallbackQuery):
             pass
     except Exception as e:
         await callback.answer(f"Xato: {e}", show_alert=True)
+
+
+# ==============================================================================
+# GLOBAL XABARNOMALAR BOSHQARUVI (OWNER TOGGLES)
+# ==============================================================================
+def format_notification_settings_html(settings_dict: Dict[str, bool]) -> str:
+    p_on = settings_dict.get("notify_parents", True)
+    c_on = settings_dict.get("notify_children", True)
+    o_on = settings_dict.get("notify_owner", True)
+
+    p_badge = "🟢 <b>YOQILGAN (Xabarlar boradi)</b>" if p_on else "🔴 <b>OʻCHIRILGAN (Xabarlar toʻxtatilgan)</b>"
+    c_badge = "🟢 <b>YOQILGAN (Signallar boradi)</b>" if c_on else "🔴 <b>OʻCHIRILGAN (Signallar toʻxtatilgan)</b>"
+    o_badge = "🟢 <b>YOQILGAN (Nusxalar keladi)</b>" if o_on else "🔴 <b>OʻCHIRILGAN (Nusxalar kelmaydi)</b>"
+
+    return (
+        "🔔 <b>GLOBAL XABARNOMALAR & SIGNALLAR BOSHQARUVI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>Bu boʻlim orqali platformadagi xabarlar oqimini mustaqil ravishda yoqib/oʻchirishingiz mumkin:</i>\n\n"
+        f"👨‍👩‍👧 <b>Ota-onalarga boradigan xabarlar:</b>\n"
+        f"Holat: {p_badge}\n"
+        "<i>(SOS xavf signallari, geozona kirish/chiqish, batareya va tezlik ogohlantirishlari, tezkor signallar)</i>\n\n"
+        f"👦 <b>Bolalarga boradigan signallar:</b>\n"
+        f"Holat: {c_badge}\n"
+        "<i>(Siren tovushi, ekran qulflash buyruqlari, direktivalar va topshiriqlar)</i>\n\n"
+        f"👑 <b>Owner / Asoschiga keladigan xabarlar:</b>\n"
+        f"Holat: {o_badge}\n"
+        "<i>(SOS global nusxalari, tizim ogohlantirishlari va roʻyxatdan oʻtish bildirishnomalari)</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "👇 <i>Kerakli tugmani bosing va 1-bosishda holatni oʻzgartiring:</i>"
+    )
+
+
+@owner_bot_router.message(F.text.in_({"🔔 Xabarnomalar Boshqaruvi", "/notifications", "/xabarlar"}))
+async def handle_notifications_control_cmd(message: Message):
+    async with async_session_maker() as session:
+        settings = await crud.get_notification_settings(session)
+    html_text = format_notification_settings_html(settings)
+    kb = get_notifications_settings_inline_keyboard(settings)
+    await message.answer(html_text, reply_markup=kb, parse_mode="HTML")
+
+
+@owner_bot_router.callback_query(F.data.startswith("toggle_notif:"))
+async def handle_toggle_notification_cb(callback: CallbackQuery):
+    action = callback.data.split(":")[1]
+    async with async_session_maker() as session:
+        if action == "parents":
+            await crud.toggle_notification_setting("notify_parents", session)
+            toast = "👨‍👩‍👧 Ota-ona xabarlari holati oʻzgartirildi!"
+        elif action == "children":
+            await crud.toggle_notification_setting("notify_children", session)
+            toast = "👦 Bola signallari holati oʻzgartirildi!"
+        elif action == "owner":
+            await crud.toggle_notification_setting("notify_owner", session)
+            toast = "👑 Owner nusxalari holati oʻzgartirildi!"
+        elif action == "all_on":
+            await crud.set_all_notification_settings(True, session)
+            toast = "🟢 Barcha xabarnomalar yoqildi!"
+        elif action == "all_off":
+            await crud.set_all_notification_settings(False, session)
+            toast = "🔴 Barcha xabarnomalar oʻchirildi!"
+        else:
+            toast = "Yangilandi!"
+
+        settings = await crud.get_notification_settings(session)
+
+    html_text = format_notification_settings_html(settings)
+    kb = get_notifications_settings_inline_keyboard(settings)
+    try:
+        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer(toast)

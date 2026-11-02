@@ -118,6 +118,9 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
     # 2. Battery Alert Check (<= 10% critical drop & charging while <= 10%)
     battery_alert_triggered = False
     now_utc = datetime.now(timezone.utc)
+    notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+    effective_bot_for_parents = telegram_bot if notify_parents_allowed else None
+
     if payload.battery_level is not None:
         parents = None
         child_name = None
@@ -126,7 +129,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         if payload.battery_level <= 10 and not payload.is_charging:
             last_alert_time = last_low_10_alert_map.get(payload.child_id)
             if not last_alert_time or (now_utc - last_alert_time) > timedelta(minutes=20):
-                if telegram_bot:
+                if effective_bot_for_parents:
                     parents = await crud.get_parents_for_child(session, payload.child_id)
                     child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
                     alert_msg = (
@@ -154,7 +157,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
             if not was_charging:
                 last_chg_time = last_charging_low_alert_map.get(payload.child_id)
                 if not last_chg_time or (now_utc - last_chg_time) > timedelta(minutes=15):
-                    if telegram_bot:
+                    if effective_bot_for_parents:
                         if parents is None:
                             parents = await crud.get_parents_for_child(session, payload.child_id)
                             child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
@@ -184,7 +187,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                 child_id=payload.child_id,
                 battery_level=payload.battery_level
             )
-            if should_alert and telegram_bot:
+            if should_alert and effective_bot_for_parents:
                 if parents is None:
                     parents = await crud.get_parents_for_child(session, payload.child_id)
                     child_name = html.escape(child.full_name or f"Farzand ID:{child.id}")
@@ -208,7 +211,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
 
     # 2.5 Speed Alert Check (Transport movement >= 30 km/h)
     speed_alert_triggered = False
-    if payload.speed is not None and payload.speed >= 30.0 and telegram_bot:
+    if payload.speed is not None and payload.speed >= 30.0 and effective_bot_for_parents:
         now = datetime.now(timezone.utc)
         last_alert_time = last_speed_alert_map.get(payload.child_id)
         if not last_alert_time or (now - last_alert_time) > timedelta(minutes=15):
@@ -237,7 +240,7 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
     # 2.6 Sudden Impact / Emergency Stop Alert (>40 km/h dropped to < 5 km/h in <= 4s)
     prev_speed_data = last_known_speed_tracker.get(payload.child_id)
     curr_speed = payload.speed or 0.0
-    if prev_speed_data and telegram_bot:
+    if prev_speed_data and effective_bot_for_parents:
         prev_spd, prev_time = prev_speed_data
         dt = now_ts - prev_time
         last_impact_time = last_impact_alert_map.get(payload.child_id, 0.0)

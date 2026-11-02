@@ -1484,29 +1484,33 @@ async def child_sos_endpoint(
                 f"⚠️ <b>DIQQAT:</b> Farzandingiz bilan zudlik bilan bog'laning yoki xaritada tekshiring!"
             )
 
+        notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+        notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+
         if parents:
             for p in parents:
                 target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
-                try:
-                    sent_m = await bot.send_message(
-                        chat_id=target_chat_id,
-                        text=parent_alert,
-                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                        parse_mode="HTML"
-                    )
-                    record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
-                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                        sent_loc = await bot.send_location(
+                if notify_parents_allowed:
+                    try:
+                        sent_m = await bot.send_message(
                             chat_id=target_chat_id,
-                            latitude=lat,
-                            longitude=lon
+                            text=parent_alert,
+                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                            parse_mode="HTML"
                         )
-                        record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
-                except Exception as e:
-                    logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS via main bot: {e}")
+                        record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
+                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                            sent_loc = await bot.send_location(
+                                chat_id=target_chat_id,
+                                latitude=lat,
+                                longitude=lon
+                            )
+                            record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
+                    except Exception as e:
+                        logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS via main bot: {e}")
 
                 # Always deliver to owner bot if parent is owner (ID 1 or 6707839718)
-                if p.id in (1, 6707839718):
+                if p.id in (1, 6707839718) and notify_owner_allowed:
                     ob = get_owner_bot()
                     if ob:
                         try:
@@ -1524,72 +1528,74 @@ async def child_sos_endpoint(
                             logger.error(f"Owner bot dispatch also failed: {oe}")
 
             # Also notify Owner Bot for global admin oversight
-            owner_bot = get_owner_bot()
-            if owner_bot:
-                try:
-                    sent_adm = await owner_bot.send_message(
-                        chat_id=6707839718,
-                        text=f"🚨 <b>[PLATFORMA SOS OGOHLANTIRISHI - #{current_seq}-MARTA]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS tugmasini bosdi!\nOta-onasiga xabar yuborildi.\n\n" + parent_alert,
-                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                        parse_mode="HTML"
-                    )
-                    record_sos_message(child_id, owner_bot, 6707839718, sent_adm.message_id)
-                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                        sent_adm_loc = await owner_bot.send_location(
+            if notify_owner_allowed:
+                owner_bot = get_owner_bot()
+                if owner_bot:
+                    try:
+                        sent_adm = await owner_bot.send_message(
                             chat_id=6707839718,
-                            latitude=lat,
-                            longitude=lon
+                            text=f"🚨 <b>[PLATFORMA SOS OGOHLANTIRISHI - #{current_seq}-MARTA]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS tugmasini bosdi!\nOta-onasiga xabar yuborildi.\n\n" + parent_alert,
+                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                            parse_mode="HTML"
                         )
-                        record_sos_message(child_id, owner_bot, 6707839718, sent_adm_loc.message_id)
-                except Exception as oe:
-                    logger.warning(f"Could not dispatch SOS copy to owner bot: {oe}")
+                        record_sos_message(child_id, owner_bot, 6707839718, sent_adm.message_id)
+                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                            sent_adm_loc = await owner_bot.send_location(
+                                chat_id=6707839718,
+                                latitude=lat,
+                                longitude=lon
+                            )
+                            record_sos_message(child_id, owner_bot, 6707839718, sent_adm_loc.message_id)
+                    except Exception as oe:
+                        logger.warning(f"Could not dispatch SOS copy to owner bot: {oe}")
         else:
-            # Fallback for unlinked child accounts or admin testing: notify owner
-            owner_id = 6707839718
-            owner_alert = (
-                f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS - #{current_seq}-MARTA]</b>\n"
-                f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
-                + parent_alert
-            )
-            try:
-                sent_m = await bot.send_message(
-                    chat_id=owner_id,
-                    text=owner_alert,
-                    reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                    parse_mode="HTML"
+            # Fallback for unlinked child accounts or admin testing: notify owner if enabled
+            if notify_owner_allowed:
+                owner_id = 6707839718
+                owner_alert = (
+                    f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS - #{current_seq}-MARTA]</b>\n"
+                    f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
+                    + parent_alert
                 )
-                record_sos_message(child_id, bot, owner_id, sent_m.message_id)
-                if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                    sent_loc = await bot.send_location(
-                        chat_id=owner_id,
-                        latitude=lat,
-                        longitude=lon
-                    )
-                    record_sos_message(child_id, bot, owner_id, sent_loc.message_id)
-            except Exception as e:
-                logger.warning(f"Could not dispatch fallback SOS to owner {owner_id} via main bot: {e}")
-
-            # Send via OWNER BOT directly to @fayzbek1331 so it is GUARANTEED to be received!
-            owner_bot = get_owner_bot()
-            if owner_bot:
                 try:
-                    sent_ob = await owner_bot.send_message(
+                    sent_m = await bot.send_message(
                         chat_id=owner_id,
                         text=owner_alert,
                         reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
                         parse_mode="HTML"
                     )
-                    record_sos_message(child_id, owner_bot, owner_id, sent_ob.message_id)
+                    record_sos_message(child_id, bot, owner_id, sent_m.message_id)
                     if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                        sent_ob_loc = await owner_bot.send_location(
+                        sent_loc = await bot.send_location(
                             chat_id=owner_id,
                             latitude=lat,
                             longitude=lon
                         )
-                        record_sos_message(child_id, owner_bot, owner_id, sent_ob_loc.message_id)
-                    logger.info(f"Dispatched fallback SOS alert via OWNER BOT to {owner_id}")
-                except Exception as oe:
-                    logger.warning(f"Could not dispatch fallback SOS via owner bot: {oe}")
+                        record_sos_message(child_id, bot, owner_id, sent_loc.message_id)
+                except Exception as e:
+                    logger.warning(f"Could not dispatch fallback SOS to owner {owner_id} via main bot: {e}")
+
+                # Send via OWNER BOT directly to @fayzbek1331 so it is GUARANTEED to be received!
+                owner_bot = get_owner_bot()
+                if owner_bot:
+                    try:
+                        sent_ob = await owner_bot.send_message(
+                            chat_id=owner_id,
+                            text=owner_alert,
+                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                            parse_mode="HTML"
+                        )
+                        record_sos_message(child_id, owner_bot, owner_id, sent_ob.message_id)
+                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                            sent_ob_loc = await owner_bot.send_location(
+                                chat_id=owner_id,
+                                latitude=lat,
+                                longitude=lon
+                            )
+                            record_sos_message(child_id, owner_bot, owner_id, sent_ob_loc.message_id)
+                        logger.info(f"Dispatched fallback SOS alert via OWNER BOT to {owner_id}")
+                    except Exception as oe:
+                        logger.warning(f"Could not dispatch fallback SOS via owner bot: {oe}")
 
     parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
@@ -1644,39 +1650,66 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     if has_live_loc:
         cancel_text += "📍 <b>Farzandning keyingi harakatini real vaqtda kuzatishingiz uchun pastda 30 daqiqalik jonli (Live) lokatsiya yoqildi:</b>"
 
+    notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+    notify_children_allowed = await crud.is_notify_children_enabled(session)
+    notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+
     bot = telemetry.get_telegram_bot()
     if bot:
         if parents:
-            for p in parents:
-                target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+            if notify_parents_allowed:
+                for p in parents:
+                    target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+                    try:
+                        await bot.send_message(
+                            chat_id=target_chat_id,
+                            text=cancel_text,
+                            parse_mode="HTML"
+                        )
+                        if has_live_loc:
+                            await bot.send_location(
+                                chat_id=target_chat_id,
+                                latitude=cur_lat,
+                                longitude=cur_lon,
+                                live_period=1800
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS cancellation: {e}")
+        else:
+            if notify_owner_allowed:
+                owner_id = 6707839718
                 try:
                     await bot.send_message(
-                        chat_id=target_chat_id,
-                        text=cancel_text,
+                        chat_id=owner_id,
+                        text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
+                            "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
+                        ),
                         parse_mode="HTML"
                     )
                     if has_live_loc:
                         await bot.send_location(
-                            chat_id=target_chat_id,
+                            chat_id=owner_id,
                             latitude=cur_lat,
                             longitude=cur_lon,
                             live_period=1800
                         )
-                except Exception as e:
-                    logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS cancellation: {e}")
-        else:
-            owner_id = 6707839718
+                except Exception:
+                    pass
+
+    if notify_owner_allowed:
+        owner_bot = get_owner_bot()
+        if owner_bot:
             try:
-                await bot.send_message(
-                    chat_id=owner_id,
-                    text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
+                await owner_bot.send_message(
+                    chat_id=6707839718,
+                    text=f"✅ <b>[SOS BEKOR QILINDI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
                         "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
                     ),
                     parse_mode="HTML"
                 )
                 if has_live_loc:
-                    await bot.send_location(
-                        chat_id=owner_id,
+                    await owner_bot.send_location(
+                        chat_id=6707839718,
                         latitude=cur_lat,
                         longitude=cur_lon,
                         live_period=1800
@@ -1684,27 +1717,7 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
             except Exception:
                 pass
 
-    owner_bot = get_owner_bot()
-    if owner_bot:
-        try:
-            await owner_bot.send_message(
-                chat_id=6707839718,
-                text=f"✅ <b>[SOS BEKOR QILINDI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
-                    "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
-                ),
-                parse_mode="HTML"
-            )
-            if has_live_loc:
-                await owner_bot.send_location(
-                    chat_id=6707839718,
-                    latitude=cur_lat,
-                    longitude=cur_lon,
-                    live_period=1800
-                )
-        except Exception:
-            pass
-
-    if child and bot:
+    if child and bot and notify_children_allowed:
         try:
             await bot.send_message(
                 chat_id=child.id,
@@ -1861,7 +1874,8 @@ async def parent_siren_endpoint(
         }
     last_siren_alert_map[child_id] = now_utc
 
-    if telemetry.telegram_bot:
+    notify_children_allowed = await crud.is_notify_children_enabled(session)
+    if notify_children_allowed and telemetry.telegram_bot:
         try:
             await telemetry.telegram_bot.send_message(
                 chat_id=child_id,
@@ -2853,12 +2867,14 @@ async def send_child_quick_signal(
         tg_text += f"📍 Joylashuv: <a href=\"{maps_url}\">Xaritada ochish</a>\n"
 
     notified = 0
+    notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+    notify_owner_allowed = await crud.is_notify_owner_enabled(session)
     tbot = telemetry.get_telegram_bot()
     ob = get_owner_bot()
     if parents:
         for p in parents:
             target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
-            if tbot:
+            if notify_parents_allowed and tbot:
                 try:
                     await tbot.send_message(
                         chat_id=target_chat_id,
@@ -2868,7 +2884,7 @@ async def send_child_quick_signal(
                     notified += 1
                 except Exception as e:
                     logger.error(f"Failed to send quick signal to parent {p.id} via client bot: {e}")
-            if p.id in (1, 6707839718) and ob:
+            if p.id in (1, 6707839718) and notify_owner_allowed and ob:
                 try:
                     await ob.send_message(
                         chat_id=6707839718,
@@ -2940,7 +2956,8 @@ async def send_parent_ping_to_child(
 
     now_tashkent = datetime.now(TASHKENT_TZ).strftime("%H:%M")
 
-    if telemetry.telegram_bot and child_id != 2002:
+    notify_children_allowed = await crud.is_notify_children_enabled(session)
+    if notify_children_allowed and telemetry.telegram_bot and child_id != 2002:
         try:
             tg_text = (
                 f"<b>{title}</b>\n\n"
@@ -3224,7 +3241,8 @@ async def update_child_device_policy_endpoint(
         "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
     })
 
-    if telemetry.telegram_bot and parents and payload.is_all_apps_blocked is not None:
+    notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+    if notify_parents_allowed and telemetry.telegram_bot and parents and payload.is_all_apps_blocked is not None:
         try:
             ch_user = await crud.get_user(session, child_id)
             c_name = html.escape(ch_user.full_name) if ch_user and ch_user.full_name else f"Farzand #{child_id}"
@@ -3257,7 +3275,7 @@ async def update_child_device_policy_endpoint(
         except Exception:
             pass
 
-    if telemetry.telegram_bot and parents and payload.is_network_restricted is not None:
+    if notify_parents_allowed and telemetry.telegram_bot and parents and payload.is_network_restricted is not None:
         try:
             ch_user = await crud.get_user(session, child_id)
             c_name = html.escape(ch_user.full_name) if ch_user and ch_user.full_name else f"Farzand #{child_id}"
@@ -3832,4 +3850,53 @@ async def set_child_walking_goal_endpoint(
         "target_km": payload.target_km,
         "target_steps": steps_calc,
         "message": f"Kunlik maqsad {payload.target_km} km ({steps_calc:,} qadam) qilib belgilandi!"
+    }
+
+
+# ==============================================================================
+# GLOBAL NOTIFICATION SETTINGS ENDPOINTS (FOR WEBAPP & OWNER)
+# ==============================================================================
+class NotificationSettingsUpdateRequest(BaseModel):
+    requester_id: int
+    notify_parents: Optional[bool] = None
+    notify_children: Optional[bool] = None
+    notify_owner: Optional[bool] = None
+
+
+@router.get("/admin/notification-settings")
+async def get_admin_notification_settings_endpoint(
+    requester_id: int = Query(..., description="ID of admin or owner"),
+    session: AsyncSession = Depends(get_db)
+):
+    """Retrieve platform-wide notification toggles for parents, children, and owner."""
+    if not is_owner_or_admin(requester_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat etilmagan: Faqat Admin yoki Asoschi ko'ra oladi.")
+    settings = await crud.get_notification_settings(session)
+    return {
+        "status": "success",
+        "settings": settings
+    }
+
+
+@router.post("/admin/notification-settings")
+async def update_admin_notification_settings_endpoint(
+    payload: NotificationSettingsUpdateRequest,
+    session: AsyncSession = Depends(get_db)
+):
+    """Update platform-wide notification toggles."""
+    if not is_owner_or_admin(payload.requester_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat etilmagan: Faqat Admin yoki Asoschi o'zgartira oladi.")
+
+    if payload.notify_parents is not None:
+        await crud.update_notification_setting("notify_parents", payload.notify_parents, session)
+    if payload.notify_children is not None:
+        await crud.update_notification_setting("notify_children", payload.notify_children, session)
+    if payload.notify_owner is not None:
+        await crud.update_notification_setting("notify_owner", payload.notify_owner, session)
+
+    updated = await crud.get_notification_settings(session)
+    return {
+        "status": "success",
+        "message": "Xabarnomalar sozlamalari muvaffaqiyatli yangilandi",
+        "settings": updated
     }

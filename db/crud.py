@@ -21,6 +21,7 @@ from db.models import (
     AdminUser,
     ChildDevicePolicy,
     AppUsageReport,
+    SystemSetting,
 )
 
 
@@ -1743,3 +1744,107 @@ async def get_paginated_users(
     return users, total_count, total_pages
 
 
+
+
+# ==========================================
+# GLOBAL SYSTEM NOTIFICATION TOGGLES (OWNER)
+# ==========================================
+
+import time as _time
+
+_NOTIFICATION_SETTINGS_CACHE: dict[str, bool] = {
+    "notify_parents": True,
+    "notify_children": True,
+    "notify_owner": True,
+}
+_NOTIFICATION_CACHE_TIMESTAMP: float = 0.0
+
+
+async def get_notification_settings(session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Retrieve global notification toggles, cached with 3-second TTL for peak performance."""
+    global _NOTIFICATION_SETTINGS_CACHE, _NOTIFICATION_CACHE_TIMESTAMP
+    now = _time.time()
+    if now - _NOTIFICATION_CACHE_TIMESTAMP < 3.0:
+        return dict(_NOTIFICATION_SETTINGS_CACHE)
+
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+
+    try:
+        result = await session.execute(select(SystemSetting))
+        settings_rows = result.scalars().all()
+        current = {
+            "notify_parents": True,
+            "notify_children": True,
+            "notify_owner": True,
+        }
+        for row in settings_rows:
+            if row.key in current:
+                current[row.key] = str(row.value).strip().lower() in ("true", "1", "yes", "on")
+        _NOTIFICATION_SETTINGS_CACHE = current
+        _NOTIFICATION_CACHE_TIMESTAMP = now
+        return dict(_NOTIFICATION_SETTINGS_CACHE)
+    except Exception:
+        return dict(_NOTIFICATION_SETTINGS_CACHE)
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def update_notification_setting(key: str, enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Update a notification toggle in DB and update cache immediately."""
+    global _NOTIFICATION_SETTINGS_CACHE, _NOTIFICATION_CACHE_TIMESTAMP
+    val_str = "true" if enabled else "false"
+
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+
+    try:
+        setting = await session.get(SystemSetting, key)
+        if not setting:
+            setting = SystemSetting(key=key, value=val_str)
+            session.add(setting)
+        else:
+            setting.value = val_str
+        await session.commit()
+        _NOTIFICATION_SETTINGS_CACHE[key] = enabled
+        _NOTIFICATION_CACHE_TIMESTAMP = _time.time()
+        return dict(_NOTIFICATION_SETTINGS_CACHE)
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def toggle_notification_setting(key: str, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Flip the boolean state of a notification setting."""
+    curr = await get_notification_settings(session)
+    new_val = not curr.get(key, True)
+    return await update_notification_setting(key, new_val, session)
+
+
+async def set_all_notification_settings(enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Set all notification toggles at once."""
+    for key in ("notify_parents", "notify_children", "notify_owner"):
+        await update_notification_setting(key, enabled, session)
+    return await get_notification_settings(session)
+
+
+async def is_notify_parents_enabled(session: Optional[AsyncSession] = None) -> bool:
+    s = await get_notification_settings(session)
+    return s.get("notify_parents", True)
+
+
+async def is_notify_children_enabled(session: Optional[AsyncSession] = None) -> bool:
+    s = await get_notification_settings(session)
+    return s.get("notify_children", True)
+
+
+async def is_notify_owner_enabled(session: Optional[AsyncSession] = None) -> bool:
+    s = await get_notification_settings(session)
+    return s.get("notify_owner", True)

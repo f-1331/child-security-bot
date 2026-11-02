@@ -2386,6 +2386,47 @@
         </div>
       </div>
 
+
+      <!-- SECTION 3: OWNER / ADMIN GLOBAL NOTIFICATION TOGGLES -->
+      <div id="ownerNotificationSettingsSection" class="hidden pt-3 border-t border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1.5 text-xs font-bold text-amber-400 uppercase tracking-wider">
+            <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+            <span>🔔 Xabarnomalar Boshqaruvi</span>
+          </div>
+          <span class="text-[10px] text-amber-300 font-bold bg-amber-500/20 px-1.5 py-0.5 rounded">Owner VIP</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mb-2.5">
+          Platformadagi xabarnomalarni istalgan tomon uchun yoqing yoki o'chiring:
+        </p>
+        <div class="space-y-2">
+          <!-- 1. Parents Toggle -->
+          <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+            <div>
+              <p class="text-xs font-bold text-white">👨‍👩‍👧 Ota-onalarga xabarlar</p>
+              <p class="text-[10px] text-slate-400">SOS, geozona, batareya, tezkor signal</p>
+            </div>
+            <input type="checkbox" id="toggleWebNotifyParents" onchange="updateWebNotificationSettings()" class="toggle-checkbox w-5 h-5 accent-emerald-500 rounded cursor-pointer" />
+          </div>
+          <!-- 2. Children Toggle -->
+          <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+            <div>
+              <p class="text-xs font-bold text-white">👦 Bolalarga signallar</p>
+              <p class="text-[10px] text-slate-400">Siren, direktivalar, topshiriqlar</p>
+            </div>
+            <input type="checkbox" id="toggleWebNotifyChildren" onchange="updateWebNotificationSettings()" class="toggle-checkbox w-5 h-5 accent-emerald-500 rounded cursor-pointer" />
+          </div>
+          <!-- 3. Owner Toggle -->
+          <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700">
+            <div>
+              <p class="text-xs font-bold text-white">👑 Owner/Asoschiga kelish</p>
+              <p class="text-[10px] text-slate-400">SOS global nusxalari va ogohlantirishlar</p>
+            </div>
+            <input type="checkbox" id="toggleWebNotifyOwner" onchange="updateWebNotificationSettings()" class="toggle-checkbox w-5 h-5 accent-emerald-500 rounded cursor-pointer" />
+          </div>
+        </div>
+      </div>
+
       <div class="pt-3">
         <button type="button" onclick="closeSettingsModal()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white text-xs font-bold rounded-xl transition" data-i18n="close_btn">
           Yopish

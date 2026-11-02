@@ -2600,6 +2600,7 @@ function openSettingsModal() {
   setTimeout(updateTelegramBackButton, 50);
   haptic("medium");
   switchTab("settings");
+  loadOwnerNotificationSettings();
 }
 
 function closeSettingsModal() {
@@ -2609,6 +2610,61 @@ function closeSettingsModal() {
   if (modal) modal.classList.add("hidden");
   switchTab("map");
 }
+
+async function loadOwnerNotificationSettings() {
+  const section = document.getElementById("ownerNotificationSettingsSection");
+  if (!section) return;
+  const isOwner = (window.isImpersonate || window.userId == 1 || window.userId == 6707839718 || window.currentUserRole === 'admin');
+  if (!isOwner) {
+    section.classList.add("hidden");
+    return;
+  }
+  section.classList.remove("hidden");
+  try {
+    const res = await fetch(`/api/v1/webapp/admin/notification-settings?requester_id=${window.userId || 1}`);
+    const data = await res.json();
+    if (data.status === "success" && data.settings) {
+      const p = document.getElementById("toggleWebNotifyParents");
+      const c = document.getElementById("toggleWebNotifyChildren");
+      const o = document.getElementById("toggleWebNotifyOwner");
+      if (p) p.checked = !!data.settings.notify_parents;
+      if (c) c.checked = !!data.settings.notify_children;
+      if (o) o.checked = !!data.settings.notify_owner;
+    }
+  } catch (err) {
+    console.warn("Could not load notification settings:", err);
+  }
+}
+
+async function updateWebNotificationSettings() {
+  haptic("light");
+  const p = document.getElementById("toggleWebNotifyParents");
+  const c = document.getElementById("toggleWebNotifyChildren");
+  const o = document.getElementById("toggleWebNotifyOwner");
+  try {
+    const payload = {
+      requester_id: window.userId || 1,
+      notify_parents: p ? p.checked : true,
+      notify_children: c ? c.checked : true,
+      notify_owner: o ? o.checked : true
+    };
+    const res = await fetch(`/api/v1/webapp/admin/notification-settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.status === "success") {
+      showToast("✅ Xabarnomalar sozlamalari saqlandi!");
+    } else {
+      showToast("❌ Xatolik yuz berdi");
+    }
+  } catch (err) {
+    console.error("Failed to update notification settings:", err);
+    showToast("❌ Serverga ulanishda xato");
+  }
+}
+
 
 function openThemeModal() {
   openSettingsModal();
