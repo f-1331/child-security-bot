@@ -266,7 +266,7 @@ async def get_coin_rate_for_user(session: AsyncSession, user_id: int) -> tuple[i
             ParentChildLink, ParentChildLink.parent_id == User.id
         ).where(ParentChildLink.child_id == user_id)
     )
-    parent = result.scalar_one_or_none()
+    parent = result.scalars().first()
     if parent and parent.coin_rate_coins and parent.coin_rate_som:
         return (parent.coin_rate_coins, parent.coin_rate_som)
 

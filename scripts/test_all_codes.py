@@ -1,5 +1,6 @@
-import urllib.request, json
+import urllib.request, json, sys, io
 
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 codes = ['67078397', '31238560', '29909881', '12707685', '21092869', '61105272']
 
 for code in codes:
@@ -10,10 +11,10 @@ for code in codes:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
+            data = json.loads(resp.read().decode('utf-8'))
             print(f"Code {code}: 200 OK -> User: {data.get('user', {}).get('full_name')} (ID: {data.get('user', {}).get('id')}) Role: {data.get('role')}")
     except urllib.error.HTTPError as e:
-        body = e.read().decode()
+        body = e.read().decode('utf-8')
         print(f"Code {code}: {e.code} -> {body}")
     except Exception as e:
         print(f"Code {code}: Error -> {e}")

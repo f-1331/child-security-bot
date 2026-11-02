@@ -124,8 +124,10 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
         session.add(demo_p)
         report["users_updated_or_created"].append("created:1001")
     else:
-        demo_p.web_access_code = demo_p.web_access_code or "12707685"
-        demo_p.pairing_code = demo_p.pairing_code or "12707685"
+        demo_p.web_access_code = "12707685"
+        demo_p.pairing_code = "12707685"
+        demo_p.is_active = True
+        report["users_updated_or_created"].append("updated:1001")
 
     demo_c = await session.get(User, 2002)
     if not demo_c:
@@ -143,7 +145,9 @@ async def ensure_core_seeds(session: AsyncSession) -> dict:
         session.add(demo_c)
         report["users_updated_or_created"].append("created:2002")
     else:
-        demo_c.web_access_code = demo_c.web_access_code or "21092869"
+        demo_c.web_access_code = "21092869"
+        demo_c.is_active = True
+        report["users_updated_or_created"].append("updated:2002")
 
     await session.flush()
 

@@ -422,7 +422,7 @@ async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -
             ParentChildLink, ParentChildLink.parent_id == crud.User.id
         ).where(ParentChildLink.child_id == user.id)
     )
-    parent = res.scalar_one_or_none()
+    parent = res.scalars().first()
 
     return {
         "status": "success",
