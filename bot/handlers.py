@@ -8098,3 +8098,24 @@ async def on_login_approval_callback(callback: CallbackQuery, bot: Bot):
             await callback.message.edit_text(msg_deny, parse_mode="HTML")
         except Exception:
             pass
+
+
+@bot_router.message(Command("test_daily_report"))
+@bot_router.message(Command("hisobot"))
+async def handle_main_bot_test_daily_report(message: Message, bot: Bot):
+    """Manually triggers daily safety report dispatch for owner / parents."""
+    user_id = message.from_user.id
+    await message.answer("🌙 <i>Kunlik xavfsizlik hisoboti tayyorlanmoqda va yuborilmoqda...</i>", parse_mode="HTML")
+    try:
+        from bot.scheduler import dispatch_nightly_safety_reports
+        from db.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            sent_count = await dispatch_nightly_safety_reports(bot, session, force_target_id=user_id)
+            await session.commit()
+        if sent_count > 0:
+            await message.answer(f"✅ <b>Kunlik xavfsizlik hisoboti muvaffaqiyatli jo'natildi!</b>\n({sent_count} ta hisobot xabari yuborildi)", parse_mode="HTML")
+        else:
+            await message.answer("ℹ️ <i>Bog'langan farzandlar hisoboti topilmadi.</i>", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error in handle_main_bot_test_daily_report: {e}")
+        await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")

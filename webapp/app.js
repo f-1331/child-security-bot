@@ -1148,7 +1148,7 @@ async function checkAuthenticationState() {
         // Silent background refresh to keep children and balance up to date
         // NEVER wipe localStorage on temporary 404/502/redeploy errors!
         if (storedCode && storedCode.trim().length > 0) {
-          fetch("/api/v1/webapp/auth/code", {
+          fetch(`${getApiBase()}/api/v1/webapp/auth/code`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ code: storedCode.trim() })
@@ -1258,7 +1258,7 @@ async function generateWebCodeAction() {
   }
 
   try {
-    const res = await fetch("/api/v1/webapp/auth/generate-code", {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/auth/generate-code`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: role, full_name: fullName })
@@ -2245,7 +2245,7 @@ async function saveCoinRate() {
 
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch("/api/v1/webapp/coin-rate", {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/coin-rate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ parent_id: parentId, coins, som })
@@ -2637,7 +2637,7 @@ async function loadOwnerNotificationSettings() {
   }
   section.classList.remove("hidden");
   try {
-    const res = await fetch(`/api/v1/webapp/admin/notification-settings?requester_id=${window.userId || 1}`);
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/admin/notification-settings?requester_id=${window.userId || 1}`);
     const data = await res.json();
     if (data.status === "success" && data.settings) {
       const p = document.getElementById("toggleWebNotifyParents");
@@ -2664,7 +2664,7 @@ async function updateWebNotificationSettings() {
       notify_children: c ? c.checked : true,
       notify_owner: o ? o.checked : true
     };
-    const res = await fetch(`/api/v1/webapp/admin/notification-settings`, {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/admin/notification-settings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -5681,7 +5681,7 @@ async function submitNewZone() {
 
   try {
     const effectiveParentId = parentId || authenticatedSession?.user?.id;
-    const res = await fetch("/api/v1/webapp/geofence", {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/geofence`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -5845,12 +5845,13 @@ async function loadTasks() {
 
   try {
     let url = "";
+    const base = getApiBase();
     if (parentId) {
       url = currentChildId
-        ? `/api/v1/webapp/parent/${parentId}/tasks?child_id=${currentChildId}`
-        : `/api/v1/webapp/parent/${parentId}/tasks`;
+        ? `${base}/api/v1/webapp/parent/${parentId}/tasks?child_id=${currentChildId}`
+        : `${base}/api/v1/webapp/parent/${parentId}/tasks`;
     } else if (currentChildId) {
-      url = `/api/v1/webapp/child/${currentChildId}/tasks`;
+      url = `${base}/api/v1/webapp/child/${currentChildId}/tasks`;
     } else {
       if (!tasksList || tasksList.length === 0) {
         container.innerHTML = '<p class="text-center text-xs text-slate-400 py-6">Farzand tanlanmagan.</p>';
@@ -6266,7 +6267,7 @@ async function submitNewTask() {
     if (selectedTaskMediaFile) {
       const formData = new FormData();
       formData.append("file", selectedTaskMediaFile);
-      const uploadRes = await fetch("/api/v1/webapp/upload", {
+      const uploadRes = await fetch(`${getApiBase()}/api/v1/webapp/upload`, {
         method: "POST",
         body: formData
       });
@@ -6304,7 +6305,7 @@ async function submitNewTask() {
       media_url: mediaUrl
     };
 
-    const res = await fetch("/api/v1/webapp/task", {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/task`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -6602,7 +6603,7 @@ async function submitTaskProof() {
   try {
     const formData = new FormData();
     formData.append("file", selectedProofPhotoFile);
-    const upRes = await fetch("/api/v1/webapp/upload", {
+    const upRes = await fetch(`${getApiBase()}/api/v1/webapp/upload`, {
       method: "POST",
       body: formData
     });
@@ -6696,7 +6697,7 @@ async function approveTask(taskId) {
     }
 
     const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
-    const approveUrl = `/api/v1/webapp/task/${taskId}/approve?parent_id=${effectiveParentId || ''}`;
+    const approveUrl = `${getApiBase()}/api/v1/webapp/task/${taskId}/approve?parent_id=${effectiveParentId || ''}`;
     const res = await fetch(approveUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
@@ -6722,7 +6723,7 @@ async function rejectTask(taskId) {
     }
 
     const effectiveParentId = parentId || (currentUser && currentUser.role === "parent" ? currentUser.id : null);
-    const rejectUrl = `/api/v1/webapp/task/${taskId}/reject?parent_id=${effectiveParentId || ''}`;
+    const rejectUrl = `${getApiBase()}/api/v1/webapp/task/${taskId}/reject?parent_id=${effectiveParentId || ''}`;
     const res = await fetch(rejectUrl, { method: "POST" });
     const data = await res.json();
     if (data.status === "success") {
@@ -12278,7 +12279,7 @@ function startApprovalPolling(requestId, code) {
 
   _approvalPollTimer = setInterval(async () => {
     try {
-      const res = await fetch(`/api/v1/webapp/auth/approval-status?request_id=${encodeURIComponent(requestId)}`);
+      const res = await fetch(`${getApiBase()}/api/v1/webapp/auth/approval-status?request_id=${encodeURIComponent(requestId)}`);
       if (!res.ok) {
         if (res.status === 404) {
           hidePendingApprovalModal();

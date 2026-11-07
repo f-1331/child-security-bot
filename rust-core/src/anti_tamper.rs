@@ -52,6 +52,36 @@ pub fn is_within_bedtime_window(
     }
 }
 
+/// Validates whether the current day and time falls within active School Mode schedule
+/// e.g. Monday-Saturday from 08:00 to 14:00
+pub fn is_within_school_mode_schedule(
+    current_hour: u32,
+    current_min: u32,
+    current_weekday: u32, // 1 = Monday, 7 = Sunday
+    start_hour: u32,
+    start_min: u32,
+    end_hour: u32,
+    end_min: u32,
+    active_days_mask: u32, // bit 1 = Monday, bit 2 = Tuesday, etc. (0b01111110 = Mon-Sat)
+) -> bool {
+    if current_weekday >= 1 && current_weekday <= 7 {
+        let day_bit = 1 << current_weekday;
+        if (active_days_mask & day_bit) == 0 {
+            return false;
+        }
+    }
+
+    let cur_total = current_hour * 60 + current_min;
+    let start_total = start_hour * 60 + start_min;
+    let end_total = end_hour * 60 + end_min;
+
+    if start_total <= end_total {
+        cur_total >= start_total && cur_total < end_total
+    } else {
+        cur_total >= start_total || cur_total < end_total
+    }
+}
+
 /// Verifies HMAC-SHA256 signature for coin transactions / telemetry commands
 pub fn verify_hmac_signature(message: &[u8], signature_hex: &str, secret_key: &[u8]) -> bool {
     let mut mac = match HmacSha256::new_from_slice(secret_key) {

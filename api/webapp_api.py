@@ -2334,6 +2334,10 @@ async def update_child_live_location_endpoint(
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked_packages,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "school_mode_enabled": bool(getattr(policy, "school_mode_enabled", False)),
+            "school_start": getattr(policy, "school_start", "08:00"),
+            "school_end": getattr(policy, "school_end", "14:00"),
+            "school_days": getattr(policy, "school_days", "1,2,3,4,5,6"),
             "bedtime_start": getattr(policy, "bedtime_start", None),
             "bedtime_end": getattr(policy, "bedtime_end", None),
             "has_parent_pin": bool(policy.parent_pin_hash),
@@ -2384,6 +2388,10 @@ async def update_child_batch_location_endpoint(
             "lockdown_reason": policy.lockdown_reason,
             "blocked_packages": blocked_packages,
             "anti_uninstall_enabled": policy.anti_uninstall_enabled,
+            "school_mode_enabled": bool(getattr(policy, "school_mode_enabled", False)),
+            "school_start": getattr(policy, "school_start", "08:00"),
+            "school_end": getattr(policy, "school_end", "14:00"),
+            "school_days": getattr(policy, "school_days", "1,2,3,4,5,6"),
             "bedtime_start": getattr(policy, "bedtime_start", None),
             "bedtime_end": getattr(policy, "bedtime_end", None),
             "has_parent_pin": bool(policy.parent_pin_hash),
@@ -3491,8 +3499,7 @@ async def toggle_child_school_mode(
     policy = await crud.get_or_create_device_policy(session, child_id)
     policy.is_all_apps_blocked = payload.enabled
     policy.lockdown_reason = "Maktab dars vaqti 📚" if payload.enabled else "Dars vaqti"
-    if hasattr(policy, "school_mode_enabled"):
-        policy.school_mode_enabled = payload.enabled
+    policy.school_mode_enabled = payload.enabled
     await session.commit()
 
     update_data = {
@@ -3616,6 +3623,10 @@ async def get_child_device_policy_endpoint(
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
             "is_network_restricted": policy.is_network_restricted,
+            "school_mode_enabled": bool(getattr(policy, "school_mode_enabled", False)),
+            "school_start": getattr(policy, "school_start", "08:00"),
+            "school_end": getattr(policy, "school_end", "14:00"),
+            "school_days": getattr(policy, "school_days", "1,2,3,4,5,6"),
             "bedtime_start": policy.bedtime_start,
             "bedtime_end": policy.bedtime_end,
             "daily_limit_minutes": policy.daily_limit_minutes,
@@ -3790,6 +3801,10 @@ async def update_child_device_policy_endpoint(
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
             "is_network_restricted": policy.is_network_restricted,
+            "school_mode_enabled": bool(getattr(policy, "school_mode_enabled", False)),
+            "school_start": getattr(policy, "school_start", "08:00"),
+            "school_end": getattr(policy, "school_end", "14:00"),
+            "school_days": getattr(policy, "school_days", "1,2,3,4,5,6"),
             "bedtime_start": policy.bedtime_start,
             "bedtime_end": policy.bedtime_end,
             "daily_limit_minutes": policy.daily_limit_minutes,

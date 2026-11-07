@@ -174,6 +174,10 @@ class ChildDevicePolicy(Base):
     blocked_packages: Mapped[Optional[str]] = mapped_column(Text, default="[]")  # JSON string of blocked packages
     parent_pin_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)  # SHA-256 hash
     anti_uninstall_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    school_mode_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    school_start: Mapped[Optional[str]] = mapped_column(String(10), default="08:00", nullable=True)  # e.g. "08:00"
+    school_end: Mapped[Optional[str]] = mapped_column(String(10), default="14:00", nullable=True)      # e.g. "14:00"
+    school_days: Mapped[Optional[str]] = mapped_column(String(20), default="1,2,3,4,5,6", nullable=True)  # Mon-Sat
     bedtime_start: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # e.g. "22:00"
     bedtime_end: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)    # e.g. "07:00"
     daily_limit_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

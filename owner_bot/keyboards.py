@@ -53,6 +53,7 @@ def get_owner_main_keyboard(is_owner: bool = True) -> ReplyKeyboardMarkup:
             KeyboardButton(text="📑 Server loglari"),
         ],
         [
+            KeyboardButton(text="🌙 Kunlik hisobot (Test)"),
             KeyboardButton(text="ℹ️ Yordam & Buyruqlar"),
         ],
     ]

@@ -87,3 +87,26 @@ pub fn rust_is_bedtime(
         end_min,
     )
 }
+
+#[wasm_bindgen]
+pub fn rust_is_school_mode_active(
+    current_hour: u32,
+    current_min: u32,
+    current_weekday: u32,
+    start_hour: u32,
+    start_min: u32,
+    end_hour: u32,
+    end_min: u32,
+    active_days_mask: u32,
+) -> bool {
+    anti_tamper::is_within_school_mode_schedule(
+        current_hour,
+        current_min,
+        current_weekday,
+        start_hour,
+        start_min,
+        end_hour,
+        end_min,
+        active_days_mask,
+    )
+}

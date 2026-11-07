@@ -23,6 +23,9 @@ bool rust_c_check_clock_tampered(int64_t current_wall_ms, int64_t last_saved_wal
 // Bedtime schedule check (offline without timezone/network)
 bool rust_c_is_bedtime(uint32_t current_hour, uint32_t current_min, uint32_t start_hour, uint32_t start_min, uint32_t end_hour, uint32_t end_min);
 
+// School mode schedule check (offline rules validator)
+bool rust_c_is_school_mode_active(uint32_t current_hour, uint32_t current_min, uint32_t current_weekday, uint32_t start_hour, uint32_t start_min, uint32_t end_hour, uint32_t end_min, uint32_t active_days_mask);
+
 #ifdef __cplusplus
 }
 #endif
