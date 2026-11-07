@@ -1,3 +1,28 @@
+
+function toggleParentHudCollapse() {
+  haptic("light");
+  const bar = document.getElementById("parentMonitoringBar");
+  const icon = document.getElementById("iconHudCollapse");
+  if (!bar) return;
+  const isCollapsed = bar.classList.contains("hud-collapsed");
+  if (isCollapsed) {
+    bar.classList.remove("hud-collapsed");
+    bar.style.maxHeight = "120px";
+    bar.style.opacity = "1";
+    bar.style.paddingTop = "0.25rem";
+    bar.style.borderTopWidth = "1px";
+    if (icon) icon.style.transform = "rotate(0deg)";
+  } else {
+    bar.classList.add("hud-collapsed");
+    bar.style.maxHeight = "0px";
+    bar.style.opacity = "0";
+    bar.style.paddingTop = "0";
+    bar.style.borderTopWidth = "0px";
+    if (icon) icon.style.transform = "rotate(180deg)";
+  }
+}
+window.toggleParentHudCollapse = toggleParentHudCollapse;
+
 // =========================================================
 // PRODUCTION CONSTANTS & API BASE ROUTING
 // =========================================================
@@ -3108,7 +3133,14 @@ async function selectChild(childId) {
     const addrEl = document.getElementById("addressText");
     if (addrEl) addrEl.textContent = "Joylashuv kutilmoqda (Ilovaga kirib ruxsat bering)";
     const lastSeenEl = document.getElementById("lastSeenText");
-    if (lastSeenEl) lastSeenEl.textContent = "Kutilmoqda...";
+    if (lastSeenEl) {
+      lastSeenEl.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[10px] shadow-sm">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>Kutilmoqda...</span>
+        </span>
+      `;
+    }
     updateBatteryUI(null, false);
   }
 
@@ -3180,9 +3212,11 @@ async function updateLiveTelemetry(childId) {
           if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-950 rounded-full shadow-sm";
           if (lastSeenEl) {
             lastSeenEl.innerHTML = `
-              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
-              <span class="text-emerald-400 font-extrabold text-xs">Online</span>
-              <span class="text-slate-400 text-[10px]">(${formatTimeAgo(loc.recorded_at)})</span>
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-[10px] shadow-sm">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>Online</span>
+                <span class="text-emerald-200/70 font-normal">· Jonli</span>
+              </span>
             `;
           }
           const offlineSmsBox = document.getElementById("offlineSmsPillContainer");
@@ -3192,9 +3226,11 @@ async function updateLiveTelemetry(childId) {
           if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-slate-950 rounded-full shadow-sm";
           if (lastSeenEl) {
             lastSeenEl.innerHTML = `
-              <span class="inline-block w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
-              <span class="text-rose-400 font-extrabold text-xs">Oflayn</span>
-              <span class="text-slate-300 text-[10px]">(${timeFormatted} da uzilgan — ${formatTimeAgo(loc.recorded_at)})</span>
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-[10px] shadow-sm">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+                <span>Oflayn</span>
+                <span class="text-rose-200/70 font-normal">· ${timeFormatted} da uzilgan</span>
+              </span>
             `;
           }
           // Show offline SMS trigger fallback when child is offline
@@ -3227,7 +3263,15 @@ async function updateLiveTelemetry(childId) {
         if (window.lucide) lucide.createIcons();
       }
       document.getElementById("addressText").textContent = "Joylashuv kutilmoqda (Ilovaga kirib ruxsat bering)";
-      document.getElementById("lastSeenText").textContent = "Kutilmoqda...";
+      const _lastSeen = document.getElementById("lastSeenText");
+      if (_lastSeen) {
+        _lastSeen.innerHTML = `
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-[10px] shadow-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span>Kutilmoqda...</span>
+          </span>
+        `;
+      }
       if (childMarker && map) {
         try { map.removeLayer(childMarker); } catch (e) {}
         childMarker = null;
@@ -8982,7 +9026,7 @@ window.addEventListener("offline", () => {
   const bar = document.getElementById("offlineStatusBar");
   const txt = document.getElementById("offlineStatusText");
   if (bar) {
-    bar.className = "bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-amber-300/40 mb-2 transition-all duration-300";
+    bar.className = "bg-slate-900/90 backdrop-blur-xl text-rose-300 px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-lg border border-rose-500/30 mb-2 transition-all duration-300";
     if (txt) txt.textContent = "📡 Oflayn rejim (GPS, topshiriqlar va xarita lokal faol)";
     bar.classList.remove("hidden");
   }
@@ -8998,7 +9042,7 @@ window.addEventListener("online", () => {
   const bar = document.getElementById("offlineStatusBar");
   const txt = document.getElementById("offlineStatusText");
   if (bar) {
-    bar.className = "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg border border-emerald-300/40 mb-2 transition-all duration-300";
+    bar.className = "bg-slate-900/90 backdrop-blur-xl text-emerald-300 px-3 py-1.5 rounded-2xl flex items-center justify-between text-xs font-semibold shadow-lg border border-emerald-500/30 mb-2 transition-all duration-300";
     if (txt) txt.textContent = "🟢 Internet tiklandi! Barcha oflayn ma'lumotlar serverga sinxronlandi.";
     setTimeout(() => {
       bar.classList.add("hidden");
