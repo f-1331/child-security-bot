@@ -8123,8 +8123,8 @@ async def on_login_approval_callback(callback: CallbackQuery, bot: Bot):
             pass
 
 
-@bot_router.message(Command("test_daily_report"))
-@bot_router.message(Command("hisobot"))
+@router.message(Command("test_daily_report"))
+@router.message(Command("hisobot"))
 async def handle_main_bot_test_daily_report(message: Message, bot: Bot):
     """Manually triggers daily safety report dispatch for owner / parents."""
     user_id = message.from_user.id
