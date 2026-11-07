@@ -290,6 +290,7 @@ class CreateGeofenceRequest(BaseModel):
 
 class AuthCodeRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=20)
+    target_role: Optional[str] = Field(None, max_length=20, description="Target role: 'parent' or 'child'")
 
 
 class GenerateWebCodeRequest(BaseModel):
@@ -485,7 +486,8 @@ async def verify_auth_code_endpoint(
         )
 
     code = payload.code.strip().replace(" ", "").replace("-", "")
-    user = await crud.get_user_by_web_access_code(session, code)
+    target_role = payload.target_role.strip().lower() if getattr(payload, "target_role", None) else None
+    user = await crud.get_user_by_web_access_code(session, code, target_role=target_role)
     if not user:
         rate_limiter.record_auth_failure(client_ip)
         raise HTTPException(
@@ -535,25 +537,11 @@ async def verify_auth_code_endpoint(
                     parse_mode="HTML"
                 )
                 sent_ok = True
-                logger.info(f"Dispatched 2FA login prompt via owner bot @child_security_owner_bot to {target_tg_id}")
+                logger.info(f"Dispatched 2FA login prompt strictly via owner bot @child_security_owner_bot to {target_tg_id}")
             except Exception as e:
                 logger.warning(f"Failed to dispatch 2FA login prompt via owner bot: {e}")
-
-        # Fallback to main bot only if owner bot could not deliver
-        if not sent_ok:
-            tbot = telemetry.get_telegram_bot()
-            if tbot:
-                try:
-                    await tbot.send_message(
-                        chat_id=target_tg_id,
-                        text=tg_text,
-                        reply_markup=reply_kb,
-                        parse_mode="HTML"
-                    )
-                    sent_ok = True
-                    logger.info(f"Dispatched 2FA login prompt via main bot fallback to {target_tg_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to dispatch 2FA login prompt via main bot fallback: {e}")
+        else:
+            logger.error("Owner bot instance not available for 2FA prompt dispatch")
 
         return {
             "status": "pending_approval",
@@ -1530,6 +1518,33 @@ async def child_sos_endpoint(
     parents = await crud.get_parents_for_child(session, child_id)
     await session.commit()
 
+    # Instant Real-Time WebSocket broadcast (0 delay, no 30m batch wait!)
+    cur_spd_val = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+    sos_ws_payload = {
+        "type": "sos_alert",
+        "child_id": child_id,
+        "child_name": child_name,
+        "is_sos_active": True,
+        "latitude": lat,
+        "longitude": lon,
+        "accuracy": accuracy,
+        "battery_level": battery_lvl,
+        "speed": cur_spd_val,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    for p in parents:
+        try:
+            await ws_manager.send_to_user(p.id, sos_ws_payload)
+        except Exception:
+            pass
+    notify_owner_sos_allowed = await crud.is_notify_owner_sos_enabled(session)
+    if notify_owner_sos_allowed:
+        try:
+            await ws_manager.send_to_user(6707839718, sos_ws_payload)
+            await ws_manager.send_to_user(1, sos_ws_payload)
+        except Exception:
+            pass
+
     # Rate limiting / Debounce: Prevent duplicate SOS Telegram alerts within 10 seconds
     now_utc = datetime.now(timezone.utc)
     last_sos = telemetry.last_sos_alert_map.get(child_id)
@@ -1728,6 +1743,25 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     await crud.set_child_sos(session, child_id, False)
     telemetry.last_sos_alert_map.pop(child_id, None)
     child = await crud.get_user(session, child_id)
+    # Instant WebSocket broadcast of resolved SOS
+    sos_resolved_payload = {
+        "type": "sos_resolved",
+        "child_id": child_id,
+        "child_name": child.full_name if child else f"Farzand #{child_id}",
+        "is_sos_active": False,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    parents_to_notify = await crud.get_parents_for_child(session, child_id)
+    for p in parents_to_notify:
+        try:
+            await ws_manager.send_to_user(p.id, sos_resolved_payload)
+        except Exception:
+            pass
+    try:
+        await ws_manager.send_to_user(6707839718, sos_resolved_payload)
+        await ws_manager.send_to_user(1, sos_resolved_payload)
+    except Exception:
+        pass
     child_name = child.full_name if child else f"Farzand #{child_id}"
     parents = await crud.get_parents_for_child(session, child_id)
 
@@ -3457,6 +3491,8 @@ async def toggle_child_school_mode(
     policy = await crud.get_or_create_device_policy(session, child_id)
     policy.is_all_apps_blocked = payload.enabled
     policy.lockdown_reason = "Maktab dars vaqti 📚" if payload.enabled else "Dars vaqti"
+    if hasattr(policy, "school_mode_enabled"):
+        policy.school_mode_enabled = payload.enabled
     await session.commit()
 
     update_data = {

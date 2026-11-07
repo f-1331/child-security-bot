@@ -356,7 +356,7 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                 except Exception as e:
                     logger.error(f"Failed to process coparent invite: {e}")
 
-            elif args.startswith("pair_") or (args.strip().isdigit() and len(args.strip()) == 6):
+            elif args.startswith("pair_") or (args.strip().isdigit() and 1 <= len(args.strip()) <= 16):
                 pairing_code = args.replace("pair_", "").strip()
                 parent = await crud.get_parent_by_pairing_code(session, pairing_code)
                 if parent:
@@ -1733,7 +1733,7 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
         telemetry.last_sos_alert_map[child_id] = datetime.now(timezone.utc)
         from owner_bot import get_owner_bot
         ob = get_owner_bot()
-        notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+        notify_owner_allowed = await crud.is_notify_owner_sos_enabled(session)
         sent_chats = set()
 
         for parent in parents:

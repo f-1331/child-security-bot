@@ -548,7 +548,7 @@ let previewCircle = null;
 let zonePickerMarker = null;
 let isZonePickerActive = false;
 let replayMarker = null;
-let isRouteVisible = false;
+let isRouteVisible = (typeof localStorage !== "undefined" && localStorage.getItem("smart_tracker_route_visible") === "true");
 let isRepeatedPlacesVisible = false;
 let isReplaying = false;
 let replayTimer = null;
@@ -1371,6 +1371,7 @@ function hideAuthGateModal() {
       enableDemoMode();
     }
     document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
+  updateDemoBannerText();
   }
 }
 
@@ -1415,7 +1416,7 @@ async function submitAuthCode() {
     const res = await fetch(`${getApiBase()}/api/v1/webapp/auth/code`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code })
+      body: JSON.stringify({ code: code, target_role: window._pendingTargetRole || null })
     });
 
     if (res.status === 404 && (code === "123456" || code === "000000" || code.toLowerCase() === "demo")) {
@@ -1542,6 +1543,7 @@ function enableChildDemoMode() {
   document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
   document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
+  updateDemoBannerText();
   if (window.lucide) lucide.createIcons();
 
   // Render demo child live position
@@ -1888,6 +1890,7 @@ function applyChildUI(user) {
   document.getElementById("childWelcomeBanner")?.classList.remove("hidden");
   if (isDemoMode) {
     document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
+  updateDemoBannerText();
     document.getElementById("demoBadge")?.classList.remove("hidden");
   } else {
     document.getElementById("globalDemoWarningBanner")?.classList.add("hidden");
@@ -2915,6 +2918,7 @@ function enableDemoMode() {
   document.getElementById("btnTopDemoAuth")?.classList.remove("hidden");
   document.getElementById("demoNoticeBanner")?.classList.remove("hidden");
   document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
+  updateDemoBannerText();
 
   childrenList = [
     {
@@ -4371,8 +4375,17 @@ function updateRoutePlaybackHud(stepIdx) {
   const scrubber = document.getElementById("routeTimelineScrubber");
 
   if (pt && pt.recorded_at) {
-    const s = pt.recorded_at.endsWith("Z") ? pt.recorded_at : pt.recorded_at + "Z";
-    const tStr = new Date(s).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    let tStr = "--:--:--";
+    try {
+      let raw = String(pt.recorded_at).trim();
+      if (!raw.includes("Z") && !raw.includes("+") && !raw.includes("-", 10)) {
+        raw += "Z";
+      }
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        tStr = d.toLocaleTimeString("uz-UZ", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      }
+    } catch (e) {}
     if (timeEl) timeEl.textContent = `🕒 ${tStr}`;
   }
   if (speedEl) {
@@ -4696,6 +4709,9 @@ async function toggleRouteHistory(forceState) {
   haptic("light");
   const newState = typeof forceState === "boolean" ? forceState : !isRouteVisible;
   isRouteVisible = newState;
+  try {
+    localStorage.setItem("smart_tracker_route_visible", isRouteVisible ? "true" : "false");
+  } catch (e) {}
 
   if (currentRole === "parent" && currentTab !== "map") {
     switchTab("map");
@@ -7795,6 +7811,26 @@ async function sendQuickChildSignal(signalType) {
   if (lastChildLocation && lastChildLocation.latitude) {
     lat = lastChildLocation.latitude;
     lon = lastChildLocation.longitude;
+  }
+
+  // Fallback fresh location permission prompt if coordinates are null
+  if ((!lat || !lon) && navigator.geolocation) {
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 4000,
+          maximumAge: 10000
+        });
+      });
+      if (pos && pos.coords) {
+        lat = pos.coords.latitude;
+        lon = pos.coords.longitude;
+        lastChildLocation = { latitude: lat, longitude: lon };
+      }
+    } catch (permErr) {
+      console.warn("Geolocation prompt note in sendQuickChildSignal:", permErr);
+    }
   }
 
   const childId = currentChildId || (authenticatedSession?.user?.id);
@@ -12290,3 +12326,30 @@ function startApprovalPolling(requestId, code) {
   }, 1500);
 }
 window.startApprovalPolling = startApprovalPolling;
+
+function updateDemoBannerText() {
+  const banner = document.getElementById("globalDemoWarningBanner");
+  if (!banner) return;
+  if (!isDemoMode) {
+    banner.classList.add("hidden");
+    return;
+  }
+  banner.classList.remove("hidden");
+  const badge = banner.querySelector("span");
+  const text = banner.querySelector("p");
+  if (currentRole === "child") {
+    if (badge) {
+      badge.textContent = "🟡 DEMO: FARZAND KO'RINISHI";
+      badge.className = "px-2 py-0.5 rounded-lg bg-yellow-400 text-slate-950 text-[10px] font-black tracking-widest uppercase shrink-0 shadow";
+    }
+    if (text) text.innerHTML = "⚠️ Siz <b>Farzand namuna rejimi</b>dasiz. SOS, topshiriqlar va tangalarni sinab ko'rishingiz mumkin.";
+  } else {
+    if (badge) {
+      badge.textContent = "🟣 DEMO: OTA-ONA KO'RINISHI";
+      badge.className = "px-2 py-0.5 rounded-lg bg-purple-400 text-slate-950 text-[10px] font-black tracking-widest uppercase shrink-0 shadow";
+    }
+    if (text) text.innerHTML = "⚠️ Siz <b>Ota-ona namuna rejimi</b>dasiz. Xarita, geozonalar va boshqaruv pultini sinab ko'rishingiz mumkin.";
+  }
+  if (window.lucide) lucide.createIcons();
+}
+window.updateDemoBannerText = updateDemoBannerText;

@@ -2451,10 +2451,12 @@ def format_notification_settings_html(settings_dict: Dict[str, bool]) -> str:
     p_on = settings_dict.get("notify_parents", True)
     c_on = settings_dict.get("notify_children", True)
     o_on = settings_dict.get("notify_owner", True)
+    sos_on = settings_dict.get("notify_owner_sos", True)
 
     p_badge = "🟢 <b>YOQILGAN (Xabarlar boradi)</b>" if p_on else "🔴 <b>OʻCHIRILGAN (Xabarlar toʻxtatilgan)</b>"
     c_badge = "🟢 <b>YOQILGAN (Signallar boradi)</b>" if c_on else "🔴 <b>OʻCHIRILGAN (Signallar toʻxtatilgan)</b>"
     o_badge = "🟢 <b>YOQILGAN (Nusxalar keladi)</b>" if o_on else "🔴 <b>OʻCHIRILGAN (Nusxalar kelmaydi)</b>"
+    sos_badge = "🟢 <b>YOQILGAN (SOS keladi)</b>" if sos_on else "🔴 <b>OʻCHIRILGAN (SOS toʻxtatilgan)</b>"
 
     return (
         "🔔 <b>GLOBAL XABARNOMALAR & SIGNALLAR BOSHQARUVI</b>\n"
@@ -2468,7 +2470,10 @@ def format_notification_settings_html(settings_dict: Dict[str, bool]) -> str:
         "<i>(Siren tovushi, ekran qulflash buyruqlari, direktivalar va topshiriqlar)</i>\n\n"
         f"👑 <b>Owner / Asoschiga keladigan xabarlar:</b>\n"
         f"Holat: {o_badge}\n"
-        "<i>(SOS global nusxalari, tizim ogohlantirishlari va roʻyxatdan oʻtish bildirishnomalari)</i>\n"
+        "<i>(Tizim ogohlantirishlari va bildirishnomalari)</i>\n\n"
+        f"🚨 <b>Owner SOS xavf xabarnomalari:</b>\n"
+        f"Holat: {sos_badge}\n"
+        "<i>(Bolalar SOS favqulodda tugmasini bosganda keladigan nusxalar)</i>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "👇 <i>Kerakli tugmani bosing va 1-bosishda holatni oʻzgartiring:</i>"
     )
@@ -2496,6 +2501,9 @@ async def handle_toggle_notification_cb(callback: CallbackQuery):
         elif action == "owner":
             await crud.toggle_notification_setting("notify_owner", session)
             toast = "👑 Owner nusxalari holati oʻzgartirildi!"
+        elif action == "owner_sos":
+            await crud.toggle_notification_setting("notify_owner_sos", session)
+            toast = "🚨 Owner SOS xabarlari holati oʻzgartirildi!"
         elif action == "all_on":
             await crud.set_all_notification_settings(True, session)
             toast = "🟢 Barcha xabarnomalar yoqildi!"

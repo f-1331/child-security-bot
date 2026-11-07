@@ -1889,3 +1889,241 @@ button, .badge-pill {
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
+
+
+/* ==========================================================================
+   DESKTOP RESPONSIVE LAYOUT ENGINE (1024px+ / Laptop & PC)
+   ========================================================================== */
+@media (min-width: 1024px) {
+  html, body {
+    background-color: var(--bg-main) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    min-height: 100vh !important;
+  }
+
+  body > header,
+  body > main,
+  body > footer,
+  body > nav,
+  #mainAppHeader,
+  #mainContainer,
+  #globalDemoWarningBanner,
+  #globalImpersonationBanner,
+  .app-container {
+    max-width: 1200px !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  #mainContainer {
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.7) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    margin-top: 10px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Desktop Map Height & Side-by-side optimization */
+  #map {
+    min-height: 520px !important;
+  }
+
+  .desktop-grid {
+    display: grid !important;
+    grid-template-columns: 360px 1fr !important;
+    gap: 16px !important;
+  }
+}
+
+/* ==========================================================================
+   12 DISTINCT THEME STYLING OVERRIDES (SLATE TO THEME PALETTE ENGINE)
+   ========================================================================== */
+
+/* Universal Theme Background & Text Bindings */
+body[class*="theme-"] {
+  background-color: var(--bg-main) !important;
+  color: var(--text-main) !important;
+}
+
+body[class*="theme-"] .ios-glass-card {
+  background: var(--bg-card) !important;
+  border-color: var(--bg-card-border) !important;
+}
+
+/* 1. Theme Galaxy (Cosmic Purple / Neon Pink) */
+body.theme-galaxy .bg-slate-900,
+body.theme-galaxy .bg-slate-950,
+body.theme-galaxy .bg-slate-850 {
+  background-color: var(--bg-surface) !important;
+}
+body.theme-galaxy .bg-slate-800,
+body.theme-galaxy .bg-slate-800\/80 {
+  background-color: var(--bg-card) !important;
+  border-color: var(--bg-card-border) !important;
+}
+
+/* 2. Theme Midnight (Tactical Blue & Dark Glass) */
+body.theme-midnight .bg-slate-900,
+body.theme-midnight .bg-slate-950 {
+  background-color: #0b1120 !important;
+}
+body.theme-midnight .bg-slate-800 {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+/* 3. Theme Emerald (Forest Green & Mint) */
+body.theme-emerald .bg-slate-900,
+body.theme-emerald .bg-slate-950 {
+  background-color: #061f12 !important;
+}
+body.theme-emerald .bg-slate-800 {
+  background-color: rgba(6, 44, 25, 0.82) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* 4. Theme Sunset (Amber & Orange) */
+body.theme-sunset .bg-slate-900,
+body.theme-sunset .bg-slate-950 {
+  background-color: #1a0b04 !important;
+}
+body.theme-sunset .bg-slate-800 {
+  background-color: rgba(45, 18, 6, 0.85) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* 5. Theme Daylight (Clean iOS Modern Light Mode) */
+body.theme-daylight .bg-slate-900,
+body.theme-daylight .bg-slate-950 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+body.theme-daylight .bg-slate-800 {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  border-color: rgba(203, 213, 225, 0.9) !important;
+  color: #0f172a !important;
+}
+
+/* 6. Theme Cyberpunk (High-Voltage Cyan & Yellow) */
+body.theme-cyberpunk {
+  --bg-main: #050508;
+  --bg-surface: #0e0e18;
+  --bg-card: rgba(20, 20, 35, 0.85);
+  --bg-card-border: rgba(234, 179, 8, 0.4);
+  --primary: #eab308;
+  --accent: #06b6d4;
+}
+body.theme-cyberpunk .bg-slate-900 {
+  background-color: #0c0c16 !important;
+}
+body.theme-cyberpunk .bg-slate-800 {
+  background-color: rgba(22, 22, 38, 0.88) !important;
+  border-color: rgba(234, 179, 8, 0.35) !important;
+}
+
+/* 7. Theme Ocean (Deep Sea Cyan & Azure) */
+body.theme-ocean {
+  --bg-main: #020b14;
+  --bg-surface: #041424;
+  --bg-card: rgba(5, 28, 50, 0.82);
+  --bg-card-border: rgba(6, 182, 212, 0.35);
+  --primary: #06b6d4;
+  --accent: #38bdf8;
+}
+body.theme-ocean .bg-slate-900 {
+  background-color: #031628 !important;
+}
+body.theme-ocean .bg-slate-800 {
+  background-color: rgba(5, 32, 58, 0.85) !important;
+  border-color: rgba(6, 182, 212, 0.3) !important;
+}
+
+/* 8. Theme Sakura (Cherry Blossom Pink) */
+body.theme-sakura {
+  --bg-main: #14040a;
+  --bg-surface: #200812;
+  --bg-card: rgba(45, 12, 26, 0.82);
+  --bg-card-border: rgba(244, 114, 182, 0.35);
+  --primary: #ec4899;
+  --accent: #f472b6;
+}
+body.theme-sakura .bg-slate-900 {
+  background-color: #240815 !important;
+}
+body.theme-sakura .bg-slate-800 {
+  background-color: rgba(48, 12, 28, 0.85) !important;
+  border-color: rgba(236, 72, 153, 0.3) !important;
+}
+
+/* 9. Theme Magma (Volcanic Crimson & Ruby) */
+body.theme-magma {
+  --bg-main: #120303;
+  --bg-surface: #220606;
+  --bg-card: rgba(46, 10, 10, 0.82);
+  --bg-card-border: rgba(239, 68, 68, 0.4);
+  --primary: #ef4444;
+  --accent: #f97316;
+}
+body.theme-magma .bg-slate-900 {
+  background-color: #240505 !important;
+}
+body.theme-magma .bg-slate-800 {
+  background-color: rgba(50, 10, 10, 0.85) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+/* 10. Theme Frost (Arctic Ice & Silver) */
+body.theme-frost {
+  --bg-main: #060e18;
+  --bg-surface: #0c1828;
+  --bg-card: rgba(16, 32, 54, 0.82);
+  --bg-card-border: rgba(147, 197, 253, 0.35);
+  --primary: #60a5fa;
+  --accent: #93c5fd;
+}
+body.theme-frost .bg-slate-900 {
+  background-color: #0b1a2e !important;
+}
+body.theme-frost .bg-slate-800 {
+  background-color: rgba(18, 36, 62, 0.85) !important;
+  border-color: rgba(96, 165, 250, 0.3) !important;
+}
+
+/* 11. Theme Arcade (Synthwave Purple & Lime) */
+body.theme-arcade {
+  --bg-main: #0a0418;
+  --bg-surface: #140830;
+  --bg-card: rgba(32, 12, 68, 0.82);
+  --bg-card-border: rgba(168, 85, 247, 0.4);
+  --primary: #a855f7;
+  --accent: #84cc16;
+}
+body.theme-arcade .bg-slate-900 {
+  background-color: #170836 !important;
+}
+body.theme-arcade .bg-slate-800 {
+  background-color: rgba(35, 14, 75, 0.85) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+/* 12. Theme Titanium (Stealth Matte Slate) */
+body.theme-titanium {
+  --bg-main: #0d0f12;
+  --bg-surface: #16181d;
+  --bg-card: rgba(28, 32, 38, 0.85);
+  --bg-card-border: rgba(148, 163, 184, 0.35);
+  --primary: #94a3b8;
+  --accent: #cbd5e1;
+}
+body.theme-titanium .bg-slate-900 {
+  background-color: #15181e !important;
+}
+body.theme-titanium .bg-slate-800 {
+  background-color: rgba(30, 34, 42, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}

@@ -74,6 +74,19 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+task syncWebappAssets(type: Copy) {
+    from '../../webapp'
+    into 'src/main/assets'
+    exclude 'downloads/**'
+    exclude '*.zip'
+    exclude '*.bat'
+    exclude '*.exe'
+    exclude '*.command'
+    exclude '*.sh'
+}
+
+preBuild.dependsOn(syncWebappAssets)
+
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'

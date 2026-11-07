@@ -467,6 +467,7 @@ def get_notifications_settings_inline_keyboard(settings_dict: Dict[str, bool]) -
     p_on = settings_dict.get("notify_parents", True)
     c_on = settings_dict.get("notify_children", True)
     o_on = settings_dict.get("notify_owner", True)
+    sos_on = settings_dict.get("notify_owner_sos", True)
 
     btn_parents = InlineKeyboardButton(
         text=f"{'🟢 YOQILGAN' if p_on else '🔴 OʻCHIRILGAN'} | 👨‍👩‍👧 Ota-ona xabarlari",
@@ -480,6 +481,10 @@ def get_notifications_settings_inline_keyboard(settings_dict: Dict[str, bool]) -
         text=f"{'🟢 YOQILGAN' if o_on else '🔴 OʻCHIRILGAN'} | 👑 Owner nusxalari",
         callback_data="toggle_notif:owner",
     )
+    btn_owner_sos = InlineKeyboardButton(
+        text=f"{'🟢 YOQILGAN' if sos_on else '🔴 OʻCHIRILGAN'} | 🚨 Owner SOS xabarlari",
+        callback_data="toggle_notif:owner_sos",
+    )
 
     btn_all_on = InlineKeyboardButton(text="🟢 Barchasini yoqish", callback_data="toggle_notif:all_on")
     btn_all_off = InlineKeyboardButton(text="🔴 Barchasini oʻchirish", callback_data="toggle_notif:all_off")
@@ -491,6 +496,7 @@ def get_notifications_settings_inline_keyboard(settings_dict: Dict[str, bool]) -
             [btn_parents],
             [btn_children],
             [btn_owner],
+            [btn_owner_sos],
             [btn_all_on, btn_all_off],
             [btn_refresh, btn_back],
         ]

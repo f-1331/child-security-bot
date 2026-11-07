@@ -24,6 +24,8 @@ from db.models import (
     SystemSetting,
 )
 
+TASHKENT_TZ = timezone(timedelta(hours=5))
+
 
 async def get_user(session: AsyncSession, user_id: int) -> Optional[User]:
     """Retrieve user by Telegram ID."""
@@ -172,10 +174,15 @@ async def generate_web_access_code(session: AsyncSession, user_id: int, force_ne
     return code
 
 
-async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optional[User]:
+async def get_user_by_web_access_code(
+    session: AsyncSession,
+    code: str,
+    target_role: Optional[str] = None
+) -> Optional[User]:
     """Find user by web access code (or pairing code, or telegram ID fallback).
     - If code belongs to a Child, returns the Child (child account opens).
     - If code belongs to a Parent, returns the Parent (all children load together).
+    - If target_role is specified ('parent' or 'child'), enforces matching role.
     """
     code_clean = code.strip().replace(" ", "").replace("-", "")
 
@@ -187,10 +194,17 @@ async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optio
         owner_alias = await session.get(User, 1)
         if owner_alias:
             return owner_alias
+        res = await session.execute(select(User).where(User.username == "fayzbek1331"))
+        u = res.scalars().first()
+        if u:
+            return u
+
+    # Role filter condition if target_role is supplied
+    role_cond = [User.role == target_role.strip().lower()] if target_role else []
 
     # 1. Match directly on web_access_code
     result = await session.execute(
-        select(User).where(User.web_access_code == code_clean)
+        select(User).where(User.web_access_code == code_clean, *role_cond)
     )
     user = result.scalars().first()
     if user:
@@ -198,13 +212,20 @@ async def get_user_by_web_access_code(session: AsyncSession, code: str) -> Optio
 
     # 2. Match on pairing_code (e.g. parent's pairing code)
     result = await session.execute(
-        select(User).where(User.pairing_code == code_clean)
+        select(User).where(User.pairing_code == code_clean, *role_cond)
     )
     user = result.scalars().first()
     if user:
         return user
 
-    # Telegram ID fallback removed for defensive security (requires cryptographically signed initData or valid 6-digit access code)
+    # If target_role was passed but no strict match, fallback to match without role filter
+    if target_role:
+        result = await session.execute(
+            select(User).where(or_(User.web_access_code == code_clean, User.pairing_code == code_clean))
+        )
+        user = result.scalars().first()
+        if user:
+            return user
 
     return None
 
@@ -344,10 +365,14 @@ async def get_parent_child_link(session: AsyncSession, parent_id: int, child_id:
 
 async def get_children_for_parent(session: AsyncSession, parent_id: int) -> List[User]:
     """Fetch all linked children for a parent."""
+    parent_ids = [parent_id]
+    if parent_id in (1, 6707839718):
+        parent_ids = [1, 6707839718]
     result = await session.execute(
         select(User)
         .join(ParentChildLink, ParentChildLink.child_id == User.id)
-        .where(ParentChildLink.parent_id == parent_id)
+        .where(ParentChildLink.parent_id.in_(parent_ids))
+        .distinct()
     )
     return list(result.scalars().all())
 
@@ -512,8 +537,11 @@ async def get_location_history_today(
     child_id: int,
     limit: int = 500
 ) -> List[LocationLog]:
-    """Fetch location history for today (last 24 hours), returning most recent points chronologically."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    """Fetch location history for today in local Tashkent timezone (UTC+5), returning most recent points chronologically."""
+    now_tz = datetime.now(TASHKENT_TZ)
+    start_of_today_tz = now_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = start_of_today_tz.astimezone(timezone.utc)
+
     result = await session.execute(
         select(LocationLog)
         .where(
@@ -524,6 +552,20 @@ async def get_location_history_today(
         .limit(limit)
     )
     logs = list(result.scalars().all())
+    if len(logs) < 5:
+        # Fallback to last 24 hours if today has very few logs
+        cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        fallback_res = await session.execute(
+            select(LocationLog)
+            .where(
+                LocationLog.child_id == child_id,
+                LocationLog.recorded_at >= cutoff_24h
+            )
+            .order_by(LocationLog.recorded_at.desc(), LocationLog.id.desc())
+            .limit(limit)
+        )
+        logs = list(fallback_res.scalars().all())
+
     if not logs:
         # Fallback to the latest available trail if child has logs in database
         fallback_res = await session.execute(
@@ -1181,8 +1223,9 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
                 "est_minutes": min(720, inside_count * 2)
             })
 
-    # 3. Tasks completed today
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    # 3. Tasks completed today (Tashkent timezone UTC+5)
+    start_of_today_tz = datetime.now(TASHKENT_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = start_of_today_tz.astimezone(timezone.utc)
     tasks_res = await session.execute(
         select(Task).where(
             Task.child_id == child_id,
@@ -1765,6 +1808,7 @@ _NOTIFICATION_SETTINGS_CACHE: dict[str, bool] = {
     "notify_parents": True,
     "notify_children": True,
     "notify_owner": True,
+    "notify_owner_sos": True,
 }
 _NOTIFICATION_CACHE_TIMESTAMP: float = 0.0
 
@@ -1789,6 +1833,7 @@ async def get_notification_settings(session: Optional[AsyncSession] = None) -> d
             "notify_parents": True,
             "notify_children": True,
             "notify_owner": True,
+            "notify_owner_sos": True,
         }
         for row in settings_rows:
             if row.key in current:
@@ -1839,7 +1884,7 @@ async def toggle_notification_setting(key: str, session: Optional[AsyncSession] 
 
 async def set_all_notification_settings(enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
     """Set all notification toggles at once."""
-    for key in ("notify_parents", "notify_children", "notify_owner"):
+    for key in ("notify_parents", "notify_children", "notify_owner", "notify_owner_sos"):
         await update_notification_setting(key, enabled, session)
     return await get_notification_settings(session)
 
@@ -1857,3 +1902,8 @@ async def is_notify_children_enabled(session: Optional[AsyncSession] = None) -> 
 async def is_notify_owner_enabled(session: Optional[AsyncSession] = None) -> bool:
     s = await get_notification_settings(session)
     return s.get("notify_owner", True)
+
+
+async def is_notify_owner_sos_enabled(session: Optional[AsyncSession] = None) -> bool:
+    s = await get_notification_settings(session)
+    return s.get("notify_owner_sos", True)
