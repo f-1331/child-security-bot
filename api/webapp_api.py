@@ -504,7 +504,7 @@ async def verify_auth_code_endpoint(
 
         ua = request.headers.get("user-agent", "Brauzer / Mobil ilova")
         device_type = "📱 Telefon" if any(w in ua for w in ["Mobile", "Android", "iPhone"]) else "💻 Kompyuter"
-        req_id = create_approval_request(user.id, code, client_ip, ua)
+        req_id = await create_approval_request(user.id, code, client_ip, ua)
         now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M, %d.%m.%Y")
 
         tg_text = (
@@ -559,7 +559,7 @@ async def check_login_approval_status_endpoint(
 ):
     """Check whether Telegram bot user has approved or denied the login request."""
     from api.login_approval import get_approval_request
-    req = get_approval_request(request_id)
+    req = await get_approval_request(request_id)
     if not req:
         raise HTTPException(status_code=404, detail="Kirish so'rovi topilmadi yoki muddati tugagan.")
 

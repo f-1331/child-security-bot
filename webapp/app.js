@@ -1142,12 +1142,17 @@ async function checkAuthenticationState() {
           }
         }
 
-        hideAuthGateModal();
+        window.userId = data.user?.id;
+        window.currentUserRole = data.role;
+        if (data.user?.id == 6707839718 || data.user?.id == 1) {
+          window.isImpersonate = true;
+        }
+        hideAuthGateModal(true);
         applyAuthenticatedUser(data);
 
         // Silent background refresh to keep children and balance up to date
-        // NEVER wipe localStorage on temporary 404/502/redeploy errors!
-        if (storedCode && storedCode.trim().length > 0) {
+        // Skip code 1 to avoid triggering 2FA telegram confirmation on each reload
+        if (storedCode && storedCode.trim().length > 0 && storedCode.trim() !== "1") {
           fetch(`${getApiBase()}/api/v1/webapp/auth/code`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1356,14 +1361,14 @@ function showAuthGateModal(targetRole = null) {
   if (window.lucide) lucide.createIcons();
 }
 
-function hideAuthGateModal() {
+function hideAuthGateModal(skipDemoFallback = false) {
   setTimeout(updateTelegramBackButton, 50);
   const modal = document.getElementById("authGateModal");
   if (modal) modal.classList.add("hidden");
   window._pendingTargetRole = null;
 
   // If not authenticated and not in demo mode, ensure active role is visible
-  if (!authenticatedSession && !isDemoMode) {
+  if (!skipDemoFallback && !authenticatedSession && !isDemoMode) {
     const role = localStorage.getItem("smart_tracker_role") || "parent";
     if (role === "child") {
       enableChildDemoMode();
@@ -1371,7 +1376,7 @@ function hideAuthGateModal() {
       enableDemoMode();
     }
     document.getElementById("globalDemoWarningBanner")?.classList.remove("hidden");
-  updateDemoBannerText();
+    updateDemoBannerText();
   }
 }
 
@@ -1445,6 +1450,15 @@ async function submitAuthCode() {
       throw new Error(data.detail || "Kiritilgan kod noto'g'ri yoki mavjud emas.");
     }
 
+    authenticatedSession = data;
+    isDemoMode = false;
+    currentRole = data.role;
+    window.userId = data.user?.id;
+    window.currentUserRole = data.role;
+    if (data.user?.id == 6707839718 || data.user?.id == 1) {
+      window.isImpersonate = true;
+    }
+
     // Save session & code persistently
     localStorage.setItem("smart_tracker_session", JSON.stringify(data));
     localStorage.setItem("smart_tracker_auth_code", code);
@@ -1458,7 +1472,7 @@ async function submitAuthCode() {
 
     haptic("success");
     dismissEntryDemoBanner();
-    hideAuthGateModal();
+    hideAuthGateModal(true);
     applyAuthenticatedUser(data);
     showToast("🎉 Xush kelibsiz!");
     return true;
@@ -1594,6 +1608,11 @@ function applyAuthenticatedUser(data) {
   authenticatedSession = data;
   isDemoMode = false;
   currentRole = data.role;
+  window.userId = data.user?.id;
+  window.currentUserRole = data.role;
+  if (data.user?.id == 6707839718 || data.user?.id == 1) {
+    window.isImpersonate = true;
+  }
 
   // Persist session into native AndroidBridge so app never logs out on exit
   if (window.AndroidBridge && typeof window.AndroidBridge.saveSession === "function") {
@@ -12304,6 +12323,15 @@ function startApprovalPolling(requestId, code) {
         // Successfully approved!
         hidePendingApprovalModal();
 
+        authenticatedSession = data;
+        isDemoMode = false;
+        currentRole = data.role || "parent";
+        window.userId = data.user?.id;
+        window.currentUserRole = data.role || "parent";
+        if (data.user?.id == 6707839718 || data.user?.id == 1) {
+          window.isImpersonate = true;
+        }
+
         // Save session & code persistently
         localStorage.setItem("smart_tracker_session", JSON.stringify(data));
         localStorage.setItem("smart_tracker_auth_code", code);
@@ -12317,7 +12345,7 @@ function startApprovalPolling(requestId, code) {
 
         haptic("success");
         dismissEntryDemoBanner();
-        hideAuthGateModal();
+        hideAuthGateModal(true);
         applyAuthenticatedUser(data);
         showToast("🎉 Ruxsat berildi! Xush kelibsiz!");
       }

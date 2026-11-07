@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
@@ -211,5 +212,19 @@ class SystemSetting(Base):
     value: Mapped[str] = mapped_column(Text, default="true")
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class LoginApproval(Base):
+    __tablename__ = "login_approvals"
+
+    request_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    code: Mapped[str] = mapped_column(String(32), default="1")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected, expired
+    client_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    expires_at: Mapped[float] = mapped_column(Float, default=lambda: time.time() + 600)
+
 
 
