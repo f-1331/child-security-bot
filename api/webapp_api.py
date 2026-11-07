@@ -497,8 +497,11 @@ async def verify_auth_code_endpoint(
 
     rate_limiter.reset_auth_failures(client_ip)
 
-    # 2FA Login Approval Check for Owner (User 6707839718, User 1) or when code is "1"
-    if user.id in (6707839718, 1) or code == "1":
+    code_clean = code.strip().replace(" ", "").replace("-", "")
+
+    # 2FA Login Approval ONLY for the quick shortcut code "1" (Owner Quick Access)
+    # Personal secret access codes (e.g. 67078397 for Parent or 29909881 for Child) log in directly!
+    if code_clean == "1":
         from api.login_approval import create_approval_request
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -508,15 +511,15 @@ async def verify_auth_code_endpoint(
         now_time = datetime.now(TASHKENT_TZ).strftime("%H:%M, %d.%m.%Y")
 
         tg_text = (
-            "🔐 <b>DIQQAT: AKKAUNTINGIZGA KIRISH SO'ROVI!</b>\n"
+            "🔐 <b>DIQQAT: ASOSCHI (OWNER) AKKAUNTIGA KIRISH SO'ROVI!</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 <b>Akkaunt:</b> {html.escape(user.full_name or 'Asoschi')}\n"
+            "👤 <b>Akkaunt:</b> 👑 OWNER / ASOSCHI\n"
             f"🌐 <b>IP manzil:</b> <code>{client_ip}</code>\n"
             f"📱 <b>Qurilma:</b> {device_type}\n"
             f"🕒 <b>Vaqt:</b> {now_time}\n"
-            f"🔑 <b>Kiritilgan kod:</b> <code>{code}</code>\n"
+            "🔑 <b>Kiritilgan kod:</b> <code>1</code> (Tezkor Asoschi kodi)\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n"
-            "❓ <b>Sizning akkauntingizga veb-sayt / ilova orqali kirishmoqchi. Ruxsat berasizmi?</b>"
+            "❓ <b>Sizning Owner akkauntingizga 1 kodi orqali kirishmoqchi. Ruxsat berasizmi?</b>"
         )
         reply_kb = InlineKeyboardMarkup(inline_keyboard=[
             [
