@@ -718,7 +718,8 @@ async def health_check():
         "service": "Smart Parental Tracker",
         "database_engine": "postgresql" if is_postgres else "sqlite",
         "database_persisted": is_postgres,
-        "timezone": settings.TIMEZONE
+        "timezone": settings.TIMEZONE,
+        "version": "v79-284989f"
     }
 
 
