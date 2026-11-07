@@ -1,6 +1,9 @@
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, Optional
+
+TASHKENT_TZ = timezone(timedelta(hours=5))
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandStart, CommandObject
