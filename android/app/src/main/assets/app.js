@@ -1150,34 +1150,29 @@ async function checkAuthenticationState() {
         hideAuthGateModal(true);
         applyAuthenticatedUser(data);
 
-        // Silent background refresh to keep children and balance up to date
-        // Skip code 1 to avoid triggering 2FA telegram confirmation on each reload
-        if (storedCode && storedCode.trim().length > 0 && storedCode.trim() !== "1") {
-          fetch(`${getApiBase()}/api/v1/webapp/auth/code`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: storedCode.trim() })
-          })
-            .then(async (r) => {
-              if (r.ok) {
-                return r.json();
+        // Refresh live data directly without re-authenticating or hitting /auth/code
+        if (data.role === "parent" && data.user && data.user.id) {
+          fetch(`${getApiBase()}/api/v1/webapp/parent/${data.user.id}/children`)
+            .then(r => r.ok ? r.json() : null)
+            .then(fresh => {
+              if (fresh && fresh.status === "success" && fresh.children) {
+                childrenList = fresh.children;
+                data.children = fresh.children;
+                localStorage.setItem("smart_tracker_session", JSON.stringify(data));
+                localStorage.setItem("smart_tracker_cached_children", JSON.stringify(fresh.children));
+                renderChildSelector();
               }
-              // If server is deploying or returning 404/502, retain session!
-              console.warn("Background auth refresh status:", r.status, "- retaining local session.");
-              return null;
             })
-            .then((fresh) => {
+            .catch(() => {});
+        } else if (data.role === "child" && data.user && data.user.id) {
+          fetch(`${getApiBase()}/api/v1/webapp/child/${data.user.id}/status`)
+            .then(r => r.ok ? r.json() : null)
+            .then(fresh => {
               if (fresh && fresh.status === "success") {
-                localStorage.setItem("smart_tracker_session", JSON.stringify(fresh));
-                if (fresh.children && fresh.children.length > 0) {
-                  localStorage.setItem("smart_tracker_cached_children", JSON.stringify(fresh.children));
-                }
-                applyAuthenticatedUser(fresh);
+                applyChildUI(fresh.user || data.user);
               }
             })
-            .catch((e) => {
-              console.warn("Background auth refresh network error, keeping session:", e);
-            });
+            .catch(() => {});
         }
         return;
       }
