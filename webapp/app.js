@@ -1,4 +1,64 @@
 
+// =========================================================
+// FULLSCREEN (F11) & RESPONSIVE DESKTOP ENGINE
+// =========================================================
+function toggleAppFullscreen() {
+  if (!document.fullscreenElement) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(err => console.warn("Fullscreen request note:", err));
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen().catch(err => console.warn("Exit fullscreen note:", err));
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
+    }
+  }
+}
+
+function getMapAdjustedLatLng(lat, lng, zoom = 17) {
+  if (!map) return [lat, lng];
+  try {
+    const pt = map.project([lat, lng], zoom);
+    const offsetPx = map.getSize().y > 550 ? 75 : 45;
+    const adjustedPt = pt.add([0, offsetPx]);
+    return map.unproject(adjustedPt, zoom);
+  } catch(e) {
+    return [lat, lng];
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("fullscreenchange", () => {
+    const isFs = !!document.fullscreenElement;
+    const icon = document.getElementById("iconToggleFullscreen");
+    if (icon) {
+      icon.setAttribute("data-lucide", isFs ? "minimize" : "maximize");
+      if (window.lucide && typeof lucide.createIcons === "function") {
+        lucide.createIcons();
+      }
+    }
+    if (window.map) {
+      setTimeout(() => window.map.invalidateSize(), 150);
+    }
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "F11") {
+      setTimeout(() => {
+        if (window.map) window.map.invalidateSize();
+      }, 250);
+    }
+  });
+}
+
+
 function toggleParentHudCollapse() {
   haptic("light");
   const bar = document.getElementById("parentMonitoringBar");
@@ -32,7 +92,7 @@ const PRODUCTION_WEBAPP_URL = "https://child-security-bot.vercel.app";
 function getApiBase() {
   if (typeof window !== "undefined" && window.location) {
     if (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null") {
-      return "https://child-security-bot.vercel.app";
+      return "https://child-security-site.onrender.com";
     }
     if (window.location.hostname.includes("vercel.app")) {
       return "";
@@ -694,6 +754,12 @@ document.addEventListener("DOMContentLoaded", () => {
       updateLiveTelemetry(currentChildId);
       if (isRouteVisible && (Date.now() - lastRouteFetchTime > 3000)) {
         loadRouteHistory(currentChildId, true);
+      }
+    }
+    if (Date.now() - (window._lastAutoTaskPollTime || 0) > 6000) {
+      window._lastAutoTaskPollTime = Date.now();
+      if (typeof loadTasks === "function") {
+        loadTasks();
       }
     }
   }, 2000);
@@ -3491,9 +3557,10 @@ async function centerOnChild() {
   }
 
   if (childMarker && map) {
-    map.flyTo(childMarker.getLatLng(), 17, { animate: true, duration: 0.8 });
+    const pos = childMarker.getLatLng();
+    map.flyTo(getMapAdjustedLatLng(pos.lat, pos.lng, 17), 17, { animate: true, duration: 0.8 });
   } else if (cachedDeviceLocation && map) {
-    map.flyTo([cachedDeviceLocation.latitude, cachedDeviceLocation.longitude], 17, { animate: true, duration: 0.8 });
+    map.flyTo(getMapAdjustedLatLng(cachedDeviceLocation.latitude, cachedDeviceLocation.longitude, 17), 17, { animate: true, duration: 0.8 });
   } else {
     const loc = await getDeviceLocation();
     if (loc && typeof loc.latitude === "number" && map) {
@@ -6346,26 +6413,12 @@ async function submitNewTask() {
       }
     }
 
-    if (isDemoMode) {
-      tasksList.unshift({
-        id: Date.now(),
-        title: title,
-        description: desc,
-        reward_coins: reward,
-        status: "pending",
-        media_type: mediaType,
-        media_url: mediaUrl,
-        created_at: new Date().toISOString()
-      });
-      renderTasksList();
-      closeAddTaskModal();
-      showToast("Topshiriq yuborildi (Demo)");
-      return;
-    }
+    const effParentId = parseInt(parentId) || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) || 6707839718;
+    const effChildId = parseInt(currentChildId) || 997185613;
 
     const payload = {
-      parent_id: parseInt(parentId),
-      child_id: parseInt(currentChildId),
+      parent_id: effParentId,
+      child_id: effChildId,
       title: title,
       description: desc || null,
       reward_coins: reward,
@@ -7880,33 +7933,40 @@ async function sendQuickChildSignal(signalType) {
   if (lastChildLocation && lastChildLocation.latitude) {
     lat = lastChildLocation.latitude;
     lon = lastChildLocation.longitude;
+  } else if (cachedDeviceLocation && cachedDeviceLocation.latitude) {
+    lat = cachedDeviceLocation.latitude;
+    lon = cachedDeviceLocation.longitude;
   }
 
-  // Fallback fresh location permission prompt if coordinates are null
+  // Fast-timeout (1.5s max) geolocation check: never hang or abort!
   if ((!lat || !lon) && navigator.geolocation) {
     try {
-      const pos = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 4000,
-          maximumAge: 10000
-        });
-      });
+      const pos = await Promise.race([
+        new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 1500,
+            maximumAge: 30000
+          });
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("GPS_TIMEOUT")), 1500))
+      ]);
       if (pos && pos.coords) {
         lat = pos.coords.latitude;
         lon = pos.coords.longitude;
         lastChildLocation = { latitude: lat, longitude: lon };
       }
     } catch (permErr) {
-      console.warn("Geolocation prompt note in sendQuickChildSignal:", permErr);
+      console.warn("Geolocation fast note in sendQuickChildSignal:", permErr);
     }
   }
 
-  const childId = currentChildId || (authenticatedSession?.user?.id);
-  if (!childId) {
-    showToast("⚠️ Farzand kodi topilmadi");
-    return;
+  if (!lat || !lon) {
+    lat = DEFAULT_LAT;
+    lon = DEFAULT_LON;
   }
+
+  const childId = currentChildId || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) || 997185613;
 
   try {
     const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/quick-signal`, {
@@ -9167,9 +9227,9 @@ function handleIncomingWebSocketMessage(msg) {
   }
 
   // 1.25 Quick Signal received by Parent
-  if (msg.type === "quick_signal" && currentRole === "parent") {
-    showToast(`💬 ${msg.title || 'Tezkor signal'} (${msg.child_name || 'Farzand'}): "${msg.message || ''}"`);
-    haptic("medium");
+  if (msg.type === "quick_signal") {
+    showToast(`🔔 Farzandingiz tezkor signal yubordi: "${msg.title || ''} - ${msg.message || ''}"`);
+    haptic("heavy");
     playPingNotificationSound();
     return;
   }
@@ -9209,25 +9269,34 @@ function handleIncomingWebSocketMessage(msg) {
   }
 
   // 2. SOS Alert received by Parent
-  if (msg.type === "sos_alert" && currentRole === "parent") {
+  if (msg.type === "sos_alert") {
     const child = childrenList.find((c) => c.id == msg.child_id);
     if (child) {
       child.is_sos_active = true;
     }
     renderChildrenSwitcher();
-
-    if (msg.child_id == currentChildId) {
-      toggleSosBanner(true);
-      if (msg.latitude && msg.longitude) {
-        renderChildMarker(msg.latitude, msg.longitude, child ? child.full_name : "Farzand", true, msg.battery_level);
-        updateBatteryUI(msg.battery_level, msg.is_charging);
-        if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1 });
-      }
-    } else {
-      showToast(`🚨 SOS: ${msg.child_name || 'Farzandingiz'} xavf signalini yoqdi!`);
-      playSirenSound();
-      haptic("heavy");
+    toggleSosBanner(true);
+    playSirenSound();
+    haptic("heavy");
+    if (msg.latitude && msg.longitude) {
+      renderChildMarker(msg.latitude, msg.longitude, child ? child.full_name : (msg.child_name || "Farzand"), true, msg.battery_level);
+      updateBatteryUI(msg.battery_level, msg.is_charging);
+      if (map) map.flyTo([msg.latitude, msg.longitude], 16, { animate: true, duration: 1 });
     }
+    showToast(`🚨 SOS: ${msg.child_name || 'Farzandingiz'} xavf signalini yoqdi!`);
+    return;
+  }
+
+  // 2.1 New Task assigned by Parent
+  if (msg.type === "new_task") {
+    if (currentRole === "child") {
+      playPingNotificationSound();
+      haptic("heavy");
+      showToast(`🎯 Yangi topshiriq: "${msg.task?.title || 'Topshiriq'}" (+${(msg.task?.reward_coins || 0).toLocaleString()} tanga)`);
+    } else {
+      showToast(`✅ Yangi topshiriq qo'shildi: "${msg.task?.title || ''}"`);
+    }
+    loadTasks();
     return;
   }
 
@@ -11116,6 +11185,20 @@ function updateDevicePolicyUI(policy) {
       }
     } else {
       childLockBanner.classList.add("hidden");
+    }
+  }
+
+  // 3.5 Fullscreen barrier modal for child if all apps blocked / school mode
+  const childLockModal = document.getElementById("modal-child-lockdown");
+  const childLockReasonEl = document.getElementById("childLockdownReasonText");
+  if (currentRole === "child" && childLockModal) {
+    if (currentDevicePolicy.is_all_apps_blocked) {
+      if (childLockReasonEl) {
+        childLockReasonEl.textContent = currentDevicePolicy.lockdown_reason || "Maktab dars vaqti faol. Chalg'ituvchi o'yinlar va ilovalar cheklandi. 📚";
+      }
+      childLockModal.classList.remove("hidden");
+    } else {
+      childLockModal.classList.add("hidden");
     }
   }
 

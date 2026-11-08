@@ -1163,8 +1163,8 @@ body.theme-daylight textarea {
 }
 
 #parentMonitoringBar {
-  display: flex !important;
-  align-items: center !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
   gap: clamp(6px, 1.8vw, 8px) !important;
   width: 100% !important;
 }
@@ -1287,14 +1287,14 @@ body.theme-daylight textarea {
 
 /* 5. Floating Controls Dock (Ultra-Premium "Zerkalniy" Mirrored Liquid Glass) */
 .floating-glass-dock {
-  top: clamp(8px, 2vw, 12px) !important;
-  right: clamp(8px, 2vw, 12px) !important;
+  top: clamp(10px, 2.5vw, 16px) !important;
+  right: clamp(12px, 2.8vw, 18px) !important;
   padding: clamp(3px, 1vw, 5px) !important;
   gap: clamp(3px, 1vw, 5px) !important;
   border-radius: clamp(14px, 3.5vw, 18px) !important;
   max-height: calc(100% - clamp(90px, 14vh, 130px)) !important;
   overflow-y: auto !important;
-  overflow-x: hidden !important;
+  overflow-x: visible !important;
   scrollbar-width: none !important;
   z-index: 25 !important;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.05) 35%, rgba(10, 16, 32, 0.75) 100%) !important;
@@ -1910,12 +1910,15 @@ button, .badge-pill {
 @media (min-width: 1024px) {
   html, body {
     background-color: var(--bg-main) !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
-    align-items: center !important;
-    height: 100vh !important;
-    min-height: 100vh !important;
-    overflow: hidden !important;
+    align-items: stretch !important;
   }
 
   body > header,
@@ -1926,41 +1929,50 @@ button, .badge-pill {
   #globalDemoWarningBanner,
   #globalImpersonationBanner,
   .app-container {
-    max-width: 1200px !important;
     width: 100% !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   body > main {
-    max-width: 1200px !important;
     width: 100% !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.7) !important;
-    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    flex: 1 1 0% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
     position: relative !important;
   }
 
   #mainAppHeader {
-    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-left: none !important;
+    border-right: none !important;
   }
 
   #parentBottomContainer {
-    max-width: 440px !important;
-    bottom: 84px !important;
+    max-width: 480px !important;
+    bottom: 74px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
   }
 
   #mainNavBar {
     max-width: 520px !important;
-    bottom: 14px !important;
+    bottom: 12px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
   }
 
   /* Desktop Map Height & Side-by-side optimization */
   #map {
-    min-height: 520px !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
   }
 
   .desktop-grid {

@@ -195,7 +195,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
     ],
-    allow_origin_regex=r"^https://child-security-bot(-[a-zA-Z0-9_-]+)?\.vercel\.app$",
+    allow_origin_regex=r"^(https?://.*|file://.*|null)$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],

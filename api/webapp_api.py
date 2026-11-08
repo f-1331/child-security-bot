@@ -1158,9 +1158,9 @@ async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession
     )
     await session.commit()
 
-    if telemetry.telegram_bot:
+    bot = telemetry.get_telegram_bot()
+    if bot:
         try:
-            bot = telemetry.telegram_bot
             safe_title = html.escape(task.title)
             safe_desc = html.escape(task.description) if task.description else ""
             caption_html = (
@@ -1191,6 +1191,29 @@ async def create_task_endpoint(payload: CreateTaskRequest, session: AsyncSession
                 await bot.send_message(chat_id=task.child_id, text=caption_html, reply_markup=markup, parse_mode="HTML")
         except Exception as e:
             logger.error(f"Failed to dispatch task to child Telegram: {e}")
+
+    # Real-Time WebSocket broadcast of new task
+    ws_task_payload = {
+        "type": "new_task",
+        "task": {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "reward_coins": task.reward_coins,
+            "status": task.status,
+            "media_type": task.media_type,
+            "media_url": task.media_url,
+            "created_at": task.created_at.isoformat() if task.created_at else None
+        }
+    }
+    try:
+        await ws_manager.send_to_user(task.child_id, ws_task_payload)
+        await ws_manager.send_to_user(task.parent_id, ws_task_payload)
+        if task.parent_id in (1, 6707839718):
+            await ws_manager.send_to_user(6707839718, ws_task_payload)
+            await ws_manager.send_to_user(1, ws_task_payload)
+    except Exception:
+        pass
 
     return {
         "status": "success",
@@ -1368,13 +1391,17 @@ async def complete_task_endpoint(
             logger.error(f"Failed to forward completed task to parent Telegram: {e}")
 
     # Broadcast task submitted event to parents via WebSocket
+    ws_sub_payload = {
+        "type": "task_submitted",
+        "task_id": task_id,
+        "task_title": task.title,
+        "child_id": task.child_id
+    }
     try:
-        await ws_manager.send_to_user(task.parent_id, {
-            "type": "task_submitted",
-            "task_id": task_id,
-            "task_title": task.title,
-            "child_id": task.child_id
-        })
+        await ws_manager.send_to_user(task.parent_id, ws_sub_payload)
+        if task.parent_id in (1, 6707839718):
+            await ws_manager.send_to_user(6707839718, ws_sub_payload)
+            await ws_manager.send_to_user(1, ws_sub_payload)
     except Exception:
         pass
 
@@ -1563,13 +1590,11 @@ async def child_sos_endpoint(
             await ws_manager.send_to_user(p.id, sos_ws_payload)
         except Exception:
             pass
-    notify_owner_sos_allowed = await crud.is_notify_owner_sos_enabled(session)
-    if notify_owner_sos_allowed:
-        try:
-            await ws_manager.send_to_user(6707839718, sos_ws_payload)
-            await ws_manager.send_to_user(1, sos_ws_payload)
-        except Exception:
-            pass
+    try:
+        await ws_manager.send_to_user(6707839718, sos_ws_payload)
+        await ws_manager.send_to_user(1, sos_ws_payload)
+    except Exception:
+        pass
 
     # Rate limiting / Debounce: Prevent duplicate SOS Telegram alerts within 10 seconds
     now_utc = datetime.now(timezone.utc)
@@ -3378,32 +3403,36 @@ async def send_child_quick_signal(
     tbot = telemetry.get_telegram_bot()
     ob = get_owner_bot()
     notified_chats = set()
+    target_recipients = set()
     if parents:
         for p in parents:
-            target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
-            if target_chat_id in notified_chats:
-                continue
-            notified_chats.add(target_chat_id)
-            if notify_parents_allowed and tbot:
-                try:
-                    await tbot.send_message(
-                        chat_id=target_chat_id,
-                        text=tg_text,
-                        parse_mode="HTML"
-                    )
-                    notified += 1
-                except Exception as e:
-                    logger.error(f"Failed to send quick signal to parent {p.id} via client bot: {e}")
-            if p.id in (1, 6707839718) and notify_owner_allowed and ob:
-                try:
-                    await ob.send_message(
-                        chat_id=6707839718,
-                        text=f"📡 <b>[TEZKOR XABAR]</b>\n\n" + tg_text,
-                        parse_mode="HTML"
-                    )
-                    notified += 1
-                except Exception as oe:
-                    logger.error(f"Failed to send quick signal to owner bot: {oe}")
+            target_recipients.add(6707839718 if p.id in (1, 6707839718) else p.id)
+    target_recipients.add(6707839718)
+
+    for target_chat_id in target_recipients:
+        if target_chat_id in notified_chats:
+            continue
+        notified_chats.add(target_chat_id)
+        if tbot:
+            try:
+                await tbot.send_message(
+                    chat_id=target_chat_id,
+                    text=tg_text,
+                    parse_mode="HTML"
+                )
+                notified += 1
+            except Exception as e:
+                logger.error(f"Failed to send quick signal to {target_chat_id} via main bot: {e}")
+        if target_chat_id == 6707839718 and ob:
+            try:
+                await ob.send_message(
+                    chat_id=6707839718,
+                    text=f"📡 <b>[TEZKOR XABAR]</b>\n\n" + tg_text,
+                    parse_mode="HTML"
+                )
+                notified += 1
+            except Exception as oe:
+                pass
 
     ws_data = {
         "type": "quick_signal",
@@ -3417,9 +3446,9 @@ async def send_child_quick_signal(
         "longitude": payload.longitude,
         "battery_level": payload.battery_level
     }
-    for p in parents:
+    for uid in (target_recipients | {1, 6707839718}):
         try:
-            await ws_manager.send_to_user(p.id, ws_data)
+            await ws_manager.send_to_user(uid, ws_data)
         except Exception:
             pass
 

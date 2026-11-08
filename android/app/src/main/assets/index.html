@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=83" />
+  <link rel="stylesheet" href="style.css?v=84" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -277,6 +277,10 @@
             <span>👦</span>
             <span class="hidden sm:inline">Farzand</span>
           </button>
+          <button id="btnToggleFullscreenApp" onclick="toggleAppFullscreen()" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/15 px-2.5 py-1.5 rounded-2xl text-[11px] font-black transition active:scale-95 shadow-sm backdrop-blur-md shrink-0" title="To'liq ekran (Fullscreen / F11)">
+            <i id="iconToggleFullscreen" data-lucide="maximize" class="w-3.5 h-3.5 text-cyan-300"></i>
+            <span class="hidden sm:inline">To'liq ekran</span>
+          </button>
           <button onclick="switchTab('settings')" class="hidden sm:flex items-center gap-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-2xl text-[11px] font-bold transition active:scale-95 shadow-sm backdrop-blur-md" title="Dizayn va sozlamalar">
             <i data-lucide="palette" class="w-3.5 h-3.5 text-purple-400"></i>
             <span class="hidden sm:inline">Dizayn</span>
@@ -288,7 +292,7 @@
       <div id="parentMultiChildBar" class="hidden flex items-center gap-2 overflow-x-auto py-1 custom-scroll no-scrollbar"></div>
 
       <!-- Apple Control Center Style Utility Capsule Strip -->
-      <div id="parentUtilityBar" class="flex items-center justify-between gap-1 pt-1.5 border-t border-white/5 overflow-x-auto no-scrollbar">
+      <div id="parentUtilityBar" class="flex items-center gap-1.5 pt-1.5 pb-1 border-t border-white/5 overflow-x-auto no-scrollbar flex-nowrap scroll-smooth px-1">
         <!-- Dizayn & Mavzular -->
         <button onclick="openModal('theme')" class="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Dizayn va ranglarni o'zgartirish">
           <span>🎨</span>
@@ -693,6 +697,10 @@
                 <i data-lucide="navigation" class="w-3.5 h-3.5"></i>
                 <span data-i18n="route" class="hidden sm:inline">Yo'l</span>
               </button>
+              <button id="btnHideMenusBar" onclick="toggleMapUiVisibility(true)" class="px-2 py-1.5 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition shadow-md border border-white/10 shrink-0" title="Xaritani to'liq ko'rish uchun menyularni yashirish">
+                <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span class="hidden sm:inline">Xarita</span>
+              </button>
               <button id="btnToggleHudCollapse" type="button" onclick="toggleParentHudCollapse()" class="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-slate-300 hover:text-white border border-white/10 flex items-center justify-center transition shadow-sm" title="Monitoring tugmalarini yig'ish / ochish">
                 <i id="iconHudCollapse" data-lucide="chevron-up" class="w-4 h-4 transition-transform duration-300"></i>
               </button>
@@ -736,13 +744,7 @@
           </div>
         </div>
 
-        <!-- Fullscreen / Hide UI Map Button (Clean Subtle Floating Handle) -->
-        <div class="w-full flex justify-center pointer-events-auto">
-          <button id="btnHideMenusBar" onclick="toggleMapUiVisibility(true)" class="py-0.5 px-3 bg-slate-900/80 hover:bg-slate-800 active:scale-95 text-slate-400 hover:text-white border border-white/10 rounded-full text-[10px] font-semibold shadow-md flex items-center gap-1 backdrop-blur-md transition group" title="Xaritani to'liq ko'rish uchun menyularni yashirish">
-            <span>Xaritani to'liq ko'rish</span>
-            <i data-lucide="chevron-down" class="w-3 h-3 text-cyan-400 group-hover:translate-y-0.5 transition"></i>
-          </button>
-        </div>
+
       </div>
 
       <!-- Floating Route Playback & Navigation HUD (Visible during Route View / Playback) -->
@@ -3930,7 +3932,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=83"></script>
+  <script src="app.js?v=84"></script>
 
   <!-- MODAL: WALKING GOAL SETTER (OTA-ONA UCHUN KUNLIK MAQSAD BELGILASH) -->
   <div id="modalWalkingGoal" class="hidden fixed inset-0 z-[1500] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
