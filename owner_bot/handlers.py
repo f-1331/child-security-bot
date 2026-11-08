@@ -600,25 +600,14 @@ async def callback_regenerate_code(callback: CallbackQuery):
 async def callback_clear_sos(callback: CallbackQuery):
     user_id = int(callback.data.split(":")[1])
     async with async_session_maker() as session:
-        await crud.set_child_sos(session, user_id, is_active=False)
-
-    # Notify child
-    main_bot = get_main_bot()
-    if main_bot:
-        try:
-            await main_bot.send_message(
-                chat_id=user_id,
-                text="🟢 <b>SOS Favqulodda holati ma'muriyat tomonidan bekor qilindi.</b> Tizim normal rejimda ishlamoqda.",
-                parse_mode="HTML",
-            )
-        except Exception:
-            pass
+        from api.webapp_api import child_cancel_sos_endpoint
+        await child_cancel_sos_endpoint(user_id, session)
 
     await callback.message.answer(
-        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning SOS favqulodda holati bekor qilindi.",
+        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning SOS favqulodda holati bekor qilindi, barcha oldingi xabarlar chatdan tozalandi va 30 daqiqalik jonli lokatsiya yuborildi.",
         parse_mode="HTML",
     )
-    await callback.answer("SOS bekor qilindi!")
+    await callback.answer("SOS to'xtatildi va tozalandi!")
 
 
 @owner_bot_router.callback_query(F.data.startswith("adm_coin:"))

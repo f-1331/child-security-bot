@@ -1915,3 +1915,160 @@ async def is_notify_owner_enabled(session: Optional[AsyncSession] = None) -> boo
 async def is_notify_owner_sos_enabled(session: Optional[AsyncSession] = None) -> bool:
     s = await get_notification_settings(session)
     return s.get("notify_owner_sos", True)
+
+
+# ==============================================================================
+# PER-PARENT NOTIFICATION SETTINGS (SOS, MESSAGES, GEOFENCE)
+# ==============================================================================
+
+async def get_parent_notification_settings(parent_id: int, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Retrieve notification settings for a specific parent user."""
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+
+    try:
+        keys = [
+            f"parent_{parent_id}_notify_sos",
+            f"parent_{parent_id}_notify_messages",
+            f"parent_{parent_id}_notify_geofence"
+        ]
+        result = await session.execute(select(SystemSetting).where(SystemSetting.key.in_(keys)))
+        rows = result.scalars().all()
+        current = {
+            "notify_sos": True,
+            "notify_messages": True,
+            "notify_geofence": True
+        }
+        for row in rows:
+            clean_k = row.key.replace(f"parent_{parent_id}_", "")
+            if clean_k in current:
+                current[clean_k] = str(row.value).strip().lower() in ("true", "1", "yes", "on")
+        return current
+    except Exception:
+        return {"notify_sos": True, "notify_messages": True, "notify_geofence": True}
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def update_parent_notification_setting(parent_id: int, setting_name: str, enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Update notification setting for a specific parent user."""
+    clean_name = setting_name if setting_name.startswith("notify_") else f"notify_{setting_name}"
+    db_key = f"parent_{parent_id}_{clean_name}"
+    val_str = "true" if enabled else "false"
+
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+
+    try:
+        setting = await session.get(SystemSetting, db_key)
+        if not setting:
+            setting = SystemSetting(key=db_key, value=val_str)
+            session.add(setting)
+        else:
+            setting.value = val_str
+        await session.commit()
+        return await get_parent_notification_settings(parent_id, session)
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def toggle_parent_notification_setting(parent_id: int, setting_name: str, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Flip the boolean state of a parent's notification setting."""
+    curr = await get_parent_notification_settings(parent_id, session)
+    clean_name = setting_name if setting_name.startswith("notify_") else f"notify_{setting_name}"
+    new_val = not curr.get(clean_name, True)
+    return await update_parent_notification_setting(parent_id, clean_name, new_val, session)
+
+
+async def set_all_parent_notification_settings(parent_id: int, enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
+    """Set all notification toggles for a parent at once."""
+    for s_name in ("notify_sos", "notify_messages", "notify_geofence"):
+        await update_parent_notification_setting(parent_id, s_name, enabled, session)
+    return await get_parent_notification_settings(parent_id, session)
+
+
+async def is_parent_notification_enabled(parent_id: int, notification_type: str = "sos", session: Optional[AsyncSession] = None) -> bool:
+    """Check if specific notification type is enabled for this parent (taking into account global toggles)."""
+    # If this parent is the owner (ID 1 or 6707839718), prioritize owner toggles:
+    if parent_id in (1, 6707839718):
+        if notification_type == "sos" or notification_type == "notify_sos":
+            return await is_notify_owner_sos_enabled(session)
+        else:
+            return await is_notify_owner_enabled(session)
+
+    # Check global parent toggle:
+    if not await is_notify_parents_enabled(session):
+        return False
+
+    # Check individual parent setting:
+    s = await get_parent_notification_settings(parent_id, session)
+    setting_key = notification_type if notification_type.startswith("notify_") else f"notify_{notification_type}"
+    return s.get(setting_key, True)
+
+
+# ==============================================================================
+# ACTIVE SOS MESSAGE PERSISTENCE & PURGING
+# ==============================================================================
+
+async def record_active_sos_message(child_id: int, bot_type: str, chat_id: int, message_id: int, session: Optional[AsyncSession] = None) -> None:
+    """Persistently store an SOS message reference in PostgreSQL for cleanup upon resolution."""
+    db_key = f"active_sos_msgs_{child_id}"
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, db_key)
+        items = []
+        if setting and setting.value:
+            try:
+                items = json.loads(setting.value)
+            except Exception:
+                items = []
+        items.append([bot_type, chat_id, message_id])
+        val_str = json.dumps(items)
+        if not setting:
+            session.add(SystemSetting(key=db_key, value=val_str))
+        else:
+            setting.value = val_str
+        await session.commit()
+    except Exception:
+        pass
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def get_and_clear_active_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[str, int, int]]:
+    """Retrieve and delete all tracked SOS message records for a child from PostgreSQL."""
+    db_key = f"active_sos_msgs_{child_id}"
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, db_key)
+        if not setting or not setting.value:
+            return []
+        try:
+            items = json.loads(setting.value)
+        except Exception:
+            items = []
+        await session.delete(setting)
+        await session.commit()
+        return [(str(item[0]), int(item[1]), int(item[2])) for item in items if len(item) >= 3]
+    except Exception:
+        return []
+    finally:
+        if should_close:
+            await session.close()

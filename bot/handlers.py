@@ -1736,38 +1736,48 @@ async def on_child_sos_pressed(message: Message, bot: Bot):
         notify_owner_allowed = await crud.is_notify_owner_sos_enabled(session)
         sent_chats = set()
 
+        from api.webapp_api import record_sos_message
         for parent in parents:
             target_chat_id = 6707839718 if parent.id in (1, 6707839718) else parent.id
             if target_chat_id in sent_chats:
                 continue
+
+            # Respect parent SOS notification setting (or owner SOS toggle if owner):
+            if not await crud.is_parent_notification_enabled(parent.id, "sos", session):
+                continue
+
             sent_chats.add(target_chat_id)
             try:
-                await bot.send_message(
+                sent_m = await bot.send_message(
                     chat_id=target_chat_id,
                     text=parent_alert,
                     reply_markup=get_sos_alert_parent_keyboard(child_id, latest_loc.latitude if latest_loc else None, latest_loc.longitude if latest_loc else None),
                     parse_mode="Markdown"
                 )
+                record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
                 if latest_loc:
-                    await bot.send_location(
+                    sent_loc = await bot.send_location(
                         chat_id=target_chat_id,
                         latitude=latest_loc.latitude,
                         longitude=latest_loc.longitude
                     )
+                    record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
             except Exception as e:
                 logger.error(f"Failed to send SOS to parent {parent.id} (chat: {target_chat_id}): {e}")
 
-        # Deliver to owner bot as well
-        if ob and notify_owner_allowed:
+        # Deliver to owner bot as well if owner SOS is enabled:
+        if ob and notify_owner_allowed and 6707839718 not in sent_chats:
             try:
-                await ob.send_message(
+                sent_ob = await ob.send_message(
                     chat_id=6707839718,
                     text=f"👑 <b>[OWNER SOS OGOHLANTIRISHI]</b>\n\n" + parent_alert,
                     reply_markup=get_sos_alert_parent_keyboard(child_id, latest_loc.latitude if latest_loc else None, latest_loc.longitude if latest_loc else None),
                     parse_mode="Markdown"
                 )
+                record_sos_message(child_id, ob, 6707839718, sent_ob.message_id)
                 if latest_loc:
-                    await ob.send_location(chat_id=6707839718, latitude=latest_loc.latitude, longitude=latest_loc.longitude)
+                    sent_ob_loc = await ob.send_location(chat_id=6707839718, latitude=latest_loc.latitude, longitude=latest_loc.longitude)
+                    record_sos_message(child_id, ob, 6707839718, sent_ob_loc.message_id)
             except Exception as e_ob:
                 logger.warning(f"Failed to send SOS to owner bot: {e_ob}")
 
@@ -1810,40 +1820,11 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
     """Child reports the danger is cleared."""
     child_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
-        await crud.set_child_sos(session, child_id, False)
-        parents = await crud.get_parents_for_child(session, child_id)
-        await session.commit()
+        from api.webapp_api import child_cancel_sos_endpoint
+        await child_cancel_sos_endpoint(child_id, session)
 
-        sent_cancel_chats = set()
-        for p in parents:
-            target_chat = 6707839718 if p.id in (1, 6707839718) else p.id
-            if target_chat in sent_cancel_chats:
-                continue
-            sent_cancel_chats.add(target_chat)
-            try:
-                await bot.send_message(
-                    chat_id=target_chat,
-                    text=f"✅ Farzandingiz (<b>{html.escape(callback.from_user.full_name or 'Farzand')}</b>) xavf bartaraf bo'lganini xabar qildi.",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
-
-        # Broadcast SOS resolution to parents connected to WebApp
-        try:
-            from api.webapp_api import ws_manager
-            for p in parents:
-                await ws_manager.send_to_user(p.id, {
-                    "type": "sos_resolved",
-                    "child_id": child_id,
-                    "is_sos_active": False
-                })
-        except Exception:
-            pass
-
-    telemetry.last_sos_alert_map.pop(child_id, None)
     try:
-        await callback.message.edit_text("✅ Xavfsizlik tiklandi va ota-onangizga xabar berildi.")
+        await callback.message.edit_text("✅ Xavfsizlik tiklandi, barcha xabarlar tozalandi va ota-onangizga 30 daqiqalik lokatsiya yuborildi.")
     except Exception:
         pass
     try:
@@ -2211,6 +2192,8 @@ async def on_location_received(message: Message, bot: Bot):
                 telemetry.last_loc_forward_map[user_id] = now_utc
 
             for p in parents:
+                if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    continue
                 try:
                     if live_period:
                         await bot.send_location(
@@ -2245,9 +2228,13 @@ async def on_location_received(message: Message, bot: Bot):
             last_loc_sent = telemetry.last_sos_alert_map.get(user_id)
             if not last_loc_sent or (now_utc - last_loc_sent) > timedelta(seconds=60):
                 telemetry.last_sos_alert_map[user_id] = now_utc
+                from api.webapp_api import record_sos_message
                 for p in parents:
+                    if not await crud.is_parent_notification_enabled(p.id, "sos", session):
+                        continue
                     try:
-                        await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
+                        sent_loc = await bot.send_location(chat_id=p.id, latitude=lat, longitude=lon)
+                        record_sos_message(user_id, bot, p.id, sent_loc.message_id)
                     except Exception:
                         pass
 
@@ -2637,6 +2624,8 @@ async def on_child_media_received(message: Message, bot: Bot):
             return
 
         for parent in parents:
+            if not await crud.is_parent_notification_enabled(parent.id, "messages", session):
+                continue
             try:
                 if message.voice:
                     await bot.send_voice(
@@ -3948,44 +3937,20 @@ async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         parents = await crud.get_parents_for_child(session, child_id)
-        if not parents or parent_id not in [p.id for p in parents]:
+        is_owner = (parent_id in (1, 6707839718))
+        if not is_owner and (not parents or parent_id not in [p.id for p in parents]):
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
-        telemetry.last_sos_alert_map.pop(child_id, None)
-        await crud.set_child_sos(session, child_id, False)
-        child = await crud.get_user(session, child_id)
-        await session.commit()
-
-        if child:
-            try:
-                await bot.send_message(
-                    chat_id=child.id,
-                    text="✅ Ota-onangiz SOS xavf signalini to'xtatdi. Siz bilan hammasi joyida ekanligidan xursandmiz!",
-                    parse_mode="Markdown"
-                )
-            except Exception:
-                pass
-
-        # Broadcast SOS resolution to WebApp
-        try:
-            from api.webapp_api import ws_manager
-            target_ids = {p.id for p in parents} | {parent_id}
-            for pid in target_ids:
-                await ws_manager.send_to_user(pid, {
-                    "type": "sos_resolved",
-                    "child_id": child_id,
-                    "is_sos_active": False
-                })
-        except Exception:
-            pass
+        from api.webapp_api import child_cancel_sos_endpoint
+        await child_cancel_sos_endpoint(child_id, session)
 
     try:
-        await callback.message.edit_text("✅ SOS signali bekor qilindi.")
+        await callback.message.edit_text("✅ SOS signali bekor qilindi, oldingi barcha xabarlar tozalandi va 30 daqiqalik jonli lokatsiya yuborildi.")
     except Exception:
         pass
     try:
-        await callback.answer("✅ SOS signali to'xtatildi.", show_alert=False)
+        await callback.answer("✅ SOS to'xtatildi, xabarlar tozalandi.", show_alert=False)
     except Exception:
         pass
 
@@ -8142,3 +8107,79 @@ async def handle_main_bot_test_daily_report(message: Message, bot: Bot):
     except Exception as e:
         logger.error(f"Error in handle_main_bot_test_daily_report: {e}")
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
+
+
+# ==============================================================================
+# PARENT NOTIFICATIONS & MUTE MANAGEMENT HANDLERS
+# ==============================================================================
+
+@router.message(F.text.in_(["🔔 Xabarnomalar", "🔔 Xabarnomalar sozlamasi", "🔔 Xabarnomalar / Ovoz", "/notifications", "/xabarlar", "/bildirishnomalar"]))
+async def on_parent_notifications_cmd(message: Message):
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        settings = await crud.get_parent_notification_settings(user_id, session)
+    from bot.keyboards import format_parent_notification_settings_html, get_parent_notifications_inline_keyboard
+    html_text = format_parent_notification_settings_html(settings)
+    kb = get_parent_notifications_inline_keyboard(settings)
+    await message.answer(html_text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "parent_notifications_menu")
+async def on_parent_notifications_cb_menu(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        settings = await crud.get_parent_notification_settings(user_id, session)
+    from bot.keyboards import format_parent_notification_settings_html, get_parent_notifications_inline_keyboard
+    html_text = format_parent_notification_settings_html(settings)
+    kb = get_parent_notifications_inline_keyboard(settings)
+    try:
+        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(html_text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("toggle_parent_notif:"))
+async def on_toggle_parent_notif_cb(callback: CallbackQuery):
+    action = callback.data.split(":")[1]
+    user_id = callback.from_user.id
+    async with AsyncSessionLocal() as session:
+        if action == "sos":
+            await crud.toggle_parent_notification_setting(user_id, "notify_sos", session)
+            toast = "🚨 SOS xabarlari holati o'zgartirildi!"
+        elif action == "messages":
+            await crud.toggle_parent_notification_setting(user_id, "notify_messages", session)
+            toast = "💬 Boladan keladigan xabarlar holati o'zgartirildi!"
+        elif action == "geofence":
+            await crud.toggle_parent_notification_setting(user_id, "notify_geofence", session)
+            toast = "📍 Geozona signallari holati o'zgartirildi!"
+        elif action == "all_off":
+            await crud.set_all_parent_notification_settings(user_id, False, session)
+            toast = "🔴 Barcha bildirishnomalar o'chirildi (Mute)!"
+        elif action == "all_on":
+            await crud.set_all_parent_notification_settings(user_id, True, session)
+            toast = "🟢 Barcha bildirishnomalar yoqildi!"
+        else:
+            toast = "Yangilandi!"
+
+        settings = await crud.get_parent_notification_settings(user_id, session)
+
+    from bot.keyboards import format_parent_notification_settings_html, get_parent_notifications_inline_keyboard
+    html_text = format_parent_notification_settings_html(settings)
+    kb = get_parent_notifications_inline_keyboard(settings)
+    try:
+        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer(toast)
+
+
+@router.callback_query(F.data == "back_to_settings")
+async def on_back_to_settings_cb(callback: CallbackQuery):
+    from bot.keyboards import get_settings_keyboard
+    text = "⚙️ <b>SOZLAMALAR VA HISOB BOSHQARUVI</b>\n\nQuyidagi amallardan birini tanlang:"
+    try:
+        await callback.message.edit_text(text, reply_markup=get_settings_keyboard(), parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, reply_markup=get_settings_keyboard(), parse_mode="HTML")
+    await callback.answer()

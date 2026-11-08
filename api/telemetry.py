@@ -140,6 +140,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                         f"⚠️ Farzandingiz bilan aloqa uzilib qolmasligi uchun darhol telefonini zaryadkaga qo'yishini ayting!"
                     )
                     for p in parents:
+                        if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                            continue
                         try:
                             await telegram_bot.send_message(
                                 chat_id=p.id,
@@ -168,6 +170,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                             f"✅ Telefon 10% dan kam quvvatdaligida elektr manbaiga muvaffaqiyatli ulandi."
                         )
                         for p in parents:
+                            if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                                continue
                             try:
                                 await telegram_bot.send_message(
                                     chat_id=p.id,
@@ -199,6 +203,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                     f"Iltimos, farzandingiz bilan bog'lanib, telefonini quvvatga qo'yishini eslating."
                 )
                 for p in parents:
+                    if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                        continue
                     try:
                         await telegram_bot.send_message(
                             chat_id=p.id,
@@ -226,6 +232,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                 f"🗺 <a href=\"{maps_url}\">Xaritada ko'rish (Google Maps)</a>"
             )
             for p in parents:
+                if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    continue
                 try:
                     await telegram_bot.send_message(
                         chat_id=p.id,
@@ -256,6 +264,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
                 f"Iltimos, farzandingiz bilan bog'lanib, xavfsizligiga ishonch hosil qiling."
             )
             for p in parents:
+                if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    continue
                 try:
                     await telegram_bot.send_message(chat_id=p.id, text=impact_msg, parse_mode="HTML")
                 except Exception as e:

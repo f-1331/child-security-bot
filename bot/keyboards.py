@@ -104,6 +104,7 @@ def get_parent_main_keyboard(parent_id: int) -> ReplyKeyboardMarkup:
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
+            KeyboardButton(text="🔔 Xabarnomalar sozlamasi"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -155,6 +156,7 @@ def get_child_main_keyboard(child_id: Optional[int] = None) -> ReplyKeyboardMark
             KeyboardButton(text="ℹ️ Yordam")
         ],
         [
+            KeyboardButton(text="🔔 Xabarnomalar sozlamasi"),
             KeyboardButton(text="⚙️ Sozlamalar / Chiqish")
         ]
     ]
@@ -182,6 +184,12 @@ def get_settings_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="💰 Tangalar kursini sozlash",
                     callback_data="coin_rate_start"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔔 Xabarnomalar sozlamasi (Mute)",
+                    callback_data="parent_notifications_menu"
                 )
             ],
             [
@@ -812,6 +820,71 @@ def get_ambient_sound_inline_keyboard(child_id: int) -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(text="❌ Bekor qilish", callback_data="cancel_action")
+            ]
+        ]
+    )
+
+
+def format_parent_notification_settings_html(settings_dict: dict[str, bool]) -> str:
+    """Format HTML report of parent's personal notification preferences."""
+    sos_on = settings_dict.get("notify_sos", True)
+    msg_on = settings_dict.get("notify_messages", True)
+    geo_on = settings_dict.get("notify_geofence", True)
+
+    sos_badge = "🟢 <b>YOQILGAN (Xabarlar keladi)</b>" if sos_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
+    msg_badge = "🟢 <b>YOQILGAN (Xabarlar keladi)</b>" if msg_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
+    geo_badge = "🟢 <b>YOQILGAN (Signallar keladi)</b>" if geo_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
+
+    return (
+        "🔔 <b>XABARNOMALAR VA BILDIRISHNOMALAR SOZLAMASI</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "<i>Farzandingizdan keladigan bildirishnomalar oqimini mustaqil boshqaring:</i>\n\n"
+        f"🚨 <b>SOS xavf signallari:</b>\n"
+        f"Holat: {sos_badge}\n"
+        "<i>(Farzand favqulodda SOS bosganda keladigan shoshilinch xabar va sirenalar)</i>\n\n"
+        f"💬 <b>Boladan keladigan xabarlar:</b>\n"
+        f"Holat: {msg_badge}\n"
+        "<i>(Tezkor signallar: «Maktabdaman», «Uyga ketyapman», topshiriq hisobotlari)</i>\n\n"
+        f"📍 <b>Joylashuv va Geozona xabarlari:</b>\n"
+        f"Holat: {geo_badge}\n"
+        "<i>(Maktabga kirish/chiqish, xavfli hudud, quvvat tugashi)</i>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "👇 <i>Kerakli tugmani bosing va 1-bosishda xabarlarni yoqing/o'chiring:</i>"
+    )
+
+
+def get_parent_notifications_inline_keyboard(settings_dict: dict[str, bool]) -> InlineKeyboardMarkup:
+    """Keyboard for parent toggling personal notifications."""
+    sos_on = settings_dict.get("notify_sos", True)
+    msg_on = settings_dict.get("notify_messages", True)
+    geo_on = settings_dict.get("notify_geofence", True)
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{'🟢 YOQILGAN' if sos_on else '🔴 OʻCHIRILGAN'} | 🚨 SOS xavf",
+                    callback_data="toggle_parent_notif:sos"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"{'🟢 YOQILGAN' if msg_on else '🔴 OʻCHIRILGAN'} | 💬 Boladan xabarlar",
+                    callback_data="toggle_parent_notif:messages"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"{'🟢 YOQILGAN' if geo_on else '🔴 OʻCHIRILGAN'} | 📍 Geozona signallari",
+                    callback_data="toggle_parent_notif:geofence"
+                )
+            ],
+            [
+                InlineKeyboardButton(text="🟢 Barchasini yoqish", callback_data="toggle_parent_notif:all_on"),
+                InlineKeyboardButton(text="🔴 Barchasini o'chirish (Mute)", callback_data="toggle_parent_notif:all_off")
+            ],
+            [
+                InlineKeyboardButton(text="🔙 Sozlamalarga qaytish", callback_data="back_to_settings")
             ]
         ]
     )

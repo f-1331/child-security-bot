@@ -49,6 +49,74 @@ def record_sos_message(child_id: int, bot_inst: Any, chat_id: int, message_id: i
     if child_id not in sos_chat_messages_map:
         sos_chat_messages_map[child_id] = []
     sos_chat_messages_map[child_id].append((bot_inst, chat_id, message_id))
+    try:
+        bot_type = "owner" if bot_inst == get_owner_bot() else "main"
+        import asyncio
+        asyncio.create_task(crud.record_active_sos_message(child_id, bot_type, chat_id, message_id))
+    except Exception:
+        pass
+
+
+async def pop_all_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[Any, int, int]]:
+    """Pop all recorded SOS messages from both RAM and DB, deduplicating."""
+    ram_items = sos_chat_messages_map.pop(child_id, [])
+    db_records = await crud.get_and_clear_active_sos_messages(child_id, session)
+
+    main_bot = telemetry.get_telegram_bot()
+    owner_bot = get_owner_bot()
+
+    all_messages: list[tuple[Any, int, int]] = []
+    seen: set[tuple[int, int]] = set()
+
+    for bot_inst, chat_id, msg_id in ram_items:
+        key = (int(chat_id), int(msg_id))
+        if key not in seen:
+            seen.add(key)
+            all_messages.append((bot_inst, chat_id, msg_id))
+
+    for b_type, chat_id, msg_id in db_records:
+        key = (int(chat_id), int(msg_id))
+        if key not in seen:
+            seen.add(key)
+            bot_obj = owner_bot if b_type == "owner" and owner_bot else main_bot
+            if bot_obj:
+                all_messages.append((bot_obj, chat_id, msg_id))
+
+    return all_messages
+    try:
+        bot_type = "owner" if bot_inst == get_owner_bot() else "main"
+        import asyncio
+        asyncio.create_task(crud.record_active_sos_message(child_id, bot_type, chat_id, message_id))
+    except Exception:
+        pass
+
+
+async def pop_all_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[Any, int, int]]:
+    """Pop all recorded SOS messages from both RAM and DB, deduplicating."""
+    ram_items = sos_chat_messages_map.pop(child_id, [])
+    db_records = await crud.get_and_clear_active_sos_messages(child_id, session)
+
+    main_bot = telemetry.get_telegram_bot()
+    owner_bot = get_owner_bot()
+
+    all_messages: list[tuple[Any, int, int]] = []
+    seen: set[tuple[int, int]] = set()
+
+    for bot_inst, chat_id, msg_id in ram_items:
+        key = (int(chat_id), int(msg_id))
+        if key not in seen:
+            seen.add(key)
+            all_messages.append((bot_inst, chat_id, msg_id))
+
+    for b_type, chat_id, msg_id in db_records:
+        key = (int(chat_id), int(msg_id))
+        if key not in seen:
+            seen.add(key)
+            bot_obj = owner_bot if b_type == "owner" and owner_bot else main_bot
+            if bot_obj:
+                all_messages.append((bot_obj, chat_id, msg_id))
+
+    return all_messages
 
 _owner_bot_instance: Optional[Bot] = None
 
@@ -1659,74 +1727,60 @@ async def child_sos_endpoint(
         notify_owner_allowed = await crud.is_notify_owner_sos_enabled(session)
 
         sent_target_chats = set()
-        if parents:
+        if parents and notify_parents_allowed:
             for p in parents:
                 target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
                 if target_chat_id in sent_target_chats:
                     continue
+
+                # Respect individual parent notification toggle (or owner SOS toggle if owner):
+                if not await crud.is_parent_notification_enabled(p.id, "sos", session):
+                    continue
+
                 sent_target_chats.add(target_chat_id)
-                if notify_parents_allowed:
-                    try:
-                        sent_m = await bot.send_message(
+                try:
+                    sent_m = await bot.send_message(
+                        chat_id=target_chat_id,
+                        text=parent_alert,
+                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                        parse_mode="HTML"
+                    )
+                    record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
+                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                        sent_loc = await bot.send_location(
                             chat_id=target_chat_id,
-                            text=parent_alert,
-                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                            parse_mode="HTML"
+                            latitude=lat,
+                            longitude=lon
                         )
-                        record_sos_message(child_id, bot, target_chat_id, sent_m.message_id)
-                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                            sent_loc = await bot.send_location(
-                                chat_id=target_chat_id,
-                                latitude=lat,
-                                longitude=lon
-                            )
-                            record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
-                    except Exception as e:
-                        logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS via main bot: {e}")
+                        record_sos_message(child_id, bot, target_chat_id, sent_loc.message_id)
+                except Exception as e:
+                    logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS: {e}")
 
-                # Always deliver to owner bot if parent is owner (ID 1 or 6707839718)
-                if p.id in (1, 6707839718) and notify_owner_allowed:
-                    ob = get_owner_bot()
-                    if ob:
-                        try:
-                            sent_ob = await ob.send_message(
-                                chat_id=6707839718,
-                                text=parent_alert,
-                                reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                                parse_mode="HTML"
-                            )
-                            record_sos_message(child_id, ob, 6707839718, sent_ob.message_id)
-                            if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                                sent_ob_loc = await ob.send_location(chat_id=6707839718, latitude=lat, longitude=lon)
-                                record_sos_message(child_id, ob, 6707839718, sent_ob_loc.message_id)
-                        except Exception as oe:
-                            logger.error(f"Owner bot dispatch also failed: {oe}")
-
-            # Also notify Owner Bot for global admin oversight
-            if notify_owner_allowed:
-                owner_bot = get_owner_bot()
-                if owner_bot:
-                    try:
-                        sent_adm = await owner_bot.send_message(
+        # Deliver to owner bot ONLY if owner SOS notifications are enabled:
+        if notify_owner_allowed:
+            owner_bot = get_owner_bot()
+            if owner_bot and 6707839718 not in sent_target_chats:
+                try:
+                    sent_adm = await owner_bot.send_message(
+                        chat_id=6707839718,
+                        text=f"🚨 <b>[PLATFORMA SOS OGOHLANTIRISHI - #{current_seq}-MARTA]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS tugmasini bosdi!\n\n" + parent_alert,
+                        reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
+                        parse_mode="HTML"
+                    )
+                    record_sos_message(child_id, owner_bot, 6707839718, sent_adm.message_id)
+                    if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
+                        sent_adm_loc = await owner_bot.send_location(
                             chat_id=6707839718,
-                            text=f"🚨 <b>[PLATFORMA SOS OGOHLANTIRISHI - #{current_seq}-MARTA]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS tugmasini bosdi!\nOta-onasiga xabar yuborildi.\n\n" + parent_alert,
-                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                            parse_mode="HTML"
+                            latitude=lat,
+                            longitude=lon
                         )
-                        record_sos_message(child_id, owner_bot, 6707839718, sent_adm.message_id)
-                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                            sent_adm_loc = await owner_bot.send_location(
-                                chat_id=6707839718,
-                                latitude=lat,
-                                longitude=lon
-                            )
-                            record_sos_message(child_id, owner_bot, 6707839718, sent_adm_loc.message_id)
-                    except Exception as oe:
-                        logger.warning(f"Could not dispatch SOS copy to owner bot: {oe}")
-        else:
-            # Fallback for unlinked child accounts or admin testing: notify owner if enabled
-            if notify_owner_allowed:
+                        record_sos_message(child_id, owner_bot, 6707839718, sent_adm_loc.message_id)
+                except Exception as oe:
+                    logger.warning(f"Could not dispatch SOS copy to owner bot: {oe}")
+            elif not parents and 6707839718 not in sent_target_chats:
+                # Unlinked child fallback ONLY if child has NO linked parents at all
                 owner_id = 6707839718
+                sent_target_chats.add(owner_id)
                 owner_alert = (
                     f"⚠️ <b>[BOG'LANMAGAN FARZAND / TEST SOS - #{current_seq}-MARTA]</b>\n"
                     f"Farzand (ID: <code>{child_id}</code>, {safe_cname}) ota-onaga ulanmagan holda SOS bosdi!\n\n"
@@ -1750,31 +1804,9 @@ async def child_sos_endpoint(
                 except Exception as e:
                     logger.warning(f"Could not dispatch fallback SOS to owner {owner_id} via main bot: {e}")
 
-                # Send via OWNER BOT directly to @fayzbek1331 so it is GUARANTEED to be received!
-                owner_bot = get_owner_bot()
-                if owner_bot:
-                    try:
-                        sent_ob = await owner_bot.send_message(
-                            chat_id=owner_id,
-                            text=owner_alert,
-                            reply_markup=get_sos_alert_parent_keyboard(child_id, lat, lon),
-                            parse_mode="HTML"
-                        )
-                        record_sos_message(child_id, owner_bot, owner_id, sent_ob.message_id)
-                        if lat is not None and lon is not None and (abs(lat) > 0.1 or abs(lon) > 0.1):
-                            sent_ob_loc = await owner_bot.send_location(
-                                chat_id=owner_id,
-                                latitude=lat,
-                                longitude=lon
-                            )
-                            record_sos_message(child_id, owner_bot, owner_id, sent_ob_loc.message_id)
-                        logger.info(f"Dispatched fallback SOS alert via OWNER BOT to {owner_id}")
-                    except Exception as oe:
-                        logger.warning(f"Could not dispatch fallback SOS via owner bot: {oe}")
+        parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
 
-    parent_phone = parents[0].phone_number if parents and parents[0].phone_number else None
-
-    return {
+        return {
         "status": "success",
         "child_id": child_id,
         "is_sos_active": True,
@@ -1822,8 +1854,14 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     cur_lon = latest_loc.longitude if latest_loc else None
     await session.commit()
 
-    # Keep SOS alert messages in chat history for audit trail (do not delete!)
-    sos_chat_messages_map.pop(child_id, None)
+    # 1. DELETE ALL PREVIOUSLY SENT SOS ALERT MESSAGES FROM TELEGRAM CHATS:
+    sos_messages = await pop_all_sos_messages(child_id, session)
+    for bot_inst, chat_id, msg_id in sos_messages:
+        try:
+            await bot_inst.delete_message(chat_id=chat_id, message_id=msg_id)
+            logger.info(f"Deleted SOS message {msg_id} in chat {chat_id}")
+        except Exception as del_err:
+            logger.debug(f"Could not delete message {msg_id} in chat {chat_id}: {del_err}")
 
     # Reset sequence counter
     sos_sequence_counter.pop(child_id, None)
@@ -1834,74 +1872,77 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     cancel_text = (
         f"✅ <b>XAVF BARTARAF ETILDI!</b>\n\n"
         f"Farzandingiz <b>{safe_cname}</b> SOS xavf signalini to'xtatdi. Hammasi joyida va xavfsiz ekanligi tasdiqlandi.\n\n"
-        f""
+        f"🧹 <i>Oldingi barcha takroriy SOS xabarlari chatdan tozalandi.</i>\n"
     )
     if has_live_loc:
-        cancel_text += "📍 <b>Farzandning keyingi harakatini real vaqtda kuzatishingiz uchun pastda 30 daqiqalik jonli (Live) lokatsiya yoqildi:</b>"
+        cancel_text += "📍 <b>Farzandning keyingi 30 daqiqalik harakatini xavfsiz kuzatishingiz uchun pastda jonli (Live) lokatsiya yoqildi:</b>"
 
     notify_parents_allowed = await crud.is_notify_parents_enabled(session)
     notify_children_allowed = await crud.is_notify_children_enabled(session)
     notify_owner_allowed = await crud.is_notify_owner_sos_enabled(session)
 
     bot = telemetry.get_telegram_bot()
-    if bot:
-        if parents:
-            if notify_parents_allowed:
-                sent_cancel_chats = set()
-                for p in parents:
-                    target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
-                    if target_chat_id in sent_cancel_chats:
-                        continue
-                    sent_cancel_chats.add(target_chat_id)
-                    try:
-                        await bot.send_message(
-                            chat_id=target_chat_id,
-                            text=cancel_text,
-                            parse_mode="HTML"
-                        )
-                        if has_live_loc:
-                            await bot.send_location(
-                                chat_id=target_chat_id,
-                                latitude=cur_lat,
-                                longitude=cur_lon,
-                                live_period=1800
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS cancellation: {e}")
-        else:
-            if notify_owner_allowed:
-                owner_id = 6707839718
-                try:
-                    await bot.send_message(
-                        chat_id=owner_id,
-                        text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
-                            "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
-                        ),
-                        parse_mode="HTML"
-                    )
-                    if has_live_loc:
-                        await bot.send_location(
-                            chat_id=owner_id,
-                            latitude=cur_lat,
-                            longitude=cur_lon,
-                            live_period=1800
-                        )
-                except Exception:
-                    pass
+    sent_cancel_chats = set()
+    if bot and notify_parents_allowed and parents:
+        for p in parents:
+            target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+            if target_chat_id in sent_cancel_chats:
+                continue
 
+            # Respect individual parent notification toggle:
+            if not await crud.is_parent_notification_enabled(p.id, "sos", session):
+                continue
+
+            sent_cancel_chats.add(target_chat_id)
+            try:
+                await bot.send_message(
+                    chat_id=target_chat_id,
+                    text=cancel_text,
+                    parse_mode="HTML"
+                )
+                if has_live_loc:
+                    await bot.send_location(
+                        chat_id=target_chat_id,
+                        latitude=cur_lat,
+                        longitude=cur_lon,
+                        live_period=1800
+                    )
+            except Exception as e:
+                logger.error(f"Failed to notify parent {p.id} (chat_id: {target_chat_id}) of SOS cancellation: {e}")
+
+    # Deliver cancellation to owner ONLY if owner SOS is enabled:
     if notify_owner_allowed:
         owner_bot = get_owner_bot()
-        if owner_bot:
+        if owner_bot and 6707839718 not in sent_cancel_chats:
             try:
                 await owner_bot.send_message(
                     chat_id=6707839718,
-                    text=f"✅ <b>[SOS BEKOR QILINDI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oraliq SOS xabarlar chatdan tozalandi.</i>" + (
+                    text=f"✅ <b>[SOS BEKOR QILINDI]</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oldingi barcha SOS xabarlari chatdan tozalandi.</i>" + (
                         "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
                     ),
                     parse_mode="HTML"
                 )
                 if has_live_loc:
                     await owner_bot.send_location(
+                        chat_id=6707839718,
+                        latitude=cur_lat,
+                        longitude=cur_lon,
+                        live_period=1800
+                    )
+            except Exception:
+                pass
+        elif not parents and 6707839718 not in sent_cancel_chats:
+            # Fallback for unlinked test child
+            try:
+                await bot.send_message(
+                    chat_id=6707839718,
+                    text=f"✅ <b>[TEST/BOG'LANMAGAN FARZAND] XAVF BARTARAF ETILDI!</b>\n\nFarzand <b>{safe_cname}</b> (ID: <code>{child_id}</code>) SOS signalini bekor qildi.\n\n🧹 <i>Oldingi barcha SOS xabarlar chatdan tozalandi.</i>" + (
+                        "\n📍 <i>30 daqiqalik jonli lokatsiya:</i>" if has_live_loc else ""
+                    ),
+                    parse_mode="HTML"
+                )
+                if has_live_loc:
+                    await bot.send_location(
                         chat_id=6707839718,
                         latitude=cur_lat,
                         longitude=cur_lon,
@@ -1929,23 +1970,15 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
                 "is_sos_active": False
             })
         except Exception as ws_err:
-            logger.error(f"Failed to broadcast SOS resolution via WS: {ws_err}")
+            logger.debug(f"Failed to broadcast SOS resolution via WS: {ws_err}")
 
     return {
         "status": "success",
         "child_id": child_id,
         "is_sos_active": False,
         "live_location_active": has_live_loc,
-        "live_period": 1800 if has_live_loc else 0
+        "live_period_seconds": 1800 if has_live_loc else 0
     }
-
-
-class EmergencyTextMessagePayload(BaseModel):
-    message: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-
-
 @router.post("/child/{child_id}/emergency-message")
 async def send_emergency_text_message(
     child_id: int,
@@ -3399,15 +3432,21 @@ async def send_child_quick_signal(
 
     notified = 0
     notify_parents_allowed = await crud.is_notify_parents_enabled(session)
-    notify_owner_allowed = await crud.is_notify_owner_sos_enabled(session)
+    notify_owner_allowed = await crud.is_notify_owner_enabled(session)
     tbot = telemetry.get_telegram_bot()
     ob = get_owner_bot()
     notified_chats = set()
     target_recipients = set()
-    if parents:
+    if notify_parents_allowed and parents:
         for p in parents:
-            target_recipients.add(6707839718 if p.id in (1, 6707839718) else p.id)
-    target_recipients.add(6707839718)
+            if p.id in (1, 6707839718):
+                if notify_owner_allowed:
+                    target_recipients.add(6707839718)
+            else:
+                if await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    target_recipients.add(p.id)
+    elif notify_owner_allowed:
+        target_recipients.add(6707839718)
 
     for target_chat_id in target_recipients:
         if target_chat_id in notified_chats:
@@ -3423,7 +3462,7 @@ async def send_child_quick_signal(
                 notified += 1
             except Exception as e:
                 logger.error(f"Failed to send quick signal to {target_chat_id} via main bot: {e}")
-        if target_chat_id == 6707839718 and ob:
+        if target_chat_id == 6707839718 and notify_owner_allowed and ob:
             try:
                 await ob.send_message(
                     chat_id=6707839718,
