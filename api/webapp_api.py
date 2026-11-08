@@ -403,6 +403,18 @@ class SchoolModeRequest(BaseModel):
     enabled: bool
 
 
+def create_session_token(user_id: int, role: str) -> str:
+    """Generate a tamper-proof session token for webapp authentication."""
+    import time
+    import hmac
+    import hashlib
+    secret = getattr(settings, "BOT_TOKEN", "default-salt-secret-key")
+    timestamp = int(time.time())
+    payload = f"{user_id}:{role}:{timestamp}"
+    signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"sess_{payload}:{signature}"
+
+
 async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -> dict:
     """Standardized user auth payload builder for both code and Telegram initData authentications."""
     effective_code = user.web_access_code or user.pairing_code or code
