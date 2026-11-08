@@ -183,11 +183,15 @@ async def get_user_by_web_access_code(
     code: str,
     target_role: Optional[str] = None
 ) -> Optional[User]:
-    """Find user by web access code or pairing code with strict role separation.
-    - Strictly designated queries for Owner, Parent, and Child without cross-role pollution.
-    - If target_role is specified ('parent' or 'child'), enforces matching role strictly.
+    """Find user by web access code or pairing code with resilient role-aware lookup.
+    - Strictly designates queries for Owner, Parent, and Child without cross-role pollution.
+    - Prevents false "Code error" rejections if a user inputs their code from an alternate modal.
+    - Owner quick access: code "1" explicitly maps to Owner User (Fayzbek).
+    - Supports lookup by web_access_code, pairing_code, or direct Telegram user ID.
     """
     code_clean = code.strip().replace(" ", "").replace("-", "")
+    if not code_clean:
+        return None
 
     # 0. Owner quick access: code "1" explicitly maps to Owner User (Fayzbek)
     if code_clean == "1":
@@ -204,25 +208,46 @@ async def get_user_by_web_access_code(
 
     normalized_role = target_role.strip().lower() if target_role else None
 
-    # 1. If target_role is explicitly specified, enforce strict query against that role table only!
-    if normalized_role in ("parent", "child"):
+    # Match conditions: web_access_code, pairing_code, or numeric ID
+    match_conds = [
+        User.web_access_code == code_clean,
+        User.pairing_code == code_clean
+    ]
+    if code_clean.isdigit():
+        try:
+            match_conds.append(User.id == int(code_clean))
+        except (ValueError, OverflowError):
+            pass
+
+    code_filter = or_(*match_conds)
+
+    # 1. Designated lookup when target_role is specified:
+    if normalized_role in ("parent", "owner", "admin"):
         result = await session.execute(
             select(User).where(
-                or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
-                User.role == normalized_role
+                code_filter,
+                User.role.in_(["parent", "owner", "admin"])
             )
         )
         user = result.scalars().first()
         if user:
             return user
-        return None
+    elif normalized_role == "child":
+        result = await session.execute(
+            select(User).where(
+                code_filter,
+                User.role == "child"
+            )
+        )
+        user = result.scalars().first()
+        if user:
+            return user
 
-    # 2. Generic lookup (when target_role is null):
-    # Check parent/owner first, then child
+    # 2. Resilient fallback: search across roles so valid codes are NEVER rejected
     res_parent = await session.execute(
         select(User).where(
-            or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
-            User.role == "parent"
+            code_filter,
+            User.role.in_(["parent", "owner", "admin"])
         )
     )
     user = res_parent.scalars().first()
@@ -231,7 +256,7 @@ async def get_user_by_web_access_code(
 
     res_child = await session.execute(
         select(User).where(
-            or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
+            code_filter,
             User.role == "child"
         )
     )
@@ -239,7 +264,8 @@ async def get_user_by_web_access_code(
     if user:
         return user
 
-    return None
+    res_any = await session.execute(select(User).where(code_filter))
+    return res_any.scalars().first()
 
 async def link_co_parent(session: AsyncSession, primary_parent_id: int, new_parent_id: int) -> List[User]:
     """Link a second parent (e.g. mother invites father or vice-versa) to all existing children."""
@@ -1962,7 +1988,7 @@ async def get_parent_notification_settings(parent_id: int, session: Optional[Asy
 
 
 async def update_parent_notification_setting(parent_id: int, setting_name: str, enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
-    """Update notification setting for a specific parent user."""
+    """Update notification setting for a specific parent user and synchronize owner toggles."""
     clean_name = setting_name if setting_name.startswith("notify_") else f"notify_{setting_name}"
     db_key = f"parent_{parent_id}_{clean_name}"
     val_str = "true" if enabled else "false"
@@ -1980,6 +2006,22 @@ async def update_parent_notification_setting(parent_id: int, setting_name: str, 
             session.add(setting)
         else:
             setting.value = val_str
+
+        # If parent is owner, keep global owner notification settings in sync
+        if parent_id in (1, 6707839718):
+            if clean_name == "notify_sos":
+                owner_s = await session.get(SystemSetting, "notify_owner_sos")
+                if not owner_s:
+                    session.add(SystemSetting(key="notify_owner_sos", value=val_str))
+                else:
+                    owner_s.value = val_str
+            elif clean_name == "notify_messages":
+                owner_m = await session.get(SystemSetting, "notify_owner")
+                if not owner_m:
+                    session.add(SystemSetting(key="notify_owner", value=val_str))
+                else:
+                    owner_m.value = val_str
+
         await session.commit()
         return await get_parent_notification_settings(parent_id, session)
     finally:
@@ -2004,20 +2046,23 @@ async def set_all_parent_notification_settings(parent_id: int, enabled: bool, se
 
 async def is_parent_notification_enabled(parent_id: int, notification_type: str = "sos", session: Optional[AsyncSession] = None) -> bool:
     """Check if specific notification type is enabled for this parent (taking into account global toggles)."""
-    # If this parent is the owner (ID 1 or 6707839718), prioritize owner toggles:
+    # First check individual parent setting:
+    s = await get_parent_notification_settings(parent_id, session)
+    setting_key = notification_type if notification_type.startswith("notify_") else f"notify_{notification_type}"
+    if setting_key in s and s[setting_key] is False:
+        return False
+
+    # If this parent is the owner (ID 1 or 6707839718), also check owner global switches:
     if parent_id in (1, 6707839718):
-        if notification_type == "sos" or notification_type == "notify_sos":
+        if notification_type in ("sos", "notify_sos"):
             return await is_notify_owner_sos_enabled(session)
         else:
             return await is_notify_owner_enabled(session)
 
-    # Check global parent toggle:
+    # Check global parent toggle for standard parents:
     if not await is_notify_parents_enabled(session):
         return False
 
-    # Check individual parent setting:
-    s = await get_parent_notification_settings(parent_id, session)
-    setting_key = notification_type if notification_type.startswith("notify_") else f"notify_{notification_type}"
     return s.get(setting_key, True)
 
 

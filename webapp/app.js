@@ -105,6 +105,167 @@ function getApiBase() {
 }
 
 // =========================================================
+// ZERO-LOSS OFFLINE QUEUE MANAGER (IndexedDB + Auto-Flush)
+// =========================================================
+const OfflineQueueManager = (function() {
+  const DB_NAME = "ChildSecurityOfflineDB";
+  const DB_VERSION = 1;
+  let dbPromise = null;
+
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    if (typeof indexedDB === "undefined") {
+      return Promise.resolve(null);
+    }
+    dbPromise = new Promise((resolve) => {
+      try {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("audio_queue")) {
+            db.createObjectStore("audio_queue", { keyPath: "id", autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains("telemetry_queue")) {
+            db.createObjectStore("telemetry_queue", { keyPath: "id", autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains("events_queue")) {
+            db.createObjectStore("events_queue", { keyPath: "id", autoIncrement: true });
+          }
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = () => resolve(null);
+      } catch (err) {
+        resolve(null);
+      }
+    });
+    return dbPromise;
+  }
+
+  async function enqueueAudio(childId, blob, ext) {
+    const db = await openDB();
+    if (!db) {
+      console.warn("IndexedDB not available for offline audio");
+      return;
+    }
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction("audio_queue", "readwrite");
+        const store = tx.objectStore("audio_queue");
+        store.add({
+          childId: childId,
+          blob: blob,
+          ext: ext || "webm",
+          timestamp: Date.now()
+        });
+        tx.oncomplete = () => {
+          console.log("[OfflineQueue] Saved SOS audio snapshot to IndexedDB");
+          resolve(true);
+        };
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  async function enqueueTelemetry(childId, payload) {
+    const db = await openDB();
+    if (!db) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction("telemetry_queue", "readwrite");
+        const store = tx.objectStore("telemetry_queue");
+        store.add({
+          childId: childId,
+          payload: payload,
+          timestamp: Date.now()
+        });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  async function flushAllQueues() {
+    if (!navigator.onLine) return;
+    const db = await openDB();
+    if (!db) return;
+
+    // 1. Flush Audio Queue
+    try {
+      const tx = db.transaction("audio_queue", "readwrite");
+      const store = tx.objectStore("audio_queue");
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = async () => {
+        const items = getAllReq.result || [];
+        for (const item of items) {
+          try {
+            const formData = new FormData();
+            formData.append("file", item.blob, `sos_audio_offline_${item.timestamp}.${item.ext}`);
+            const resp = await fetch(`${getApiBase()}/api/v1/webapp/child/${item.childId}/sos/media`, {
+              method: "POST",
+              body: formData
+            });
+            if (resp.ok) {
+              const delTx = db.transaction("audio_queue", "readwrite");
+              delTx.objectStore("audio_queue").delete(item.id);
+              console.log(`[OfflineQueue] Flushed offline SOS audio #${item.id}`);
+            }
+          } catch (e) {
+            console.warn("[OfflineQueue] Audio flush retry paused:", e);
+            break;
+          }
+        }
+      };
+    } catch (err) {}
+
+    // 2. Flush Telemetry Queue
+    try {
+      const tx = db.transaction("telemetry_queue", "readwrite");
+      const store = tx.objectStore("telemetry_queue");
+      const getAllReq = store.getAll();
+      getAllReq.onsuccess = async () => {
+        const items = getAllReq.result || [];
+        for (const item of items) {
+          try {
+            const resp = await fetch(`${getApiBase()}/api/v1/webapp/child/${item.childId}/telemetry`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(item.payload)
+            });
+            if (resp.ok) {
+              const delTx = db.transaction("telemetry_queue", "readwrite");
+              delTx.objectStore("telemetry_queue").delete(item.id);
+            }
+          } catch (e) {
+            break;
+          }
+        }
+      };
+    } catch (err) {}
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", () => {
+      console.log("[OfflineQueue] Device came online. Flushing queued data...");
+      flushAllQueues();
+    });
+    setInterval(() => {
+      if (navigator.onLine) flushAllQueues();
+    }, 20000);
+  }
+
+  return {
+    enqueueAudio,
+    enqueueTelemetry,
+    flushAllQueues
+  };
+})();
+window.OfflineQueueManager = OfflineQueueManager;
+
+// =========================================================
 // UNIVERSAL COMPATIBILITY (ES5/ES6 POLYFILLS & LOW-RAM LITE MODE)
 // =========================================================
 (function() {
@@ -3292,10 +3453,13 @@ async function updateLiveTelemetry(childId) {
           if (onlineDot) onlineDot.className = "absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-rose-500 border-2 border-slate-950 rounded-full shadow-sm";
           if (lastSeenEl) {
             lastSeenEl.innerHTML = `
-              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 font-bold text-[10px] shadow-sm">
-                <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
-                <span>Oflayn</span>
-                <span class="text-rose-200/70 font-normal">· ${timeFormatted} da uzilgan</span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900/85 border border-rose-500/35 text-rose-300 font-bold text-[10px] shadow-md backdrop-blur-md">
+                <span class="relative flex h-2 w-2 shrink-0">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-60"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                </span>
+                <span class="tracking-wide">Oflayn</span>
+                <span class="text-slate-400 font-medium">(${timeFormatted} da uzilgan)</span>
               </span>
             `;
           }
@@ -5270,6 +5434,9 @@ function toggleMapUiVisibility(forceState) {
   const btnRestore = document.getElementById("btnRestoreMenus");
   const icon = document.getElementById("iconFullscreenMap");
   const btnDock = document.getElementById("btnToggleFullscreenMap");
+  const btnFloating = document.getElementById("btnFloatingExpandMap");
+  const iconFloating = document.getElementById("iconFloatingExpandMap");
+  const textFloating = document.getElementById("textFloatingExpandMap");
 
   if (newState) {
     document.body.classList.add("fullscreen-map-mode");
@@ -5280,7 +5447,13 @@ function toggleMapUiVisibility(forceState) {
       btnDock.classList.add("text-rose-400");
       btnDock.classList.remove("text-cyan-400");
     }
-    showToast("🗺️ Xarita to'liq kengaytirildi. Menyuni ochish uchun pastdagi tugmani bosing.");
+    if (btnFloating) {
+      btnFloating.classList.remove("bg-cyan-500", "hover:bg-cyan-400", "text-slate-950", "border-cyan-300");
+      btnFloating.classList.add("bg-rose-500", "hover:bg-rose-400", "text-white", "border-rose-300");
+    }
+    if (iconFloating) iconFloating.setAttribute("data-lucide", "minimize-2");
+    if (textFloating) textFloating.textContent = "Menyularni ko'rsatish";
+    showToast("🗺️ Xarita to'liq kengaytirildi. Menyuni ochish uchun tugmani bosing.");
   } else {
     document.body.classList.remove("fullscreen-map-mode");
     if (btnRestore) btnRestore.classList.add("hidden");
@@ -5290,6 +5463,12 @@ function toggleMapUiVisibility(forceState) {
       btnDock.classList.remove("text-rose-400");
       btnDock.classList.add("text-cyan-400");
     }
+    if (btnFloating) {
+      btnFloating.classList.add("bg-cyan-500", "hover:bg-cyan-400", "text-slate-950", "border-cyan-300");
+      btnFloating.classList.remove("bg-rose-500", "hover:bg-rose-400", "text-white", "border-rose-300");
+    }
+    if (iconFloating) iconFloating.setAttribute("data-lucide", "maximize-2");
+    if (textFloating) textFloating.textContent = "Xaritani to'liq ko'rish";
   }
 
   if (window.lucide) {
@@ -7595,11 +7774,10 @@ function triggerChildCheckIn() {
   haptic("medium");
   playSuccessChime();
   showToast("✅ «Men yetib keldim» deb ota-onangizga bildirishnoma yuborildi!");
-  if (!isDemoMode && currentChildId) {
-    fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/checkin`, {
-      method: "POST"
-    }).catch(console.error);
-  }
+  const targetChildId = currentChildId || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) || (currentUser && currentUser.id) || 997185613;
+  fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/checkin`, {
+    method: "POST"
+  }).catch(console.error);
 }
 
 function navigateChildHome() {
@@ -7625,13 +7803,12 @@ function triggerRemoteSiren() {
   haptic("heavy");
   playPingNotificationSound();
   showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
-  if (!isDemoMode && currentChildId) {
-    const effParentId = getEffectiveParentId() || 6707839718;
-    const query = effParentId ? `?parent_id=${effParentId}` : "";
-    fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/siren${query}`, {
-      method: "POST"
-    }).catch(console.error);
-  }
+  const targetChildId = currentChildId || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) || 997185613;
+  const effParentId = getEffectiveParentId() || 6707839718;
+  const query = effParentId ? `?parent_id=${effParentId}` : "";
+  fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/siren${query}`, {
+    method: "POST"
+  }).catch(console.error);
 }
 
 // ==============================================================================
@@ -8756,6 +8933,24 @@ async function requestChildAllPermissions() {
       (err) => console.warn("Initial GPS query:", err),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+  }
+
+  // 2.5 Request Microphone for 5s audio and ambient snapshot
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micStream.getTracks().forEach((t) => t.stop());
+      localStorage.setItem("smart_tracker_mic_permitted", "true");
+    } catch (micErr) {
+      console.warn("Microphone permission note:", micErr);
+    }
+  }
+
+  // 2.6 Request Notification permission
+  if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
+    try {
+      await Notification.requestPermission();
+    } catch (notifErr) {}
   }
 
   // 3. Start continuous background GPS telemetry
@@ -10035,9 +10230,7 @@ async function recordAndUploadSOSAudio(childId) {
       // Exponential backoff retry (up to 3 attempts with 1s, 2s, 4s delay)
       let uploadSuccess = false;
       let delay = 1000;
-      const apiBase = (window.location.protocol === "file:" || !window.location.origin || window.location.origin === "null")
-        ? PRODUCTION_BACKEND_URL
-        : "";
+      const apiBase = getApiBase();
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const resp = await fetch(`${apiBase}/api/v1/webapp/child/${childId}/sos/media`, {
@@ -10058,7 +10251,10 @@ async function recordAndUploadSOSAudio(childId) {
         }
       }
       if (!uploadSuccess) {
-        console.warn("[SOS Audio] Could not upload SOS audio snapshot after 3 retries");
+        console.warn("[SOS Audio] Upload failed or offline. Storing in IndexedDB queue...");
+        if (window.OfflineQueueManager) {
+          await window.OfflineQueueManager.enqueueAudio(childId, blob, ext);
+        }
       }
     };
 

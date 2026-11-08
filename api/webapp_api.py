@@ -420,7 +420,7 @@ async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -
     effective_code = user.web_access_code or user.pairing_code or code
     rate_coins, rate_som = await crud.get_coin_rate_for_user(session, user.id)
 
-    if user.role == "parent":
+    if user.role in ("parent", "owner", "admin"):
         children = await crud.get_children_for_parent(session, user.id)
         children_data = []
         for child in children:
@@ -450,12 +450,14 @@ async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -
         return {
             "status": "success",
             "role": "parent",
+            "is_owner": (user.role == "owner"),
             "token": sess_token,
             "session_token": sess_token,
             "user": {
                 "id": user.id,
-                "full_name": user.full_name or "Ota-ona",
-                "role": "parent",
+                "full_name": user.full_name or ("Asoschi (Owner)" if user.role == "owner" else "Ota-ona"),
+                "role": user.role,
+                "is_owner": (user.role == "owner"),
                 "coin_rate_coins": rate_coins,
                 "coin_rate_som": rate_som,
                 "web_access_code": effective_code
@@ -793,7 +795,7 @@ async def get_coin_rate_endpoint(user_id: int, session: AsyncSession = Depends(g
 async def update_coin_rate_endpoint(payload: UpdateCoinRateRequest, session: AsyncSession = Depends(get_db)):
     """Update coin rate settings and notify linked children (Restricted to verified parents)."""
     parent = await crud.get_user(session, payload.parent_id)
-    if not parent or parent.role != "parent":
+    if not parent or parent.role not in ("parent", "owner", "admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Ruxsat berilmagan: Faqat ota-ona hisobi tangalar kursini o'zgartira oladi."
@@ -3778,7 +3780,7 @@ async def update_child_device_policy_endpoint(
             )
     elif effective_parent_id and not is_owner:
         parent_user = await crud.get_user(session, effective_parent_id)
-        if parent_user and parent_user.role == "parent":
+        if parent_user and parent_user.role in ("parent", "owner", "admin"):
             try:
                 await crud.link_parent_child(session, effective_parent_id, child_id)
                 parents = await crud.get_parents_for_child(session, child_id)

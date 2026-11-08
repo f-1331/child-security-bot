@@ -3575,7 +3575,7 @@ async def on_link_demo_child(callback: CallbackQuery, bot: Bot):
     parent_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
         parent = await crud.get_user(session, parent_id)
-        if not parent or parent.role != "parent":
+        if not parent or (parent.role != "parent" and parent.role != "owner"):
             await crud.update_user_role(session, parent_id, "parent")
 
         children = await crud.get_children_for_parent(session, parent_id)
@@ -5848,7 +5848,7 @@ async def on_coin_rate_settings_pressed(event: Message | CallbackQuery, state: F
 
     async with AsyncSessionLocal() as session:
         user = await crud.get_user(session, user_id)
-        if not user or user.role != "parent":
+        if not user or user.role not in ("parent", "owner", "admin"):
             await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
             if isinstance(event, CallbackQuery):
                 await event.answer()
@@ -6033,7 +6033,7 @@ async def on_parent_invite_coparent(message: Message, bot: Bot):
     user_id = message.from_user.id
     async with AsyncSessionLocal() as session:
         user = await crud.get_user(session, user_id)
-        if not user or user.role != "parent":
+        if not user or user.role not in ("parent", "owner", "admin"):
             await message.answer("Ushbu tugma faqat ota-onalar uchun mo'ljallangan.")
             return
 
@@ -6221,7 +6221,7 @@ async def parent_screen_time_handler(message: Message, bot: Optional[Bot] = None
     try:
         async with AsyncSessionLocal() as session:
             user = await crud.get_user(session, user_id)
-            if not user or user.role != "parent":
+            if not user or user.role not in ("parent", "owner", "admin"):
                 await message.answer("Ushbu bo'lim faqat ota-onalar uchun mo'ljallangan.")
                 return
 
