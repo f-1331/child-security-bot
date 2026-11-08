@@ -83,40 +83,8 @@ async def pop_all_sos_messages(child_id: int, session: Optional[AsyncSession] = 
                 all_messages.append((bot_obj, chat_id, msg_id))
 
     return all_messages
-    try:
-        bot_type = "owner" if bot_inst == get_owner_bot() else "main"
-        import asyncio
-        asyncio.create_task(crud.record_active_sos_message(child_id, bot_type, chat_id, message_id))
-    except Exception:
-        pass
 
 
-async def pop_all_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[Any, int, int]]:
-    """Pop all recorded SOS messages from both RAM and DB, deduplicating."""
-    ram_items = sos_chat_messages_map.pop(child_id, [])
-    db_records = await crud.get_and_clear_active_sos_messages(child_id, session)
-
-    main_bot = telemetry.get_telegram_bot()
-    owner_bot = get_owner_bot()
-
-    all_messages: list[tuple[Any, int, int]] = []
-    seen: set[tuple[int, int]] = set()
-
-    for bot_inst, chat_id, msg_id in ram_items:
-        key = (int(chat_id), int(msg_id))
-        if key not in seen:
-            seen.add(key)
-            all_messages.append((bot_inst, chat_id, msg_id))
-
-    for b_type, chat_id, msg_id in db_records:
-        key = (int(chat_id), int(msg_id))
-        if key not in seen:
-            seen.add(key)
-            bot_obj = owner_bot if b_type == "owner" and owner_bot else main_bot
-            if bot_obj:
-                all_messages.append((bot_obj, chat_id, msg_id))
-
-    return all_messages
 
 _owner_bot_instance: Optional[Bot] = None
 
@@ -1979,6 +1947,12 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
         "live_location_active": has_live_loc,
         "live_period_seconds": 1800 if has_live_loc else 0
     }
+class EmergencyTextMessagePayload(BaseModel):
+    message: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
 @router.post("/child/{child_id}/emergency-message")
 async def send_emergency_text_message(
     child_id: int,
