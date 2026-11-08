@@ -121,7 +121,7 @@ async def generate_pairing_code(session: AsyncSession, parent_id: int, force_new
 
 
 async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Optional[User]:
-    """Find parent by their pairing code or web access code."""
+    """Find parent by their pairing code or web access code with zero MultipleResultsFound crashes."""
     if not code:
         return None
     clean_code = str(code).strip().replace(" ", "")
@@ -131,7 +131,7 @@ async def get_parent_by_pairing_code(session: AsyncSession, code: str) -> Option
             User.role == "parent"
         )
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def generate_web_access_code(session: AsyncSession, user_id: int, force_new: bool = False) -> str:
@@ -179,10 +179,9 @@ async def get_user_by_web_access_code(
     code: str,
     target_role: Optional[str] = None
 ) -> Optional[User]:
-    """Find user by web access code (or pairing code, or telegram ID fallback).
-    - If code belongs to a Child, returns the Child (child account opens).
-    - If code belongs to a Parent, returns the Parent (all children load together).
-    - If target_role is specified ('parent' or 'child'), enforces matching role.
+    """Find user by web access code or pairing code with strict role separation.
+    - Strictly designated queries for Owner, Parent, and Child without cross-role pollution.
+    - If target_role is specified ('parent' or 'child'), enforces matching role strictly.
     """
     code_clean = code.strip().replace(" ", "").replace("-", "")
 
@@ -199,36 +198,44 @@ async def get_user_by_web_access_code(
         if u:
             return u
 
-    # Role filter condition if target_role is supplied
-    role_cond = [User.role == target_role.strip().lower()] if target_role else []
+    normalized_role = target_role.strip().lower() if target_role else None
 
-    # 1. Match directly on web_access_code
-    result = await session.execute(
-        select(User).where(User.web_access_code == code_clean, *role_cond)
-    )
-    user = result.scalars().first()
-    if user:
-        return user
-
-    # 2. Match on pairing_code (e.g. parent's pairing code)
-    result = await session.execute(
-        select(User).where(User.pairing_code == code_clean, *role_cond)
-    )
-    user = result.scalars().first()
-    if user:
-        return user
-
-    # If target_role was passed but no strict match, fallback to match without role filter
-    if target_role:
+    # 1. If target_role is explicitly specified, enforce strict query against that role table only!
+    if normalized_role in ("parent", "child"):
         result = await session.execute(
-            select(User).where(or_(User.web_access_code == code_clean, User.pairing_code == code_clean))
+            select(User).where(
+                or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
+                User.role == normalized_role
+            )
         )
         user = result.scalars().first()
         if user:
             return user
+        return None
+
+    # 2. Generic lookup (when target_role is null):
+    # Check parent/owner first, then child
+    res_parent = await session.execute(
+        select(User).where(
+            or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
+            User.role == "parent"
+        )
+    )
+    user = res_parent.scalars().first()
+    if user:
+        return user
+
+    res_child = await session.execute(
+        select(User).where(
+            or_(User.web_access_code == code_clean, User.pairing_code == code_clean),
+            User.role == "child"
+        )
+    )
+    user = res_child.scalars().first()
+    if user:
+        return user
 
     return None
-
 
 async def link_co_parent(session: AsyncSession, primary_parent_id: int, new_parent_id: int) -> List[User]:
     """Link a second parent (e.g. mother invites father or vice-versa) to all existing children."""
@@ -542,11 +549,12 @@ async def get_location_history_today(
     start_of_today_tz = now_tz.replace(hour=0, minute=0, second=0, microsecond=0)
     cutoff = start_of_today_tz.astimezone(timezone.utc)
 
+    cutoff_naive = cutoff.replace(tzinfo=None)
     result = await session.execute(
         select(LocationLog)
         .where(
             LocationLog.child_id == child_id,
-            LocationLog.recorded_at >= cutoff
+            or_(LocationLog.recorded_at >= cutoff, LocationLog.recorded_at >= cutoff_naive)
         )
         .order_by(LocationLog.recorded_at.desc(), LocationLog.id.desc())
         .limit(limit)

@@ -719,7 +719,7 @@ async def health_check():
         "database_engine": "postgresql" if is_postgres else "sqlite",
         "database_persisted": is_postgres,
         "timezone": settings.TIMEZONE,
-        "version": "v79-284989f"
+        "version": "v83-arch-17-fixes"
     }
 
 

@@ -109,6 +109,17 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
             return;
         }
 
+        // 1.6. SCHOOL MODE OFFLINE SCHEDULE (Offline maktab dars vaqti bloklash qalqoni)
+        boolean schoolModeEnabled = prefs.getBoolean("school_mode_enabled", false);
+        String schoolStart = prefs.getString("school_start", "08:00");
+        String schoolEnd = prefs.getString("school_end", "14:00");
+        String schoolDays = prefs.getString("school_days", "1,2,3,4,5,6");
+        if (schoolModeEnabled && isWithinSchoolSchedule(schoolStart, schoolEnd, schoolDays)) {
+            String appName = getAppLabel(currentPackage);
+            launchLockOverlay(currentPackage, appName, "📚 Maktab dars vaqti (Ota-ona tomonidan cheklangan)");
+            return;
+        }
+
         // 2. MASTER LOCKDOWN (BARCHA ILOVALARNI BLOKLASH)
         boolean isAllBlocked = prefs.getBoolean("is_all_apps_blocked", false);
         if (isAllBlocked) {
@@ -127,6 +138,41 @@ public class ChildSecurityAccessibilityService extends AccessibilityService {
                 String appName = getAppLabel(currentPackage);
                 launchLockOverlay(currentPackage, appName, "Ota-onangiz ushbu ilovani bloklab qo'ygan");
             }
+        }
+    }
+
+    
+    private boolean isWithinSchoolSchedule(String startStr, String endStr, String daysStr) {
+        try {
+            if (startStr == null || endStr == null || startStr.isEmpty() || endStr.isEmpty()) return false;
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            int curHour = cal.get(java.util.Calendar.HOUR_OF_DAY);
+            int curMin = cal.get(java.util.Calendar.MINUTE);
+            int dayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK); // 1 = Sunday, 2 = Monday ... 7 = Saturday
+            int isoWeekday = (dayOfWeek == java.util.Calendar.SUNDAY) ? 7 : (dayOfWeek - 1); // 1 = Mon ... 7 = Sun
+
+            String[] startParts = startStr.split(":");
+            String[] endParts = endStr.split(":");
+            int sHour = Integer.parseInt(startParts[0].trim());
+            int sMin = Integer.parseInt(startParts[1].trim());
+            int eHour = Integer.parseInt(endParts[0].trim());
+            int eMin = Integer.parseInt(endParts[1].trim());
+
+            int mask = 0;
+            if (daysStr != null && !daysStr.isEmpty()) {
+                for (String d : daysStr.split(",")) {
+                    try {
+                        int dayNum = Integer.parseInt(d.trim());
+                        mask |= (1 << dayNum);
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                mask = 0b01111110; // Mon-Sat default
+            }
+
+            return RustCoreBridge.isSchoolModeActive(curHour, curMin, isoWeekday, sHour, sMin, eHour, eMin, mask);
+        } catch (Exception e) {
+            return false;
         }
     }
 

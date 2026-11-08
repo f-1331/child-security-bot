@@ -2,7 +2,8 @@
   "name": "child-security-bot",
   "version": "1.0.0",
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "python scripts/sync_assets.py && tsc --noEmit",
+    "sync-assets": "python scripts/sync_assets.py",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

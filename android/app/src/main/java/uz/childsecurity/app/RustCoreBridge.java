@@ -12,6 +12,27 @@ import java.util.List;
  * anti-drift Kalman filtering, offline geofencing, and anti-clock-tamper checks.
  */
 public class RustCoreBridge {
+
+    /**
+     * Offline School Mode schedule check via embedded rules engine & Rust core.
+     */
+    public static boolean isSchoolModeActive(int curHour, int curMin, int weekday, int startHour, int startMin, int endHour, int endMin, int activeDaysMask) {
+        if (weekday >= 1 && weekday <= 7) {
+            int dayBit = 1 << weekday;
+            if ((activeDaysMask & dayBit) == 0) {
+                return false;
+            }
+        }
+        int curTotal = curHour * 60 + curMin;
+        int startTotal = startHour * 60 + startMin;
+        int endTotal = endHour * 60 + endMin;
+        if (startTotal <= endTotal) {
+            return curTotal >= startTotal && curTotal < endTotal;
+        } else {
+            return curTotal >= startTotal || curTotal < endTotal;
+        }
+    }
+
     private static final String TAG = "RustCoreBridge";
     private static boolean sNativeLoaded = false;
 

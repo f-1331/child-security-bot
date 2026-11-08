@@ -99,23 +99,30 @@ async def check_admin_access(event: TelegramObject) -> Optional[Dict[str, Any]]:
         or from_user.id == getattr(settings, "OWNER_ID", 1)
     )
 
-    async with async_session_maker() as session:
-        if is_owner:
-            await crud.ensure_owner_registered(
-                session,
-                from_user.id,
-                from_user.username,
-                from_user.full_name,
-            )
-            return {"is_admin": True, "is_owner": True, "user_id": from_user.id}
+    if is_owner:
+        try:
+            async with async_session_maker() as session:
+                await crud.ensure_owner_registered(
+                    session,
+                    from_user.id,
+                    from_user.username,
+                    from_user.full_name,
+                )
+        except Exception as e:
+            logger.debug(f"ensure_owner_registered notice: {e}")
+        return {"is_admin": True, "is_owner": True, "user_id": from_user.id}
 
-        admin = await crud.get_admin_user(session, from_user.id)
-        if admin:
-            return {
-                "is_admin": True,
-                "is_owner": admin.is_owner,
-                "user_id": from_user.id,
-            }
+    try:
+        async with async_session_maker() as session:
+            admin = await crud.get_admin_user(session, from_user.id)
+            if admin:
+                return {
+                    "is_admin": True,
+                    "is_owner": admin.is_owner,
+                    "user_id": from_user.id,
+                }
+    except Exception as e:
+        logger.warning(f"Error checking admin user in DB: {e}")
 
     return None
 

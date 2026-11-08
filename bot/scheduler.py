@@ -381,8 +381,9 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. 00:00 Midnight Safety Report (Dispatched once per day during hour 0 in Tashkent time UTC+5)
-            if now_tz.hour == 0:
+            # 1. Daily Safety Report (Dispatched once per day at 22:00 or 00:00 in local Tashkent time UTC+5)
+            daily_report_hour = getattr(settings, "DAILY_REPORT_HOUR", 22)
+            if now_tz.hour == daily_report_hour or (daily_report_hour != 0 and now_tz.hour == 0):
                 if last_sent_date != today_str:
                     logger.info(f"Triggering midnight safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                     async with AsyncSessionLocal() as session:

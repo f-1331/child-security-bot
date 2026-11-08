@@ -573,7 +573,7 @@ let previewCircle = null;
 let zonePickerMarker = null;
 let isZonePickerActive = false;
 let replayMarker = null;
-let isRouteVisible = (typeof localStorage !== "undefined" && localStorage.getItem("smart_tracker_route_visible") === "true");
+let isRouteVisible = (typeof localStorage !== "undefined" ? (localStorage.getItem("smart_tracker_route_visible") !== "false") : true);
 let isRepeatedPlacesVisible = false;
 let isReplaying = false;
 let replayTimer = null;
@@ -4432,16 +4432,26 @@ function updateRoutePlaybackHud(stepIdx) {
   const statsEl = document.getElementById("routeHudStatsText");
   const scrubber = document.getElementById("routeTimelineScrubber");
 
-  if (pt && pt.recorded_at) {
+  if (pt) {
     let tStr = "--:--:--";
     try {
-      let raw = String(pt.recorded_at).trim();
-      if (!raw.includes("Z") && !raw.includes("+") && !raw.includes("-", 10)) {
-        raw += "Z";
-      }
-      const d = new Date(raw);
-      if (!isNaN(d.getTime())) {
-        tStr = d.toLocaleTimeString("uz-UZ", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const rawField = pt.recorded_at || pt.time || pt.timestamp || pt.created_at;
+      if (rawField) {
+        let raw = String(rawField).trim();
+        if (!raw.includes("Z") && !raw.includes("+") && !raw.includes("-", 10)) {
+          raw += "Z";
+        }
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          tStr = d.toLocaleTimeString("uz-UZ", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        } else if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+          tStr = raw;
+        }
+      } else {
+        // Approximate time along route timeline if individual point has no timestamp
+        const nowMs = Date.now();
+        const estMs = nowMs - (routePointsCache.length - clampedIdx) * 15000;
+        tStr = new Date(estMs).toLocaleTimeString("uz-UZ", { timeZone: "Asia/Tashkent", hour: "2-digit", minute: "2-digit", second: "2-digit" });
       }
     } catch (e) {}
     if (timeEl) timeEl.textContent = `🕒 ${tStr}`;
