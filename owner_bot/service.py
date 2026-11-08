@@ -14,6 +14,7 @@ import db.crud as crud
 from config import settings
 
 _main_bot_instance: Optional[Bot] = None
+_owner_bot_instance: Optional[Bot] = None
 _start_time: float = time.time()
 
 
@@ -26,6 +27,31 @@ def set_main_bot(bot: Bot) -> None:
 def get_main_bot() -> Optional[Bot]:
     """Retrieve reference to the primary public client bot."""
     return _main_bot_instance
+
+
+def set_owner_bot(bot: Bot) -> None:
+    """Store reference to the dedicated owner bot."""
+    global _owner_bot_instance
+    _owner_bot_instance = bot
+
+
+def get_owner_bot() -> Optional[Bot]:
+    """Retrieve reference to the dedicated owner bot."""
+    global _owner_bot_instance
+    if _owner_bot_instance is not None:
+        return _owner_bot_instance
+    try:
+        from config import settings
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
+        if getattr(settings, "OWNER_BOT_TOKEN", None):
+            _owner_bot_instance = Bot(
+                token=settings.OWNER_BOT_TOKEN,
+                default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+            )
+    except Exception:
+        pass
+    return _owner_bot_instance
 
 
 def get_uptime_str() -> str:
@@ -457,8 +483,12 @@ async def perform_database_optimization(session: AsyncSession) -> str:
     )
 
 
-async def distribute_coins_airdrop(session: AsyncSession, amount: int, message_text: Optional[str] = None) -> Tuple[int, int]:
-    """Distribute coin bonus to all active children on the platform."""
+async def distribute_coins_airdrop(session: AsyncSession, amount: int, message_text: Optional[str] = None) -> Tuple[int, int, int]:
+    """
+    Distribute coin bonus to all active children on the platform.
+    Takes into account each child's parent-configured initial coin rate.
+    Returns: (total_children_count, total_coins_distributed, total_som_equivalent)
+    """
     from db.models import User
     from sqlalchemy import select
 
@@ -466,26 +496,41 @@ async def distribute_coins_airdrop(session: AsyncSession, amount: int, message_t
     children = res.scalars().all()
 
     total_count = 0
+    total_som_est = 0
     main_bot = get_main_bot()
 
-    if not message_text:
-        message_text = f"🎁 **TABRIKLAYMIZ!**\n\nSizga tizim ma'muriyati tomonidan **+{amount:,} tanga** bayramona bonus sovg'a qilindi! Jamg'armangiz oshdi 🐷🌟"
-
     for ch in children:
+        # Retrieve family-specific exchange rate
+        rate_coins, rate_som = await crud.get_coin_rate_for_user(session, ch.id)
+        som_equiv = crud.calculate_som_from_coins(amount, rate_coins, rate_som)
+        total_som_est += som_equiv
+
         ch.virtual_balance = (ch.virtual_balance or 0) + amount
+        new_bal = ch.virtual_balance
+        new_bal_som = crud.calculate_som_from_coins(new_bal, rate_coins, rate_som)
         total_count += 1
+
         if main_bot:
+            if message_text:
+                custom_msg = message_text
+            else:
+                custom_msg = (
+                    f"🎁 <b>TABRIKLAYMIZ! BAYRAMONA AIRDROP!</b> 🌟\n\n"
+                    f"Sizga tizim ma'muriyati tomonidan <b>+{amount:,} tanga</b> (~{som_equiv:,} so'm) bayramona bonus sovg'a qilindi! 🐷✨\n\n"
+                    f"📌 <i>Sizning belgilangan kursingiz: <b>{rate_coins:,} tanga = {rate_som:,} so'm</b></i>\n"
+                    f"💰 <b>Hozirgi jamg'armangiz:</b> <b>{new_bal:,} tanga</b> (~{new_bal_som:,} so'm)"
+                )
             try:
                 await main_bot.send_message(
                     chat_id=ch.id,
-                    text=message_text,
-                    parse_mode="Markdown"
+                    text=custom_msg,
+                    parse_mode="HTML"
                 )
             except Exception:
                 pass
 
     await session.commit()
-    return total_count, total_count * amount
+    return total_count, total_count * amount, total_som_est
 
 
 async def get_live_gps_radar(session: AsyncSession) -> Tuple[str, InlineKeyboardMarkup]:

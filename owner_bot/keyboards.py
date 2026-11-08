@@ -258,20 +258,20 @@ def get_broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_airdrop_preset_keyboard() -> InlineKeyboardMarkup:
-    """Airdrop coin amount selection keyboard."""
+    """Airdrop coin amount selection keyboard (respects family customized coin rates)."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🎁 +100 tanga (≈1,000 so'm)", callback_data="ad_amt:100"),
-                InlineKeyboardButton(text="🎁 +500 tanga (≈5,000 so'm)", callback_data="ad_amt:500"),
+                InlineKeyboardButton(text="🎁 +100 tanga", callback_data="ad_amt:100"),
+                InlineKeyboardButton(text="🎁 +500 tanga", callback_data="ad_amt:500"),
             ],
             [
-                InlineKeyboardButton(text="🎉 +1,000 tanga (≈10,000 so'm)", callback_data="ad_amt:1000"),
-                InlineKeyboardButton(text="👑 +5,000 tanga (≈50,000 so'm)", callback_data="ad_amt:5000"),
+                InlineKeyboardButton(text="🎉 +1,000 tanga", callback_data="ad_amt:1000"),
+                InlineKeyboardButton(text="👑 +5,000 tanga", callback_data="ad_amt:5000"),
             ],
             [
                 InlineKeyboardButton(text="✍️ Boshqa miqdor kiritish", callback_data="ad_amt_custom"),
-                InlineKeyboardButton(text="❌ Bekor qilish", callback_data="adm_back_main"),
+                InlineKeyboardButton(text="🔙 Boshqaruv paneli", callback_data="adm_back_main"),
             ],
         ]
     )

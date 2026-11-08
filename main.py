@@ -28,7 +28,7 @@ from bot.handlers import router as bot_router
 from api.telemetry import router as telemetry_router, set_bot_instance
 from api.webapp_api import router as webapp_router
 import owner_bot.logger_buffer  # noqa: F401
-from owner_bot import owner_bot_router, set_main_bot
+from owner_bot import owner_bot_router, set_main_bot, set_owner_bot
 
 # Configure logging
 logging.basicConfig(
@@ -928,6 +928,7 @@ async def main():
             token=settings.OWNER_BOT_TOKEN,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
+        set_owner_bot(owner_bot)
         owner_dp = Dispatcher(storage=MemoryStorage())
         from bot.anti_ad_middleware import AntiAdShieldMiddleware
         owner_dp.message.outer_middleware(AntiAdShieldMiddleware())

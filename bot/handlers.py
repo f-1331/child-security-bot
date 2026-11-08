@@ -1820,15 +1820,17 @@ async def on_child_cancel_sos(callback: CallbackQuery, bot: Bot):
     """Child reports the danger is cleared."""
     child_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
-        from api.webapp_api import child_cancel_sos_endpoint
+        from api.webapp_api import child_cancel_sos_endpoint, record_sos_message
+        if callback.message:
+            record_sos_message(child_id, bot, callback.message.chat.id, callback.message.message_id)
         await child_cancel_sos_endpoint(child_id, session)
 
     try:
-        await callback.message.edit_text("✅ Xavfsizlik tiklandi, barcha xabarlar tozalandi va ota-onangizga 30 daqiqalik lokatsiya yuborildi.")
+        await callback.message.delete()
     except Exception:
         pass
     try:
-        await callback.answer()
+        await callback.answer("✅ Xavfsizlik tiklandi, barcha xabarlar tozalandi.", show_alert=False)
     except Exception:
         pass
 
@@ -3942,15 +3944,17 @@ async def on_resolve_sos(callback: CallbackQuery, bot: Bot):
             await callback.answer("Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz.", show_alert=True)
             return
 
-        from api.webapp_api import child_cancel_sos_endpoint
+        from api.webapp_api import child_cancel_sos_endpoint, record_sos_message
+        if callback.message:
+            record_sos_message(child_id, bot, callback.message.chat.id, callback.message.message_id)
         await child_cancel_sos_endpoint(child_id, session)
 
     try:
-        await callback.message.edit_text("✅ SOS signali bekor qilindi, oldingi barcha xabarlar tozalandi va 30 daqiqalik jonli lokatsiya yuborildi.")
+        await callback.message.delete()
     except Exception:
         pass
     try:
-        await callback.answer("✅ SOS to'xtatildi, xabarlar tozalandi.", show_alert=False)
+        await callback.answer("✅ SOS to'xtatildi, oldingi barcha xabarlar va lokatsiyalar tozalandi.", show_alert=False)
     except Exception:
         pass
 
@@ -7808,6 +7812,8 @@ async def fallback_text_handler(message: Message, bot: Bot):
             ])
 
             for p in parents:
+                if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    continue
                 try:
                     await bot.send_message(chat_id=p.id, text=parent_alert, reply_markup=reply_kb, parse_mode="HTML")
                 except Exception as e:

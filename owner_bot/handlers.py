@@ -603,8 +603,12 @@ async def callback_clear_sos(callback: CallbackQuery):
         from api.webapp_api import child_cancel_sos_endpoint
         await child_cancel_sos_endpoint(user_id, session)
 
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer(
-        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning SOS favqulodda holati bekor qilindi, barcha oldingi xabarlar chatdan tozalandi va 30 daqiqalik jonli lokatsiya yuborildi.",
+        f"✅ Foydalanuvchi (ID: <code>{user_id}</code>)ning SOS favqulodda holati bekor qilindi, barcha oldingi xabarlar va lokatsiyalar chatdan tozalandi va 30 daqiqalik jonli lokatsiya yuborildi.",
         parse_mode="HTML",
     )
     await callback.answer("SOS to'xtatildi va tozalandi!")
@@ -1423,13 +1427,15 @@ async def handle_airdrop_amount_cb(callback: CallbackQuery, auth_info: Dict[str,
         return
     amt = int(callback.data.split(":")[1])
     async with async_session_maker() as session:
-        count, total = await distribute_coins_airdrop(session, amt)
+        count, total, total_som = await distribute_coins_airdrop(session, amt)
         await callback.message.edit_text(
             f"🎉 <b>AIRDROP MUVAFFAQIYATLI YAKUNLANDI!</b>\n\n"
             f"👦 Qabul qilgan bolalar: <b>{count} nafar</b>\n"
             f"💰 Har biriga qo'shildi: <b>+{amt:,} tanga</b>\n"
-            f"🪙 Jami tarqatilgan tangalar: <b>{total:,} tanga</b>\n\n"
-            f"✅ Barcha bolalarning telefoniga tabriknoma yuborildi!",
+            f"🪙 Jami tarqatilgan tangalar: <b>{total:,} tanga</b>\n"
+            f"💵 Jami so'm ekvivalenti: ~<b>{total_som:,} so'm</b>\n\n"
+            f"📌 <i>Har bir farzandning hisobiga tangalar ularning ota-onasi belgilagan individual kurs bo'yicha hisoblandi va tabriknoma yuborildi.</i>\n"
+            f"✅ Barcha bolalarning telefoniga tabriknoma yetkazildi!",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
             parse_mode="HTML"
         )
@@ -1467,12 +1473,14 @@ async def handle_airdrop_custom_submit(message: Message, state: FSMContext, auth
 
     await state.clear()
     async with async_session_maker() as session:
-        count, total = await distribute_coins_airdrop(session, amt)
+        count, total, total_som = await distribute_coins_airdrop(session, amt)
         await message.answer(
             f"🎉 <b>MAXSUS AIRDROP YAKUNLANDI!</b>\n\n"
             f"👦 Qabul qilgan bolalar: <b>{count} nafar</b>\n"
             f"💰 Har biriga qo'shildi: <b>+{amt:,} tanga</b>\n"
-            f"🪙 Jami tarqatildi: <b>{total:,} tanga</b>",
+            f"🪙 Jami tarqatildi: <b>{total:,} tanga</b>\n"
+            f"💵 Jami so'm ekvivalenti: ~<b>{total_som:,} so'm</b>\n\n"
+            f"📌 <i>Har bir bola o'zining oilaviy kursi bo'yicha hisoblangan ekvivalent bilan qabul qildi.</i>",
             reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
             parse_mode="HTML"
         )
@@ -2429,16 +2437,18 @@ async def callback_resolve_sos_owner(callback: CallbackQuery):
         await callback.answer("Noto'g'ri so'rov", show_alert=True)
         return
 
-    from api.webapp_api import child_cancel_sos_endpoint
+    from api.webapp_api import child_cancel_sos_endpoint, record_sos_message
     from db.database import async_session_maker
     try:
+        if callback.message:
+            record_sos_message(child_id, callback.bot, callback.message.chat.id, callback.message.message_id)
         async with async_session_maker() as session:
             await child_cancel_sos_endpoint(child_id, session)
-        await callback.answer("✅ SOS xavf signali to'xtatildi!", show_alert=True)
         try:
-            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.delete()
         except Exception:
             pass
+        await callback.answer("✅ SOS to'xtatildi, barcha eski xabarlar tozalandi!", show_alert=True)
     except Exception as e:
         await callback.answer(f"Xato: {e}", show_alert=True)
 

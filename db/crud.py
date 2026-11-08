@@ -1,6 +1,10 @@
+import asyncio
+import logging
 import math
 import random
 import secrets
+
+logger = logging.getLogger(__name__)
 import string
 import hmac
 import hashlib
@@ -2018,57 +2022,75 @@ async def is_parent_notification_enabled(parent_id: int, notification_type: str 
 # ACTIVE SOS MESSAGE PERSISTENCE & PURGING
 # ==============================================================================
 
-async def record_active_sos_message(child_id: int, bot_type: str, chat_id: int, message_id: int, session: Optional[AsyncSession] = None) -> None:
-    """Persistently store an SOS message reference in PostgreSQL for cleanup upon resolution."""
+_sos_msg_lock = asyncio.Lock()
+
+
+async def record_active_sos_messages_bulk(child_id: int, messages: list[tuple[str, int, int]], session: Optional[AsyncSession] = None) -> None:
+    """Persistently store multiple SOS message & location references in PostgreSQL with atomic locking."""
+    if not messages:
+        return
     db_key = f"active_sos_msgs_{child_id}"
-    should_close = False
-    if session is None:
-        from db.database import async_session_maker
-        session = async_session_maker()
-        should_close = True
-    try:
-        setting = await session.get(SystemSetting, db_key)
-        items = []
-        if setting and setting.value:
+    async with _sos_msg_lock:
+        should_close = False
+        if session is None:
+            from db.database import async_session_maker
+            session = async_session_maker()
+            should_close = True
+        try:
+            setting = await session.get(SystemSetting, db_key)
+            items = []
+            if setting and setting.value:
+                try:
+                    items = json.loads(setting.value)
+                except Exception:
+                    items = []
+            existing_keys = {(str(it[0]), int(it[1]), int(it[2])) for it in items if len(it) >= 3}
+            for b_type, c_id, m_id in messages:
+                k = (str(b_type), int(c_id), int(m_id))
+                if k not in existing_keys:
+                    existing_keys.add(k)
+                    items.append([b_type, c_id, m_id])
+            val_str = json.dumps(items)
+            if not setting:
+                session.add(SystemSetting(key=db_key, value=val_str))
+            else:
+                setting.value = val_str
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to record active SOS messages bulk: {e}")
+        finally:
+            if should_close:
+                await session.close()
+
+
+async def record_active_sos_message(child_id: int, bot_type: str, chat_id: int, message_id: int, session: Optional[AsyncSession] = None) -> None:
+    """Persistently store a single SOS message or location reference in PostgreSQL."""
+    await record_active_sos_messages_bulk(child_id, [(bot_type, chat_id, message_id)], session)
+
+
+async def get_and_clear_active_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[str, int, int]]:
+    """Retrieve and delete all tracked SOS message & location records for a child from PostgreSQL."""
+    db_key = f"active_sos_msgs_{child_id}"
+    async with _sos_msg_lock:
+        should_close = False
+        if session is None:
+            from db.database import async_session_maker
+            session = async_session_maker()
+            should_close = True
+        try:
+            setting = await session.get(SystemSetting, db_key)
+            if not setting or not setting.value:
+                return []
             try:
                 items = json.loads(setting.value)
             except Exception:
                 items = []
-        items.append([bot_type, chat_id, message_id])
-        val_str = json.dumps(items)
-        if not setting:
-            session.add(SystemSetting(key=db_key, value=val_str))
-        else:
-            setting.value = val_str
-        await session.commit()
-    except Exception:
-        pass
-    finally:
-        if should_close:
-            await session.close()
-
-
-async def get_and_clear_active_sos_messages(child_id: int, session: Optional[AsyncSession] = None) -> list[tuple[str, int, int]]:
-    """Retrieve and delete all tracked SOS message records for a child from PostgreSQL."""
-    db_key = f"active_sos_msgs_{child_id}"
-    should_close = False
-    if session is None:
-        from db.database import async_session_maker
-        session = async_session_maker()
-        should_close = True
-    try:
-        setting = await session.get(SystemSetting, db_key)
-        if not setting or not setting.value:
+            await session.delete(setting)
+            await session.commit()
+            return [(str(item[0]), int(item[1]), int(item[2])) for item in items if len(item) >= 3]
+        except Exception as e:
+            logger.error(f"Failed to clear active SOS messages: {e}")
             return []
-        try:
-            items = json.loads(setting.value)
-        except Exception:
-            items = []
-        await session.delete(setting)
-        await session.commit()
-        return [(str(item[0]), int(item[1]), int(item[2])) for item in items if len(item) >= 3]
-    except Exception:
-        return []
-    finally:
-        if should_close:
-            await session.close()
+        finally:
+            if should_close:
+                await session.close()

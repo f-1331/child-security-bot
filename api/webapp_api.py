@@ -1834,14 +1834,27 @@ async def child_cancel_sos_endpoint(child_id: int, session: AsyncSession = Depen
     cur_lon = latest_loc.longitude if latest_loc else None
     await session.commit()
 
-    # 1. DELETE ALL PREVIOUSLY SENT SOS ALERT MESSAGES FROM TELEGRAM CHATS:
+    # 1. DELETE ALL PREVIOUSLY SENT SOS ALERT MESSAGES & LOCATION PINS FROM TELEGRAM CHATS:
     sos_messages = await pop_all_sos_messages(child_id, session)
+    main_bot = telemetry.get_telegram_bot()
+    owner_bot = get_owner_bot()
     for bot_inst, chat_id, msg_id in sos_messages:
+        deleted = False
         try:
             await bot_inst.delete_message(chat_id=chat_id, message_id=msg_id)
-            logger.info(f"Deleted SOS message {msg_id} in chat {chat_id}")
+            deleted = True
+            logger.info(f"Deleted SOS message/location {msg_id} in chat {chat_id}")
         except Exception as del_err:
-            logger.debug(f"Could not delete message {msg_id} in chat {chat_id}: {del_err}")
+            logger.debug(f"Could not delete message {msg_id} with primary bot: {del_err}")
+        
+        if not deleted:
+            alt_bot = owner_bot if bot_inst == main_bot else main_bot
+            if alt_bot:
+                try:
+                    await alt_bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                    logger.info(f"Deleted SOS message/location {msg_id} with alt bot in chat {chat_id}")
+                except Exception:
+                    pass
 
     # Reset sequence counter
     sos_sequence_counter.pop(child_id, None)
@@ -1997,8 +2010,12 @@ async def send_emergency_text_message(
     bot = telemetry.get_telegram_bot()
     notified = 0
     if bot:
-        if parents:
+        notify_parents_allowed = await crud.is_notify_parents_enabled(session)
+        notify_owner_allowed = await crud.is_notify_owner_enabled(session)
+        if parents and notify_parents_allowed:
             for p in parents:
+                if not await crud.is_parent_notification_enabled(p.id, "messages", session):
+                    continue
                 try:
                     await bot.send_message(chat_id=p.id, text=msg, parse_mode="HTML")
                     if payload.latitude and payload.longitude and (abs(payload.latitude) > 0.1 or abs(payload.longitude) > 0.1):
@@ -2006,7 +2023,7 @@ async def send_emergency_text_message(
                     notified += 1
                 except Exception as e:
                     logger.error(f"Failed to send emergency message to parent {p.id}: {e}")
-        else:
+        elif notify_owner_allowed:
             owner_id = 6707839718
             try:
                 await bot.send_message(chat_id=owner_id, text=f"⚠️ [TEST FARZAND] " + msg, parse_mode="HTML")
