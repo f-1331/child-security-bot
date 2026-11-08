@@ -891,6 +891,12 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
 
     today_logs = await crud.get_location_history_today(session, child_id, limit=300)
     total_km, max_speed, _ = crud.calculate_precise_movement_stats(today_logs)
+    dist_m = int(round(total_km * 1000.0))
+    if total_km < 1.0:
+        distance_formatted = f"{dist_m} metr" if dist_m > 0 else "0 metr"
+    else:
+        distance_formatted = f"{total_km:.2f} km"
+
     steps_today = int(total_km * 1428)
     calories_today = int(total_km * 55)
 
@@ -941,7 +947,9 @@ async def get_child_status(child_id: int, session: AsyncSession = Depends(get_db
                 "recorded_at": format_utc_iso(latest.recorded_at) if latest else None,
             } if latest else None,
             "activity": {
-                "distance_km": round(total_km, 2),
+                "distance_km": round(total_km, 3),
+                "distance_m": dist_m,
+                "distance_formatted": distance_formatted,
                 "steps": steps_today,
                 "target_km": round(target_km, 1),
                 "target_steps": target_steps,

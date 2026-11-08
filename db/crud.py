@@ -1139,8 +1139,9 @@ def calculate_precise_movement_stats(logs: List[LocationLog]) -> Tuple[float, fl
             if l.speed > max_speed and l.speed < 180.0:
                 max_speed = l.speed
 
-        # Skip points with poor GPS accuracy for distance accumulation
-        if l.accuracy is not None and l.accuracy > 40.0:
+        # Skip points with extremely poor GPS accuracy (> 80m) from corrupting distance accumulation
+        acc = l.accuracy if (l.accuracy is not None and l.accuracy > 0) else 15.0
+        if acc > 80.0:
             continue
 
         if last_anchor is None:
@@ -1158,22 +1159,23 @@ def calculate_precise_movement_stats(logs: List[LocationLog]) -> Tuple[float, fl
             dt_sec = max(1, int((t1 - t0).total_seconds()))
 
         # Glitch / Teleportation check: speed > 150 km/h
-        if dt_sec > 0:
-            implied_spd = (dist_m / dt_sec) * 3.6
-            if implied_spd > 150.0:
-                # Glitch jump, do not count
-                continue
+        implied_spd = (dist_m / dt_sec) * 3.6 if dt_sec > 0 else 0.0
+        if dt_sec > 0 and implied_spd > 150.0:
+            # Glitch jump, do not count
+            continue
 
-        # High-Precision Stationary Deadband:
-        # Rejects indoor GPS jitter bounce (which previously caused huge false distances)
+        # Intelligent Walking & Commute Deadband:
+        # Stationary GPS noise usually bounces within 2-4 meters.
+        # We use an adaptive threshold: minimum 4.0m, up to min(18.0m, acc * 0.4).
         is_moving = False
-        if l.speed is not None and l.speed >= 1.8:
-            is_moving = (dist_m >= 12.0)
+        if l.speed is not None and l.speed >= 1.2:
+            is_moving = (dist_m >= 3.0)
+        elif dt_sec > 0 and 2.0 <= implied_spd <= 140.0:
+            deadband_m = max(4.0, min(18.0, acc * 0.4))
+            is_moving = (dist_m >= deadband_m)
         else:
-            acc = l.accuracy or 15.0
-            if acc <= 35.0:
-                deadband_m = max(45.0, acc * 1.5)
-                is_moving = (dist_m >= deadband_m)
+            deadband_m = max(4.0, min(18.0, acc * 0.4))
+            is_moving = (dist_m >= deadband_m)
 
         if is_moving:
             total_km += dist_km
@@ -1186,7 +1188,7 @@ def calculate_precise_movement_stats(logs: List[LocationLog]) -> Tuple[float, fl
                     "longitude": l.longitude
                 })
 
-    return round(total_km, 2), round(max_speed, 1), speed_events
+    return round(total_km, 3), round(max_speed, 1), speed_events
 
 
 async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> dict:
@@ -1212,9 +1214,9 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
     battery_level = logs[-1].battery_level if logs and logs[-1].battery_level is not None else None
 
     # Format distance nicely (metres when < 1 km)
+    meters = int(round(total_km * 1000))
     if total_km < 1.0:
-        meters = int(round(total_km * 1000))
-        distance_formatted = f"{meters} metr ({total_km:.2f} km)" if meters > 0 else "0 metr"
+        distance_formatted = f"{meters} metr" if meters > 0 else "0 metr"
     else:
         distance_formatted = f"{total_km:.2f} km"
 
@@ -1257,7 +1259,8 @@ async def generate_daily_safety_report(session: AsyncSession, child_id: int) -> 
         "child_id": child_id,
         "child_name": child_name,
         "points_count": len(logs),
-        "total_distance_km": round(total_km, 2),
+        "total_distance_km": round(total_km, 3),
+        "total_distance_m": meters,
         "distance_formatted": distance_formatted,
         "max_speed_kmh": round(max_speed, 1),
         "speed_events": speed_events,

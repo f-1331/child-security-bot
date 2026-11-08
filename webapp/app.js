@@ -3839,39 +3839,48 @@ function renderHistoryToMapAndList(points) {
     return tA - tB;
   });
 
-  // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed and layer is on map!
+  // Ultra-fast diff check: skip full DOM & Leaflet repainting if points haven't changed and layers exist!
   const lastPt = points[points.length - 1];
   const lastSig = `${points.length}_${lastPt ? (lastPt.latitude + '_' + lastPt.longitude) : ''}`;
-  if (window._lastRenderedRouteSig === lastSig && routePolyline && map && routeLayerGroup && map.hasLayer(routeLayerGroup)) {
+  if (window._lastRenderedRouteSig === lastSig && routeLayerGroup && repeatsLayerGroup) {
+    if (isRouteVisible && map && !map.hasLayer(routeLayerGroup)) {
+      routeLayerGroup.addTo(map);
+    } else if (!isRouteVisible && map && map.hasLayer(routeLayerGroup)) {
+      map.removeLayer(routeLayerGroup);
+    }
+    if (isRepeatedPlacesVisible && map && !map.hasLayer(repeatsLayerGroup)) {
+      repeatsLayerGroup.addTo(map);
+    } else if (!isRepeatedPlacesVisible && map && map.hasLayer(repeatsLayerGroup)) {
+      map.removeLayer(repeatsLayerGroup);
+    }
+    updateRouteButtonsState();
     return;
   }
   window._lastRenderedRouteSig = lastSig;
 
   routePointsCache = points || [];
 
-  if (routeLayerGroup && map) {
-    try { map.removeLayer(routeLayerGroup); } catch (e) {}
-    routeLayerGroup = null;
-  }
-  if (repeatsLayerGroup && map) {
-    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
-    repeatsLayerGroup = null;
-  }
-  if (routePolyline && map) {
-    try { map.removeLayer(routePolyline); } catch (e) {}
-    routePolyline = null;
-  }
-
   const container = document.getElementById("historyListContainer");
   if (!points || points.length === 0) {
     if (container) {
       container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
     }
+    if (routeLayerGroup) routeLayerGroup.clearLayers();
+    if (repeatsLayerGroup) repeatsLayerGroup.clearLayers();
     return;
   }
 
-  routeLayerGroup = L.featureGroup();
-  repeatsLayerGroup = L.featureGroup();
+  if (!routeLayerGroup) {
+    routeLayerGroup = L.featureGroup();
+  } else {
+    routeLayerGroup.clearLayers();
+  }
+
+  if (!repeatsLayerGroup) {
+    repeatsLayerGroup = L.featureGroup();
+  } else {
+    repeatsLayerGroup.clearLayers();
+  }
 
   // Rust Core Kalman smoothing
   const smoothed = (window.RustCore && typeof RustCore.filterTrajectoryKalman === "function")
@@ -4174,16 +4183,21 @@ function renderHistoryToMapAndList(points) {
     stopMarker.addTo(repeatsLayerGroup);
   });
 
-  // Layer Visibility Control: Independently add route line or repeated places based on user state
+  // Layer Visibility Control: Independently add or remove route line and repeated places based on user state
   if (isRouteVisible && map && routeLayerGroup) {
     if (!map.hasLayer(routeLayerGroup)) {
       routeLayerGroup.addTo(map);
     }
+  } else if (map && routeLayerGroup && map.hasLayer(routeLayerGroup)) {
+    map.removeLayer(routeLayerGroup);
   }
+
   if (isRepeatedPlacesVisible && map && repeatsLayerGroup) {
     if (!map.hasLayer(repeatsLayerGroup)) {
       repeatsLayerGroup.addTo(map);
     }
+  } else if (map && repeatsLayerGroup && map.hasLayer(repeatsLayerGroup)) {
+    map.removeLayer(repeatsLayerGroup);
   }
   updateRouteButtonsState();
 
@@ -4214,8 +4228,8 @@ function calculateRouteStats(points) {
     if (pt.speed && pt.speed > maxSpd && pt.speed < 180) {
       maxSpd = Math.round(pt.speed);
     }
-    // Filter out poor accuracy points (> 40m) from corrupting distance accumulation
-    if (pt.accuracy && pt.accuracy > 40) continue;
+    // Filter out poor accuracy points (> 80m) from corrupting distance accumulation
+    if (pt.accuracy && pt.accuracy > 80) continue;
 
     const d = calculateDistanceMeters(lastAnchor.latitude, lastAnchor.longitude, pt.latitude, pt.longitude);
 
@@ -4343,6 +4357,9 @@ function calculateRouteStats(points) {
   if (elSteps) elSteps.textContent = `${totalCalculatedSteps.toLocaleString()} qadam`;
   if (elSpeed) elSpeed.textContent = `${maxSpd} km/s`;
   if (elStops) elStops.textContent = `${routeStopsCache.length} joy`;
+
+  const childDistEl = document.getElementById("childActivityDistanceText");
+  if (childDistEl) childDistEl.textContent = distFormatted;
 }
 
 // Filter History List by Time of Day (All, Morning, Afternoon, Evening)
@@ -4856,16 +4873,15 @@ async function toggleRouteHistory(forceState) {
 
   if (isRouteVisible) {
     showToast("🗺️ Harakat yo'li xaritada ko'rsatilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !routeLayerGroup || routeLayerGroup.getLayers().length === 0) {
       await loadRouteHistory(currentChildId);
     } else {
-      renderHistoryToMapAndList(routePointsCache);
-    }
-
-    if (routeLayerGroup && map) {
-      if (!map.hasLayer(routeLayerGroup)) {
+      if (map && routeLayerGroup && !map.hasLayer(routeLayerGroup)) {
         routeLayerGroup.addTo(map);
       }
+    }
+
+    if (routeLayerGroup && map && map.hasLayer(routeLayerGroup)) {
       try {
         const bounds = routeLayerGroup.getBounds();
         if (bounds.isValid()) {
@@ -4881,7 +4897,7 @@ async function toggleRouteHistory(forceState) {
       showToast("📍 Bugungi joylashuv nuqtasi xaritada ko'rsatildi");
     }
   } else {
-    // Reliably turn OFF and completely erase route layers from map
+    // Reliably remove route layers from map without destroying instances
     if (replayMarker && map) {
       try { map.removeLayer(replayMarker); } catch (e) {}
       replayMarker = null;
@@ -4890,24 +4906,11 @@ async function toggleRouteHistory(forceState) {
     replayTimer = null;
     isReplayPlaying = false;
 
-    if (routeLayerGroup) {
+    if (routeLayerGroup && map && map.hasLayer(routeLayerGroup)) {
       try {
-        if (map && map.hasLayer(routeLayerGroup)) {
-          map.removeLayer(routeLayerGroup);
-        }
-        routeLayerGroup.clearLayers();
+        map.removeLayer(routeLayerGroup);
       } catch (e) {}
-      routeLayerGroup = null;
     }
-    if (routePolyline) {
-      try {
-        if (map && map.hasLayer(routePolyline)) {
-          map.removeLayer(routePolyline);
-        }
-      } catch (e) {}
-      routePolyline = null;
-    }
-    window._lastRenderedRouteSig = null;
     hideRoutePlaybackHud();
     showToast("🗺️ Bugungi harakat yo'li yashirildi");
   }
@@ -4919,6 +4922,9 @@ async function toggleRepeatedPlaces(forceState) {
   haptic("light");
   const newState = typeof forceState === "boolean" ? forceState : !isRepeatedPlacesVisible;
   isRepeatedPlacesVisible = newState;
+  try {
+    localStorage.setItem("smart_tracker_repeated_visible", isRepeatedPlacesVisible ? "true" : "false");
+  } catch (e) {}
 
   if (currentRole === "parent" && currentTab !== "map") {
     switchTab("map");
@@ -4928,16 +4934,15 @@ async function toggleRepeatedPlaces(forceState) {
 
   if (isRepeatedPlacesVisible) {
     showToast("🔁 Qayta yurilgan joylar tekshirilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !repeatsLayerGroup || repeatsLayerGroup.getLayers().length === 0) {
       await loadRouteHistory(currentChildId);
     } else {
-      renderHistoryToMapAndList(routePointsCache);
-    }
-
-    if (repeatsLayerGroup && map) {
-      if (!map.hasLayer(repeatsLayerGroup)) {
+      if (map && repeatsLayerGroup && !map.hasLayer(repeatsLayerGroup)) {
         repeatsLayerGroup.addTo(map);
       }
+    }
+
+    if (repeatsLayerGroup && map && map.hasLayer(repeatsLayerGroup)) {
       try {
         const bounds = repeatsLayerGroup.getBounds();
         if (bounds.isValid()) {
@@ -4956,15 +4961,11 @@ async function toggleRepeatedPlaces(forceState) {
       showToast("ℹ️ Bugun hali qayta-qayta yurilgan alohida joylar qayd etilmagan");
     }
   } else {
-    // Reliably turn OFF and completely erase repeated places from map
-    if (repeatsLayerGroup) {
+    // Reliably remove repeated places from map without destroying instances
+    if (repeatsLayerGroup && map && map.hasLayer(repeatsLayerGroup)) {
       try {
-        if (map && map.hasLayer(repeatsLayerGroup)) {
-          map.removeLayer(repeatsLayerGroup);
-        }
-        repeatsLayerGroup.clearLayers();
+        map.removeLayer(repeatsLayerGroup);
       } catch (e) {}
-      repeatsLayerGroup = null;
     }
     showToast("🔁 Qayta-qayta yurilgan joylar yashirildi");
   }
@@ -8111,7 +8112,18 @@ function updateChildActivityUI(act) {
   if (badge) badge.textContent = `${pct}%`;
 
   const distEl = document.getElementById("childActivityDistanceText");
-  if (distEl) distEl.textContent = `${act.distance_km || 0.0} km`;
+  if (distEl) {
+    if (act.distance_formatted) {
+      distEl.textContent = act.distance_formatted;
+    } else {
+      const dKm = Number(act.distance_km || 0);
+      if (dKm < 1.0) {
+        distEl.textContent = `${Math.round(dKm * 1000)} m`;
+      } else {
+        distEl.textContent = `${dKm.toFixed(2)} km`;
+      }
+    }
+  }
 
   const calEl = document.getElementById("childActivityCaloriesText");
   if (calEl) calEl.textContent = `${act.calories || 0} kkal`;
@@ -10613,7 +10625,7 @@ function renderDailyReportContent(report) {
           <span class="text-[10px] text-slate-400 font-bold uppercase">Yurilgan masofa</span>
           <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
         </div>
-        <p class="text-base font-black text-white mt-1">${report.total_distance_km || 0} <span class="text-xs font-normal text-slate-400">km</span></p>
+        <p class="text-base font-black text-white mt-1">${report.distance_formatted ? report.distance_formatted : ((report.total_distance_km || 0) + ' km')}</p>
         <p class="text-[10px] text-amber-300/90 font-semibold mt-1">Maks. tezlik: ${report.max_speed_kmh || 0} km/h</p>
       </div>
 
