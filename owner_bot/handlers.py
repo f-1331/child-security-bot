@@ -2651,9 +2651,12 @@ async def handle_trigger_hourly_report_test(message: Message, bot: Bot):
     await message.answer(f"⏰ <i>Soatlik hisobot ({hour_str}:00) tayyorlanmoqda va yuborilmoqda...</i>", parse_mode="HTML")
     try:
         async with AsyncSessionLocal() as session:
-            await dispatch_hourly_location_reports(bot, session, hour_str)
+            sent_count = await dispatch_hourly_location_reports(bot, session, hour_str)
             await session.commit()
-        await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) muvaffaqiyatli jo'natildi!</b>", parse_mode="HTML")
+        if sent_count > 0:
+            await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) muvaffaqiyatli jo'natildi!</b>\n({sent_count} ta xabar yetkazildi)", parse_mode="HTML")
+        else:
+            await message.answer(f"⚠️ <b>Soatlik hisobot yuborilmadi (farzandlar yoki joylashuv ma'lumotlari topilmadi).</b>", parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error in handle_trigger_hourly_report_test: {e}")
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")

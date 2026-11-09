@@ -61,7 +61,7 @@ def _save_last_hourly_sent_slot(slot_str: str) -> None:
         pass
 
 
-async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
+async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str) -> int:
     """
     Every 1 hour (at all hours ending in :00 EXCEPT 01:00, 02:00, 03:00, 04:00),
     dispatches an hourly safety report to parents and Owner via both Main Bot and Owner Bot.
@@ -78,6 +78,7 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
         return
 
     sent_parent_chats = set()
+    total_sent = 0
 
     for p in parents:
         target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
@@ -152,13 +153,16 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
 
                     # Check if currently inside any active geofence
                     current_zone_name = None
-                    geofences = await crud.get_geofences_for_child(session, ch.id)
-                    for gf in geofences:
-                        if gf.is_active:
-                            dist = crud.haversine_distance(lat, lon, gf.latitude, gf.longitude)
-                            if dist <= gf.radius_meters:
-                                current_zone_name = gf.name
-                                break
+                    try:
+                        geofences = await crud.get_geofences_for_child(session, ch.id)
+                        for gf in geofences:
+                            if gf.is_active:
+                                dist = crud.haversine_distance(lat, lon, gf.latitude, gf.longitude)
+                                if dist <= gf.radius_meters:
+                                    current_zone_name = gf.name
+                                    break
+                    except Exception as gf_e:
+                        logger.warning(f"Geofence check error for child {ch.id}: {gf_e}")
 
                     if current_zone_name:
                         loc_desc = f"🏰 <b>{html.escape(current_zone_name)}</b> hududida"
@@ -208,24 +212,35 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                     ]
                 ])
 
-                # 1. Main Bot dispatch with isolated try-except
+                # 1. Primary Bot dispatch with isolated try-except
+                primary_sent = False
                 try:
                     await bot.send_message(chat_id=target_chat_id, text=msg, reply_markup=kb, parse_mode="HTML")
-                    logger.info(f"Dispatched hourly report to {target_chat_id} via main bot")
+                    logger.info(f"Dispatched hourly report to {target_chat_id} via primary bot")
+                    total_sent += 1
+                    primary_sent = True
                 except Exception as mb_err:
-                    logger.warning(f"Could not send hourly location via main bot to {target_chat_id}: {mb_err}")
+                    logger.warning(f"Could not send hourly location via primary bot to {target_chat_id}: {mb_err}")
 
                 # 2. Owner Bot dispatch (Always delivered to Owner 6707839718 via Owner Bot!)
                 if target_chat_id == 6707839718:
                     ob = get_owner_bot()
                     if ob:
-                        try:
-                            await ob.send_message(chat_id=6707839718, text=msg, reply_markup=kb, parse_mode="HTML")
-                            logger.info("Dispatched hourly report to 6707839718 via owner bot")
-                        except Exception as ob_err:
-                            logger.warning(f"Could not send hourly location via owner bot to 6707839718: {ob_err}")
+                        bot_token = getattr(bot, "token", None)
+                        ob_token = getattr(ob, "token", None)
+                        if (bot_token != ob_token) or not primary_sent:
+                            try:
+                                await ob.send_message(chat_id=6707839718, text=msg, reply_markup=kb, parse_mode="HTML")
+                                logger.info("Dispatched hourly report to 6707839718 via owner bot")
+                                total_sent += 1
+                            except Exception as ob_err:
+                                logger.warning(f"Could not send hourly location via owner bot to 6707839718: {ob_err}")
             except Exception as e:
                 logger.error(f"Failed to send hourly location for child {ch.id} to parent {target_chat_id}: {e}")
+
+
+
+    return total_sent
 
 
 async def dispatch_nightly_safety_reports(bot: Bot, session, force_target_id: Optional[int] = None) -> int:
@@ -252,7 +267,7 @@ async def dispatch_nightly_safety_reports(bot: Bot, session, force_target_id: Op
         parents = list(parents_res.scalars().all())
     else:
         parents_res = await session.execute(
-            select(User).where(User.role == "parent")
+            select(User).where(User.role.in_(["parent", "owner", "admin"]))
         )
         parents = list(parents_res.scalars().all())
 
@@ -269,6 +284,11 @@ async def dispatch_nightly_safety_reports(bot: Bot, session, force_target_id: Op
         sent_parent_chats.add(target_chat_id)
 
         children = await crud.get_children_for_parent(session, p.id)
+        if not children and p.id in (1, 6707839718):
+            children = (await crud.get_children_for_parent(session, 6707839718)) or (await crud.get_children_for_parent(session, 1))
+        if not children and p.id in (1, 6707839718):
+            all_ch_res = await session.execute(select(User).where(User.role == "child"))
+            children = list(all_ch_res.scalars().all())
         if not children:
             continue
 
