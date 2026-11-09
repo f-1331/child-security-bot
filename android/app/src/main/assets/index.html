@@ -560,16 +560,12 @@
         <button onclick="handleMasterLockToggle(false)" class="ml-1.5 px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white text-[10px] rounded-lg font-black transition active:scale-95 shadow">Yechish</button>
       </div>
 
-      <!-- Floating Map Expand/Collapse Pill (Top Right) -->
-      <div id="floatingExpandMapWrapper" class="absolute top-3 right-3 sm:right-4 z-30 pointer-events-auto">
-        <button id="btnFloatingExpandMap" onclick="toggleMapUiVisibility()" class="px-3 py-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs shadow-xl flex items-center gap-1.5 transition active:scale-95 border border-cyan-300" title="Xaritani to'liq ko'rish (Menyularni yashirish / ko'rsatish)">
+      <!-- Route, Repeated Places & Fullscreen Quick Action Pills (Top Left Floating) -->
+      <div id="routeQuickPillBar" class="absolute top-3 left-3.5 z-30 flex items-center gap-1.5 pointer-events-auto flex-wrap max-w-[calc(100vw-65px)]">
+        <button id="btnFloatingExpandMap" onclick="toggleMapUiVisibility()" class="px-2.5 py-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-2xs shadow-xl flex items-center gap-1 transition active:scale-95 border border-cyan-300" title="Xaritani to'liq ko'rish (Menyularni yashirish / ko'rsatish)">
           <i data-lucide="maximize-2" id="iconFloatingExpandMap" class="w-3.5 h-3.5"></i>
-          <span id="textFloatingExpandMap">Xaritani to'liq ko'rish</span>
+          <span id="textFloatingExpandMap">To'liq xarita</span>
         </button>
-      </div>
-
-      <!-- Route & Repeated Places Quick Action Pills (Top Left Floating) -->
-      <div id="routeQuickPillBar" class="absolute top-3 left-3.5 z-30 flex items-center gap-1.5 pointer-events-auto">
         <button id="pillToggleRoute" onclick="toggleRouteHistory()" class="px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Bugungi harakat yo'li (Yoqish / O'chirish)">
           <i data-lucide="route" class="w-3.5 h-3.5 text-amber-400"></i>
           <span id="labelPillRoute">Harakat yo'li</span>

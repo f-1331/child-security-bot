@@ -2636,3 +2636,24 @@ async def handle_trigger_daily_report_test(message: Message, bot: Bot):
     except Exception as e:
         logger.error(f"Error in handle_trigger_daily_report_test: {e}")
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
+
+
+@owner_bot_router.message(F.text == "⏰ Soatlik hisobot (Test)")
+@owner_bot_router.message(Command("test_hourly"))
+@owner_bot_router.message(Command("soatlik"))
+async def handle_trigger_hourly_report_test(message: Message, bot: Bot):
+    """Manually triggers hourly location and safety report dispatch immediately."""
+    from datetime import datetime
+    from bot.scheduler import dispatch_hourly_location_reports, TASHKENT_TZ
+    from db.database import AsyncSessionLocal
+    now_tz = datetime.now(TASHKENT_TZ)
+    hour_str = f"{now_tz.hour:02d}"
+    await message.answer(f"⏰ <i>Soatlik hisobot ({hour_str}:00) tayyorlanmoqda va yuborilmoqda...</i>", parse_mode="HTML")
+    try:
+        async with AsyncSessionLocal() as session:
+            await dispatch_hourly_location_reports(bot, session, hour_str)
+            await session.commit()
+        await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) muvaffaqiyatli jo'natildi!</b>", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error in handle_trigger_hourly_report_test: {e}")
+        await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")

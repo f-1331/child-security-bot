@@ -8115,6 +8115,26 @@ async def handle_main_bot_test_daily_report(message: Message, bot: Bot):
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
 
 
+@router.message(Command("test_hourly"))
+@router.message(Command("soatlik"))
+async def handle_main_bot_test_hourly_report(message: Message, bot: Bot):
+    """Manually triggers hourly location and safety report dispatch for owner / parents."""
+    from datetime import datetime
+    from bot.scheduler import dispatch_hourly_location_reports, TASHKENT_TZ
+    from db.database import AsyncSessionLocal
+    now_tz = datetime.now(TASHKENT_TZ)
+    hour_str = f"{now_tz.hour:02d}"
+    await message.answer(f"⏰ <i>Soatlik hisobot ({hour_str}:00) tayyorlanmoqda va yuborilmoqda...</i>", parse_mode="HTML")
+    try:
+        async with AsyncSessionLocal() as session:
+            await dispatch_hourly_location_reports(bot, session, hour_str)
+            await session.commit()
+        await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) muvaffaqiyatli jo'natildi!</b>", parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"Error in handle_main_bot_test_hourly_report: {e}")
+        await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
+
+
 # ==============================================================================
 # PARENT NOTIFICATIONS & MUTE MANAGEMENT HANDLERS
 # ==============================================================================

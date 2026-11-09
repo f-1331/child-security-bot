@@ -63,15 +63,15 @@ def _save_last_hourly_sent_slot(slot_str: str) -> None:
 
 async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
     """
-    Every 1 hour (during daytime 07:00 - 21:00), sends an update to all parents
-    with their child's current location, safe zone status, and battery level.
+    Every 1 hour (at all hours ending in :00 EXCEPT 01:00, 02:00, 03:00, 04:00),
+    dispatches an hourly safety report to parents and Owner via both Main Bot and Owner Bot.
     """
     from sqlalchemy import select
     from db.models import User, LocationLog
     from api.webapp_api import get_owner_bot
 
     parents_res = await session.execute(
-        select(User).where(User.role == "parent")
+        select(User).where(User.role.in_(["parent", "owner", "admin"]))
     )
     parents = list(parents_res.scalars().all())
     if not parents:
@@ -86,6 +86,12 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
         sent_parent_chats.add(target_chat_id)
 
         children = await crud.get_children_for_parent(session, p.id)
+        if not children and p.id in (1, 6707839718):
+            children = (await crud.get_children_for_parent(session, 6707839718)) or (await crud.get_children_for_parent(session, 1))
+        if not children and p.id in (1, 6707839718):
+            all_ch_res = await session.execute(select(User).where(User.role == "child"))
+            children = list(all_ch_res.scalars().all())
+
         if not children:
             continue
 
@@ -94,84 +100,89 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                 latest_loc = await crud.get_latest_location(session, ch.id)
                 c_name = html.escape(ch.full_name or f"Farzand #{ch.id}")
 
-                if not latest_loc:
-                    continue
-
-                lat = latest_loc.latitude
-                lon = latest_loc.longitude
-                maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
-                batt_level = latest_loc.battery_level if latest_loc.battery_level is not None else "Noma'lum"
-                charging_icon = "⚡" if latest_loc.is_charging else ""
-
                 now_utc = datetime.now(timezone.utc)
 
-                # Speed change and movement analysis over the last hour
-                hour_ago = now_utc - timedelta(minutes=65)
-                h_res = await session.execute(
-                    select(LocationLog)
-                    .where(
-                        LocationLog.child_id == ch.id,
-                        LocationLog.recorded_at >= hour_ago
-                    )
-                    .order_by(LocationLog.recorded_at.asc())
-                )
-                hour_logs = list(h_res.scalars().all())
+                if latest_loc:
+                    lat = latest_loc.latitude
+                    lon = latest_loc.longitude
+                    maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+                    batt_level = latest_loc.battery_level if latest_loc.battery_level is not None else "Noma'lum"
+                    charging_icon = "⚡" if latest_loc.is_charging else ""
 
-                max_hour_spd = 0.0
-                fastest_time_str = None
-                for hl in hour_logs:
-                    if hl.speed is not None and hl.speed > max_hour_spd and hl.speed < 160.0:
-                        max_hour_spd = hl.speed
-                        if hl.recorded_at:
-                            dt = hl.recorded_at if hl.recorded_at.tzinfo else hl.recorded_at.replace(tzinfo=timezone.utc)
-                            fastest_time_str = dt.astimezone(TASHKENT_TZ).strftime("%H:%M")
+                    # Speed change and movement analysis over the last hour
+                    hour_ago = now_utc - timedelta(minutes=65)
+                    h_res = await session.execute(
+                        select(LocationLog)
+                        .where(
+                            LocationLog.child_id == ch.id,
+                            LocationLog.recorded_at >= hour_ago
+                        )
+                        .order_by(LocationLog.recorded_at.asc())
+                    )
+                    hour_logs = list(h_res.scalars().all())
 
-                cur_spd = latest_loc.speed if (latest_loc and latest_loc.speed is not None) else 0.0
+                    max_hour_spd = 0.0
+                    fastest_time_str = None
+                    for hl in hour_logs:
+                        if hl.speed is not None and hl.speed > max_hour_spd and hl.speed < 160.0:
+                            max_hour_spd = hl.speed
+                            if hl.recorded_at:
+                                dt = hl.recorded_at if hl.recorded_at.tzinfo else hl.recorded_at.replace(tzinfo=timezone.utc)
+                                fastest_time_str = dt.astimezone(TASHKENT_TZ).strftime("%H:%M")
 
-                if max_hour_spd >= 25.0:
-                    movement_line = (
-                        f"🚗 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Transportda)\n"
-                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
-                    )
-                elif max_hour_spd >= 7.0:
-                    movement_line = (
-                        f"🛴 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Velosiped / Samokat)\n"
-                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
-                    )
-                elif max_hour_spd >= 2.0:
-                    movement_line = (
-                        f"🚶‍♂️ <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Piyoda)\n"
-                        f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
-                    )
+                    cur_spd = latest_loc.speed if latest_loc.speed is not None else 0.0
+
+                    if max_hour_spd >= 25.0:
+                        movement_line = (
+                            f"🚗 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Transportda)\n"
+                            f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                        )
+                    elif max_hour_spd >= 7.0:
+                        movement_line = (
+                            f"🛴 <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Velosiped / Samokat)\n"
+                            f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                        )
+                    elif max_hour_spd >= 2.0:
+                        movement_line = (
+                            f"🚶‍♂️ <b>Tezlik o'zgarishi:</b> Soat {fastest_time_str} da <b>{max_hour_spd:.0f} km/soat</b> tezlikda harakatlandi (Piyoda)\n"
+                            f"📍 <b>Hozirgi tezlik:</b> {cur_spd:.0f} km/soat" + (" (To'xtagan / Harakatsiz)" if cur_spd < 2 else "")
+                        )
+                    else:
+                        movement_line = "🛑 <b>Harakat:</b> Soat davomida harakatsiz / bir joyda turibdi (0 km/soat)"
+
+                    # Check if currently inside any active geofence
+                    current_zone_name = None
+                    geofences = await crud.get_geofences_for_child(session, ch.id)
+                    for gf in geofences:
+                        if gf.is_active:
+                            dist = crud.haversine_distance(lat, lon, gf.latitude, gf.longitude)
+                            if dist <= gf.radius_meters:
+                                current_zone_name = gf.name
+                                break
+
+                    if current_zone_name:
+                        loc_desc = f"🏰 <b>{html.escape(current_zone_name)}</b> hududida"
+                    else:
+                        loc_desc = f"<code>{lat:.5f}, {lon:.5f}</code>"
+
+                    # Calculate last seen text
+                    rec_dt = latest_loc.recorded_at
+                    if rec_dt.tzinfo is None:
+                        rec_dt = rec_dt.replace(tzinfo=timezone.utc)
+                    diff_sec = max(0, int((now_utc - rec_dt).total_seconds()))
+                    if diff_sec < 180:
+                        time_ago = "🟢 Jonli / Hozirgina"
+                    elif diff_sec < 3600:
+                        time_ago = f"🟡 {diff_sec // 60} daqiqa oldin"
+                    else:
+                        time_ago = f"⚪ {diff_sec // 3600} soat oldin"
                 else:
-                    movement_line = "🛑 <b>Harakat:</b> Soat davomida harakatsiz / bir joyda turibdi (0 km/soat)"
-
-                # Check if currently inside any active geofence
-                current_zone_name = None
-                geofences = await crud.get_geofences_for_child(session, ch.id)
-                for gf in geofences:
-                    if gf.is_active:
-                        dist = crud.haversine_distance(lat, lon, gf.latitude, gf.longitude)
-                        if dist <= gf.radius_meters:
-                            current_zone_name = gf.name
-                            break
-
-                if current_zone_name:
-                    loc_desc = f"🏰 <b>{html.escape(current_zone_name)}</b> hududida"
-                else:
-                    loc_desc = f"<code>{lat:.5f}, {lon:.5f}</code>"
-
-                # Calculate last seen text
-                rec_dt = latest_loc.recorded_at
-                if rec_dt.tzinfo is None:
-                    rec_dt = rec_dt.replace(tzinfo=timezone.utc)
-                diff_sec = max(0, int((now_utc - rec_dt).total_seconds()))
-                if diff_sec < 180:
-                    time_ago = "🟢 Jonli / Hozirgina"
-                elif diff_sec < 3600:
-                    time_ago = f"🟡 {diff_sec // 60} daqiqa oldin"
-                else:
-                    time_ago = f"⚪ {diff_sec // 3600} soat oldin"
+                    maps_url = "https://www.google.com/maps"
+                    batt_level = "Noma'lum"
+                    charging_icon = ""
+                    movement_line = "🛑 <b>Harakat:</b> Qurilmadan yangi koordinata kutilmoqda"
+                    loc_desc = "📍 <i>Qurilma oflayn yoki signal yo'q</i>"
+                    time_ago = "⚪ Signal kutilmoqda"
 
                 msg = (
                     f"⏰ <b>SOATLIK XAVFSIZLIK XABARNOMASI ({hour_str}:00)</b>\n"
@@ -197,15 +208,22 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str):
                     ]
                 ])
 
-                await bot.send_message(chat_id=target_chat_id, text=msg, reply_markup=kb, parse_mode="HTML")
+                # 1. Main Bot dispatch with isolated try-except
+                try:
+                    await bot.send_message(chat_id=target_chat_id, text=msg, reply_markup=kb, parse_mode="HTML")
+                    logger.info(f"Dispatched hourly report to {target_chat_id} via main bot")
+                except Exception as mb_err:
+                    logger.warning(f"Could not send hourly location via main bot to {target_chat_id}: {mb_err}")
 
+                # 2. Owner Bot dispatch (Always delivered to Owner 6707839718 via Owner Bot!)
                 if target_chat_id == 6707839718:
                     ob = get_owner_bot()
                     if ob:
                         try:
                             await ob.send_message(chat_id=6707839718, text=msg, reply_markup=kb, parse_mode="HTML")
-                        except Exception:
-                            pass
+                            logger.info("Dispatched hourly report to 6707839718 via owner bot")
+                        except Exception as ob_err:
+                            logger.warning(f"Could not send hourly location via owner bot to 6707839718: {ob_err}")
             except Exception as e:
                 logger.error(f"Failed to send hourly location for child {ch.id} to parent {target_chat_id}: {e}")
 
@@ -381,9 +399,8 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             now_tz = datetime.now(tz)
             today_str = now_tz.strftime("%Y-%m-%d")
 
-            # 1. Daily Safety Report (Dispatched once per day at 22:00 or 00:00 in local Tashkent time UTC+5)
-            daily_report_hour = getattr(settings, "DAILY_REPORT_HOUR", 22)
-            if now_tz.hour == daily_report_hour or (daily_report_hour != 0 and now_tz.hour == 0):
+            # 1. Daily Safety Report (Dispatched at 00:00 local Tashkent time UTC+5)
+            if now_tz.hour == 0 and (0 <= now_tz.minute <= 5):
                 if last_sent_date != today_str:
                     logger.info(f"Triggering midnight safety reports for {today_str} (Local Tashkent time: {now_tz.strftime('%H:%M:%S')})...")
                     async with AsyncSessionLocal() as session:
@@ -394,9 +411,10 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
                     _save_last_nightly_sent_date(today_str)
                     logger.info(f"Nightly safety reports dispatched for {today_str} at 00:00.")
 
-            # 1.5 Hourly Child Location Updates (Sent once per hour during top-of-the-hour window 0..5 min between 07:00 and 23:00 Tashkent time)
+            # 1.5 Hourly Child Location Updates (Sent at ALL hours ending in :00 EXCEPT 01:00, 02:00, 03:00, 04:00)
+            # Active hours: 00:00, 05:00, 06:00, 07:00, 08:00, ..., 23:00 (20 times per day)
             current_hour_slot = now_tz.strftime("%Y-%m-%d-%H")
-            if 7 <= now_tz.hour <= 23:
+            if now_tz.hour not in (1, 2, 3, 4):
                 if 0 <= now_tz.minute <= 5:
                     if last_hourly_slot != current_hour_slot:
                         logger.info(f"Triggering hourly location updates for {current_hour_slot} (Local time: {now_tz.hour}:{now_tz.minute:02d})...")
