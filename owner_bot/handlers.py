@@ -2621,18 +2621,18 @@ async def on_login_approval_callback(callback: CallbackQuery, bot: Bot):
 @owner_bot_router.message(Command("test_daily_report"))
 @owner_bot_router.message(Command("hisobot"))
 async def handle_trigger_daily_report_test(message: Message, bot: Bot):
-    """Manually triggers daily safety report dispatch for owner's children to Owner Bot."""
-    await message.answer("🌙 <i>Kunlik xavfsizlik hisoboti bolangiz bo'yicha tayyorlanmoqda...</i>", parse_mode="HTML")
+    """Manually triggers daily safety report dispatch to ordinary parents only."""
+    await message.answer("🌙 <i>Kunlik xavfsizlik hisoboti oddiy ota-onalarga yuborilmoqda...</i>", parse_mode="HTML")
     try:
         from bot.scheduler import dispatch_nightly_safety_reports
         from db.database import AsyncSessionLocal
         async with AsyncSessionLocal() as session:
-            sent_count = await dispatch_nightly_safety_reports(bot, session, force_target_id=message.from_user.id)
+            sent_count = await dispatch_nightly_safety_reports(bot, session)
             await session.commit()
         if sent_count > 0:
-            await message.answer(f"✅ <b>Kunlik xavfsizlik hisoboti bolangiz bo'yicha Owner Botga muvaffaqiyatli jo'natildi!</b>", parse_mode="HTML")
+            await message.answer(f"✅ <b>Kunlik xavfsizlik hisoboti oddiy ota-onalarga muvaffaqiyatli jo'natildi!</b>\n({sent_count} ta ota-onaga yetkazildi. Owner Botga kelmaydi)", parse_mode="HTML")
         else:
-            await message.answer("ℹ️ <i>Bog'langan farzandlar topilmadi yoki hisobot ma'lumotlari mavjud emas.</i>", parse_mode="HTML")
+            await message.answer("ℹ️ <i>Oddiy ota-onalar hisoboti tekshirildi (0 ta faol qabul qiluvchi).</i>", parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error in handle_trigger_daily_report_test: {e}")
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
@@ -2642,21 +2642,21 @@ async def handle_trigger_daily_report_test(message: Message, bot: Bot):
 @owner_bot_router.message(Command("test_hourly"))
 @owner_bot_router.message(Command("soatlik"))
 async def handle_trigger_hourly_report_test(message: Message, bot: Bot):
-    """Manually triggers hourly location and safety report dispatch for owner's children to Owner Bot."""
+    """Manually triggers hourly location and safety report dispatch to ordinary parents only."""
     from datetime import datetime
     from bot.scheduler import dispatch_hourly_location_reports, TASHKENT_TZ
     from db.database import AsyncSessionLocal
     now_tz = datetime.now(TASHKENT_TZ)
     hour_str = f"{now_tz.hour:02d}"
-    await message.answer(f"⏰ <i>Soatlik hisobot ({hour_str}:00) bolangiz bo'yicha tayyorlanmoqda...</i>", parse_mode="HTML")
+    await message.answer(f"⏰ <i>Soatlik hisobot ({hour_str}:00) oddiy ota-onalarga yuborilmoqda...</i>", parse_mode="HTML")
     try:
         async with AsyncSessionLocal() as session:
-            sent_count = await dispatch_hourly_location_reports(bot, session, hour_str, force_target_id=message.from_user.id)
+            sent_count = await dispatch_hourly_location_reports(bot, session, hour_str)
             await session.commit()
         if sent_count > 0:
-            await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) bolangiz bo'yicha Owner Botga muvaffaqiyatli jo'natildi!</b>", parse_mode="HTML")
+            await message.answer(f"✅ <b>Soatlik xavfsizlik hisoboti ({hour_str}:00) oddiy ota-onalarga muvaffaqiyatli jo'natildi!</b>\n({sent_count} ta ota-onaga yetkazildi. Owner Botga kelmaydi)", parse_mode="HTML")
         else:
-            await message.answer(f"⚠️ <b>Soatlik hisobot yuborilmadi (bog'langan farzand yoki joylashuv topilmadi).</b>", parse_mode="HTML")
+            await message.answer(f"⚠️ <b>Soatlik hisobot yuborilmadi (oddiy ota-onalar yoki joylashuv ma'lumotlari topilmadi).</b>", parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error in handle_trigger_hourly_report_test: {e}")
         await message.answer(f"❌ Xatolik yuz berdi: {html.escape(str(e))}")
