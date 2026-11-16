@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://obviously-dealt-equipped-cooperative.trycloudflare.com/api/$1"
+      "dest": "https://sam-indianapolis-locations-heavily.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://obviously-dealt-equipped-cooperative.trycloudflare.com/uploads/$1"
+      "dest": "https://sam-indianapolis-locations-heavily.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
