@@ -61,54 +61,65 @@ def _save_last_hourly_sent_slot(slot_str: str) -> None:
         pass
 
 
-async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str) -> int:
+async def dispatch_hourly_location_reports(bot: Optional[Bot], session, hour_str: str) -> int:
     """
     Every 1 hour (at all hours ending in :00 EXCEPT 01:00, 02:00, 03:00, 04:00):
-    Dispatches hourly location safety reports to ORDINARY PARENTS ONLY via Main Bot (@child_security_bot).
-    STRICT CONSTRAINT: Owner Bot (@child_security_owner_bot) and Owner accounts (1, 6707839718)
-    NEVER receive child reports under any circumstances!
+    Dispatches hourly location safety reports to all parents via the Main Bot (@child_security_bot).
+    STRICT ROUTING RULE:
+    - Delivered EXCLUSIVELY via Main Bot (@child_security_bot).
+    - NEVER delivered via Owner Bot (@child_security_owner_bot).
+    - Parent accounts (including 6707839718 who is the parent of 997185613) receive reports in Main Bot.
     """
     from sqlalchemy import select
     from db.models import User, LocationLog
+    from api.telemetry import get_telegram_bot
+
+    # Ensure we use Main Bot instance
+    if bot is None or getattr(bot, "token", "") != settings.BOT_TOKEN:
+        main_bot = get_telegram_bot()
+        if main_bot:
+            bot = main_bot
+
+    if not bot:
+        logger.error("dispatch_hourly_location_reports: Main bot instance is not available")
+        return 0
 
     tz = TASHKENT_TZ
     now_tz = datetime.now(tz)
     now_utc = datetime.now(timezone.utc)
     total_sent = 0
 
-    # STRICT: Select ONLY ordinary parents. Owner (ID 1, 6707839718, role owner/admin) is 100% EXCLUDED!
+    # Query all users with parent or owner/admin roles who have children
     parents_res = await session.execute(
         select(User).where(
-            User.role == "parent",
-            User.id.notin_([1, 6707839718]),
+            User.role.in_(["parent", "owner", "admin"]),
             User.is_active == True
         )
     )
     raw_parents = list(parents_res.scalars().all())
-    parents = [
-        p for p in raw_parents
-        if p.id not in (1, 6707839718)
-        and p.role not in ("owner", "admin")
-        and (not p.username or p.username.lower() != (settings.OWNER_USERNAME or "").lower())
-    ]
 
-    if not parents:
-        return 0
+    handled_chat_ids = set()
 
-    handled_parent_ids = set()
+    for p in raw_parents:
+        # User ID 1 is the internal DB ID for Fayzbek whose real Telegram ID is 6707839718
+        target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
 
-    for p in parents:
-        if p.id in handled_parent_ids:
+        # Skip invalid or already handled telegram chat IDs
+        if target_chat_id <= 1000 or target_chat_id in handled_chat_ids:
             continue
-        handled_parent_ids.add(p.id)
+        handled_chat_ids.add(target_chat_id)
 
-        # Check notification toggle
-        parent_notif_enabled = await crud.is_parent_notification_enabled(p.id, "messages", session)
+        # Check if parent muted notifications in Main Bot
+        parent_notif_enabled = await crud.is_parent_notification_enabled(target_chat_id, "messages", session)
         if not parent_notif_enabled:
-            logger.info(f"Hourly reports skipped for parent {p.id}: notifications muted")
+            logger.info(f"Hourly reports skipped for parent {target_chat_id}: notifications muted")
             continue
 
+        # Get linked children for this parent
         children = await crud.get_children_for_parent(session, p.id)
+        if not children and target_chat_id == 6707839718:
+            children = (await crud.get_children_for_parent(session, 6707839718)) or (await crud.get_children_for_parent(session, 1))
+
         if not children:
             continue
 
@@ -223,7 +234,7 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str) -> 
                     [
                         InlineKeyboardButton(
                             text="🗺 Jonli xaritada ko'rish",
-                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={target_chat_id}&child_id={ch.id}")
                         )
                     ],
                     [
@@ -231,65 +242,85 @@ async def dispatch_hourly_location_reports(bot: Bot, session, hour_str: str) -> 
                     ]
                 ])
 
-                # ONLY send to ordinary parent via primary Main Bot (@child_security_bot)
+                # ONLY send to parent via Main Bot (@child_security_bot)
                 try:
-                    await bot.send_message(chat_id=p.id, text=msg, reply_markup=kb, parse_mode="HTML")
-                    logger.info(f"Dispatched hourly report for child {ch.id} to parent {p.id} via main bot")
+                    await bot.send_message(chat_id=target_chat_id, text=msg, reply_markup=kb, parse_mode="HTML")
+                    logger.info(f"Dispatched hourly report for child {ch.id} to parent chat {target_chat_id} via main bot")
                     total_sent += 1
                 except Exception as mb_err:
-                    logger.warning(f"Could not send hourly location via main bot to {p.id}: {mb_err}")
+                    logger.warning(f"Could not send hourly location via main bot to {target_chat_id}: {mb_err}")
 
             except Exception as e:
-                logger.error(f"Failed to send hourly location for child {ch.id} to parent {p.id}: {e}")
+                logger.error(f"Failed to send hourly location for child {ch.id} to parent {target_chat_id}: {e}")
 
     return total_sent
 
 
-async def dispatch_nightly_safety_reports(bot: Bot, session) -> int:
+async def dispatch_nightly_safety_reports(bot: Optional[Bot], session, force_target_id: Optional[int] = None) -> int:
     """
-    Sends midnight (00:00 Tashkent time UTC+5) safety report to ORDINARY PARENTS ONLY via Main Bot.
-    STRICT CONSTRAINT: Owner Bot (@child_security_owner_bot) and Owner accounts (1, 6707839718)
-    NEVER receive child reports under any circumstances!
+    Sends midnight (00:00 Tashkent time UTC+5) safety report to parents via Main Bot (@child_security_bot).
+    STRICT ROUTING RULE:
+    - Delivered EXCLUSIVELY via Main Bot (@child_security_bot).
+    - NEVER delivered via Owner Bot (@child_security_owner_bot).
+    - Parent accounts (including 6707839718) receive reports in Main Bot.
     """
     from sqlalchemy import select
     from db.models import User
+    from api.telemetry import get_telegram_bot
+
+    # Ensure we use Main Bot instance
+    if bot is None or getattr(bot, "token", "") != settings.BOT_TOKEN:
+        main_bot = get_telegram_bot()
+        if main_bot:
+            bot = main_bot
+
+    if not bot:
+        logger.error("dispatch_nightly_safety_reports: Main bot instance is not available")
+        return 0
 
     tz = TASHKENT_TZ
     now_tz = datetime.now(tz)
     today_str = now_tz.strftime("%Y-%m-%d")
     total_sent = 0
 
-    parents_res = await session.execute(
-        select(User).where(
-            User.role == "parent",
-            User.id.notin_([1, 6707839718]),
-            User.is_active == True
+    if force_target_id:
+        target_ids = [force_target_id]
+        if force_target_id in (1, 6707839718):
+            target_ids = [1, 6707839718]
+        parents_res = await session.execute(
+            select(User).where(User.id.in_(target_ids))
         )
-    )
-    raw_parents = list(parents_res.scalars().all())
-    parents = [
-        p for p in raw_parents
-        if p.id not in (1, 6707839718)
-        and p.role not in ("owner", "admin")
-        and (not p.username or p.username.lower() != (settings.OWNER_USERNAME or "").lower())
-    ]
+        raw_parents = list(parents_res.scalars().all())
+    else:
+        parents_res = await session.execute(
+            select(User).where(
+                User.role.in_(["parent", "owner", "admin"]),
+                User.is_active == True
+            )
+        )
+        raw_parents = list(parents_res.scalars().all())
 
-    if not parents:
+    if not raw_parents:
         return 0
 
-    handled_parent_ids = set()
+    handled_chat_ids = set()
 
-    for p in parents:
-        if p.id in handled_parent_ids:
+    for p in raw_parents:
+        target_chat_id = 6707839718 if p.id in (1, 6707839718) else p.id
+
+        if target_chat_id <= 1000 or target_chat_id in handled_chat_ids:
             continue
-        handled_parent_ids.add(p.id)
+        handled_chat_ids.add(target_chat_id)
 
-        parent_notif_enabled = await crud.is_parent_notification_enabled(p.id, "messages", session)
-        if not parent_notif_enabled:
-            logger.info(f"Nightly report skipped for parent {p.id}: notifications muted")
+        parent_notif_enabled = await crud.is_parent_notification_enabled(target_chat_id, "messages", session)
+        if not parent_notif_enabled and not force_target_id:
+            logger.info(f"Nightly report skipped for parent {target_chat_id}: notifications muted")
             continue
 
         children = await crud.get_children_for_parent(session, p.id)
+        if not children and target_chat_id == 6707839718:
+            children = (await crud.get_children_for_parent(session, 6707839718)) or (await crud.get_children_for_parent(session, 1))
+
         if not children:
             continue
 
@@ -365,7 +396,7 @@ async def dispatch_nightly_safety_reports(bot: Bot, session) -> int:
                     [
                         InlineKeyboardButton(
                             text="🗺 Xaritada marshrutni ko'rish",
-                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={p.id}&child_id={ch.id}")
+                            web_app=WebAppInfo(url=f"{settings.WEBAPP_BASE_URL}?role=parent&parent_id={target_chat_id}&child_id={ch.id}")
                         )
                     ],
                     [
@@ -377,16 +408,16 @@ async def dispatch_nightly_safety_reports(bot: Bot, session) -> int:
                     ]
                 ])
 
-                # ONLY send to ordinary parent via Main Bot (@child_security_bot)
+                # ONLY send to parent chat via Main Bot (@child_security_bot)
                 try:
-                    await bot.send_message(chat_id=p.id, text=report_msg, reply_markup=report_kb, parse_mode="HTML")
-                    logger.info(f"Dispatched nightly report for child {ch.id} to parent {p.id} via main bot")
+                    await bot.send_message(chat_id=target_chat_id, text=report_msg, reply_markup=report_kb, parse_mode="HTML")
+                    logger.info(f"Dispatched nightly report for child {ch.id} to parent {target_chat_id} via main bot")
                     total_sent += 1
                 except Exception as b_err:
-                    logger.warning(f"Could not send nightly report to {p.id} via main bot: {b_err}")
+                    logger.warning(f"Could not send nightly report to {target_chat_id} via main bot: {b_err}")
 
             except Exception as ch_err:
-                logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {p.id}: {ch_err}")
+                logger.error(f"Failed to dispatch nightly report for child {ch.id} to parent {target_chat_id}: {ch_err}")
 
     return total_sent
 
