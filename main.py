@@ -710,6 +710,7 @@ async def privacy_policy_view():
 
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 async def health_check():
     """Service health status endpoint."""
     is_postgres = "postgres" in settings.RESOLVED_DATABASE_URL.lower()
