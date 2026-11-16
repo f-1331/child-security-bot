@@ -61,9 +61,14 @@ async_session_maker = AsyncSessionLocal
 class Base(DeclarativeBase):
     pass
 
+_db_initialized = False
 
 async def init_db() -> None:
     """Initialize database tables schema and auto-seed if migrating."""
+    global _db_initialized
+    if _db_initialized:
+        return
+    _db_initialized = True
     async with engine.begin() as conn:
         # Import models so Base metadata has all tables registered
         import db.models  # noqa: F401

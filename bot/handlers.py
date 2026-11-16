@@ -8173,7 +8173,11 @@ async def on_toggle_parent_notif_cb(callback: CallbackQuery):
     action = callback.data.split(":")[1]
     user_id = callback.from_user.id
     async with AsyncSessionLocal() as session:
-        if action == "sos":
+        if action == "hourly_reports":
+            new_s = await crud.toggle_parent_notification_setting(user_id, "notify_hourly_reports", session)
+            is_on = new_s.get("notify_hourly_reports", True)
+            toast = "🕒 Soatlik hisobotlar (:00) YOQILDI!\nHar soat :00 da xabarlar keladi." if is_on else "🔕 Soatlik hisobotlar (:00) O'CHIRILDI!\nEndi soatlik xabarlar kelmaydi."
+        elif action == "sos":
             await crud.toggle_parent_notification_setting(user_id, "notify_sos", session)
             toast = "🚨 SOS xabarlari holati o'zgartirildi!"
         elif action == "messages":
@@ -8197,10 +8201,55 @@ async def on_toggle_parent_notif_cb(callback: CallbackQuery):
     html_text = format_parent_notification_settings_html(settings)
     kb = get_parent_notifications_inline_keyboard(settings)
     try:
-        await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+        if callback.message and callback.message.reply_markup:
+            has_settings_btns = any("toggle_parent_notif:sos" in str(b) for row in callback.message.reply_markup.inline_keyboard for b in row)
+            if has_settings_btns:
+                await callback.message.edit_text(html_text, reply_markup=kb, parse_mode="HTML")
+            else:
+                is_hourly_on = settings.get("notify_hourly_reports", True)
+                toggle_btn_text = "🔕 Soatlikni o'chirish" if is_hourly_on else "🔔 Soatlikni yoqish"
+                new_rows = []
+                for row in callback.message.reply_markup.inline_keyboard:
+                    new_row = []
+                    for btn in row:
+                        if btn.callback_data == "toggle_parent_notif:hourly_reports":
+                            new_row.append(InlineKeyboardButton(text=toggle_btn_text, callback_data="toggle_parent_notif:hourly_reports"))
+                        else:
+                            new_row.append(btn)
+                    new_rows.append(new_row)
+                await callback.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows))
     except Exception:
         pass
-    await callback.answer(toast)
+    await callback.answer(toast, show_alert=True)
+
+
+@router.message(Command("hourly", "soatlik"))
+async def cmd_toggle_hourly_reports(message: Message):
+    user_id = message.from_user.id
+    async with AsyncSessionLocal() as session:
+        new_s = await crud.toggle_parent_notification_setting(user_id, "notify_hourly_reports", session)
+    is_on = new_s.get("notify_hourly_reports", True)
+    if is_on:
+        txt = (
+            "🕒 <b>Soatlik joylashuv hisobotlari (:00) YOQILDI!</b>\n\n"
+            "Endi sizga har soat oxiri :00 da (00:00, 05:00 dan 23:00 gacha) bolangizning joriy manzili, "
+            "tezligi va harakat yo'li xabari avtomatik yuboriladi.\n\n"
+            "<i>Istalgan paytda pastdagi tugma orqali o'chirib qo'yishingiz mumkin:</i>"
+        )
+        btn_txt = "🔕 Soatlik hisobotlarni o'chirish"
+    else:
+        txt = (
+            "🔕 <b>Soatlik joylashuv hisobotlari (:00) O'CHIRILDI!</b>\n\n"
+            "Endi sizga har soat :00 da muntazam hisobotlar kelmaydi va bezovta qilmaydi.\n"
+            "(SOS va xavfli geozona signallari esa odatdagidek kelishda davom etadi).\n\n"
+            "<i>Istalgan paytda pastdagi tugma orqali qayta yoqishingiz mumkin:</i>"
+        )
+        btn_txt = "🔔 Soatlik hisobotlarni yoqish"
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=btn_txt, callback_data="toggle_parent_notif:hourly_reports")],
+        [InlineKeyboardButton(text="⚙️ Barcha bildirishnomalar", callback_data="parent_notifications_menu")]
+    ])
+    await message.answer(txt, reply_markup=kb, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "back_to_settings")

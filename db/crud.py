@@ -1987,14 +1987,16 @@ async def get_parent_notification_settings(parent_id: int, session: Optional[Asy
         keys = [
             f"parent_{parent_id}_notify_sos",
             f"parent_{parent_id}_notify_messages",
-            f"parent_{parent_id}_notify_geofence"
+            f"parent_{parent_id}_notify_geofence",
+            f"parent_{parent_id}_notify_hourly_reports"
         ]
         result = await session.execute(select(SystemSetting).where(SystemSetting.key.in_(keys)))
         rows = result.scalars().all()
         current = {
             "notify_sos": True,
             "notify_messages": True,
-            "notify_geofence": True
+            "notify_geofence": True,
+            "notify_hourly_reports": True
         }
         for row in rows:
             clean_k = row.key.replace(f"parent_{parent_id}_", "")
@@ -2002,7 +2004,7 @@ async def get_parent_notification_settings(parent_id: int, session: Optional[Asy
                 current[clean_k] = str(row.value).strip().lower() in ("true", "1", "yes", "on")
         return current
     except Exception:
-        return {"notify_sos": True, "notify_messages": True, "notify_geofence": True}
+        return {"notify_sos": True, "notify_messages": True, "notify_geofence": True, "notify_hourly_reports": True}
     finally:
         if should_close:
             await session.close()
@@ -2060,7 +2062,7 @@ async def toggle_parent_notification_setting(parent_id: int, setting_name: str, 
 
 async def set_all_parent_notification_settings(parent_id: int, enabled: bool, session: Optional[AsyncSession] = None) -> dict[str, bool]:
     """Set all notification toggles for a parent at once."""
-    for s_name in ("notify_sos", "notify_messages", "notify_geofence"):
+    for s_name in ("notify_sos", "notify_messages", "notify_geofence", "notify_hourly_reports"):
         await update_parent_notification_setting(parent_id, s_name, enabled, session)
     return await get_parent_notification_settings(parent_id, session)
 
@@ -2077,6 +2079,8 @@ async def is_parent_notification_enabled(parent_id: int, notification_type: str 
     if parent_id in (1, 6707839718):
         if notification_type in ("sos", "notify_sos"):
             return await is_notify_owner_sos_enabled(session)
+        elif notification_type in ("hourly_reports", "notify_hourly_reports"):
+            return s.get("notify_hourly_reports", True)
         else:
             return await is_notify_owner_enabled(session)
 

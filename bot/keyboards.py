@@ -827,10 +827,12 @@ def get_ambient_sound_inline_keyboard(child_id: int) -> InlineKeyboardMarkup:
 
 def format_parent_notification_settings_html(settings_dict: dict[str, bool]) -> str:
     """Format HTML report of parent's personal notification preferences."""
+    hourly_on = settings_dict.get("notify_hourly_reports", True)
     sos_on = settings_dict.get("notify_sos", True)
     msg_on = settings_dict.get("notify_messages", True)
     geo_on = settings_dict.get("notify_geofence", True)
 
+    hourly_badge = "🟢 <b>YOQILGAN (Har soat :00 da keladi)</b>" if hourly_on else "🔴 <b>OʻCHIRILGAN (Kelmeydi)</b>"
     sos_badge = "🟢 <b>YOQILGAN (Xabarlar keladi)</b>" if sos_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
     msg_badge = "🟢 <b>YOQILGAN (Xabarlar keladi)</b>" if msg_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
     geo_badge = "🟢 <b>YOQILGAN (Signallar keladi)</b>" if geo_on else "🔴 <b>OʻCHIRILGAN (Mute qilingan)</b>"
@@ -839,6 +841,9 @@ def format_parent_notification_settings_html(settings_dict: dict[str, bool]) -> 
         "🔔 <b>XABARNOMALAR VA BILDIRISHNOMALAR SOZLAMASI</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "<i>Farzandingizdan keladigan bildirishnomalar oqimini mustaqil boshqaring:</i>\n\n"
+        f"🕒 <b>Soatlik joylashuv hisobotlari (:00):</b>\n"
+        f"Holat: {hourly_badge}\n"
+        "<i>(Har soat oxiri :00 da bolaning joriy manzili, tezligi va xaritasini yuborish)</i>\n\n"
         f"🚨 <b>SOS xavf signallari:</b>\n"
         f"Holat: {sos_badge}\n"
         "<i>(Farzand favqulodda SOS bosganda keladigan shoshilinch xabar va sirenalar)</i>\n\n"
@@ -855,12 +860,19 @@ def format_parent_notification_settings_html(settings_dict: dict[str, bool]) -> 
 
 def get_parent_notifications_inline_keyboard(settings_dict: dict[str, bool]) -> InlineKeyboardMarkup:
     """Keyboard for parent toggling personal notifications."""
+    hourly_on = settings_dict.get("notify_hourly_reports", True)
     sos_on = settings_dict.get("notify_sos", True)
     msg_on = settings_dict.get("notify_messages", True)
     geo_on = settings_dict.get("notify_geofence", True)
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{'🟢 YOQILGAN' if hourly_on else '🔴 OʻCHIRILGAN'} | 🕒 Soatlik hisobotlar (:00)",
+                    callback_data="toggle_parent_notif:hourly_reports"
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text=f"{'🟢 YOQILGAN' if sos_on else '🔴 OʻCHIRILGAN'} | 🚨 SOS xavf",

@@ -109,10 +109,10 @@ async def dispatch_hourly_location_reports(bot: Optional[Bot], session, hour_str
             continue
         handled_chat_ids.add(target_chat_id)
 
-        # Check if parent muted notifications in Main Bot
-        parent_notif_enabled = await crud.is_parent_notification_enabled(target_chat_id, "messages", session)
-        if not parent_notif_enabled:
-            logger.info(f"Hourly reports skipped for parent {target_chat_id}: notifications muted")
+        # Check if parent muted hourly reports in Main Bot
+        parent_hourly_enabled = await crud.is_parent_notification_enabled(target_chat_id, "hourly_reports", session)
+        if not parent_hourly_enabled:
+            logger.info(f"Hourly reports skipped for parent {target_chat_id}: hourly reports disabled by parent")
             continue
 
         # Get linked children for this parent
@@ -230,6 +230,10 @@ async def dispatch_hourly_location_reports(bot: Optional[Bot], session, hour_str
                     f"🗺 <a href=\"{maps_url}\">Xaritada ochish (Google Maps)</a>"
                 )
 
+                parent_s = await crud.get_parent_notification_settings(target_chat_id, session)
+                is_hourly_on = parent_s.get("notify_hourly_reports", True)
+                toggle_btn_text = "🔕 Soatlikni o'chirish" if is_hourly_on else "🔔 Soatlikni yoqish"
+
                 kb = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
@@ -238,7 +242,8 @@ async def dispatch_hourly_location_reports(bot: Optional[Bot], session, hour_str
                         )
                     ],
                     [
-                        InlineKeyboardButton(text="🔔 Signal chalish", callback_data=f"siren_child_{ch.id}")
+                        InlineKeyboardButton(text="🔔 Signal chalish", callback_data=f"siren_child_{ch.id}"),
+                        InlineKeyboardButton(text=toggle_btn_text, callback_data="toggle_parent_notif:hourly_reports")
                     ]
                 ])
 
