@@ -4029,8 +4029,20 @@ function renderHistoryToMapAndList(points) {
     if (container) {
       container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
     }
-    if (routeLayerGroup) routeLayerGroup.clearLayers();
-    if (repeatsLayerGroup) repeatsLayerGroup.clearLayers();
+    if (routeLayerGroup) {
+      routeLayerGroup.clearLayers();
+      if (map && map.hasLayer(routeLayerGroup)) {
+        try { map.removeLayer(routeLayerGroup); } catch (e) {}
+      }
+    }
+    if (repeatsLayerGroup) {
+      repeatsLayerGroup.clearLayers();
+      if (map && map.hasLayer(repeatsLayerGroup)) {
+        try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+      }
+    }
+    calculateRouteStats([]);
+    updateRouteButtonsState();
     return;
   }
 
@@ -5037,7 +5049,7 @@ async function toggleRouteHistory(forceState) {
 
   if (isRouteVisible) {
     showToast("🗺️ Harakat yo'li xaritada ko'rsatilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0 || !routeLayerGroup || routeLayerGroup.getLayers().length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !routeLayerGroup) {
       await loadRouteHistory(currentChildId);
     } else {
       if (map && routeLayerGroup && !map.hasLayer(routeLayerGroup)) {
@@ -5098,7 +5110,7 @@ async function toggleRepeatedPlaces(forceState) {
 
   if (isRepeatedPlacesVisible) {
     showToast("🔁 Qayta yurilgan joylar tekshirilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0 || !repeatsLayerGroup || repeatsLayerGroup.getLayers().length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !repeatsLayerGroup) {
       await loadRouteHistory(currentChildId);
     } else {
       if (map && repeatsLayerGroup && !map.hasLayer(repeatsLayerGroup)) {
