@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://griffin-sao-doll-organisms.trycloudflare.com/api/$1"
+      "dest": "https://casino-disks-auburn-cash.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://griffin-sao-doll-organisms.trycloudflare.com/uploads/$1"
+      "dest": "https://casino-disks-auburn-cash.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
