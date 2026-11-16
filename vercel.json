@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://raises-institutional-clubs-causes.trycloudflare.com/api/$1"
+      "dest": "https://griffin-sao-doll-organisms.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://raises-institutional-clubs-causes.trycloudflare.com/uploads/$1"
+      "dest": "https://griffin-sao-doll-organisms.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
