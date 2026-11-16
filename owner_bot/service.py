@@ -790,16 +790,20 @@ async def trigger_remote_screen_lock(child_id: int, lock: bool) -> bool:
 async def perform_global_keyboards_refresh(bot: Optional[Bot], session: AsyncSession) -> Tuple[int, int]:
     """
     Sends updated reply keyboard to all active parents and children.
+    Always uses the main client bot (@child_security_bot) so owner_bot is NEVER corrupted with parent keyboards.
     Returns (success_count, fail_count).
     """
     from db.models import User
     from sqlalchemy import select
+    from config import settings
     from bot.keyboards import get_parent_main_keyboard, get_child_main_keyboard, get_role_selection_keyboard
 
-    target_bot = bot or get_main_bot()
+    # Must prefer main client bot (@child_security_bot) where client users actually reside
+    target_bot = get_main_bot() or bot
     if not target_bot:
         return 0, 0
 
+    owner_id = getattr(settings, "OWNER_ID", 6707839718)
     res = await session.execute(select(User).where(User.is_active == True))
     users = res.scalars().all()
     success_count = 0
@@ -815,6 +819,10 @@ async def perform_global_keyboards_refresh(bot: Optional[Bot], session: AsyncSes
     )
 
     for u in users:
+        # Never send parent/child client keyboard to owner via owner_bot!
+        if u.id == owner_id and target_bot != get_main_bot():
+            continue
+
         if u.role == "parent":
             kb = get_parent_main_keyboard(u.id)
         elif u.role == "child":
@@ -878,8 +886,8 @@ async def perform_global_factory_reset(bot: Optional[Bot], session: AsyncSession
     await session.commit()
     reset_count = res.rowcount if hasattr(res, "rowcount") else 0
 
-    # 3. Notify all users with fresh onboarding keyboard (exclude owner)
-    target_bot = bot or get_main_bot()
+    # 3. Notify all users with fresh onboarding keyboard via main bot (exclude owner)
+    target_bot = get_main_bot() or bot
     notified_count = 0
     if target_bot:
         users_res = await session.execute(select(User).where(User.is_active == True, User.id != owner_id))

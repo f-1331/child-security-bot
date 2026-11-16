@@ -1518,9 +1518,13 @@ async def handle_reset_keyboards_callback(callback: CallbackQuery, bot: Bot, aut
         f"✅ <b>BARCHADA BOT MENYUSI YANGILANDI VA RESET QILINDI!</b>\n\n"
         f"• 🟢 Yangilangan foydalanuvchilar: <b>{success} ta</b>\n"
         f"• 🔴 Yetib bormaganlar: <b>{fails} ta</b>\n\n"
-        f"Barcha foydalanuvchilarning chatida so'nggi tugmalar va xavfsizlik menyusi tiklandi.",
-        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        f"Barcha foydalanuvchilarning @child_security_bot chatida so'nggi tugmalar va xavfsizlik menyusi tiklandi.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy panel", callback_data="adm_back_main")]]),
         parse_mode="HTML"
+    )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
     )
     await callback.answer("Muvaffaqiyatli yangilandi!")
 
@@ -1536,8 +1540,12 @@ async def handle_reset_cache_sos_callback(callback: CallbackQuery, auth_info: Di
         f"✅ <b>KESH VA SOS SIGNALLARI TOZALANDI!</b>\n\n"
         f"• O'chirilgan faol SOS signallari: <b>{res['cleared_sos']} ta</b>\n"
         f"• Tizim sessiyalari to'liq normallashtirildi.",
-        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy panel", callback_data="adm_back_main")]]),
         parse_mode="HTML"
+    )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
     )
     await callback.answer("Tozalandi!")
 
@@ -1572,8 +1580,12 @@ async def handle_reset_confirm_factory_callback(callback: CallbackQuery, bot: Bo
         f"• 👤 Qayta tiklangan hisoblar: <b>{reset_count} ta</b>\n"
         f"• 📨 /start bildirishnomasi bordi: <b>{notified} ta</b>\n\n"
         f"Barcha ulanishlar uzildi va foydalanuvchilar qayta ro'yxatdan o'tish holatiga o'tkazildi.",
-        reply_markup=get_owner_main_keyboard(auth_info["is_owner"]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy panel", callback_data="adm_back_main")]]),
         parse_mode="HTML"
+    )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
     )
     await callback.answer("Factory Reset yakunlandi!")
 
@@ -1842,6 +1854,10 @@ async def cb_global_reset_keyboards(callback: CallbackQuery, bot: Bot, auth_info
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
         parse_mode="HTML"
     )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli faol:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
+    )
     await callback.answer("Klaviaturalar yangilandi!")
 
 
@@ -1859,6 +1875,10 @@ async def cb_global_reset_cache_sos(callback: CallbackQuery, auth_info: Dict[str
         f"🟢 Barcha tizim kesh xotirasi yangilandi.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
         parse_mode="HTML"
+    )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli faol:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
     )
     await callback.answer("Kesh tozalandi!")
 
@@ -1894,6 +1914,10 @@ async def cb_confirm_factory_reset(callback: CallbackQuery, bot: Bot, auth_info:
         f"Tizim to'liq boshlang'ich holatga keltirildi.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Asosiy menyu", callback_data="adm_back_main")]]),
         parse_mode="HTML"
+    )
+    await callback.message.answer(
+        "👑 <b>Asoschi boshqaruv paneli faol:</b>",
+        reply_markup=get_owner_main_keyboard(auth_info["is_owner"])
     )
     await callback.answer("Factory reset bajarildi!", show_alert=True)
 
