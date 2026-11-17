@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://collected-lafayette-questionnaire-awareness.trycloudflare.com/api/$1"
+      "dest": "https://outlined-introduced-studios-abilities.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://collected-lafayette-questionnaire-awareness.trycloudflare.com/uploads/$1"
+      "dest": "https://outlined-introduced-studios-abilities.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
