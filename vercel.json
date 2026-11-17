@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://child-security-uz.loca.lt/api/$1"
+      "dest": "https://honest-penguin-2.loca.lt/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://child-security-uz.loca.lt/uploads/$1"
+      "dest": "https://honest-penguin-2.loca.lt/uploads/$1"
     },
     {
       "src": "/(.*)",
