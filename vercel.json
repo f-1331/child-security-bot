@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://omaha-excluded-skiing-ppc.trycloudflare.com/api/$1"
+      "dest": "https://amp-josh-describes-draft.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://omaha-excluded-skiing-ppc.trycloudflare.com/uploads/$1"
+      "dest": "https://amp-josh-describes-draft.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
