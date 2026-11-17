@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://52fc4b91f444ab.app.lhr.life/api/$1"
+      "dest": "https://child-security-uz.loca.lt/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://52fc4b91f444ab.app.lhr.life/uploads/$1"
+      "dest": "https://child-security-uz.loca.lt/uploads/$1"
     },
     {
       "src": "/(.*)",
