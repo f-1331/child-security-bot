@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://technique-finance-mercy-detected.trycloudflare.com/api/$1"
+      "dest": "https://3de9c29bceeac0.app.lhr.life/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://technique-finance-mercy-detected.trycloudflare.com/uploads/$1"
+      "dest": "https://3de9c29bceeac0.app.lhr.life/uploads/$1"
     },
     {
       "src": "/(.*)",
