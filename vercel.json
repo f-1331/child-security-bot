@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://popular-turtle-42.loca.lt/api/$1"
+      "dest": "https://child-security-uz.loca.lt/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://popular-turtle-42.loca.lt/uploads/$1"
+      "dest": "https://child-security-uz.loca.lt/uploads/$1"
     },
     {
       "src": "/(.*)",
