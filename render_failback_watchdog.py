@@ -9,13 +9,17 @@ import time
 from pathlib import Path
 import httpx
 
+BASE_DIR = Path(__file__).resolve().parent
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s : %(message)s"
+    format="%(asctime)s | %(levelname)-8s | %(name)s : %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(BASE_DIR / "watchdog.log", encoding="utf-8")
+    ]
 )
 logger = logging.getLogger("ha_failover_watchdog")
-
-BASE_DIR = Path(__file__).resolve().parent
 RENDER_URL = "https://child-security-site.onrender.com"
 RENDER_HEALTH_URL = f"{RENDER_URL}/health"
 LOCAL_HEALTH_URL = "http://127.0.0.1:8000/health"
@@ -56,7 +60,7 @@ def get_current_vercel_target() -> str:
             content = f.read()
         if "child-security-site.onrender.com" in content:
             return "RENDER"
-        elif "trycloudflare.com" in content:
+        elif any(d in content for d in ["trycloudflare.com", "lhr.life", "loca.lt"]):
             return "TUNNEL"
     except Exception:
         pass
@@ -69,7 +73,7 @@ def get_active_tunnel_url() -> str:
         try:
             with open(tunnel_file, "r", encoding="utf-8") as f:
                 url = f.read().strip()
-                if url.startswith("https://") and "trycloudflare.com" in url:
+                if url.startswith("https://"):
                     return url
         except Exception:
             pass
@@ -86,7 +90,7 @@ def update_vercel_route(new_target_url: str, target_name: str) -> bool:
         with open(vercel_path, "r", encoding="utf-8") as f:
             content = f.read()
 
-        old_pattern = r'https://[a-zA-Z0-9\.\-]+\.(?:onrender\.com|trycloudflare\.com)'
+        old_pattern = r'https://[a-zA-Z0-9\.\-]+(?:\.onrender\.com|\.trycloudflare\.com|\.app\.lhr\.life|\.loca\.lt)'
         new_content = re.sub(old_pattern, new_target_url, content)
 
         if new_content == content:
@@ -98,9 +102,10 @@ def update_vercel_route(new_target_url: str, target_name: str) -> bool:
 
         logger.info(f"Updated vercel.json target -> {new_target_url}")
 
-        subprocess.run(["git", "add", "vercel.json"], cwd=str(BASE_DIR), check=True)
-        subprocess.run(["git", "commit", "-m", f"chore(ha-failover): auto-route to {target_name} ({new_target_url})"], cwd=str(BASE_DIR), check=True)
-        subprocess.run(["git", "push", "origin", "main"], cwd=str(BASE_DIR), check=True)
+        subprocess.run(["git", "add", "vercel.json"], cwd=str(BASE_DIR), stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=True)
+        subprocess.run(["git", "commit", "-m", f"chore(ha-failover): auto-route to {target_name} ({new_target_url})"], cwd=str(BASE_DIR), stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=True)
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=str(BASE_DIR), stdin=subprocess.DEVNULL, capture_output=True, timeout=15, check=False)
+        subprocess.run(["git", "push", "origin", "main"], cwd=str(BASE_DIR), stdin=subprocess.DEVNULL, capture_output=True, timeout=20, check=True)
         logger.info(f"✅ Successfully pushed route switch to GitHub -> {target_name}")
         return True
     except Exception as e:
