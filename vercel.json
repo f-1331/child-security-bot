@@ -176,11 +176,11 @@
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://amp-josh-describes-draft.trycloudflare.com/api/$1"
+      "dest": "https://components-bids-protocols-milwaukee.trycloudflare.com/api/$1"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://amp-josh-describes-draft.trycloudflare.com/uploads/$1"
+      "dest": "https://components-bids-protocols-milwaukee.trycloudflare.com/uploads/$1"
     },
     {
       "src": "/(.*)",
