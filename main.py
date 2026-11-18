@@ -852,13 +852,30 @@ async def telegram_owner_webhook(
     return {"ok": True}
 
 
+async def _align_to_exact_top_of_hour(max_wait_sec: float = 285.0) -> None:
+    """When triggered a few minutes early (XX:55..XX:59 to cancel Vercel Hobby jitter),
+    sleep until exact :00:00 Tashkent time so reports arrive right on the hour."""
+    from datetime import datetime, timedelta
+    from bot.scheduler import TASHKENT_TZ
+
+    now_tz = datetime.now(TASHKENT_TZ)
+    if now_tz.minute >= 50:
+        next_hour = (now_tz + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        wait_sec = (next_hour - now_tz).total_seconds()
+        if 0 < wait_sec <= max_wait_sec:
+            logger.info(f"Aligning cron dispatch to exact {next_hour.strftime('%H:%M:%S')} (waiting {wait_sec:.1f}s)...")
+            await asyncio.sleep(wait_sec)
+
+
 @app.api_route("/api/cron/hourly", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)
 async def cron_hourly_reports(request: Request):
-    """Vercel Schedule target: Hourly location updates (skips 01:00-04:00 Tashkent time)."""
+    """Vercel Schedule target: Hourly location updates at exact :00 (skips 01:00-04:00 Tashkent time)."""
     _verify_cron_auth(request)
     from datetime import datetime
     from bot.scheduler import TASHKENT_TZ, dispatch_hourly_location_reports
     from db.database import AsyncSessionLocal
+
+    await _align_to_exact_top_of_hour()
 
     now_tz = datetime.now(TASHKENT_TZ)
     if now_tz.hour in (1, 2, 3, 4):
@@ -868,22 +885,24 @@ async def cron_hourly_reports(request: Request):
     async with AsyncSessionLocal() as session:
         sent = await dispatch_hourly_location_reports(main_bot, session, f"{now_tz.hour:02d}")
         await session.commit()
-    return {"status": "ok", "dispatched": sent, "local_time": now_tz.strftime("%Y-%m-%d %H:%M")}
+    return {"status": "ok", "dispatched": sent, "local_time": now_tz.strftime("%Y-%m-%d %H:%M:%S")}
 
 
 @app.api_route("/api/cron/nightly", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)
 async def cron_nightly_reports(request: Request):
-    """Vercel Schedule target: Midnight daily safety report (00:00 Tashkent time)."""
+    """Vercel Schedule target: Midnight daily safety report at exact 00:00 Tashkent time."""
     _verify_cron_auth(request)
     from datetime import datetime
     from bot.scheduler import TASHKENT_TZ, dispatch_nightly_safety_reports
     from db.database import AsyncSessionLocal
 
+    await _align_to_exact_top_of_hour()
+
     main_bot, _, _, _ = await _ensure_serverless_bots()
     async with AsyncSessionLocal() as session:
         sent = await dispatch_nightly_safety_reports(main_bot, session)
         await session.commit()
-    return {"status": "ok", "dispatched": sent, "local_time": datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d %H:%M")}
+    return {"status": "ok", "dispatched": sent, "local_time": datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d %H:%M:%S")}
 
 
 @app.api_route("/api/cron/walksafe", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)

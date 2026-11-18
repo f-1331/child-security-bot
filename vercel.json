@@ -200,13 +200,13 @@
   ],
   "schedules": {
     "hourly-location": {
-      "schedule": "0 * * * *",
+      "schedule": "55 * * * *",
       "timezone": "Asia/Tashkent",
       "path": "/api/cron/hourly",
       "requestMethod": "POST"
     },
     "nightly-report": {
-      "schedule": "0 0 * * *",
+      "schedule": "55 23 * * *",
       "timezone": "Asia/Tashkent",
       "path": "/api/cron/nightly",
       "requestMethod": "POST"
