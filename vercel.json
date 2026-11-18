@@ -1,6 +1,10 @@
-﻿{
+{
   "version": 2,
   "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
+    },
     {
       "src": "webapp/**",
       "use": "@vercel/static"
@@ -175,12 +179,16 @@
       "status": 302
     },
     {
+      "src": "/health",
+      "dest": "api/index.py"
+    },
+    {
       "src": "/api/(.*)",
-      "dest": "https://gentle-dog-99.loca.lt/api/$1"
+      "dest": "api/index.py"
     },
     {
       "src": "/uploads/(.*)",
-      "dest": "https://gentle-dog-99.loca.lt/uploads/$1"
+      "dest": "api/index.py"
     },
     {
       "src": "/(.*)",
@@ -189,5 +197,25 @@
       },
       "dest": "/webapp/$1"
     }
-  ]
+  ],
+  "schedules": {
+    "hourly-location": {
+      "schedule": "0 * * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/hourly",
+      "requestMethod": "POST"
+    },
+    "nightly-report": {
+      "schedule": "0 0 * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/nightly",
+      "requestMethod": "POST"
+    },
+    "walksafe-check": {
+      "schedule": "*/15 * * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/walksafe",
+      "requestMethod": "POST"
+    }
+  }
 }

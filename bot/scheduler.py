@@ -21,8 +21,9 @@ logger = logging.getLogger("scheduler")
 # Robust local Tashkent timezone (UTC+5) that never fails even on systems without tzdata
 TASHKENT_TZ = timezone(timedelta(hours=5))
 
-NIGHTLY_STATE_FILE = os.path.join(settings.BASE_DIR, "nightly_report_state.txt")
-HOURLY_STATE_FILE = os.path.join(settings.BASE_DIR, "hourly_report_state.txt")
+_STATE_DIR = "/tmp" if os.environ.get("VERCEL") else settings.BASE_DIR
+NIGHTLY_STATE_FILE = os.path.join(_STATE_DIR, "nightly_report_state.txt")
+HOURLY_STATE_FILE = os.path.join(_STATE_DIR, "hourly_report_state.txt")
 
 
 def _get_last_nightly_sent_date() -> Optional[str]:
@@ -583,3 +584,50 @@ async def run_nightly_and_walksafe_worker(bot: Bot):
             logger.error(f"Scheduler worker error: {err}")
 
         await asyncio.sleep(5)
+
+
+async def check_walksafe_deadlines_once(bot: Bot) -> int:
+    """Single serverless pass checking expired Walk Safe deadlines (for Vercel Schedules)."""
+    from sqlalchemy import select
+    from db.models import User
+
+    alerts_sent = 0
+    now_utc = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        active_ws_res = await session.execute(
+            select(User).where(
+                User.walk_safe_active == True,
+                User.walk_safe_deadline != None
+            )
+        )
+        active_ws_children = list(active_ws_res.scalars().all())
+        for ch in active_ws_children:
+            if not ch.walk_safe_deadline:
+                continue
+            ch_deadline = ch.walk_safe_deadline
+            if ch_deadline.tzinfo is None:
+                ch_deadline = ch_deadline.replace(tzinfo=timezone.utc)
+            if ch_deadline < now_utc:
+                parents = await crud.get_parents_for_child(session, ch.id)
+                ch_name_esc = html.escape(ch.full_name or f"Farzand #{ch.id}")
+                dest_esc = html.escape(ch.walk_safe_destination or "Uyga qaytish")
+                latest_loc = await crud.get_latest_location(session, ch.id)
+                maps_url = (
+                    f"https://www.google.com/maps/search/?api=1&query={latest_loc.latitude},{latest_loc.longitude}"
+                    if latest_loc else None
+                )
+                warn_msg = (
+                    f"🚨 <b>DIQQAT: XAVFSIZ YO'L VAQTI TUGADI!</b>\n\n"
+                    f"Farzandingiz <b>{ch_name_esc}</b> «Xavfsiz yo'l» (<b>{dest_esc}</b>) rejimida belgilangan vaqt ichida yetib borganini tasdiqlamadi!\n\n"
+                    + (f"📍 Oxirgi joylashuvi: <a href=\"{maps_url}\">Google Maps orqali ko'rish</a>\n\n" if maps_url else "")
+                    + "Iltimos, farzandingiz bilan zudlik bilan bog'laning!"
+                )
+                for p in parents:
+                    try:
+                        await bot.send_message(chat_id=p.id, text=warn_msg, parse_mode="HTML")
+                        if latest_loc:
+                            await bot.send_location(chat_id=p.id, latitude=latest_loc.latitude, longitude=latest_loc.longitude)
+                        alerts_sent += 1
+                    except Exception as e:
+                        logger.error(f"Failed to alert parent {p.id} of Walk Safe timeout: {e}")
+    return alerts_sent

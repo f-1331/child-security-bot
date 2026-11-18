@@ -150,7 +150,8 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database schema...")
     await init_db()
     logger.info("Database initialized successfully.")
-    asyncio.create_task(ensure_cached_apk())
+    if not os.environ.get("VERCEL"):
+        asyncio.create_task(ensure_cached_apk())
     yield
     logger.info("Application shutting down...")
 
@@ -165,12 +166,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Content-Security-Policy"] = (
-            "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app;"
+            "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app https://*.tgcloud.ai;"
         )
         response.headers["Permissions-Policy"] = (
-            "camera=(self \"https://child-security-bot.vercel.app\"), "
-            "geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\"), "
-            "microphone=(self \"https://child-security-bot.vercel.app\")"
+            "camera=(self \"https://child-security-bot.vercel.app\" \"https://app8899084854.tgcloud.ai\"), "
+            "geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\"), "
+            "microphone=(self \"https://child-security-bot.vercel.app\" \"https://app8899084854.tgcloud.ai\")"
         )
         if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -188,6 +189,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://child-security-bot.vercel.app",
+        "https://app8899084854.tgcloud.ai",
         "https://child-security-site.onrender.com",
         "http://localhost:8000",
         "http://localhost:5173",
@@ -342,11 +344,12 @@ async def neon_status_endpoint():
 
 # Mount WebApp Static Directory under both /child_security_site and /webapp
 webapp_path = Path(__file__).resolve().parent / "webapp"
-app.mount("/child_security_site", StaticFiles(directory=str(webapp_path), html=True), name="child_security_site")
-app.mount("/webapp", StaticFiles(directory=str(webapp_path), html=True), name="webapp")
+if webapp_path.exists():
+    app.mount("/child_security_site", StaticFiles(directory=str(webapp_path), html=True), name="child_security_site")
+    app.mount("/webapp", StaticFiles(directory=str(webapp_path), html=True), name="webapp")
 
-# Mount Uploads directory for task photos and videos
-uploads_path = Path(__file__).resolve().parent / "uploads"
+# Mount Uploads directory for task photos and videos (use /tmp on read-only Vercel serverless)
+uploads_path = Path("/tmp/uploads") if os.environ.get("VERCEL") else (Path(__file__).resolve().parent / "uploads")
 uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
@@ -719,9 +722,179 @@ async def health_check():
         "service": "Smart Parental Tracker",
         "database_engine": "postgresql" if is_postgres else "sqlite",
         "database_persisted": is_postgres,
+        "runtime": "vercel-serverless" if os.environ.get("VERCEL") else "server",
         "timezone": settings.TIMEZONE,
-        "version": "v83-arch-17-fixes"
+        "version": "v84-serverless-hybrid"
     }
+
+
+# ==============================================================================
+# SERVERLESS WEBHOOK & SCHEDULED CRON ENDPOINTS (Vercel + tgcloud Bridge)
+# ==============================================================================
+import hashlib
+from aiogram.types import Update as TelegramUpdate
+
+_serverless_main_bot: Optional[Bot] = None
+_serverless_main_dp: Optional[Dispatcher] = None
+_serverless_owner_bot: Optional[Bot] = None
+_serverless_owner_dp: Optional[Dispatcher] = None
+
+
+def _get_webhook_secret() -> str:
+    env_secret = os.environ.get("WEBHOOK_SECRET", "").strip()
+    if env_secret:
+        return env_secret
+    return hashlib.sha256((settings.BOT_TOKEN or "fallback").encode("utf-8")).hexdigest()[:32]
+
+
+def _get_cron_secret() -> str:
+    env_secret = os.environ.get("CRON_SECRET", "").strip()
+    if env_secret:
+        return env_secret
+    return hashlib.sha256(f"cron:{settings.BOT_TOKEN}".encode("utf-8")).hexdigest()[:32]
+
+
+async def _ensure_serverless_bots():
+    """Lazily initialize Main Bot & Owner Bot dispatchers for serverless webhook/cron invocations."""
+    global _serverless_main_bot, _serverless_main_dp, _serverless_owner_bot, _serverless_owner_dp
+    await init_db()
+
+    if _serverless_main_bot is None or _serverless_main_dp is None:
+        _serverless_main_bot = Bot(
+            token=settings.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        set_bot_instance(_serverless_main_bot)
+        set_main_bot(_serverless_main_bot)
+
+        dp = Dispatcher(storage=MemoryStorage())
+        from bot.anti_ad_middleware import AntiAdShieldMiddleware
+        dp.message.outer_middleware(AntiAdShieldMiddleware())
+        if bot_router.parent_router is None:
+            dp.include_router(bot_router)
+        _serverless_main_dp = dp
+
+    if (
+        settings.OWNER_BOT_TOKEN
+        and ":" in settings.OWNER_BOT_TOKEN
+        and (_serverless_owner_bot is None or _serverless_owner_dp is None)
+    ):
+        _serverless_owner_bot = Bot(
+            token=settings.OWNER_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        set_owner_bot(_serverless_owner_bot)
+
+        owner_dp = Dispatcher(storage=MemoryStorage())
+        from bot.anti_ad_middleware import AntiAdShieldMiddleware
+        owner_dp.message.outer_middleware(AntiAdShieldMiddleware())
+        if owner_bot_router.parent_router is None:
+            owner_dp.include_router(owner_bot_router)
+        _serverless_owner_dp = owner_dp
+
+    return _serverless_main_bot, _serverless_main_dp, _serverless_owner_bot, _serverless_owner_dp
+
+
+def _verify_cron_auth(request: Request) -> None:
+    expected = _get_cron_secret()
+    auth_header = request.headers.get("authorization", "")
+    cron_header = request.headers.get("x-cron-secret", "")
+    query_secret = request.query_params.get("secret", "")
+    token = auth_header.replace("Bearer ", "").strip() if auth_header.startswith("Bearer ") else (cron_header or query_secret)
+    if not token or not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized cron invocation")
+
+
+@app.post("/api/telegram/webhook", tags=["Telegram Webhook"], include_in_schema=False)
+async def telegram_main_webhook(
+    request: Request,
+    x_secret: Optional[str] = Header(None, alias="X-Telegram-Bot-Api-Secret-Token"),
+    x_bridge_secret: Optional[str] = Header(None, alias="X-Tgcloud-Bridge-Secret"),
+):
+    """Receive Telegram updates for @child_security_bot (directly or via tgcloud edge bridge)."""
+    expected = _get_webhook_secret()
+    provided = x_secret or x_bridge_secret or ""
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+
+    payload = await request.json()
+    main_bot, main_dp, _, _ = await _ensure_serverless_bots()
+    update = TelegramUpdate.model_validate(payload, context={"bot": main_bot})
+    try:
+        await main_dp.feed_update(main_bot, update)
+    except Exception as e:
+        logger.error(f"Main bot webhook processing error: {e}", exc_info=True)
+        return {"ok": False, "error": str(e)}
+    return {"ok": True}
+
+
+@app.post("/api/telegram/owner-webhook", tags=["Telegram Webhook"], include_in_schema=False)
+async def telegram_owner_webhook(
+    request: Request,
+    x_secret: Optional[str] = Header(None, alias="X-Telegram-Bot-Api-Secret-Token"),
+):
+    """Receive Telegram updates for @child_security_owner_bot."""
+    expected = _get_webhook_secret()
+    if not x_secret or not hmac.compare_digest(x_secret, expected):
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+
+    payload = await request.json()
+    _, _, owner_bot, owner_dp = await _ensure_serverless_bots()
+    if not owner_bot or not owner_dp:
+        raise HTTPException(status_code=503, detail="Owner bot not configured")
+
+    update = TelegramUpdate.model_validate(payload, context={"bot": owner_bot})
+    try:
+        await owner_dp.feed_update(owner_bot, update)
+    except Exception as e:
+        logger.error(f"Owner bot webhook processing error: {e}", exc_info=True)
+        return {"ok": False, "error": str(e)}
+    return {"ok": True}
+
+
+@app.api_route("/api/cron/hourly", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)
+async def cron_hourly_reports(request: Request):
+    """Vercel Schedule target: Hourly location updates (skips 01:00-04:00 Tashkent time)."""
+    _verify_cron_auth(request)
+    from datetime import datetime
+    from bot.scheduler import TASHKENT_TZ, dispatch_hourly_location_reports
+    from db.database import AsyncSessionLocal
+
+    now_tz = datetime.now(TASHKENT_TZ)
+    if now_tz.hour in (1, 2, 3, 4):
+        return {"status": "skipped", "reason": "quiet_hours_01_04", "local_hour": now_tz.hour}
+
+    main_bot, _, _, _ = await _ensure_serverless_bots()
+    async with AsyncSessionLocal() as session:
+        sent = await dispatch_hourly_location_reports(main_bot, session, f"{now_tz.hour:02d}")
+        await session.commit()
+    return {"status": "ok", "dispatched": sent, "local_time": now_tz.strftime("%Y-%m-%d %H:%M")}
+
+
+@app.api_route("/api/cron/nightly", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)
+async def cron_nightly_reports(request: Request):
+    """Vercel Schedule target: Midnight daily safety report (00:00 Tashkent time)."""
+    _verify_cron_auth(request)
+    from datetime import datetime
+    from bot.scheduler import TASHKENT_TZ, dispatch_nightly_safety_reports
+    from db.database import AsyncSessionLocal
+
+    main_bot, _, _, _ = await _ensure_serverless_bots()
+    async with AsyncSessionLocal() as session:
+        sent = await dispatch_nightly_safety_reports(main_bot, session)
+        await session.commit()
+    return {"status": "ok", "dispatched": sent, "local_time": datetime.now(TASHKENT_TZ).strftime("%Y-%m-%d %H:%M")}
+
+
+@app.api_route("/api/cron/walksafe", methods=["GET", "POST"], tags=["Cron"], include_in_schema=False)
+async def cron_walksafe_check(request: Request):
+    """Vercel Schedule target: Walk Safe expired deadline alerts."""
+    _verify_cron_auth(request)
+    from bot.scheduler import check_walksafe_deadlines_once
+
+    main_bot, _, _, _ = await _ensure_serverless_bots()
+    alerts = await check_walksafe_deadlines_once(main_bot)
+    return {"status": "ok", "alerts_sent": alerts}
 
 
 

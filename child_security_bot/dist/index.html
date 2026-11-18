@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bola Xavfsizligi — Telegram Serverless</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+    .card { max-width: 420px; width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 18px; padding: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { font-size: 14px; color: #94a3b8; margin: 0 0 18px; }
+    .btn { display: inline-block; width: 100%; box-sizing: border-box; padding: 14px 18px; border-radius: 12px; background: #2563eb; color: #fff; text-decoration: none; font-weight: 600; font-size: 15px; }
+    .status { margin-top: 16px; font-size: 12px; color: #38bdf8; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🛡️ Bola Xavfsizligi</h1>
+    <p>Telegram Serverless Edge + Vercel Cloud 24/7 tizimi</p>
+    <a class="btn" id="openBtn" href="https://child-security-bot.vercel.app">🌐 Asosiy Boshqaruv Panelini Ochish</a>
+    <div class="status" id="status">⚡ Bulut holati tekshirilmoqda...</div>
+  </div>
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+    if (tg && tg.Serverless && tg.Serverless.call) {
+      tg.Serverless.call('status', {}, function (err, res) {
+        const el = document.getElementById('status');
+        if (err) {
+          el.textContent = '⚠️ Edge status: ' + err.message;
+        } else {
+          const ok = res.vercel_backend && res.vercel_backend.status === 'healthy';
+          el.textContent = (ok ? '✅ 24/7 Bulut: Faol' : '⚡ Bulut uyg\'onmoqda') +
+            ' | Edge foydalanuvchilar: ' + (res.edge_stats?.users ?? 0);
+        }
+      });
+    } else {
+      window.location.replace('https://child-security-bot.vercel.app');
+    }
+  </script>
+</body>
+</html>

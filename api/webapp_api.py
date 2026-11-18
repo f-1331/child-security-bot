@@ -1098,7 +1098,7 @@ async def upload_file_endpoint(request: Request, file: UploadFile = File(...)):
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Faqat rasm yoki video fayllari qabul qilinadi")
 
-    uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+    uploads_dir = Path("/tmp/uploads") if os.environ.get("VERCEL") else (Path(__file__).resolve().parent.parent / "uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
 
     contents = await file.read()
@@ -2723,7 +2723,7 @@ async def upload_sos_snapshot_media(
     if ext not in ALLOWED_SOS_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Yaroqsiz media formati")
 
-    upload_dir = Path("uploads/sos_snapshots")
+    upload_dir = Path("/tmp/uploads/sos_snapshots") if os.environ.get("VERCEL") else Path("uploads/sos_snapshots")
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     contents = await file.read()
@@ -2948,7 +2948,7 @@ async def upload_ambient_sound_endpoint(
     if not ext or ext not in ALLOWED_AUDIO_EXT:
         ext = ".ogg" if "ogg" in (upload_file.content_type or "") else ".webm"
 
-    upload_dir = Path("uploads/ambient_sounds")
+    upload_dir = Path("/tmp/uploads/ambient_sounds") if os.environ.get("VERCEL") else Path("uploads/ambient_sounds")
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     contents = await upload_file.read()

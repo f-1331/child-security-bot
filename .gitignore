@@ -46,3 +46,6 @@ downloads/*
 !downloads/*.webloc
 .neon
 node_modules/
+
+.vercel
+.env*

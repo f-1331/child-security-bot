@@ -11,7 +11,7 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 DB_PATH = Path(settings.BASE_DIR) / "parental_tracker.db"
-BACKUP_DIR = Path(settings.BASE_DIR) / "backups"
+BACKUP_DIR = Path("/tmp/backups") if os.environ.get("VERCEL") else (Path(settings.BASE_DIR) / "backups")
 
 
 def create_local_db_backup() -> Optional[Path]:

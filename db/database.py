@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -11,6 +12,7 @@ from config import settings
 logger = logging.getLogger("smart_parental_tracker.database")
 
 is_sqlite = "sqlite" in settings.RESOLVED_DATABASE_URL
+is_vercel = bool(os.environ.get("VERCEL"))
 engine_kwargs = {
     "echo": False,
     "future": True,
@@ -22,9 +24,9 @@ if is_sqlite:
     }
 else:
     engine_kwargs["pool_pre_ping"] = True
-    engine_kwargs["pool_recycle"] = 300
-    engine_kwargs["pool_size"] = 20
-    engine_kwargs["max_overflow"] = 30
+    engine_kwargs["pool_recycle"] = 180 if is_vercel else 300
+    engine_kwargs["pool_size"] = 3 if is_vercel else 20
+    engine_kwargs["max_overflow"] = 5 if is_vercel else 30
     if "postgres" in settings.RESOLVED_DATABASE_URL:
         engine_kwargs["connect_args"] = {"ssl": "require"}
 
@@ -69,9 +71,14 @@ async def init_db() -> None:
     if _db_initialized:
         return
     _db_initialized = True
+    # Import models so Base metadata has all tables registered
+    import db.models  # noqa: F401
+    if is_vercel and not is_sqlite:
+        # On Vercel Serverless, Neon PostgreSQL schema is already migrated.
+        # Skipping 40+ DDL ALTER TABLE checks cuts cold-start from ~20s to <0.5s.
+        logger.info("Vercel serverless fast DB init enabled (Neon PostgreSQL).")
+        return
     async with engine.begin() as conn:
-        # Import models so Base metadata has all tables registered
-        import db.models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
 
         # Safe automatic migration for new Task columns
