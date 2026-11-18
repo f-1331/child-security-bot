@@ -4,6 +4,7 @@ macos
 windows
 rust-core
 child_security_bot
+child_security_owner_bot
 node_modules
 ci_logs
 downloads

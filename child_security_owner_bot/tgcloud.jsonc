@@ -1,0 +1,7 @@
+{
+  "static": {
+    "source": "dist",
+    "spa": true
+  },
+  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json"
+}
