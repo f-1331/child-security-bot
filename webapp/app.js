@@ -944,13 +944,20 @@ document.addEventListener("DOMContentLoaded", () => {
   initBackdropDismissListeners();
   setupTelegramBackButton();
 
-  // Support direct deep links to show route or repeated places from Telegram
+  // Support direct deep links to show route, repeated places, or emergency siren from Telegram
   const initialParams = new URLSearchParams(window.location.search);
   if (initialParams.get("show_route") === "1" || initialParams.get("route") === "1") {
     setTimeout(() => toggleRouteHistory(true), 800);
   }
   if (initialParams.get("show_repeats") === "1" || initialParams.get("repeats") === "1") {
     setTimeout(() => toggleRepeatedPlaces(true), 900);
+  }
+  if (initialParams.get("siren") === "1") {
+    setTimeout(() => {
+      if (typeof triggerIncomingSirenNotification === "function") {
+        triggerIncomingSirenNotification();
+      }
+    }, 600);
   }
 });
 

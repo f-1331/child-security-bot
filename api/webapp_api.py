@@ -2113,13 +2113,29 @@ async def parent_siren_endpoint(
         }
     last_siren_alert_map[child_id] = now_utc
 
-    notify_children_allowed = await crud.is_notify_children_enabled(session)
-    if notify_children_allowed and telemetry.telegram_bot:
+    tbot = telemetry.get_telegram_bot()
+    if tbot:
         try:
-            await telemetry.telegram_bot.send_message(
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+            webapp_url = "https://child-security-bot.vercel.app/?siren=1"
+            siren_kb = InlineKeyboardMarkup(
+                inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="🚨 SIGNALNI OCHISH / TO'XTATISH 🔊",
+                        web_app=WebAppInfo(url=webapp_url)
+                    )
+                ]]
+            )
+            await tbot.send_message(
                 chat_id=child_id,
-                text="🔔 <b>DIQQAT: Ota-onangiz telefoningizga qidiruv/ogohlantirish signali yubordi!</b>",
-                parse_mode="HTML"
+                text=(
+                    "🚨🚨🚨 <b>OTA-ONANGIZ QIDIRUV SIGNALI YUBORDI!</b> 🔊🚨🚨\n\n"
+                    "Ota-onangiz sizni topish uchun baland ovozli signal yubordi.\n"
+                    "Iltimos, zudlik bilan pastdagi tugmani bosing yoki ota-onangizga qo'ng'iroq qiling!"
+                ),
+                parse_mode="HTML",
+                disable_notification=False,
+                reply_markup=siren_kb
             )
         except Exception as e:
             logger.error(f"Failed to send siren alert to child {child_id}: {e}")
@@ -2583,17 +2599,18 @@ async def active_check_endpoint(
     pending_child_notifications[child_id].append(alert_msg)
 
     # 3. Direct push alert to child's Telegram chat if bot is available
-    if telemetry.telegram_bot:
+    tbot = telemetry.get_telegram_bot()
+    if tbot:
         try:
             from bot.keyboards import get_child_main_keyboard
-            await telemetry.telegram_bot.send_message(
+            await tbot.send_message(
                 chat_id=child_id,
                 text=(
                     "🔔 <b>Ota-onangiz joylashuvingizni so'radi!</b>\n\n"
                     "Ota-onangiz xaritada qayerdaligingizni bilish uchun joylashuvingizni so'ramoqda.\n"
                     "Iltimos, ilovani oching yoki pastdagi <b>«📍 Jonli joylashuvimni yuborish»</b> tugmasini bosing! 🛡️"
                 ),
-                reply_markup=get_child_main_keyboard(),
+                reply_markup=get_child_main_keyboard(child_id),
                 parse_mode="HTML"
             )
         except Exception as e:
