@@ -986,6 +986,30 @@ function haptic(type = "light") {
 
 // Web Audio API Sound Synthesis Engine (Zero external dependencies)
 let audioCtx = null;
+let isAudioEngineUnlocked = false;
+
+function unlockAudioEngine() {
+  try {
+    if (!audioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) audioCtx = new AudioCtxClass();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().then(() => {
+        isAudioEngineUnlocked = true;
+      }).catch(() => {});
+    } else if (audioCtx && audioCtx.state === "running") {
+      isAudioEngineUnlocked = true;
+    }
+  } catch (e) {}
+}
+
+if (typeof document !== "undefined") {
+  ["click", "touchstart", "touchend", "pointerdown"].forEach((evt) => {
+    document.addEventListener(evt, () => unlockAudioEngine(), { passive: true });
+  });
+}
+
 function getAudioContext() {
   try {
     if (!audioCtx) {
@@ -993,10 +1017,46 @@ function getAudioContext() {
       if (AudioCtxClass) audioCtx = new AudioCtxClass();
     }
     if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume();
+      audioCtx.resume().catch(() => {});
     }
   } catch (e) {}
   return audioCtx;
+}
+
+let sirenInterval = null;
+
+function triggerIncomingSirenNotification() {
+  unlockAudioEngine();
+  playSirenSound();
+  haptic("heavy");
+  const modal = document.getElementById("modalIncomingSirenAlert");
+  if (modal) {
+    modal.classList.remove("hidden");
+    if (window.lucide) lucide.createIcons();
+  }
+  if (sirenInterval) clearInterval(sirenInterval);
+  let repeats = 0;
+  sirenInterval = setInterval(() => {
+    repeats++;
+    if (repeats >= 8) {
+      clearInterval(sirenInterval);
+      sirenInterval = null;
+    } else {
+      playSirenSound();
+    }
+  }, 3500);
+  showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+}
+
+function dismissIncomingSirenAlert() {
+  if (sirenInterval) {
+    clearInterval(sirenInterval);
+    sirenInterval = null;
+  }
+  const modal = document.getElementById("modalIncomingSirenAlert");
+  if (modal) modal.classList.add("hidden");
+  haptic("medium");
+  showToast("✅ Qidiruv signali o'chirildi");
 }
 
 function playSirenSound() {
@@ -2313,6 +2373,17 @@ function applyChildUI(user) {
     if (sosModal) {
       sosModal.classList.remove("hidden");
       startSosRecurringBroadcast();
+    }
+  }
+
+  const targetChildId = user.id || currentChildId;
+  if (targetChildId) {
+    currentChildId = targetChildId;
+    if (typeof checkAndPromptChildPermissions === "function") {
+      checkAndPromptChildPermissions(targetChildId);
+    }
+    if (typeof initChildPermissionsAndTracking === "function") {
+      initChildPermissionsAndTracking(targetChildId);
     }
   }
 
@@ -8717,6 +8788,94 @@ function startChildWebSessionTracker(childId) {
   }, 30000);
 }
 
+async function checkAndPromptChildPermissions(childId, forceShow = false) {
+  if (currentRole !== "child") return;
+  const targetId = childId || currentChildId;
+
+  let geoGranted = false;
+  let micGranted = (localStorage.getItem("smart_tracker_mic_permitted") === "true");
+
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const geoStatus = await navigator.permissions.query({ name: "geolocation" });
+      if (geoStatus && geoStatus.state === "granted") {
+        geoGranted = true;
+      }
+    } catch (e) {
+      if (localStorage.getItem("smart_tracker_location_permitted") === "true") {
+        geoGranted = true;
+      }
+    }
+    try {
+      const micStatus = await navigator.permissions.query({ name: "microphone" });
+      if (micStatus && micStatus.state === "granted") {
+        micGranted = true;
+      }
+    } catch (e) {}
+  } else {
+    if (localStorage.getItem("smart_tracker_location_permitted") === "true") {
+      geoGranted = true;
+    }
+  }
+
+  let nativeAllGranted = true;
+  if (window.AndroidBridge && typeof window.AndroidBridge.isUsageAccessGranted === "function") {
+    try {
+      const hasUsage = window.AndroidBridge.isUsageAccessGranted();
+      const hasAccess = typeof window.AndroidBridge.isAccessibilityGranted === "function" ? window.AndroidBridge.isAccessibilityGranted() : true;
+      if (!hasUsage || !hasAccess) nativeAllGranted = false;
+    } catch (e) {}
+  }
+
+  const allGranted = geoGranted && micGranted && nativeAllGranted;
+
+  // Update Status Pill
+  const pill = document.getElementById("btnChildPermissionsStatusPill");
+  const pillIcon = document.getElementById("childPermissionPillIcon");
+  const pillText = document.getElementById("childPermissionPillText");
+  const banner = document.getElementById("childPermissionAlertBanner");
+
+  if (allGranted) {
+    if (pill) {
+      pill.className = "min-h-[44px] flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-2 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0";
+      pill.title = "Barcha xavfsizlik ruxsatlari faol (GPS, Ovoz, Signal)";
+    }
+    if (pillIcon) {
+      pillIcon.setAttribute("data-lucide", "shield-check");
+      pillIcon.className = "w-4 h-4 text-emerald-400";
+    }
+    if (pillText) pillText.textContent = "Ruxsatlar faol";
+    if (banner) banner.classList.add("hidden");
+  } else {
+    if (pill) {
+      pill.className = "min-h-[44px] flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-2 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0";
+      pill.title = "Xavfsizlik ruxsatlari to'liq emas (GPS yoki Ovoz yoqilmagan)";
+    }
+    if (pillIcon) {
+      pillIcon.setAttribute("data-lucide", "shield-alert");
+      pillIcon.className = "w-4 h-4 text-amber-400 animate-pulse";
+    }
+    if (pillText) pillText.textContent = "Ruxsat kerak";
+    if (banner) banner.classList.remove("hidden");
+  }
+
+  if (window.lucide) lucide.createIcons();
+
+  const sessionDismissed = sessionStorage.getItem("smart_tracker_child_permissions_dismissed_session");
+  if (forceShow || (!allGranted && !sessionDismissed)) {
+    const modal = document.getElementById("childOnboardingModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function openChildPermissionsModal() {
+  haptic("light");
+  checkAndPromptChildPermissions(currentChildId, true);
+}
+
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
@@ -8742,28 +8901,8 @@ function initChildPermissionsAndTracking(childId) {
   // ALWAYS attempt background telemetry acquisition immediately so live signal connects with 0 wait!
   trySilentBackgroundLocationTracking(childId);
 
-  // Check if permissions onboarding modal needs to be shown for first-time instructions
-  const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
-  let needsPermissionPrompt = !granted;
-
-  // In Native Android APK, proactively check if Usage Access or Accessibility are missing
-  if (window.AndroidBridge && typeof window.AndroidBridge.isUsageAccessGranted === "function") {
-    try {
-      const hasUsage = window.AndroidBridge.isUsageAccessGranted();
-      const hasAccess = typeof window.AndroidBridge.isAccessibilityGranted === "function" ? window.AndroidBridge.isAccessibilityGranted() : true;
-      if (!hasUsage || !hasAccess) {
-        needsPermissionPrompt = true;
-      }
-    } catch (e) {}
-  }
-
-  if (needsPermissionPrompt) {
-    const modal = document.getElementById("childOnboardingModal");
-    if (modal) {
-      modal.classList.remove("hidden");
-      if (window.lucide) lucide.createIcons();
-    }
-  }
+  // Check live permissions and update UI/prompt modal
+  checkAndPromptChildPermissions(childId);
 }
 
 function trySilentBackgroundLocationTracking(childId) {
@@ -8848,6 +8987,7 @@ function fetchTelegramLocationSilently(childId) {
 
 async function requestChildAllPermissions() {
   haptic("medium");
+  unlockAudioEngine();
   const modal = document.getElementById("childOnboardingModal");
   const btn = document.getElementById("btnGrantChildPermissions");
   if (btn) {
@@ -8903,6 +9043,7 @@ async function requestChildAllPermissions() {
                 accuracy: loc.accuracy || 10
               };
               lastLocationFetchTime = Date.now();
+              localStorage.setItem("smart_tracker_location_permitted", "true");
               if (targetId) {
                 sendChildLiveTelemetry(targetId, {
                   latitude: loc.latitude,
@@ -8930,6 +9071,7 @@ async function requestChildAllPermissions() {
         const { latitude, longitude, accuracy } = pos.coords;
         cachedDeviceLocation = { latitude, longitude, accuracy };
         lastLocationFetchTime = Date.now();
+        localStorage.setItem("smart_tracker_location_permitted", "true");
         if (targetId) {
           sendChildLiveTelemetry(targetId, {
             latitude,
@@ -8970,20 +9112,28 @@ async function requestChildAllPermissions() {
     startChildLiveTracking(targetId);
   }
 
-  // Permanently save permission flag so it NEVER prompts again!
+  // Mark active permissions
+  sessionStorage.removeItem("smart_tracker_child_permissions_dismissed_session");
   localStorage.setItem("smart_tracker_child_permissions_granted", "true");
-  localStorage.setItem("smart_tracker_location_permitted", "true");
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i><span>⚡ Barcha Ruxsatlarni Yoqish (1 martalik)</span>`;
+  }
 
   if (modal) modal.classList.add("hidden");
-  showToast("✅ Ruxsat berildi! Joylashuvingiz ota-onangizga yuborilmoqda 🛡️");
+  showToast("✅ Barcha ruxsatlar berildi! GPS, ovoz va signal faol 🛡️");
+  checkAndPromptChildPermissions(targetId);
 }
 
 function skipChildPermissions() {
   haptic("light");
-  // Remember that user skipped so the modal NEVER pops up on entry again!
-  localStorage.setItem("smart_tracker_child_permissions_granted", "dismissed");
+  // Only dismiss for this session so child can still see warning banner & status pill
+  sessionStorage.setItem("smart_tracker_child_permissions_dismissed_session", "true");
   const modal = document.getElementById("childOnboardingModal");
   if (modal) modal.classList.add("hidden");
+  checkAndPromptChildPermissions(currentChildId);
+  showToast("⚠️ Ruxsatlar qoldirildi. Istalgan vaqt yuqoridagi qalqon orqali yoqishingiz mumkin.");
 }
 
 function startChildLiveTracking(childId) {
@@ -9413,9 +9563,7 @@ function handleIncomingWebSocketMessage(msg) {
 
   // 1.1 Remote siren signal for Child
   if (msg.type === "remote_siren" && currentRole === "child") {
-    playSirenSound();
-    haptic("heavy");
-    showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+    triggerIncomingSirenNotification();
     return;
   }
 
@@ -9744,9 +9892,7 @@ async function checkChildPendingNotifications(childId) {
               try { window.sendLocationUpdate(); } catch(e) {}
             }
           } else if (notif.type === "remote_siren") {
-            playSirenSound();
-            haptic("heavy");
-            showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+            triggerIncomingSirenNotification();
           } else if (notif.type === "record_ambient_sound") {
             startChildAmbientSoundRecording(notif.duration_seconds || 20, notif.request_id, notif.parent_id);
           } else if (notif.type === "device_policy_update") {

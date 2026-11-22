@@ -3078,7 +3078,7 @@ async def get_ambient_sound_history_endpoint(
     session: AsyncSession = Depends(get_db)
 ):
     """Retrieve list of recent ambient audio recordings for WebApp player."""
-    upload_dir = Path("uploads/ambient_sounds")
+    upload_dir = Path("/tmp/uploads/ambient_sounds") if os.environ.get("VERCEL") else Path("uploads/ambient_sounds")
     if not upload_dir.exists():
         return {"status": "success", "history": [], "recordings": []}
 
