@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="style.css?v=84" />
+  <link rel="stylesheet" href="style.css?v=85" />
 
   <!-- Sentry Browser Error & Performance Monitoring SDK -->
   <script src="https://browser.sentry-cdn.com/8.48.0/bundle.tracing.min.js" crossorigin="anonymous"></script>
@@ -124,7 +124,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex flex-col h-full h-[100dvh] max-h-[100dvh] overflow-hidden select-none">
+<body class="bg-slate-950 text-slate-100 flex flex-col w-full max-w-[100vw] h-full h-[100dvh] max-h-[100dvh] overflow-hidden overflow-x-hidden select-none box-border">
 
   <!-- TOP STICKY DEMO VERSIYA BANNER (Unmissable visual indicator as user requested) -->
   <div id="globalDemoWarningBanner" class="hidden sticky top-0 z-[2600] w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-3.5 py-2 flex items-center justify-between gap-2 shadow-2xl border-b-2 border-amber-300 font-sans transition-all duration-300 shrink-0">
@@ -159,7 +159,7 @@
   </div>
 
   <!-- TOP HEADER (APPLE DYNAMIC ISLAND & FROSTED GLASS CAPSULE) -->
-  <header id="mainAppHeader" class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top">
+  <header id="mainAppHeader" class="bg-slate-900/80 backdrop-blur-2xl border-b border-white/10 px-3 sm:px-5 py-2.5 z-20 flex flex-col gap-2 shadow-2xl safe-top w-full max-w-full overflow-x-hidden box-border">
     <!-- 0. IOS DYNAMIC ISLAND (Centrally Anchored Floating Capsule) -->
     <div id="dynamicIslandContainer" class="flex justify-center w-full">
       <div id="dynamicIslandPill" onclick="centerOnChild()" class="dynamic-island cursor-pointer active:scale-95 transition" title="Jonli holat / Farzandga yaqinlashtirish">
@@ -205,7 +205,7 @@
           <span>Demo ko'rish</span>
           <span id="demoBannerTimer" class="px-1.5 py-0.2 bg-black/20 text-slate-900 rounded font-mono text-[9px] font-black">10s</span>
         </button>
-        <button onclick="dismissEntryDemoBanner()" class="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold transition active:scale-95" title="Yopish">
+        <button onclick="dismissEntryDemoBanner()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm font-bold transition active:scale-95" title="Yopish">
           ✕
         </button>
       </div>
@@ -261,8 +261,8 @@
               </div>
             </div>
             <!-- Profilni o'chirish tugmasi -->
-            <button id="btnDeleteChild" onclick="openDeleteChildModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-200 flex items-center justify-center transition active:scale-90 shrink-0 shadow-sm" title="Farzand profilini o'chirish">
-              <i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+            <button id="btnDeleteChild" onclick="openDeleteChildModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-200 flex items-center justify-center transition active:scale-90 shrink-0 shadow-sm" title="Farzand profilini o'chirish">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
@@ -271,19 +271,19 @@
         <div class="flex items-center gap-1.5 shrink-0">
           <button onclick="showAuthGateModal('parent')" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-2xl text-[11px] font-black transition active:scale-95 shadow-sm backdrop-blur-md" title="Kodni kiritish yoki yangilash">
             <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i>
-            <span class="hidden sm:inline">Kod kiritish</span>
+            <span class="hidden sm:inline" data-i18n="btn_enter_code">Kod kiritish</span>
           </button>
           <button onclick="promptRoleSwitch('child')" class="flex items-center gap-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-2xl text-[11px] font-black transition active:scale-95 shadow-sm backdrop-blur-md" title="Farzand hisobiga o'tish">
             <span>👦</span>
-            <span class="hidden sm:inline">Farzand</span>
+            <span class="hidden sm:inline" data-i18n="role_child_btn">Farzand</span>
           </button>
           <button id="btnToggleFullscreenApp" onclick="toggleAppFullscreen()" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/15 px-2.5 py-1.5 rounded-2xl text-[11px] font-black transition active:scale-95 shadow-sm backdrop-blur-md shrink-0" title="To'liq ekran (Fullscreen / F11)">
             <i id="iconToggleFullscreen" data-lucide="maximize" class="w-3.5 h-3.5 text-cyan-300"></i>
-            <span class="hidden sm:inline">To'liq ekran</span>
+            <span class="hidden sm:inline" data-i18n="btn_fullscreen">To'liq ekran</span>
           </button>
           <button onclick="switchTab('settings')" class="hidden sm:flex items-center gap-1.5 bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-2xl text-[11px] font-bold transition active:scale-95 shadow-sm backdrop-blur-md" title="Dizayn va sozlamalar">
             <i data-lucide="palette" class="w-3.5 h-3.5 text-purple-400"></i>
-            <span class="hidden sm:inline">Dizayn</span>
+            <span class="hidden sm:inline" data-i18n="btn_design">Dizayn</span>
           </button>
         </div>
       </div>
@@ -293,22 +293,27 @@
 
       <!-- Apple Control Center Style Utility Capsule Strip -->
       <div id="parentUtilityBar" class="flex items-center gap-1.5 pt-1.5 pb-1 border-t border-white/5 overflow-x-auto no-scrollbar flex-nowrap scroll-smooth px-2 pr-6">
+        <!-- Tezkor Til Tanlash -->
+        <button onclick="switchTab('settings')" class="flex items-center gap-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-200 border border-blue-400/30 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Tilni o'zgartirish">
+          <span>🌐</span>
+          <span id="quickLangCodeLabel" class="font-black">UZ</span>
+        </button>
         <!-- Dizayn & Mavzular -->
         <button onclick="openModal('theme')" class="flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Dizayn va ranglarni o'zgartirish">
           <span>🎨</span>
-          <span class="truncate font-semibold">Dizayn</span>
+          <span class="truncate font-semibold" data-i18n="btn_design">Dizayn</span>
         </button>
         <!-- Maktab Rejimi -->
         <button id="btnParentSchoolMode" onclick="toggleParentSchoolMode()" class="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="1-bosishda maktab dars rejimini yoqish/o'chirish">
           <span class="text-xs">📚</span>
-          <span id="schoolModeBtnText" class="truncate font-semibold">Maktab</span>
-          <span id="pillSchoolBadge" class="hidden text-2xs bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-full font-black">FAOL</span>
+          <span id="schoolModeBtnText" class="truncate font-semibold" data-i18n="btn_school_mode">Maktab</span>
+          <span id="pillSchoolBadge" class="hidden text-2xs bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-full font-black" data-i18n="school_badge_active">FAOL</span>
         </button>
 
         <!-- Farzandga ko'rsatma -->
         <button id="btnParentDirective" onclick="openParentDirectiveModal()" class="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Farzandga tezkor ko'rsatma yuborish">
           <span class="text-xs">💬</span>
-          <span class="truncate font-semibold">Ko'rsatma</span>
+          <span class="truncate font-semibold" data-i18n="btn_directive">Ko'rsatma</span>
         </button>
 
         <!-- Xavfsizlik Skori -->
@@ -320,14 +325,14 @@
         <!-- Ekran vaqti va Bloklash -->
         <button id="btnParentScreenTime" onclick="openScreenTimeControlModal()" class="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Ekran vaqti va ilovalarni bloklash">
           <i data-lucide="clock" class="w-3.5 h-3.5 text-rose-400"></i>
-          <span class="truncate font-semibold">Ekran vaqti</span>
-          <span id="pillLockdownBadge" class="hidden text-2xs bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse">BLOK</span>
+          <span class="truncate font-semibold" data-i18n="btn_screen_time">Ekran vaqti</span>
+          <span id="pillLockdownBadge" class="hidden text-2xs bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-black animate-pulse" data-i18n="lock_badge_active">BLOK</span>
         </button>
 
         <!-- Kunlik hisobot -->
         <button id="btnParentDailyReport" onclick="openDailyReportModal()" class="flex items-center gap-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>
-          <span class="truncate font-semibold">Hisobot</span>
+          <span class="truncate font-semibold" data-i18n="btn_daily_report">Hisobot</span>
         </button>
 
         <!-- Tangalar kursi -->
@@ -339,8 +344,8 @@
         <!-- Hamkor ota-ona -->
         <button onclick="openParentInviteSpouseModal()" class="flex items-center gap-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/25 px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition active:scale-95 shrink-0" title="Ikkinchi ota-onani taklif qilish">
           <i data-lucide="user-plus" class="w-3.5 h-3.5 text-sky-400"></i>
-          <span class="truncate font-semibold hidden sm:inline">Hamkor ota-ona</span>
-          <span class="truncate font-semibold inline sm:hidden">Hamkor</span>
+          <span class="truncate font-semibold hidden sm:inline" data-i18n="btn_coparent_full">Hamkor ota-ona</span>
+          <span class="truncate font-semibold inline sm:hidden" data-i18n="btn_coparent_short">Hamkor</span>
         </button>
 
         <!-- Batareya -->
@@ -352,7 +357,7 @@
         <!-- Ovoz rejimi -->
         <div id="soundPill" class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-xl text-[10px] sm:text-xs font-medium text-slate-300 border border-white/10 shadow-sm shrink-0" title="Ovoz rejimi">
           <i id="soundIcon" data-lucide="volume-2" class="w-3.5 h-3.5"></i>
-          <span id="soundText" class="hidden xs:inline sm:inline">Oddiy</span>
+          <span id="soundText" class="hidden xs:inline sm:inline" data-i18n="sound_normal">Oddiy</span>
         </div>
 
         <!-- Mobil ilova (Android APK) -->
@@ -362,88 +367,98 @@
         </button>
 
         <!-- Qo'llanma & Yordam -->
-        <button onclick="openHelpModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Qo'llanma va Yordam">
-          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+        <button onclick="openHelpModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-cyan-400 hover:text-cyan-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Qo'llanma va Yordam">
+          <i data-lucide="help-circle" class="w-4 h-4"></i>
         </button>
 
         <!-- Rang mavzulari -->
-        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn ranglarini tanlash">
-          <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+        <button onclick="openThemeModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-purple-400 hover:text-purple-300 flex items-center justify-center transition active:scale-90 shadow-sm shrink-0" title="Dizayn ranglarini tanlash">
+          <i data-lucide="palette" class="w-4 h-4"></i>
         </button>
 
         <!-- Chiqish / Boshqa hisob -->
-        <button id="btnLogoutCorner" onclick="logoutSession()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
-          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        <button id="btnLogoutCorner" onclick="logoutSession()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 flex items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
         </button>
 
         <!-- Telegramga qaytish / Chiqish -->
-        <button onclick="closeWebApp()" class="px-2.5 py-1 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
-          <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          <span class="text-[10px] font-black">Chiqish</span>
+        <button onclick="closeWebApp()" class="min-h-[44px] px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1.5 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
+          <i data-lucide="x" class="w-4 h-4"></i>
+          <span class="text-xs font-black" data-i18n="btn_exit">Chiqish</span>
         </button>
       </div>
     </div>
 
-    <!-- 3. CHILD HEADER ROW (Gamified Superhero Portal Header) -->
-    <div id="childHeaderRow" class="hidden flex items-center justify-between gap-2">
+    <!-- 3. CHILD HEADER ROW (Gamified Superhero Portal Header - Responsive Fit) -->
+    <div id="childHeaderRow" class="hidden flex items-center justify-between gap-1.5 sm:gap-2 flex-wrap">
       <!-- Child Avatar & Gamified Hero Name -->
-      <div class="flex items-center gap-2.5 min-w-0">
+      <div class="flex items-center gap-2 min-w-0 flex-1">
         <div class="relative cursor-pointer shrink-0" onclick="centerOnChild()">
-          <div id="childAvatarHero" class="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-xl text-base sm:text-xl border-2 border-white/80 active:scale-95 transition overflow-hidden">
+          <div id="childAvatarHero" class="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-amber-400 via-rose-500 to-indigo-600 flex items-center justify-center font-black text-white shadow-xl text-base sm:text-xl border-2 border-white/80 active:scale-95 transition overflow-hidden">
             <img src="logo.png?v=17" class="w-full h-full object-cover" alt="Hero Mascot" />
           </div>
-          <span class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-900/90 border border-amber-400/60 rounded-full flex items-center justify-center text-[10px] shadow-sm leading-none z-10 pointer-events-none">👑</span>
+          <span class="absolute -top-1.5 -right-1.5 w-4 h-4 sm:w-5 sm:h-5 bg-slate-900/90 border border-amber-400/60 rounded-full flex items-center justify-center text-[9px] sm:text-[10px] shadow-sm leading-none z-10 pointer-events-none">👑</span>
         </div>
         
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <h1 id="childHeroName" class="text-xs sm:text-sm font-black text-white truncate max-w-[100px] xs:max-w-[150px] sm:max-w-none">Yosh Qahramon</h1>
-            <span id="childHeroLevelBadge" class="text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1 min-w-0">
+            <h1 id="childHeroName" class="hero-title text-xs sm:text-sm font-black text-white leading-snug truncate max-w-[115px] sm:max-w-[200px]">Yosh Qahramon</h1>
+            <span id="childHeroLevelBadge" class="text-[10px] bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded-full font-black shrink-0">Lvl 1</span>
           </div>
           <p id="childHeroGreeting" class="text-[10px] sm:text-[11px] text-emerald-400 font-bold mt-0.5 truncate flex items-center gap-1">
-            <span>🚀</span> <span id="childHeroStatusText">Missiyalarga tayyormisiz?</span>
+            <span>🚀</span> <span id="childHeroStatusText" class="truncate">Missiyalarga tayyormisiz?</span>
           </p>
         </div>
       </div>
 
-      <!-- Child Quick Controls: Switch to Parent + Piggy Bank + Palette + Logout -->
-      <div class="flex items-center gap-1.5 shrink-0">
+      <!-- Child View Brand & Language Switch -->
+      <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 max-w-full overflow-x-auto no-scrollbar">
+        <button onclick="switchTab('settings')" class="compact-btn flex items-center gap-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-200 border border-blue-400/30 px-2 py-1.5 rounded-xl text-[10px] font-black transition active:scale-95 shadow-sm shrink-0" title="Tilni o'zgartirish">
+          <span>🌐</span>
+          <span class="hidden sm:inline" data-i18n="btn_lang_short">Til</span>
+        </button>
+        <!-- Ruxsatlar statusi & Sozlash -->
+        <button id="btnChildPermissionsStatusPill" onclick="openChildPermissionsModal()" class="compact-btn flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Xavfsizlik ruxsatlari (GPS, Mikrofon, Signal)">
+          <i id="childPermissionPillIcon" data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span id="childPermissionPillText" class="hidden sm:inline">Ruxsatlar</span>
+        </button>
+
         <!-- Kod kiritish / Hisobni yangilash -->
-        <button onclick="showAuthGateModal('child')" class="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Kodni kiritish yoki yangilash">
+        <button onclick="showAuthGateModal('child')" class="compact-btn flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0" title="Kodni kiritish yoki yangilash">
           <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span class="hidden xs:inline sm:inline">Kod</span>
+          <span class="hidden sm:inline">Kod</span>
         </button>
 
         <!-- Piggy Bank Vault Pill -->
-        <button onclick="switchTab('wallet')" class="flex items-center gap-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 text-emerald-300 border border-emerald-500/35 px-2.5 py-1 rounded-2xl text-[10px] sm:text-xs font-black shadow-md transition active:scale-95 shrink-0" title="Jamg'armam">
-          <span class="text-xs">🐷</span>
-          <span id="childHeroMoneyText" class="truncate font-black max-w-[70px] xs:max-w-[95px] sm:max-w-none">0 so'm</span>
+        <button onclick="switchTab('wallet')" class="compact-btn flex items-center gap-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:from-emerald-500/30 text-emerald-300 border border-emerald-500/35 px-2 py-1.5 rounded-xl text-[10px] sm:text-xs font-black shadow-md transition active:scale-95 shrink-0" title="Jamg'armam">
+          <span class="text-xs sm:text-sm">🐷</span>
+          <span id="childHeroMoneyText" class="truncate font-black max-w-[68px] sm:max-w-none">0 so'm</span>
         </button>
 
         <!-- Mobil ilova (Android APK / iPhone) -->
-        <button onclick="openInstallAppModal()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
-          <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+        <button onclick="openInstallAppModal()" class="hidden md:flex compact-btn w-9 h-9 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Mobil ilovani o'rnatish (Android & iPhone)">
+          <i data-lucide="smartphone" class="w-4 h-4"></i>
         </button>
 
         <!-- Qo'llanma & Yordam -->
-        <button onclick="openHelpModal()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-cyan-500/30 text-cyan-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Yordam">
-          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
+        <button onclick="openHelpModal()" class="hidden md:flex compact-btn w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-cyan-500/30 text-cyan-300 items-center justify-center transition active:scale-90 shadow shrink-0" title="Yordam">
+          <i data-lucide="help-circle" class="w-4 h-4"></i>
         </button>
 
         <!-- Theme Palette -->
-        <button onclick="openThemeModal()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-white/10 border border-purple-500/30 text-purple-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Ranglar">
-          <span class="text-xs">🎨</span>
+        <button onclick="openThemeModal()" class="compact-btn w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-purple-500/30 text-purple-300 flex items-center justify-center transition active:scale-90 shadow shrink-0" title="Ranglar">
+          <span class="text-sm">🎨</span>
         </button>
 
         <!-- Logout -->
-        <button onclick="logoutSession()" class="hidden md:flex w-7 h-7 sm:w-8 sm:h-8 rounded-2xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
-          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+        <button onclick="logoutSession()" class="hidden md:flex compact-btn w-9 h-9 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 text-slate-400 hover:text-red-400 items-center justify-center transition active:scale-90 shrink-0" title="Hisobdan chiqish">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
         </button>
 
         <!-- Telegramga qaytish / Chiqish -->
-        <button onclick="closeWebApp()" class="px-2.5 py-1 rounded-2xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
+        <button onclick="closeWebApp()" class="compact-btn px-2.5 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600/50 text-red-200 hover:text-white border border-red-500/40 flex items-center justify-center gap-1 transition active:scale-95 shadow shrink-0" title="Telegramga qaytish (Yopish)">
           <i data-lucide="x" class="w-3.5 h-3.5"></i>
-          <span class="text-[10px] font-black">Chiqish</span>
+          <span class="hidden sm:inline text-xs font-black" data-i18n="btn_exit">Chiqish</span>
         </button>
       </div>
     </div>
@@ -452,15 +467,29 @@
     <div id="childWelcomeBanner" class="hidden bg-gradient-to-r from-emerald-950/70 via-slate-900/80 to-purple-950/70 border border-emerald-500/30 p-2.5 rounded-2xl flex items-center justify-between text-xs shadow-lg backdrop-blur-md">
       <div>
         <p class="font-black text-white flex items-center gap-1.5">
-          <span>🌟</span> <span id="childBannerName">Bugungi sarguzasht</span>
+          <span>🌟</span> <span id="childBannerName" data-i18n="hero_adventure">Bugungi sarguzasht</span>
         </p>
         <p class="text-emerald-300 font-bold text-[11px] mt-0.5" id="childBannerMoney">
           💰 Sizda hozir 0 so'm bor! (0 tanga)
         </p>
       </div>
       <button onclick="switchTab('tasks')" class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white rounded-xl font-black text-xs shadow-md transition active:scale-95 flex items-center gap-1">
-        <span>Missiyalar</span>
+        <span data-i18n="btn_missions">Missiyalar</span>
         <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+
+    <!-- Child Permission Warning Banner (Visible whenever GPS or Mic is missing) -->
+    <div id="childPermissionAlertBanner" class="hidden my-1 bg-gradient-to-r from-amber-950/90 via-orange-950/90 to-slate-900 border-2 border-amber-500/60 p-3 rounded-2xl flex items-center justify-between text-xs shadow-xl backdrop-blur-md animate-pulse">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="text-xl shrink-0">⚠️</span>
+        <div class="min-w-0 text-left">
+          <p class="font-black text-amber-300 text-xs">Ruxsatlar to'liq yoqilmagan!</p>
+          <p class="text-[10px] text-amber-200/90 leading-tight">GPS, atrof ovozi va signal ishlashi uchun barcha ruxsatlarni bering.</p>
+        </div>
+      </div>
+      <button onclick="openChildPermissionsModal()" class="min-h-[44px] px-3.5 py-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 text-slate-950 font-black text-xs rounded-xl shadow-lg active:scale-95 shrink-0 transition flex items-center gap-1">
+        <span>Yoqish 🛡️</span>
       </button>
     </div>
 
@@ -508,32 +537,8 @@
       <!-- Live Map Canvas -->
       <div id="map" class="w-full h-full"></div>
 
-      <!-- Prominent Android App Download Floating Banner (High Visibility on Web) -->
-      <div id="parentAppDownloadBanner" class="absolute top-12 left-3.5 right-14 md:right-auto md:max-w-md z-25 bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-slate-900/95 border border-blue-400/50 rounded-2xl p-2.5 sm:p-3 shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-2.5 animate-fade-in pointer-events-auto">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base sm:text-lg shadow-lg shrink-0">
-            📲
-          </div>
-          <div class="min-w-0">
-            <div class="flex items-center gap-1.5">
-              <h4 class="text-[11px] sm:text-xs font-black text-white truncate">Android Mobil Ilova</h4>
-              <span class="text-2xs font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black animate-pulse">24/7 GPS</span>
-            </div>
-            <p class="text-xs text-blue-200/90 font-medium truncate mt-0.5">Ekran o'chiq bo'lsa ham foniy kuzatuv</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 shrink-0">
-          <button onclick="handleAppDownload(event, '/download/apk', 'Android APK')" class="px-2.5 py-1.5 sm:px-3 sm:py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 active:scale-95 text-white text-[10px] sm:text-xs font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center gap-1 transition shrink-0">
-            <i data-lucide="download" class="w-3 h-3 sm:w-3.5 sm:h-3.5"></i>
-            <span>Yuklab olish</span>
-          </button>
-          <button onclick="dismissAppBanner()" class="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 text-xs shrink-0" title="Yopish">✕</button>
-        </div>
-      </div>
-
-
       <!-- Child Back Button from Fullscreen Map Mode -->
-      <button id="btnChildBackFromMap" onclick="closeChildMapModal()" class="hidden absolute top-4 left-4 z-30 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-2xl text-xs font-black shadow-2xl border border-white/20 backdrop-blur-xl flex items-center gap-1.5 active:scale-95 transition">
+      <button id="btnChildBackFromMap" onclick="closeChildMapModal()" class="hidden compact-btn absolute top-4 left-4 z-30 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-2xl text-xs font-black shadow-2xl border border-white/20 backdrop-blur-xl flex items-center gap-1.5 active:scale-95 transition">
         <i data-lucide="arrow-left" class="w-4 h-4"></i>
         <span>Ortga</span>
       </button>
@@ -541,39 +546,65 @@
       <!-- Child Floating Actions (When child views map) -->
       <div id="childFloatingActions" class="hidden absolute left-4 right-4 bottom-24 z-20 flex gap-2"></div>
 
-      <!-- Parent View Active Walk Safe Monitoring Banner -->
-      <div id="parentWalkSafeBanner" class="hidden absolute top-12 left-3.5 z-25 bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-slate-900/90 border border-amber-500/40 text-amber-200 px-3.5 py-2 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold backdrop-blur-2xl animate-pulse">
-        <span class="text-lg">🚶‍♂️</span>
-        <div class="leading-tight">
-          <p class="text-2xs text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
-          <p id="parentWalkSafeText" class="text-xs text-white font-bold">14:20 qoldi (Uyga qaytish)</p>
+      <!-- Unified Non-Overlapping Top Map Overlays Stack (Left of Floating Map Dock) -->
+      <div id="parentTopOverlaysStack" class="absolute top-3 left-3 right-16 md:right-auto md:max-w-lg z-25 flex flex-col items-start gap-2 pointer-events-none">
+        <!-- Route, Repeated Places & Fullscreen Quick Action Pills -->
+        <div id="routeQuickPillBar" class="w-full flex items-center gap-1.5 pointer-events-auto flex-wrap">
+          <button id="btnFloatingExpandMap" onclick="toggleMapUiVisibility()" class="compact-pill px-2.5 py-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-2xs shadow-xl flex items-center gap-1 transition active:scale-95 border border-cyan-300" title="Xaritani to'liq ko'rish (Menyularni yashirish / ko'rsatish)">
+            <i data-lucide="maximize-2" id="iconFloatingExpandMap" class="w-3.5 h-3.5"></i>
+            <span id="textFloatingExpandMap">To'liq xarita</span>
+          </button>
+          <button id="pillToggleRoute" onclick="toggleRouteHistory()" class="compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Bugungi harakat yo'li (Yoqish / O'chirish)">
+            <i data-lucide="route" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span id="labelPillRoute">Harakat yo'li</span>
+          </button>
+          <button id="pillToggleRepeated" onclick="toggleRepeatedPlaces()" class="compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Qayta-qayta yurilgan joylar (Yoqish / O'chirish)">
+            <i data-lucide="repeat" class="w-3.5 h-3.5 text-rose-400"></i>
+            <span id="labelPillRepeated">Qayta joylar</span>
+          </button>
         </div>
-      </div>
 
-      <!-- Device Lockdown Active Alert Banner -->
-      <div id="parentLockdownBanner" class="hidden absolute top-12 left-3.5 z-25 bg-gradient-to-r from-rose-950/95 via-red-900/90 to-slate-900/90 border border-rose-500/50 text-rose-200 px-3.5 py-2 rounded-2xl shadow-2xl flex items-center gap-2.5 text-xs font-bold backdrop-blur-2xl animate-pulse">
-        <span class="text-base animate-bounce">🛑</span>
-        <div class="leading-tight">
-          <p class="text-2xs text-rose-300 uppercase tracking-wider font-black">Barcha Ilovalar Bloklangan</p>
-          <p id="parentLockdownBannerText" class="text-xs text-white font-bold">Dars / Uyqu rejimi faol</p>
+        <!-- Prominent Android App Download Floating Banner (High Visibility on Web) -->
+        <div id="parentAppDownloadBanner" class="w-full max-w-md bg-gradient-to-r from-blue-950/95 via-indigo-950/95 to-slate-900/95 border border-blue-400/50 rounded-2xl p-2 sm:p-2.5 shadow-2xl backdrop-blur-2xl flex items-center justify-between gap-2 animate-fade-in pointer-events-auto">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white text-base shadow-lg shrink-0">
+              📲
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <h4 class="text-[11px] sm:text-xs font-black text-white truncate">Android Mobil Ilova</h4>
+                <span class="text-2xs font-bold bg-emerald-500/30 text-emerald-300 border border-emerald-400/40 px-1.5 py-0.5 rounded-full font-black shrink-0">24/7 GPS</span>
+              </div>
+              <p class="text-[10px] sm:text-xs text-blue-200/90 font-medium truncate mt-0.5">Ekran o'chiq bo'lsa ham foniy kuzatuv</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="handleAppDownload(event, '/download/apk', 'Android APK')" class="compact-btn px-2.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 active:scale-95 text-white text-[10px] sm:text-xs font-black rounded-xl shadow-lg shadow-emerald-500/30 flex items-center gap-1 transition shrink-0">
+              <i data-lucide="download" class="w-3 h-3"></i>
+              <span>Yuklab olish</span>
+            </button>
+            <button onclick="dismissAppBanner()" class="compact-btn px-2 py-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 text-xs shrink-0" title="Yopish">✕</button>
+          </div>
         </div>
-        <button onclick="handleMasterLockToggle(false)" class="ml-1.5 px-2 py-0.5 bg-white/20 hover:bg-white/30 text-white text-[10px] rounded-lg font-black transition active:scale-95 shadow">Yechish</button>
-      </div>
 
-      <!-- Route, Repeated Places & Fullscreen Quick Action Pills (Top Left Floating) -->
-      <div id="routeQuickPillBar" class="absolute top-3 left-3.5 z-30 flex items-center gap-1.5 pointer-events-auto flex-wrap max-w-[calc(100vw-65px)]">
-        <button id="btnFloatingExpandMap" onclick="toggleMapUiVisibility()" class="px-2.5 py-1.5 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-2xs shadow-xl flex items-center gap-1 transition active:scale-95 border border-cyan-300" title="Xaritani to'liq ko'rish (Menyularni yashirish / ko'rsatish)">
-          <i data-lucide="maximize-2" id="iconFloatingExpandMap" class="w-3.5 h-3.5"></i>
-          <span id="textFloatingExpandMap">To'liq xarita</span>
-        </button>
-        <button id="pillToggleRoute" onclick="toggleRouteHistory()" class="px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Bugungi harakat yo'li (Yoqish / O'chirish)">
-          <i data-lucide="route" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span id="labelPillRoute">Harakat yo'li</span>
-        </button>
-        <button id="pillToggleRepeated" onclick="toggleRepeatedPlaces()" class="px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95" title="Qayta-qayta yurilgan joylar (Yoqish / O'chirish)">
-          <i data-lucide="repeat" class="w-3.5 h-3.5 text-rose-400"></i>
-          <span id="labelPillRepeated">Qayta joylar</span>
-        </button>
+        <!-- Parent View Active Walk Safe Monitoring Banner -->
+        <div id="parentWalkSafeBanner" class="hidden w-fit max-w-full bg-gradient-to-r from-amber-950/90 via-slate-900/90 to-slate-900/90 border border-amber-500/40 text-amber-200 px-3 py-2 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold backdrop-blur-2xl pointer-events-auto">
+          <span class="text-base shrink-0">🚶‍♂️</span>
+          <div class="leading-tight min-w-0">
+            <p class="text-2xs text-amber-300 uppercase tracking-wider font-black">Xavfsiz Yo'lda</p>
+            <p id="parentWalkSafeText" class="text-xs text-white font-bold truncate">14:20 qoldi (Uyga qaytish)</p>
+          </div>
+        </div>
+
+        <!-- Device Lockdown Active Alert Banner -->
+        <div id="parentLockdownBanner" class="hidden w-fit max-w-full bg-gradient-to-r from-rose-950/95 via-red-900/90 to-slate-900/90 border border-rose-500/50 text-rose-200 px-3 py-2 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold backdrop-blur-2xl pointer-events-auto">
+          <span class="text-base shrink-0">🛑</span>
+          <div class="leading-tight min-w-0">
+            <p class="text-2xs text-rose-300 uppercase tracking-wider font-black">Barcha Ilovalar Bloklangan</p>
+            <p id="parentLockdownBannerText" class="text-xs text-white font-bold truncate">Dars / Uyqu rejimi faol</p>
+          </div>
+          <button onclick="handleMasterLockToggle(false)" class="compact-btn ml-1 px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white text-[10px] rounded-lg font-black transition active:scale-95 shadow shrink-0">Yechish</button>
+        </div>
       </div>
 
       <!-- Floating Map Controls (Right Vertical Frosted Glass Dock - Compact & Collapsible) -->
@@ -659,8 +690,8 @@
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between">
-                <h4 class="text-xs font-black text-white">Farzand joylashuvi hali aniqlanmadi</h4>
-                <span class="text-2xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">Kutilmoqda</span>
+                <h4 class="text-xs font-black text-white" data-i18n="no_loc_title">Farzand joylashuvi hali aniqlanmadi</h4>
+                <span class="text-2xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold" data-i18n="no_loc_wait">Kutilmoqda</span>
               </div>
               <p class="text-[10px] sm:text-[11px] text-slate-300 mt-1 leading-relaxed">
                 Farzandingiz telefonida ilovani ochib, <b>«Doimiy joylashuvga ruxsat berish»</b> tugmasini bosishi kerak.
@@ -668,9 +699,9 @@
               <div class="mt-2 flex items-center gap-2">
                 <button onclick="requestChildLocationPing()" class="px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 active:scale-95 text-white rounded-xl text-[10px] font-bold transition flex items-center gap-1 shadow">
                   <i data-lucide="send" class="w-3 h-3"></i>
-                  <span>Joylashuvni so'rash</span>
+                  <span data-i18n="no_loc_btn_ask">Joylashuvni so'rash</span>
                 </button>
-                <button onclick="refreshAllData()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-[10px] font-semibold rounded-xl transition">
+                <button onclick="refreshAllData()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-[10px] font-semibold rounded-xl transition" data-i18n="no_loc_btn_retry">
                   Qayta tekshirish
                 </button>
               </div>
@@ -705,7 +736,7 @@
                 <i data-lucide="maximize-2" class="w-3.5 h-3.5 text-cyan-300"></i>
                 <span class="inline">To'liq xarita</span>
               </button>
-              <button id="btnToggleHudCollapse" type="button" onclick="toggleParentHudCollapse()" class="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-slate-300 hover:text-white border border-white/10 flex items-center justify-center transition shadow-sm" title="Monitoring tugmalarini yig'ish / ochish">
+              <button id="btnToggleHudCollapse" type="button" onclick="toggleParentHudCollapse()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-slate-300 hover:text-white border border-white/10 flex items-center justify-center transition shadow-sm" title="Monitoring tugmalarini yig'ish / ochish">
                 <i id="iconHudCollapse" data-lucide="chevron-up" class="w-4 h-4 transition-transform duration-300"></i>
               </button>
             </div>
@@ -719,8 +750,8 @@
                 <i data-lucide="eye" class="w-3.5 h-3.5"></i>
               </div>
               <div class="text-left min-w-0">
-                <p class="text-[10.5px] font-bold text-purple-200 leading-tight truncate">Passiv monitoring</p>
-                <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5">Sezdirmasdan</p>
+                <p class="text-[10.5px] font-bold text-purple-200 leading-tight truncate" data-i18n="hud_passive">Passiv monitoring</p>
+                <p class="text-[9px] text-purple-300/70 font-medium leading-none truncate mt-0.5" data-i18n="hud_passive_sub">Sezdirmasdan</p>
               </div>
             </button>
 
@@ -730,8 +761,8 @@
                 <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
               </div>
               <div class="text-left min-w-0">
-                <p class="text-[10.5px] font-black text-blue-100 leading-tight truncate">Hozirgi joylashuvi</p>
-                <p class="text-[9px] text-blue-200/80 font-medium leading-none truncate mt-0.5">Faol so'rov</p>
+                <p class="text-[10.5px] font-black text-blue-100 leading-tight truncate" data-i18n="hud_active">Hozirgi joylashuvi</p>
+                <p class="text-[9px] text-blue-200/80 font-medium leading-none truncate mt-0.5" data-i18n="hud_active_sub">Faol so'rov</p>
               </div>
             </button>
           </div>
@@ -751,8 +782,8 @@
 
       </div>
 
-      <!-- Floating Route Playback & Navigation HUD (Visible during Route View / Playback) -->
-      <div id="routePlaybackHud" class="hidden absolute bottom-5 left-3.5 right-3.5 md:left-1/2 md:-translate-x-1/2 md:max-w-md z-30 bg-slate-900/95 backdrop-blur-2xl border border-amber-500/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2">
+      <!-- Floating Route Playback & Navigation HUD (Visible during Route View / Playback, positioned cleanly above mainNavBar) -->
+      <div id="routePlaybackHud" class="hidden fixed bottom-[88px] left-3.5 right-3.5 md:left-1/2 md:-translate-x-1/2 md:max-w-md z-35 bg-slate-900/95 backdrop-blur-2xl border border-amber-500/40 rounded-2xl p-3 shadow-2xl flex flex-col gap-2">
         <!-- Top Status Row: Current Step / Time / Stats -->
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
@@ -762,8 +793,8 @@
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <span id="routeHudStatsText" class="text-[10px] sm:text-xs text-slate-300 font-bold">1 / 1 ta</span>
-            <button onclick="exitRouteView()" class="w-6 h-6 rounded-full bg-white/10 hover:bg-rose-500/30 text-slate-300 hover:text-rose-300 flex items-center justify-center transition active:scale-90" title="Marshrutni yopish">
-              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            <button onclick="exitRouteView()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-white/10 hover:bg-rose-500/30 text-slate-300 hover:text-rose-300 flex items-center justify-center transition active:scale-90" title="Marshrutni yopish">
+              <i data-lucide="x" class="w-4 h-4"></i>
             </button>
           </div>
         </div>
@@ -844,15 +875,12 @@
 
       <!-- 1.4. NATIVE PRO APP STATUS (Only shown when running inside Android App) -->
       <div id="nativeAppStatusCard" class="hidden ios-glass-card p-3.5 flex flex-col gap-2.5 border border-emerald-500/40 bg-gradient-to-r from-emerald-950/70 via-slate-900/80 to-slate-900/80 shadow-xl">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-        <button onclick="openModal('theme')" class="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-200 flex items-center gap-1 text-[11px] font-bold shadow active:scale-95 transition shrink-0" title="Dizayn va mavzular">
-          <span>🎨</span> <span>Mavzu</span>
-        </button>
-            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-            <span class="text-xs font-black text-emerald-300">24/7 Foniy GPS Xizmati Faol</span>
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0"></span>
+            <span class="text-xs font-black text-emerald-300 truncate">24/7 Foniy GPS Xizmati Faol</span>
           </div>
-          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">NATIVE PRO</span>
+          <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold shrink-0">NATIVE PRO</span>
         </div>
         <p class="text-[11px] text-slate-300 leading-relaxed">
           Ilova yopilgan yoki telefon qulflangan holatda ham ota-onangizga joylashuv to'xtovsiz yuboriladi.
@@ -1144,7 +1172,55 @@
               </div>
             </div>
             <div id="badgePermAccessibility" class="shrink-0">
-              <button onclick="triggerAccessibilityRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+              <button onclick="triggerAccessibilityRequest()" class="compact-btn px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+
+          <!-- Item 4: Microphone (Ambient Sound & SOS 5s Audio) -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">🎙</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Mikrofon (Atrof ovozi &amp; 5s SOS)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">Ota-onaga ovoz yozish va SOS audio yuborish</p>
+              </div>
+            </div>
+            <div id="badgePermMic" class="shrink-0">
+              <button onclick="triggerMicPermissionRequest()" class="compact-btn px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+
+          <!-- Item 5: Notification & Siren Audio -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">🔔</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Signal va Bildirishnoma (Ovoz)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">Qidiruv signali baland ovozda yangrashi uchun</p>
+              </div>
+            </div>
+            <div id="badgePermSignal" class="shrink-0">
+              <button onclick="triggerNotificationSignalPermissionRequest()" class="compact-btn px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
+                Yoqish
+              </button>
+            </div>
+          </div>
+
+          <!-- Item 6: VPN Network Firewall -->
+          <div class="p-2.5 rounded-xl bg-slate-800/80 border border-white/5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-base shrink-0">📴</span>
+              <div>
+                <p class="text-[11px] font-bold text-white leading-tight">Internet Cheklovi (VPN Firewall)</p>
+                <p class="text-[9px] text-slate-400 leading-tight">Dars/uyqu payti o'yinlar internetini uzish</p>
+              </div>
+            </div>
+            <div id="badgePermVpn" class="shrink-0">
+              <button onclick="triggerVpnPermissionRequest()" class="compact-btn px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">
                 Yoqish
               </button>
             </div>
@@ -1246,22 +1322,22 @@
   <nav id="mainNavBar" class="fixed bottom-3 left-3 right-3 md:left-1/2 md:-translate-x-1/2 md:w-auto md:min-w-[480px] z-30 px-2 py-1.5 grid grid-cols-5 gap-1 shadow-2xl safe-bottom transition-all duration-300">
     <button onclick="switchTab('map')" id="tabBtn-map" class="nav-tab active text-blue-400 hover:text-blue-300">
       <i id="tabIcon-map" data-lucide="map" class="w-5 h-5"></i>
-      <span id="tabLabel-map" class="text-2xs sm:text-xs font-bold mt-1 truncate">Xarita</span>
+      <span id="tabLabel-map" class="text-2xs sm:text-xs font-bold mt-1 truncate" data-i18n="tab_map">Xarita</span>
     </button>
 
     <button onclick="switchTab('zones')" id="tabBtn-zones" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-zones" data-lucide="map-pin" class="w-5 h-5"></i>
-      <span id="tabLabel-zones" class="text-2xs sm:text-xs font-medium mt-1 truncate">Joylar</span>
+      <span id="tabLabel-zones" class="text-2xs sm:text-xs font-medium mt-1 truncate" data-i18n="tab_zones">Joylar</span>
     </button>
 
     <button onclick="switchTab('tasks')" id="tabBtn-tasks" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-tasks" data-lucide="check-square" class="w-5 h-5"></i>
-      <span id="tabLabel-tasks" class="text-2xs sm:text-xs font-medium mt-1 truncate">Vazifalar</span>
+      <span id="tabLabel-tasks" class="text-2xs sm:text-xs font-medium mt-1 truncate" data-i18n="tab_tasks">Vazifalar</span>
     </button>
 
     <button onclick="switchTab('history')" id="tabBtn-history" class="nav-tab text-slate-400 hover:text-slate-200">
       <i id="tabIcon-history" data-lucide="history" class="w-5 h-5"></i>
-      <span id="tabLabel-history" class="text-2xs sm:text-xs font-medium mt-1 truncate">Tarix</span>
+      <span id="tabLabel-history" class="text-2xs sm:text-xs font-medium mt-1 truncate" data-i18n="tab_history">Tarix</span>
     </button>
 
     <button onclick="switchTab('settings')" id="tabBtn-settings" class="nav-tab text-purple-400 hover:text-purple-300">
@@ -1279,9 +1355,9 @@
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
           <i data-lucide="map-pin" class="w-5 h-5 text-emerald-400"></i>
-          <h2 id="zonesModalTitle" class="text-sm font-bold text-white">Kerakli Joylar</h2>
+          <h2 id="zonesModalTitle" class="text-sm font-bold text-white" data-i18n="zones_modal_title">Kerakli Joylar</h2>
         </div>
-        <button onclick="closeModal('zones')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <button onclick="closeModal('zones')" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1289,7 +1365,7 @@
       <div id="btnAddZoneSection" class="my-3">
         <button onclick="openAddZoneModal()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg">
           <i data-lucide="plus-circle" class="w-4 h-4"></i>
-          <span>Yangi kerakli joy qo'shish</span>
+          <span data-i18n="add_zone_btn">Yangi kerakli joy qo'shish</span>
         </button>
       </div>
 
@@ -1308,9 +1384,9 @@
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
           <i data-lucide="footprints" class="w-5 h-5 text-amber-400"></i>
-          <h2 class="text-sm font-bold text-white">Bugungi Harakat Tarixi</h2>
+          <h2 class="text-sm font-bold text-white" data-i18n="history_title">Bugungi Harakat Tarixi</h2>
         </div>
-        <button onclick="closeModal('history')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <button onclick="closeModal('history')" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1334,11 +1410,11 @@
       <div class="mb-3 grid grid-cols-2 gap-2">
         <button onclick="clearRouteHistory()" class="py-2 px-2.5 bg-amber-950/50 hover:bg-amber-900/60 border border-amber-500/30 text-amber-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95" title="Bugungi harakat yo'lini xaritadan o'chirish">
           <i data-lucide="trash-2" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span>Yo'lni o'chirish</span>
+          <span data-i18n="btn_clear_route">Yo'lni o'chirish</span>
         </button>
         <button onclick="clearRepeatedPlaces()" class="py-2 px-2.5 bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95" title="Qayta-qayta yurilgan joylarni xaritadan o'chirish">
           <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
-          <span>Qayta joylarni o'chirish</span>
+          <span data-i18n="btn_clear_repeats">Qayta joylarni o'chirish</span>
         </button>
       </div>
 
@@ -1346,56 +1422,56 @@
       <div class="mb-3 flex gap-2">
         <button id="btnPlayRoute" onclick="startRoutePlayback()" class="flex-1 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md">
           <i data-lucide="play" class="w-3.5 h-3.5"></i>
-          <span>Harakatni ko'rish</span>
+          <span data-i18n="play_route_btn">Harakatni ko'rish</span>
         </button>
         <button onclick="closeModal('history'); toggleRouteHistory(true);" class="py-2.5 px-3 bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Xaritani to'liq ko'rish rejimida ochish">
           <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
-          <span>Xaritada</span>
+          <span data-i18n="btn_on_map">Xaritada</span>
         </button>
         <button id="btnOpenDailyReportFromHistory" onclick="openDailyReportModal()" class="py-2.5 px-3 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm active:scale-95 shrink-0" title="Kunlik xavfsizlik hisoboti">
           <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-indigo-400"></i>
-          <span>Hisobot</span>
+          <span data-i18n="btn_report">Hisobot</span>
         </button>
       </div>
 
       <!-- Route Stats Summary Bar -->
       <div id="routeStatsSummaryBar" class="grid grid-cols-4 gap-1.5 p-2 bg-slate-800/80 rounded-2xl border border-slate-700/60 text-center my-2 shadow-inner">
         <div>
-          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold">Masofa</p>
+          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold" data-i18n="stat_distance">Masofa</p>
           <p id="statTotalDistance" class="font-black text-amber-400 text-xs mt-0.5">0.0 km</p>
         </div>
         <div>
-          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold">Qadamlar</p>
+          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold" data-i18n="stat_steps">Qadamlar</p>
           <p id="statTotalSteps" class="font-black text-cyan-300 text-xs mt-0.5">0 ta</p>
         </div>
         <div>
-          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold">Max tezlik</p>
+          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold" data-i18n="stat_speed">Max tezlik</p>
           <p id="statMaxSpeed" class="font-black text-emerald-400 text-xs mt-0.5">0 km/s</p>
         </div>
         <div>
-          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold">To'xtashlar</p>
+          <p class="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold" data-i18n="stat_stops">To'xtashlar</p>
           <p id="statTotalStops" class="font-black text-purple-300 text-xs mt-0.5">0 joy</p>
         </div>
       </div>
 
       <!-- Time of Day Filter Pills -->
       <div class="flex items-center gap-1.5 overflow-x-auto py-1 custom-scroll no-scrollbar mb-2 text-2xs">
-        <button onclick="filterHistoryByTime('all')" id="btnFilterTime-all" class="filter-time-pill px-2.5 py-1 bg-blue-600 text-white rounded-xl font-bold transition active:scale-95 shrink-0 shadow-sm">
+        <button onclick="filterHistoryByTime('all')" id="btnFilterTime-all" class="filter-time-pill px-2.5 py-1 bg-blue-600 text-white rounded-xl font-bold transition active:scale-95 shrink-0 shadow-sm" data-i18n="filter_all">
           Barchasi
         </button>
-        <button onclick="filterHistoryByTime('morning')" id="btnFilterTime-morning" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0">
+        <button onclick="filterHistoryByTime('morning')" id="btnFilterTime-morning" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0" data-i18n="filter_morning">
           🌅 Ertalab (06-12)
         </button>
-        <button onclick="filterHistoryByTime('afternoon')" id="btnFilterTime-afternoon" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0">
+        <button onclick="filterHistoryByTime('afternoon')" id="btnFilterTime-afternoon" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0" data-i18n="filter_afternoon">
           ☀️ Tushlik (12-18)
         </button>
-        <button onclick="filterHistoryByTime('evening')" id="btnFilterTime-evening" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0">
+        <button onclick="filterHistoryByTime('evening')" id="btnFilterTime-evening" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-slate-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0" data-i18n="filter_evening">
           🌙 Kechqurun (18-24)
         </button>
-        <button onclick="filterHistoryByTime('stops')" id="btnFilterTime-stops" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-rose-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-rose-500/30">
+        <button onclick="filterHistoryByTime('stops')" id="btnFilterTime-stops" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-rose-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-rose-500/30" data-i18n="filter_stops">
           🛑 To'xtashlar
         </button>
-        <button onclick="filterHistoryByTime('offline')" id="btnFilterTime-offline" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-purple-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-purple-500/30">
+        <button onclick="filterHistoryByTime('offline')" id="btnFilterTime-offline" class="filter-time-pill px-2.5 py-1 bg-slate-800 text-purple-300 hover:text-white rounded-xl font-bold transition active:scale-95 shrink-0 border border-purple-500/30" data-i18n="filter_offline">
           📴 Oflayn GPS
         </button>
       </div>
@@ -1416,7 +1492,7 @@
           <i data-lucide="wallet" class="w-5 h-5 text-emerald-400"></i>
           <h2 class="text-sm font-bold text-white">Mening Hamyonim & Jamg'armam</h2>
         </div>
-        <button onclick="closeModal('wallet')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <button onclick="closeModal('wallet')" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1523,7 +1599,7 @@
         </div>
         <span class="text-xs font-black text-white">Yangi Xavfsiz Makon Qo'shish</span>
       </div>
-      <button type="button" onclick="closeAddZoneModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95" title="Yopish">
+      <button type="button" onclick="closeAddZoneModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition active:scale-95" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -1583,9 +1659,9 @@
       <div class="flex items-center justify-between pb-3 border-b border-slate-800">
         <div class="flex items-center gap-2">
           <i data-lucide="check-square" class="w-5 h-5 text-indigo-400"></i>
-          <h2 id="tasksModalTitle" class="text-sm font-bold text-white">Topshiriqlar Xizmati</h2>
+          <h2 id="tasksModalTitle" class="text-sm font-bold text-white" data-i18n="tasks_title">Topshiriqlar Xizmati</h2>
         </div>
-        <button onclick="closeModal('tasks')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <button onclick="closeModal('tasks')" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1594,7 +1670,7 @@
       <div id="parentTaskActionSection" class="my-3">
         <button onclick="openAddTaskModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg">
           <i data-lucide="plus-circle" class="w-4 h-4"></i>
-          <span>Yangi topshiriq berish (Rasm/Video bilan)</span>
+          <span data-i18n="add_task_btn">Yangi topshiriq berish</span>
         </button>
       </div>
 
@@ -1612,7 +1688,7 @@
           <i data-lucide="plus-circle" class="w-4 h-4 text-indigo-400"></i>
           <span>Yangi Topshiriq</span>
         </h3>
-        <button onclick="closeAddTaskModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeAddTaskModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1709,7 +1785,7 @@
           <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
           <span>Qachon bajarasiz?</span>
         </h3>
-        <button onclick="closeScheduleModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeScheduleModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1797,7 +1873,7 @@
           <i data-lucide="camera" class="w-4 h-4 text-emerald-400"></i>
           <span>Bajarilganini tasdiqlash</span>
         </h3>
-        <button onclick="closeProofModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeProofModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1859,7 +1935,7 @@
   <div id="authGateModal" class="hidden fixed inset-0 z-[2000] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto safe-top safe-bottom">
     <div class="relative bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 w-full max-w-sm sm:max-w-md max-h-[94dvh] overflow-y-auto custom-scroll my-auto flex flex-col shadow-2xl animate-fade-in text-center">
       <!-- Close button (Always accessible so user is never trapped) -->
-      <button id="btnCloseAuthGate" onclick="hideAuthGateModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+      <button id="btnCloseAuthGate" onclick="hideAuthGateModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
       <div class="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3 overflow-hidden">
@@ -2056,7 +2132,7 @@
           <i data-lucide="coins" class="w-4 h-4 text-amber-400"></i>
           <span>Tangalar Kursini Sozlash</span>
         </h3>
-        <button onclick="closeCoinRateModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeCoinRateModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2126,7 +2202,7 @@
           <span class="text-lg">⚙️</span>
           <span data-i18n="settings_title">Dizayn va Til Sozlamalari</span>
         </h3>
-        <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeSettingsModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2134,30 +2210,30 @@
       <!-- App Brand Card -->
       <div class="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-950/60 via-indigo-950/40 to-slate-900 border border-blue-500/30 flex items-center gap-3">
         <img src="logo.png?v=17" class="w-12 h-12 rounded-xl object-contain drop-shadow-md shrink-0" alt="Child Security Bot Logo" />
-        <div>
-          <h4 class="text-xs font-black text-white flex items-center gap-1.5">
-            <span>Child Security Bot</span>
-            <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded-md font-bold">PRO</span>
-          </h4>
-          <p class="text-[10px] text-slate-400 mt-0.5">Aqlli Bolalar Xavfsizlik & Rag'bat Tizimi</p>
-        </div>
-      </div>
-
-      <!-- Mobil Ilova Banner -->
-      <div class="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-purple-900/40 border border-blue-500/40 flex items-center justify-between gap-2.5 shadow-md">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-            <i data-lucide="smartphone" class="w-5 h-5"></i>
-          </div>
           <div class="min-w-0">
-            <p class="text-xs font-black text-white truncate">Mobil ilova (Android & iOS)</p>
-            <p class="text-[10px] text-blue-200/80 truncate">24/7 doimiy GPS va ekran o'chiq holda ishlash</p>
+            <h4 class="text-xs font-black text-white flex items-center gap-1.5">
+              <span>Child Security Bot</span>
+              <span class="text-2xs bg-blue-500/20 text-blue-300 border border-blue-500/40 px-1.5 py-0.5 rounded-md font-bold">PRO</span>
+            </h4>
+            <p class="text-[10px] text-slate-400 mt-0.5" data-i18n="brand_sub">Aqlli Bolalar Xavfsizlik & Rag'bat Tizimi</p>
           </div>
         </div>
-        <button type="button" onclick="openInstallAppModal()" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[10px] rounded-xl shadow transition shrink-0">
-          O'rnatish
-        </button>
-      </div>
+
+        <!-- Mobil Ilova Banner -->
+        <div class="mt-3 p-3 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/40 to-purple-900/40 border border-blue-500/40 flex items-center justify-between gap-2.5 shadow-md">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+              <i data-lucide="smartphone" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-black text-white truncate" data-i18n="install_mobile_title">Mobil ilova (Android & iOS)</p>
+              <p class="text-[10px] text-blue-200/80 truncate" data-i18n="install_mobile_sub">24/7 doimiy GPS va ekran o'chiq holda ishlash</p>
+            </div>
+          </div>
+          <button type="button" onclick="openInstallAppModal()" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold text-[10px] rounded-xl shadow transition shrink-0" data-i18n="install_btn">
+            O'rnatish
+          </button>
+        </div>
 
       <!-- SECTION 1: LANGUAGE SWITCHER -->
       <div class="mt-3 mb-4">
@@ -2207,7 +2283,7 @@
             <i data-lucide="palette" class="w-3.5 h-3.5"></i>
             <span data-i18n="theme_heading">🎨 Dizayn Mavzulari (12 xil)</span>
           </div>
-          <span class="text-[10px] text-slate-400">12 ta uslub</span>
+          <span class="text-[10px] text-slate-400" data-i18n="styles_count">12 ta uslub</span>
         </div>
         <p class="text-[11px] text-slate-400 mb-3" data-i18n="theme_desc">
           O'zingizga yoqqan dizaynni tanlang. U butun sayt, xarita va tugmalar ranglarini darhol o'zgartiradi:
@@ -2563,7 +2639,7 @@
   <!-- CHILD ONBOARDING PERMISSIONS MODAL -->
   <div id="childOnboardingModal" class="hidden fixed inset-0 z-[2400] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
     <div class="relative bg-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in max-h-[92vh] overflow-y-auto">
-      <button onclick="skipChildPermissions()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+      <button onclick="skipChildPermissions()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
 
@@ -2572,63 +2648,92 @@
       </div>
       <h3 class="text-base font-black text-white">Xavfsizlik Ruxsatnomalari 🛡️</h3>
       <p class="text-xs text-slate-300 mt-1 leading-relaxed">
-        Xavfsizlik, 5s ovoz, offline SMS va ilovalar monitoringi to'liq ishlashi uchun quyidagi 5 ta ruxsatni 1 marta bering:
+        Xavfsizlik, ovoz yozish, signal chalish, offline SMS va ilovalar nazorati to'liq ishlashi uchun quyidagi ruxsatlarni yoqing:
       </p>
 
       <div class="flex flex-col gap-2 my-3 text-left">
         <!-- 1. Geolokatsiya -->
-        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="map-pin" class="w-4 h-4"></i>
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">1. Jonli Joylashuv (GPS)</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ota-onangiz xaritada xavfsizligingizni bilib turishi va SOS yordamga kelishi uchun.</p>
+            </div>
           </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">1. Jonli Joylashuv (GPS)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ota-onangiz xaritada xavfsizligingizni bilib turishi va SOS holatida yordamga kelishi uchun.</p>
-          </div>
+          <span id="badgeOnbGeo" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
         </div>
 
-        <!-- 2. Mikrofon (5s Ovoz & SOS) -->
-        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="mic" class="w-4 h-4"></i>
+        <!-- 2. Mikrofon (Ovoz yozish & SOS) -->
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="mic" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">2. Mikrofon (Atrof ovozi &amp; 5s SOS)</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Atrof ovozini yozib olish va favqulodda SOS audio yuborish uchun.</p>
+            </div>
           </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">2. Mikrofon (5s Ovoz & SOS)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">SOS bosilganda va favqulodda vaziyatda ota-onaga 5 soniyalik audio snapshot yuborish uchun.</p>
-          </div>
+          <span id="badgeOnbMic" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
         </div>
 
-        <!-- 3. Favqulodda Offline SMS (Avtomatik SOS) -->
-        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="message-square" class="w-4 h-4"></i>
+        <!-- 3. Favqulodda Offline SMS -->
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="message-square" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">3. Favqulodda Offline SMS</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Internet uzilganda koordinatali avtomatik SOS SMS yuborish uchun.</p>
+            </div>
           </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">3. Favqulodda Offline SMS (Avtomatik)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Internet uzilganda yoki favqulodda xavf bo'lganda ota-onaga koordinatali avtomatik SMS yuborish uchun.</p>
-          </div>
+          <span id="badgeOnbSms" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
         </div>
 
-        <!-- 4. Ilovalar tahlili (Usage Access) -->
-        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+        <!-- 4. Ilovalar tahlili -->
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">4. Ilovalar Tahlili (Usage Access)</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ekran vaqti va ilovalar sarfini aniqlash uchun.</p>
+            </div>
           </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">4. Ilovalar Tahlili (Usage Access)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Qaysi o'yin va ilovalarda (YouTube, TikTok) qancha vaqt sarflanganini tahlil qilish uchun zarur.</p>
-          </div>
+          <span id="badgeOnbUsage" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
         </div>
 
-        <!-- 5. Bloklash & Xavfsizlik (Accessibility) -->
-        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-start gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="lock" class="w-4 h-4"></i>
+        <!-- 5. Bloklash & Qalqon -->
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="lock" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">5. Ilovalarni Bloklash (Overlay &amp; Accessibility)</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Zararli ilovalarni cheklash va bloklash qalqonini chiqarish uchun.</p>
+            </div>
           </div>
-          <div>
-            <h4 class="text-xs font-bold text-white">5. Ilovalarni Boshqarish (Accessibility)</h4>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Zararli ilovalarni cheklash va dars paytida bloklash qalqonini chiqarish uchun.</p>
+          <span id="badgeOnbAccess" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
+        </div>
+
+        <!-- 6. Bildirishnoma va Qidiruv Signali -->
+        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2.5">
+          <div class="flex items-start gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+              <i data-lucide="bell-ring" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-white">6. Signal va Bildirishnomalar</h4>
+              <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">Ota-onaning baland qidiruv signali va tezkor xabarlarini qabul qilish uchun.</p>
+            </div>
           </div>
+          <span id="badgeOnbSignal" class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">⏳</span>
         </div>
       </div>
 
@@ -2668,7 +2773,7 @@
   <!-- MODAL: CHILD INVITE PARENT -->
   <div id="childInviteParentModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="relative bg-slate-900 border border-blue-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
-      <button onclick="closeChildInviteParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+      <button onclick="closeChildInviteParentModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
       <div class="w-14 h-14 rounded-2xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
@@ -2723,7 +2828,7 @@
   <!-- MODAL: PARENT INVITE SPOUSE / CO-PARENT -->
   <div id="parentInviteSpouseModal" class="hidden fixed inset-0 z-[2300] bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="relative bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
-      <button onclick="closeParentInviteSpouseModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+      <button onclick="closeParentInviteSpouseModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
       <div class="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-2xl mx-auto mb-3 shadow-lg">
@@ -2777,7 +2882,7 @@
           <span class="text-lg">🚶‍♂️</span>
           <span>Xavfsiz Yo'l Taymeri</span>
         </h3>
-        <button onclick="closeWalkSafeModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeWalkSafeModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2855,7 +2960,7 @@
           <span class="text-lg">🎯</span>
           <span>Orzular Qutisi & Maqsad</span>
         </h3>
-        <button onclick="closeEditWishlistModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+        <button onclick="closeEditWishlistModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2907,7 +3012,7 @@
           <i data-lucide="bar-chart-2" class="w-5 h-5 text-indigo-400"></i>
           <h2 class="text-sm font-bold text-white">Kunlik Xavfsizlik Hisoboti</h2>
         </div>
-        <button onclick="closeDailyReportModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
+        <button onclick="closeDailyReportModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 active:scale-90 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm" title="Yopish">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2929,11 +3034,11 @@
             <i data-lucide="smartphone" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-sm sm:text-base font-black text-white">Ekran Vaqti va Ilovalar Nazorati</h3>
-            <p class="text-[11px] text-slate-400">Telefon ishlatish statistikasi va cheklovlar</p>
+            <h3 class="text-sm sm:text-base font-black text-white" data-i18n="st_title">Ekran Vaqti va Ilovalar Nazorati</h3>
+            <p class="text-[11px] text-slate-400" data-i18n="st_sub">Telefon ishlatish statistikasi va cheklovlar</p>
           </div>
         </div>
-        <button onclick="closeScreenTimeControlModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition active:scale-95">
+        <button onclick="closeScreenTimeControlModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition active:scale-95">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -2946,7 +3051,7 @@
         <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-800/80 to-slate-900/90 border border-white/10 shadow-lg">
           <div class="flex items-start justify-between">
             <div>
-              <p class="text-2xs text-slate-400 uppercase tracking-wider font-bold">Bugungi Ekran Vaqti</p>
+              <p class="text-2xs text-slate-400 uppercase tracking-wider font-bold" data-i18n="st_today">Bugungi Ekran Vaqti</p>
               <h2 id="stTotalTime" class="text-2xl sm:text-3xl font-black text-white mt-0.5">3 soat 45 daq</h2>
               <p id="stUnlockCount" class="text-xs text-slate-300 mt-1 flex items-center gap-1.5">
                 <span>🔓 Telefon ochilgan:</span>
@@ -2983,9 +3088,9 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
                 <span class="text-base">🛑</span>
-                <h4 class="text-xs sm:text-sm font-black text-white">Barcha ilovalarni bloklash</h4>
+                <h4 class="text-xs sm:text-sm font-black text-white" data-i18n="st_master_title">Barcha ilovalarni bloklash</h4>
               </div>
-              <p class="text-[11px] text-slate-300 mt-0.5 leading-snug">
+              <p class="text-[11px] text-slate-300 mt-0.5 leading-snug" data-i18n="st_master_desc">
                 Yoqilganda bolaning telefonida barcha ilovalar qulflanadi (faqat qo'ng'iroq va SOS ochiq qoladi).
               </p>
             </div>
@@ -3011,7 +3116,7 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
                 <span class="text-base">📴</span>
-                <h4 class="text-xs sm:text-sm font-black text-white">Qurilmani Offline Qilish (Internetni cheklash)</h4>
+                <h4 class="text-xs sm:text-sm font-black text-white" data-i18n="st_net_title">Qurilmani Offline Qilish (Internetni cheklash)</h4>
               </div>
               <p class="text-[11px] text-slate-300 mt-0.5 leading-snug">
                 Mahalliy xavfsizlik devori (VpnService) orqali o'yinlar, brauzer va ijtimoiy tarmoqlar interneti uziladi. Faqat ota-ona nazorati va SOS ochiq qoladi.
@@ -3045,7 +3150,7 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
                 <span class="text-base">🛡️</span>
-                <h4 class="text-xs sm:text-sm font-black text-white">Sozlamalarni o'chirishdan himoya</h4>
+                <h4 class="text-xs sm:text-sm font-black text-white" data-i18n="st_anti_title">Sozlamalarni o'chirishdan himoya</h4>
               </div>
               <p class="text-[11px] text-slate-300 mt-0.5 leading-snug">
                 Bola telefon sozlamalaridan ilovani yoki ruxsatlarni o'chira olmasligi uchun ota-ona PIN-kodi talab qilinadi.
@@ -3075,7 +3180,7 @@
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h4 class="text-xs sm:text-sm font-black text-white flex items-center gap-1.5">
-              <span>📱</span> <span>Ilovalarni alohida bloklash</span>
+              <span>📱</span> <span data-i18n="st_apps_title">Ilovalarni alohida bloklash</span>
             </h4>
             <span id="stBlockedCountText" class="text-2xs text-rose-300 font-bold bg-rose-500/20 px-2 py-0.5 rounded-full border border-rose-500/30">
               0 ta bloklangan
@@ -3093,31 +3198,31 @@
             </button>
           </div>
 
-          <!-- Quick-Add Custom App Bar -->
+      <!-- Search & Add App Inputs -->
           <div class="p-1 bg-slate-800/90 rounded-2xl border border-white/10 flex items-center gap-1.5 shadow-sm">
             <div class="relative flex-1">
               <i data-lucide="plus-circle" class="w-4 h-4 text-rose-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="inputCustomBlockApp" placeholder="Boshqa ilovani bloklash (masalan: TikTok, PUBG)..." onkeydown="if(event.key==='Enter')addCustomAppToBlock()" class="w-full pl-9 pr-2 py-1.5 bg-transparent text-xs text-white placeholder-slate-400 outline-none">
+              <input type="text" id="inputCustomBlockApp" data-i18n-placeholder="st_custom_ph" placeholder="Boshqa ilovani bloklash (masalan: TikTok, PUBG)..." onkeydown="if(event.key==='Enter')addCustomAppToBlock()" class="w-full pl-9 pr-2 py-1.5 bg-transparent text-xs text-white placeholder-slate-400 outline-none">
             </div>
-            <button onclick="addCustomAppToBlock()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 shrink-0 flex items-center gap-1">
-              <span>+ Qo'shish</span>
+            <button onclick="addCustomAppToBlock()" class="compact-btn px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 shrink-0 flex items-center gap-1">
+              <span data-i18n="st_btn_add">+ Qo'shish</span>
             </button>
           </div>
 
           <!-- Category Filter Tabs -->
           <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 text-2xs font-extrabold">
-            <button id="stTabAll" onclick="filterAppsByCategory('all')" class="st-cat-tab px-3 py-1 rounded-xl bg-rose-600 text-white transition active:scale-95 shrink-0 shadow-sm">Barchasi</button>
-            <button id="stTabBlocked" onclick="filterAppsByCategory('blocked')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">🛑 Faqat bloklangan</button>
-            <button id="stTabGame" onclick="filterAppsByCategory('game')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">🎮 O'yinlar</button>
-            <button id="stTabSocial" onclick="filterAppsByCategory('social')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">📱 Ijtimoiy</button>
-            <button id="stTabChat" onclick="filterAppsByCategory('chat')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0">💬 Muloqot</button>
+            <button id="stTabAll" onclick="filterAppsByCategory('all')" class="st-cat-tab px-3 py-1 rounded-xl bg-rose-600 text-white transition active:scale-95 shrink-0 shadow-sm" data-i18n="st_tab_all">Barchasi</button>
+            <button id="stTabBlocked" onclick="filterAppsByCategory('blocked')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0" data-i18n="st_tab_blocked">🛑 Faqat bloklangan</button>
+            <button id="stTabGame" onclick="filterAppsByCategory('game')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0" data-i18n="st_tab_game">🎮 O'yinlar</button>
+            <button id="stTabSocial" onclick="filterAppsByCategory('social')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0" data-i18n="st_tab_social">📱 Ijtimoiy</button>
+            <button id="stTabChat" onclick="filterAppsByCategory('chat')" class="st-cat-tab px-3 py-1 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition active:scale-95 shrink-0" data-i18n="st_tab_chat">💬 Muloqot</button>
           </div>
 
           <!-- Search Filter -->
           <div class="flex items-center gap-2">
             <div class="relative flex-1">
               <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="inputSearchApps" oninput="filterAppsList(this.value)" placeholder="Ilova nomini qidirish..." class="w-full pl-8 pr-3 py-1.5 bg-slate-800/80 border border-white/10 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-rose-400">
+              <input type="text" id="inputSearchApps" data-i18n-placeholder="st_search_ph" oninput="filterAppsList(this.value)" placeholder="Ilova nomini qidirish..." class="w-full pl-8 pr-3 py-1.5 bg-slate-800/80 border border-white/10 rounded-xl text-xs text-white placeholder-slate-400 outline-none focus:border-rose-400">
             </div>
           </div>
 
@@ -3143,7 +3248,7 @@
             <p class="text-2xs text-slate-400">Internet o'chiq paytda boshqarish</p>
           </div>
         </div>
-        <button onclick="closeSmsCommandsModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
+        <button onclick="closeSmsCommandsModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -3214,7 +3319,7 @@
   <!-- MODAL: CALL PARENT (1-TAP DIRECT CALL & CONTACT SHEET) -->
   <div id="modalCallParent" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
     <div class="relative bg-slate-900 border-t sm:border border-blue-500/30 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-center">
-      <button onclick="closeCallParentModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
+      <button onclick="closeCallParentModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
 
@@ -3259,7 +3364,7 @@
   <!-- MODAL: FAST EMERGENCY TEXT MESSAGE (0-TAP TO PARENT TELEGRAM) -->
   <div id="modalEmergencyMessage" class="hidden fixed inset-0 z-[2600] bg-slate-950/90 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
     <div class="relative bg-slate-900 border-t sm:border border-red-500/40 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 w-full max-w-sm shadow-2xl text-left">
-      <button onclick="closeEmergencyMessageModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
+      <button onclick="closeEmergencyMessageModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 active:scale-95 transition" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
 
@@ -3309,7 +3414,7 @@
   <!-- MODAL: HELP & DOCUMENTATION CENTER -->
   <div id="modalHelp" class="hidden fixed inset-0 z-[2500] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
     <div class="relative bg-slate-900 border border-cyan-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-lg shadow-2xl text-left max-h-[92dvh] overflow-y-auto custom-scroll">
-      <button onclick="closeHelpModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+      <button onclick="closeHelpModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
 
@@ -3415,7 +3520,7 @@
   <!-- MODAL: INSTALL MOBILE APP (ANDROID APK & IPHONE PWA) -->
   <div id="modalInstallApp" class="hidden fixed inset-0 z-[2400] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
     <div class="relative bg-slate-900 border border-blue-500/30 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl text-left max-h-[92dvh] overflow-y-auto custom-scroll">
-      <button onclick="closeInstallAppModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
+      <button onclick="closeInstallAppModal()" class="absolute top-4 right-4 min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95" title="Yopish">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
 
@@ -3724,7 +3829,7 @@
             <p class="text-[10px] text-rose-300">Internetsiz farzand koordinatasini xaritada ko'rish</p>
           </div>
         </div>
-        <button onclick="closeOfflineSmsDecoderModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95">
+        <button onclick="closeOfflineSmsDecoderModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition active:scale-95">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -3782,7 +3887,7 @@
             <p class="text-[10px] text-emerald-400 font-bold">100% Toza va Ochiq Kodli Ilova</p>
           </div>
         </div>
-        <button onclick="closeDownloadSecurityModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
+        <button onclick="closeDownloadSecurityModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
       </div>
 
       <div class="space-y-2.5 text-xs">
@@ -3828,7 +3933,7 @@
             <p class="text-[10px] text-blue-300">1-bosishda bolangiz telefoniga xabar yuboring</p>
           </div>
         </div>
-        <button onclick="closeParentDirectiveModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
+        <button onclick="closeParentDirectiveModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
       </div>
 
       <div class="grid grid-cols-2 gap-2 text-xs">
@@ -3881,7 +3986,7 @@
             <p class="text-[10px] text-red-300">O'zbekiston Davlat Tezkor Xizmatlari</p>
           </div>
         </div>
-        <button onclick="closeEmergencyServicesModal()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
+        <button onclick="closeEmergencyServicesModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">✕</button>
       </div>
 
       <div class="grid grid-cols-1 gap-2 text-xs">
@@ -3932,6 +4037,34 @@
     </div>
   </div>
 
+  <!-- INCOMING SIREN ALERT MODAL (Ota-ona Qidiruv Signali) -->
+  <div id="modalIncomingSirenAlert" class="hidden fixed inset-0 z-[2600] bg-red-950/95 backdrop-blur-lg flex items-center justify-center p-4">
+    <div class="relative bg-gradient-to-b from-red-900 via-rose-950 to-slate-950 border-2 border-red-500 rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl text-center">
+      <div class="w-20 h-20 rounded-full bg-red-600/30 border-4 border-red-500 flex items-center justify-center mx-auto mb-4 animate-bounce">
+        <span class="text-4xl">🚨</span>
+      </div>
+      <div class="inline-block px-3 py-1 bg-red-500/20 text-red-300 border border-red-500/40 rounded-full text-[10px] font-black uppercase tracking-wider mb-2">
+        FAVQULODDA CHAQIRUV
+      </div>
+      <h2 class="text-xl sm:text-2xl font-black text-white leading-tight">
+        OTA-ONANGIZ QIDIRUV SIGNALI! 🔊
+      </h2>
+      <p class="text-xs text-rose-200 mt-2 leading-relaxed">
+        Ota-onangiz sizni topish uchun baland ovozli qidiruv signali yubordi. Telefon ovozi va vibratsiyasi faollashtirildi!
+      </p>
+      
+      <div class="flex flex-col gap-2.5 mt-6">
+        <button id="btnSirenAcknowledge" onclick="dismissIncomingSirenAlert()" class="min-h-[48px] w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-black text-sm rounded-2xl shadow-xl shadow-emerald-950/60 active:scale-95 transition flex items-center justify-center gap-2">
+          <span>🛑 Men shu yerdaman / Ovozni o'chirish</span>
+        </button>
+        <button onclick="playSirenSound(); haptic('heavy');" class="min-h-[44px] w-full py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 active:scale-95 transition flex items-center justify-center gap-2">
+          <i data-lucide="volume-2" class="w-4 h-4"></i>
+          <span>🔊 Qaytadan yangratish</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- EMERGENCY STROBE LIGHT OVERLAY (Ekran Favqulodda Strob Chirog'i) -->
   <div id="emergencyStrobeOverlay" class="hidden fixed inset-0 z-[2000] flex flex-col items-center justify-center p-6 text-center select-none cursor-pointer" onclick="toggleEmergencyStrobe(false)">
     <div class="p-6 bg-black/80 rounded-3xl border-2 border-white/80 shadow-2xl backdrop-blur-md max-w-xs flex flex-col items-center gap-3">
@@ -3947,7 +4080,7 @@
   </div>
 
   <!-- Application Logic -->
-  <script src="app.js?v=84"></script>
+  <script src="app.js?v=85"></script>
 
   <!-- MODAL: WALKING GOAL SETTER (OTA-ONA UCHUN KUNLIK MAQSAD BELGILASH) -->
   <div id="modalWalkingGoal" class="hidden fixed inset-0 z-[1500] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
@@ -3960,7 +4093,7 @@
             <p class="text-[10px] text-teal-300">Farzandingiz bugun qancha yurishini belgilang</p>
           </div>
         </div>
-        <button onclick="closeWalkingGoalModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-slate-300 transition">
+        <button onclick="closeWalkingGoalModal()" class="min-w-[44px] min-h-[44px] w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-slate-300 transition">
           ✕
         </button>
       </div>
@@ -4064,10 +4197,10 @@
           <i data-lucide="mic" class="w-6 h-6 animate-pulse"></i>
         </div>
         <div>
-          <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
-            Atrof ovozi <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">«Звук вокруг»</span>
-          </h3>
-          <p class="text-xs text-slate-400">Farzandingiz atrofidagi suhbatlarni masofadan yozib olish</p>
+            <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span data-i18n="ambient_title">Atrof ovozi</span> <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">«Звук вокруг»</span>
+            </h3>
+            <p class="text-xs text-slate-400" data-i18n="ambient_sub">Farzandingiz atrofidagi suhbatlarni masofadan yozib olish</p>
         </div>
       </div>
 
@@ -4078,6 +4211,17 @@
           <span>Findmykids va Kid Security ilovalaridan ustun:</span>
         </div>
         Findmykids ilovasida «Звук вокруг» oyiga <b>$5-$10</b> pullik. Bizda esa <b>mutlaqo bepul</b>, cheklovlarsiz va yozib olingan ovoz to'g'ridan-to'g'ri Telegram botingizga ham <b>Ovozli xabar (Voice memo)</b> sifatida yetkaziladi!
+      </div>
+
+      <!-- Microphone Permission Alert Banner -->
+      <div id="ambientMicPermissionBanner" class="hidden mb-4 p-3 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-2 shadow-sm">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="text-base shrink-0">🎙</span>
+          <p id="ambientMicPermissionText" class="text-[11px] leading-tight font-medium">Farzand telefonida Mikrofon ruxsati yoqilgan bo'lishi kerak.</p>
+        </div>
+        <button id="btnAmbientMicPermissionAction" onclick="sendPermissionRequestToChild('microphone')" class="compact-btn px-2.5 py-1.5 bg-amber-400 text-slate-950 font-black rounded-xl text-[10px] shrink-0 active:scale-95 shadow">
+          📲 Ruxsat so'rash
+        </button>
       </div>
 
       <!-- Action: Choose Duration to Record -->
@@ -4149,7 +4293,7 @@
       <button onclick="triggerChildSOS()" class="w-full py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black rounded-2xl text-sm shadow-xl active:scale-95 transition flex items-center justify-center gap-2">
         <span>🚨</span> <span>Favqulodda SOS</span>
       </button>
-      <button onclick="document.getElementById('modal-call-parent')?.classList.remove('hidden')" class="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-xs border border-white/15 active:scale-95 transition flex items-center justify-center gap-2">
+      <button onclick="callParent()" class="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-xs border border-white/15 active:scale-95 transition flex items-center justify-center gap-2">
         <span>📞</span> <span>Ota-onamga qo'ng'iroq</span>
       </button>
     </div>

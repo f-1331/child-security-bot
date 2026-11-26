@@ -1,6 +1,7 @@
 import html
 import json
 import logging
+import os
 import random
 import re
 import uuid
@@ -184,6 +185,50 @@ class ConnectionManager:
 
 ws_manager = ConnectionManager()
 pending_child_notifications: dict[int, list[dict]] = defaultdict(list)
+
+
+async def dispatch_child_command(
+    child_id: int,
+    cmd: dict,
+    session: Optional[AsyncSession] = None,
+    send_ws: bool = True,
+) -> dict:
+    """Persist command in DB queue, RAM fallback, and push via WebSocket if connected."""
+    stamped = dict(cmd)
+    stamped.setdefault("_id", uuid.uuid4().hex[:12])
+    stamped.setdefault("_ts", time.time())
+    pending_child_notifications[child_id].append(stamped)
+    await crud.enqueue_child_command(child_id, stamped, session=session)
+    ws_delivered = False
+    if send_ws:
+        try:
+            conns = ws_manager.active_connections.get(child_id)
+            ws_delivered = bool(conns and len(conns) > 0)
+            await ws_manager.send_to_user(child_id, stamped)
+        except Exception:
+            ws_delivered = False
+    return {"cmd": stamped, "ws_delivered": ws_delivered}
+
+
+async def pop_all_child_commands(
+    child_id: int,
+    session: Optional[AsyncSession] = None,
+) -> list[dict]:
+    """Merge and drain child commands from both RAM and persisted DB queue without duplicates."""
+    ram_cmds = pending_child_notifications.pop(child_id, [])
+    db_cmds = await crud.pop_child_commands(child_id, session=session)
+    merged: list[dict] = []
+    seen_ids: set[str] = set()
+    for item in [*db_cmds, *ram_cmds]:
+        if not isinstance(item, dict):
+            continue
+        cid = str(item.get("_id") or "")
+        if cid:
+            if cid in seen_ids:
+                continue
+            seen_ids.add(cid)
+        merged.append(item)
+    return merged
 
 
 class RateLimiter:
@@ -403,16 +448,165 @@ class SchoolModeRequest(BaseModel):
     enabled: bool
 
 
+class ChildPermissionsPayload(BaseModel):
+    is_native: Optional[bool] = None
+    usage_access: Optional[bool] = None
+    overlay: Optional[bool] = None
+    accessibility: Optional[bool] = None
+    device_admin: Optional[bool] = None
+    record_audio: Optional[bool] = None
+    microphone: Optional[bool] = None
+    notifications: Optional[bool] = None
+    geolocation: Optional[bool] = None
+    background_location: Optional[bool] = None
+    battery_optimization: Optional[bool] = None
+    sms_permission: Optional[bool] = None
+    vpn_prepared: Optional[bool] = None
+    audio_unlocked: Optional[bool] = None
+
+
+class ParentRequestChildPermissionPayload(BaseModel):
+    parent_id: Optional[int] = None
+    scope: str = Field("all", max_length=32)  # blocking | siren | microphone | all
+    reason: Optional[str] = Field(None, max_length=200)
+
+
+def _get_session_secret() -> str:
+    return getattr(settings, "BOT_TOKEN", None) or "default-salt-secret-key"
+
+
 def create_session_token(user_id: int, role: str) -> str:
     """Generate a tamper-proof session token for webapp authentication."""
-    import time
-    import hmac
-    import hashlib
-    secret = getattr(settings, "BOT_TOKEN", "default-salt-secret-key")
+    secret = _get_session_secret()
     timestamp = int(time.time())
     payload = f"{user_id}:{role}:{timestamp}"
     signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
     return f"sess_{payload}:{signature}"
+
+
+def verify_session_token(token: Optional[str], max_age_seconds: int = 86400 * 30) -> Optional[dict]:
+    """Verify HMAC-SHA256 signature and lifetime of a webapp session token."""
+    if not token or not isinstance(token, str) or not token.startswith("sess_"):
+        return None
+    try:
+        parts = token[5:].split(":")
+        if len(parts) != 4:
+            return None
+        uid_str, role, ts_str, provided_sig = parts
+        uid = int(uid_str)
+        ts = int(ts_str)
+        now = int(time.time())
+        if (now - ts) > max_age_seconds or (ts - now) > 300:
+            return None
+        payload = f"{uid}:{role}:{ts}"
+        expected_sig = hmac.new(_get_session_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(provided_sig, expected_sig):
+            return None
+        return {"user_id": uid, "role": role, "issued_at": ts}
+    except Exception:
+        return None
+
+
+def is_request_admin_key_valid(request: Optional[Request], admin_key_query: Optional[str] = None) -> bool:
+    """Constant-time check for X-Admin-Key header or admin_key query parameter."""
+    header_key = request.headers.get("X-Admin-Key") if request else None
+    key = header_key or admin_key_query or ""
+    if not key:
+        return False
+    expected_token = (getattr(settings, "BOT_TOKEN", None) or "")[:32]
+    expected_owner_token = (getattr(settings, "OWNER_BOT_TOKEN", None) or "")[:32]
+    if expected_token and hmac.compare_digest(key, expected_token):
+        return True
+    if expected_owner_token and hmac.compare_digest(key, expected_owner_token):
+        return True
+    return False
+
+
+def extract_verified_session(request: Optional[Request]) -> Optional[dict]:
+    """Read X-Session-Token or Authorization Bearer sess_ header; reject invalid tokens with 401."""
+    if not request:
+        return None
+    raw = request.headers.get("X-Session-Token") or request.headers.get("x-session-token")
+    if not raw:
+        auth_hdr = request.headers.get("Authorization") or ""
+        if auth_hdr.startswith("Bearer sess_"):
+            raw = auth_hdr[7:].strip()
+    if not raw:
+        return None
+    decoded = verify_session_token(raw.strip())
+    if not decoded:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessiya tokeni yaroqsiz yoki muddati tugagan. Iltimos, qayta kiring."
+        )
+    return decoded
+
+
+def is_request_admin_authorized(
+    request: Optional[Request],
+    admin_key_query: Optional[str] = None
+) -> bool:
+    """Verify administrator authorization via signed X-Admin-Key or owner/admin X-Session-Token."""
+    if is_request_admin_key_valid(request, admin_key_query):
+        return True
+    sess = extract_verified_session(request)
+    if sess and (is_owner_or_admin(sess["user_id"]) or sess.get("role") in ("owner", "admin")):
+        return True
+    return False
+
+
+async def authorize_parent_for_child(
+    session: AsyncSession,
+    child_id: int,
+    claimed_parent_id: Optional[int] = None,
+    request: Optional[Request] = None,
+    require_session_token: bool = True
+) -> Optional[int]:
+    """
+    Strictly enforce session authenticity and verified Parent-Child relationship (no auto-link IDOR).
+    Preserves Demo sandbox (child_id == 2002) while rejecting tampered tokens everywhere.
+    """
+    token_info = extract_verified_session(request)
+
+    if child_id == 2002:
+        return claimed_parent_id if claimed_parent_id is not None else (token_info["user_id"] if token_info else None)
+
+    if is_request_admin_key_valid(request):
+        return claimed_parent_id
+
+    if require_session_token and not token_info:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Avtorizatsiya talab qilinadi: iltimos hisobingizga kiring."
+        )
+
+    actor_id = int(token_info["user_id"]) if token_info else (int(claimed_parent_id) if claimed_parent_id is not None else None)
+    is_actor_owner = bool(actor_id is not None and is_owner_or_admin(actor_id)) or bool(token_info and token_info.get("role") in ("owner", "admin"))
+
+    if token_info and not is_actor_owner and claimed_parent_id is not None and int(claimed_parent_id) != actor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan: Boshqa foydalanuvchi nomidan amal bajarish taqiqlangan."
+        )
+
+    if actor_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan: Ota-ona identifikatori aniqlanmadi."
+        )
+
+    if is_actor_owner:
+        return claimed_parent_id if claimed_parent_id is not None else actor_id
+
+    parents = await crud.get_parents_for_child(session, child_id)
+    parent_ids = [p.id for p in parents]
+    if actor_id not in parent_ids:
+        logger.warning(f"Blocked unauthorized parent action: actor_id={actor_id}, child_id={child_id}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
+        )
+    return actor_id
 
 
 async def build_user_auth_payload(user, session: AsyncSession, code: str = "") -> dict:
@@ -2088,31 +2282,27 @@ async def child_checkin_endpoint(child_id: int, session: AsyncSession = Depends(
 @router.post("/child/{child_id}/siren")
 async def parent_siren_endpoint(
     child_id: int,
+    request: Request,
     parent_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Parent or Owner triggers remote siren / sound ping to child's phone across Telegram Bot, WebSocket, and HTTP polling."""
-    is_owner = is_owner_or_admin(parent_id)
-    if child_id != 2002 and not is_owner and parent_id:
-        parents = await crud.get_parents_for_child(session, child_id)
-        parent_ids = [p.id for p in parents]
-        if parent_ids and parent_id not in parent_ids:
-            try:
-                await crud.link_parent_child(session, parent_id, child_id)
-                await session.commit()
-            except Exception:
-                pass
+    """Parent or Owner triggers remote siren / sound ping to child's phone across Telegram Bot, WebSocket, and persistent HTTP queue."""
+    await authorize_parent_for_child(session, child_id, parent_id, request)
+    child = await crud.get_user(session, child_id)
+    if not child and child_id != 2002:
+        raise HTTPException(status_code=404, detail="Farzand topilmadi")
 
     now_utc = datetime.now(timezone.utc)
     last_siren = last_siren_alert_map.get(child_id)
     if last_siren and (now_utc - last_siren) < timedelta(seconds=4):
         return {
             "status": "rate_limited",
-            "message": "Signal allaqachon yuborildi. Iltimos, bir oz kuting.",
+            "message": "Signal allaqachon yuborildi. Iltimos, 4 soniya kuting.",
             "child_id": child_id
         }
     last_siren_alert_map[child_id] = now_utc
 
+    delivered_telegram = False
     tbot = telemetry.get_telegram_bot()
     if tbot:
         try:
@@ -2137,27 +2327,28 @@ async def parent_siren_endpoint(
                 disable_notification=False,
                 reply_markup=siren_kb
             )
+            delivered_telegram = True
         except Exception as e:
             logger.error(f"Failed to send siren alert to child {child_id}: {e}")
 
-    try:
-        await ws_manager.send_to_user(child_id, {
-            "type": "remote_siren",
-            "sound": True,
-            "volume": 1.0,
-            "message": "🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!"
-        })
-    except Exception:
-        pass
-
-    if child_id not in pending_child_notifications:
-        pending_child_notifications[child_id] = []
-    pending_child_notifications[child_id].append({
+    siren_payload = {
         "type": "remote_siren",
-        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
-    })
+        "sound": True,
+        "volume": 1.0,
+        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S"),
+        "message": "🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!"
+    }
+    dispatch_res = await dispatch_child_command(child_id, siren_payload, session=session)
+    child_perms = await crud.get_child_permissions_status(child_id, session=session)
 
-    return {"status": "success", "child_id": child_id}
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "delivered_telegram": delivered_telegram,
+        "delivered_ws": dispatch_res["ws_delivered"],
+        "queued": True,
+        "child_permissions": child_perms,
+    }
 
 
 # ---------------------------------------------------------
@@ -2187,9 +2378,11 @@ async def webapp_websocket_endpoint(websocket: WebSocket, user_id: int):
 async def delete_child_profile_endpoint(
     parent_id: int,
     child_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db)
 ):
     """Delete and completely unlink a child profile from parent account and database."""
+    await authorize_parent_for_child(session, child_id, parent_id, request)
     success = await crud.delete_child_profile(session, parent_id, child_id)
     if not success:
         raise HTTPException(
@@ -2435,7 +2628,7 @@ async def update_child_live_location_endpoint(
     except Exception:
         blocked_packages = []
 
-    pending_cmds = pending_child_notifications.pop(child_id, [])
+    pending_cmds = await pop_all_child_commands(child_id, session=session)
 
     return {
         "status": "success",
@@ -2489,7 +2682,7 @@ async def update_child_batch_location_endpoint(
     except Exception:
         blocked_packages = []
 
-    pending_cmds = pending_child_notifications.pop(child_id, [])
+    pending_cmds = await pop_all_child_commands(child_id, session=session)
 
     return {
         "status": "success",
@@ -2517,6 +2710,7 @@ async def update_child_batch_location_endpoint(
 @router.post("/child/{child_id}/silent-check")
 async def silent_check_endpoint(
     child_id: int,
+    request: Request,
     parent_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
@@ -2524,16 +2718,7 @@ async def silent_check_endpoint(
     Fetch latest live coordinates and telemetry for parent or owner.
     Strictly NO UI alert/notification is sent to child!
     """
-    if parent_id and not is_owner_or_admin(parent_id):
-        parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
-            try:
-                await crud.link_parent_child(session, parent_id, child_id)
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
-                )
+    await authorize_parent_for_child(session, child_id, parent_id, request)
 
     latest = await crud.get_latest_location(session, child_id)
     child = await crud.get_user(session, child_id)
@@ -2561,22 +2746,14 @@ async def silent_check_endpoint(
 @router.post("/child/{child_id}/active-check")
 async def active_check_endpoint(
     child_id: int,
+    request: Request,
     parent_id: Optional[int] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
     """Active Check ('Faol so'rov'):
     Fetch latest coordinates and send 'Ota-onangiz joylashuvingizni tekshirdi' alert to child screen.
     """
-    if parent_id and not is_owner_or_admin(parent_id):
-        parents = await crud.get_parents_for_child(session, child_id)
-        if parents and parent_id not in [p.id for p in parents]:
-            try:
-                await crud.link_parent_child(session, parent_id, child_id)
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
-                )
+    await authorize_parent_for_child(session, child_id, parent_id, request)
 
     latest = await crud.get_latest_location(session, child_id)
     child = await crud.get_user(session, child_id)
@@ -2592,11 +2769,8 @@ async def active_check_endpoint(
         "timestamp": format_utc_iso(datetime.now(timezone.utc))
     }
 
-    # 1. Dispatch through real-time WebSocket
-    await ws_manager.send_to_user(child_id, alert_msg)
-
-    # 2. Add to pending notifications queue (for HTTP polling fallback)
-    pending_child_notifications[child_id].append(alert_msg)
+    # 1. Dispatch through persistent queue & real-time WebSocket
+    await dispatch_child_command(child_id, alert_msg, session=session)
 
     # 3. Direct push alert to child's Telegram chat if bot is available
     tbot = telemetry.get_telegram_bot()
@@ -2635,13 +2809,125 @@ async def active_check_endpoint(
 
 
 @router.get("/child/{child_id}/notifications")
-async def get_child_notifications_endpoint(child_id: int):
-    """Retrieve and clear pending notifications for child screen (HTTP polling fallback)."""
-    items = pending_child_notifications.pop(child_id, [])
+async def get_child_notifications_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Retrieve and clear pending notifications for child screen across RAM & DB queue."""
+    items = await pop_all_child_commands(child_id, session=session)
     return {
         "status": "success",
         "child_id": child_id,
         "notifications": items
+    }
+
+
+@router.get("/child/{child_id}/permissions")
+async def get_child_permissions_endpoint(
+    child_id: int,
+    session: AsyncSession = Depends(get_db)
+):
+    """Get child's latest reported hardware/browser permissions."""
+    perms = await crud.get_child_permissions_status(child_id, session=session)
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "permissions": perms,
+    }
+
+
+@router.post("/child/{child_id}/permissions")
+async def update_child_permissions_endpoint(
+    child_id: int,
+    payload: ChildPermissionsPayload,
+    session: AsyncSession = Depends(get_db)
+):
+    """Child device reports live permission state (Accessibility, Overlay, Usage Access, Microphone, Notifications, VPN)."""
+    data = payload.model_dump(exclude_none=True)
+    if "record_audio" in data and "microphone" not in data:
+        data["microphone"] = data["record_audio"]
+    elif "microphone" in data and "record_audio" not in data:
+        data["record_audio"] = data["microphone"]
+
+    saved = await crud.set_child_permissions_status(child_id, data, session=session)
+
+    try:
+        parents = await crud.get_parents_for_child(session, child_id)
+        ws_msg = {
+            "type": "child_permissions_update",
+            "child_id": child_id,
+            "permissions": saved,
+        }
+        for p in parents:
+            await ws_manager.send_to_user(p.id, ws_msg)
+    except Exception:
+        pass
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "permissions": saved,
+    }
+
+
+@router.post("/child/{child_id}/request-permissions")
+async def parent_request_child_permissions_endpoint(
+    child_id: int,
+    payload: ParentRequestChildPermissionPayload,
+    request: Request,
+    session: AsyncSession = Depends(get_db)
+):
+    """Parent asks child device to prompt missing permissions (blocking, microphone, siren, or all)."""
+    await authorize_parent_for_child(session, child_id, payload.parent_id, request)
+
+    scope_titles = {
+        "blocking": "Ilovalarni bloklash va ekran nazorati (Accessibility / Overlay / Usage Access)",
+        "microphone": "Atrof ovozi va favqulodda 5s SOS uchun Mikrofon ruxsati",
+        "siren": "Qidiruv signali va bildirishnomalar ruxsati (Ovoz va Notification)",
+        "all": "Barcha xavfsizlik ruxsatnomalari (GPS, Mikrofon, Signal, Bloklash)",
+    }
+    scope_desc = scope_titles.get(payload.scope, scope_titles["all"])
+
+    cmd = {
+        "type": "request_permissions",
+        "scope": payload.scope,
+        "reason": payload.reason or scope_desc,
+        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S"),
+    }
+    await dispatch_child_command(child_id, cmd, session=session)
+
+    delivered_telegram = False
+    tbot = telemetry.get_telegram_bot()
+    if tbot and child_id != 2002:
+        try:
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+            perm_kb = InlineKeyboardMarkup(
+                inline_keyboard=[[
+                    InlineKeyboardButton(
+                        text="🛡️ RUXSATLARNI YOQISH",
+                        web_app=WebAppInfo(url=f"https://child-security-bot.vercel.app/?permissions={payload.scope}")
+                    )
+                ]]
+            )
+            await tbot.send_message(
+                chat_id=child_id,
+                text=(
+                    "🛡️ <b>OTA-ONANGIZ HIMOYA RUXSATINI SO'RAMOQDA!</b>\n\n"
+                    f"📌 <b>Zarur ruxsat:</b> {html.escape(scope_desc)}\n\n"
+                    "Iltimos, pastdagi tugmani bosib kerakli ruxsatlarni yoqing."
+                ),
+                parse_mode="HTML",
+                reply_markup=perm_kb
+            )
+            delivered_telegram = True
+        except Exception as e:
+            logger.warning(f"Could not send permission request to child Telegram {child_id}: {e}")
+
+    return {
+        "status": "success",
+        "child_id": child_id,
+        "scope": payload.scope,
+        "delivered_telegram": delivered_telegram,
     }
 
 
@@ -2815,45 +3101,34 @@ class AmbientSoundRequestPayload(BaseModel):
 async def request_ambient_sound_endpoint(
     child_id: int,
     payload: AmbientSoundRequestPayload,
+    request: Request,
     session: AsyncSession = Depends(get_db)
 ):
     """
     Parent or Owner requests remote ambient audio recording ("Звук вокруг").
     Dispatches command to child's device via WebSocket and pending notification queue.
     """
-    is_owner = is_owner_or_admin(payload.parent_id)
-    if not is_owner and child_id != 2002:
-        parents = await crud.get_parents_for_child(session, child_id)
-        if payload.parent_id not in [p.id for p in parents]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ruxsat etilmagan: Siz ushbu bolaning ota-onasi emassiz."
-            )
+    verified_parent_id = await authorize_parent_for_child(session, child_id, payload.parent_id, request)
 
     cmd = {
         "type": "record_ambient_sound",
         "duration_seconds": payload.duration_seconds,
-        "parent_id": payload.parent_id,
+        "parent_id": verified_parent_id or payload.parent_id,
         "request_id": uuid.uuid4().hex[:8],
         "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
     }
 
-    if child_id not in pending_child_notifications:
-        pending_child_notifications[child_id] = []
-    pending_child_notifications[child_id].append(cmd)
-
-    # Broadcast via WebSocket directly to child device
-    try:
-        await ws_manager.send_to_user(child_id, cmd)
-    except Exception:
-        pass
+    dispatch_res = await dispatch_child_command(child_id, cmd, session=session)
+    child_perms = await crud.get_child_permissions_status(child_id, session=session)
 
     return {
         "status": "success",
         "message": f"{payload.duration_seconds} soniyalik atrof ovozi yozish buyrug'i yuborildi",
         "child_id": child_id,
         "duration_seconds": payload.duration_seconds,
-        "request_id": cmd["request_id"]
+        "request_id": cmd["request_id"],
+        "delivered_ws": dispatch_res["ws_delivered"],
+        "child_permissions": child_perms,
     }
 
 
@@ -2945,7 +3220,10 @@ async def upload_ambient_sound_endpoint(
     Child device uploads recorded ambient audio.
     Saves file and delivers Telegram Voice Message to linked parents (and Owner if copy is enabled).
     """
-    upload_file = file if isinstance(file, UploadFile) else (audio_file if isinstance(audio_file, UploadFile) else None)
+    upload_file = (
+        file if (file is not None and hasattr(file, "read"))
+        else (audio_file if (audio_file is not None and hasattr(audio_file, "read")) else None)
+    )
     if not upload_file:
         raise HTTPException(status_code=400, detail="Audio fayl topilmadi")
 
@@ -2979,6 +3257,24 @@ async def upload_ambient_sound_endpoint(
 
     with open(file_path, "wb") as f_out:
         f_out.write(contents)
+
+    clean_duration = 20
+    if isinstance(duration_seconds, int) and duration_seconds > 0:
+        clean_duration = duration_seconds
+    elif isinstance(duration_seconds, str) and duration_seconds.isdigit():
+        clean_duration = int(duration_seconds)
+
+    now_tashkent = datetime.now(TASHKENT_TZ)
+    await crud.save_ambient_audio_blob(
+        child_id=child_id,
+        filename=safe_filename,
+        raw_bytes=contents,
+        content_type=upload_file.content_type or ("audio/mp4" if ext == ".m4a" else "audio/webm"),
+        duration_seconds=clean_duration,
+        created_iso=now_tashkent.isoformat(),
+        created_human=now_tashkent.strftime("%d.%m.%Y, %H:%M:%S"),
+        session=session,
+    )
 
     file_url = f"/uploads/ambient_sounds/{safe_filename}"
     parents = await crud.get_parents_for_child(session, child_id)
@@ -3020,12 +3316,6 @@ async def upload_ambient_sound_endpoint(
         clean_parent_id = parent_id
     elif isinstance(parent_id, str) and parent_id.isdigit():
         clean_parent_id = int(parent_id)
-
-    clean_duration = 20
-    if isinstance(duration_seconds, int) and duration_seconds > 0:
-        clean_duration = duration_seconds
-    elif isinstance(duration_seconds, str) and duration_seconds.isdigit():
-        clean_duration = int(duration_seconds)
 
     # Determine recipient chats (parents + requester)
     target_chats = set()
@@ -3094,27 +3384,33 @@ async def get_ambient_sound_history_endpoint(
     limit: int = Query(15, ge=1, le=50),
     session: AsyncSession = Depends(get_db)
 ):
-    """Retrieve list of recent ambient audio recordings for WebApp player."""
+    """Retrieve list of recent ambient audio recordings (merging DB durable metadata and disk files)."""
+    db_history = await crud.get_ambient_audio_history(child_id, limit=limit, session=session)
+    seen_names = {item.get("filename") for item in db_history if isinstance(item, dict) and item.get("filename")}
+    history = [dict(item) for item in db_history if isinstance(item, dict)]
+
     upload_dir = Path("/tmp/uploads/ambient_sounds") if os.environ.get("VERCEL") else Path("uploads/ambient_sounds")
-    if not upload_dir.exists():
-        return {"status": "success", "history": [], "recordings": []}
+    if upload_dir.exists():
+        files = list(upload_dir.glob(f"ambient_{child_id}_*"))
+        files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        for f in files[:limit]:
+            if f.name in seen_names:
+                continue
+            mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=TASHKENT_TZ)
+            file_url = f"/uploads/ambient_sounds/{f.name}"
+            history.append({
+                "filename": f.name,
+                "file_url": file_url,
+                "url": file_url,
+                "duration_seconds": 20,
+                "child_id": child_id,
+                "size_kb": round(f.stat().st_size / 1024, 1),
+                "created_at": mtime.strftime("%d.%m.%Y, %H:%M:%S"),
+                "created_at_iso": mtime.isoformat(),
+            })
 
-    files = list(upload_dir.glob(f"ambient_{child_id}_*"))
-    files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-    history = []
-    for f in files[:limit]:
-        mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=TASHKENT_TZ)
-        file_url = f"/uploads/ambient_sounds/{f.name}"
-        history.append({
-            "filename": f.name,
-            "file_url": file_url,
-            "url": file_url,
-            "duration_seconds": 20,
-            "child_id": child_id,
-            "size_kb": round(f.stat().st_size / 1024, 1),
-            "created_at": mtime.strftime("%d.%m.%Y, %H:%M:%S")
-        })
+    history.sort(key=lambda x: str(x.get("created_at_iso") or x.get("created_at") or ""), reverse=True)
+    history = history[:limit]
 
     return {
         "status": "success",
@@ -3533,22 +3829,12 @@ async def send_child_quick_signal(
 async def send_parent_ping_to_child(
     child_id: int,
     payload: ParentPingRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db)
 ):
     """Parent sends 1-tap directive or cheer to child's phone and WebApp."""
-    is_owner = is_owner_or_admin(payload.parent_id)
-    if child_id != 2002 and not is_owner:
-        parents = await crud.get_parents_for_child(session, child_id)
-        if parents and payload.parent_id not in [p.id for p in parents]:
-            try:
-                await crud.link_parent_child(session, payload.parent_id, child_id)
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
-                )
-
-    parent_user = await crud.get_user(session, payload.parent_id)
+    effective_pid = await authorize_parent_for_child(session, child_id, payload.parent_id, request)
+    parent_user = await crud.get_user(session, effective_pid or payload.parent_id)
     parent_name = parent_user.full_name if parent_user and parent_user.full_name else "Ota-onangiz"
     safe_pname = html.escape(parent_name)
 
@@ -3605,20 +3891,11 @@ async def send_parent_ping_to_child(
 async def toggle_child_school_mode(
     child_id: int,
     payload: SchoolModeRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db)
 ):
     """Toggle 1-tap School DND mode: locks all distracting apps during class hours."""
-    is_owner = is_owner_or_admin(payload.parent_id)
-    if child_id != 2002 and not is_owner:
-        parents = await crud.get_parents_for_child(session, child_id)
-        if parents and payload.parent_id not in [p.id for p in parents]:
-            try:
-                await crud.link_parent_child(session, payload.parent_id, child_id)
-            except Exception:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
-                )
+    await authorize_parent_for_child(session, child_id, payload.parent_id, request)
 
     policy = await crud.get_or_create_device_policy(session, child_id)
     policy.is_all_apps_blocked = payload.enabled
@@ -3671,12 +3948,14 @@ async def get_child_screen_time_endpoint(
     child_id: int,
     session: AsyncSession = Depends(get_db)
 ):
-    """Fetch today's screen time report, per-app breakdown, and device policy status."""
+    """Fetch today's screen time report, per-app breakdown, and device permission status."""
     report = await crud.get_app_usage_report_today(session, child_id)
+    child_perms = await crud.get_child_permissions_status(child_id, session=session)
     return {
         "status": "success",
         "child_id": child_id,
-        "report": report
+        "report": report,
+        "child_permissions": child_perms,
     }
 
 
@@ -3735,15 +4014,17 @@ async def get_child_device_policy_endpoint(
     child_id: int,
     session: AsyncSession = Depends(get_db)
 ):
-    """Get current app blocking, network restriction, bedtime, and protection policy for child."""
+    """Get current app blocking, network restriction, bedtime, protection policy, and child's live permission status."""
     policy = await crud.get_or_create_device_policy(session, child_id)
     try:
         blocked = json.loads(policy.blocked_packages or "[]")
     except Exception:
         blocked = []
+    child_perms = await crud.get_child_permissions_status(child_id, session=session)
     return {
         "status": "success",
         "child_id": child_id,
+        "child_permissions": child_perms,
         "policy": {
             "is_all_apps_blocked": policy.is_all_apps_blocked,
             "is_network_restricted": policy.is_network_restricted,
@@ -3767,43 +4048,18 @@ async def get_child_device_policy_endpoint(
 async def update_child_device_policy_endpoint(
     child_id: int,
     payload: DevicePolicyUpdateRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db)
 ):
-    """Update device policy: toggle lock all apps, network restriction, bedtime, block/unblock specific apps, anti-uninstall shield, or set parent PIN with IDOR authorization guard."""
-    parents = await crud.get_parents_for_child(session, child_id)
-    parent_ids = [p.id for p in parents]
-
+    """Update device policy: toggle lock all apps, network restriction, bedtime, block/unblock specific apps, anti-uninstall shield, or set parent PIN with strict IDOR authorization guard."""
     effective_parent_id = payload.parent_id
     if effective_parent_id is not None:
         try:
             effective_parent_id = int(effective_parent_id)
         except Exception:
-            pass
+            effective_parent_id = None
 
-    is_owner = is_owner_or_admin(effective_parent_id)
-
-    if child_id != 2002 and not is_owner:
-        if parent_ids and effective_parent_id and effective_parent_id not in parent_ids:
-            try:
-                await crud.link_parent_child(session, effective_parent_id, child_id)
-                parent_ids.append(effective_parent_id)
-            except Exception:
-                pass
-        if parent_ids and (not effective_parent_id or effective_parent_id not in parent_ids):
-            logger.warning(f"Unauthorized policy update attempt on child {child_id} by parent_id {effective_parent_id}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Ruxsat berilmagan: Siz ushbu farzandning ota-onasi emassiz."
-            )
-    elif effective_parent_id and not is_owner:
-        parent_user = await crud.get_user(session, effective_parent_id)
-        if parent_user and parent_user.role in ("parent", "owner", "admin"):
-            try:
-                await crud.link_parent_child(session, effective_parent_id, child_id)
-                parents = await crud.get_parents_for_child(session, child_id)
-                parent_ids = [effective_parent_id]
-            except Exception as e:
-                logger.warning(f"Auto-link parent error on policy update: {e}")
+    effective_parent_id = await authorize_parent_for_child(session, child_id, effective_parent_id, request)
 
     policy = await crud.update_device_policy(
         session=session,
@@ -3842,17 +4098,20 @@ async def update_child_device_policy_endpoint(
     for p in parents:
         await ws_manager.send_to_user(p.id, policy_msg)
     await ws_manager.send_to_user(child_id, policy_msg)
-    if is_owner and 6707839718 not in [p.id for p in parents]:
+    if is_owner_or_admin(effective_parent_id) and 6707839718 not in [p.id for p in parents]:
         await ws_manager.send_to_user(6707839718, policy_msg)
 
-    # HTTP polling fallback queue so phone applies policy even if WS is idle
-    if child_id not in pending_child_notifications:
-        pending_child_notifications[child_id] = []
-    pending_child_notifications[child_id].append({
-        "type": "device_policy_update",
-        "policy": policy_msg,
-        "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
-    })
+    # HTTP polling & DB fallback queue so phone applies policy even if WS is idle across serverless instances
+    await dispatch_child_command(
+        child_id,
+        {
+            "type": "device_policy_update",
+            "policy": policy_msg,
+            "time": datetime.now(TASHKENT_TZ).strftime("%H:%M:%S")
+        },
+        session=session,
+        send_ws=False,
+    )
 
     notify_parents_allowed = await crud.is_notify_parents_enabled(session)
     if notify_parents_allowed and telemetry.telegram_bot and parents and payload.is_all_apps_blocked is not None:
@@ -4482,11 +4741,13 @@ class NotificationSettingsUpdateRequest(BaseModel):
 
 @router.get("/admin/notification-settings")
 async def get_admin_notification_settings_endpoint(
-    requester_id: int = Query(..., description="ID of admin or owner"),
+    request: Request,
+    requester_id: Optional[int] = Query(None, description="ID of admin or owner"),
+    admin_key: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Retrieve platform-wide notification toggles for parents, children, and owner."""
-    if not is_owner_or_admin(requester_id):
+    """Retrieve platform-wide notification toggles for parents, children, and owner (Strictly authenticated)."""
+    if not is_request_admin_authorized(request, admin_key_query=admin_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat etilmagan: Faqat Admin yoki Asoschi ko'ra oladi.")
     settings = await crud.get_notification_settings(session)
     return {
@@ -4498,10 +4759,12 @@ async def get_admin_notification_settings_endpoint(
 @router.post("/admin/notification-settings")
 async def update_admin_notification_settings_endpoint(
     payload: NotificationSettingsUpdateRequest,
+    request: Request,
+    admin_key: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Update platform-wide notification toggles."""
-    if not is_owner_or_admin(payload.requester_id):
+    """Update platform-wide notification toggles (Strictly authenticated)."""
+    if not is_request_admin_authorized(request, admin_key_query=admin_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat etilmagan: Faqat Admin yoki Asoschi o'zgartira oladi.")
 
     if payload.notify_parents is not None:
@@ -4521,9 +4784,13 @@ async def update_admin_notification_settings_endpoint(
 
 @router.api_route("/admin/seed-sync", methods=["GET", "POST"])
 async def trigger_seed_sync_endpoint(
+    request: Request,
+    admin_key: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db)
 ):
-    """Admin endpoint to ensure database core records and access codes are synchronized."""
+    """Admin endpoint to ensure database core records and access codes are synchronized (Strictly authenticated)."""
+    if not is_request_admin_authorized(request, admin_key_query=admin_key):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Ruxsat berilmagan: Administrator tasdig'i talab qilinadi.")
     from db.seeds import ensure_core_seeds
     res = await ensure_core_seeds(session)
     return {

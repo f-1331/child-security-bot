@@ -105,6 +105,98 @@ function getApiBase() {
 }
 
 // =========================================================
+// CLIENT SECURITY HELPERS (URL Sanitization & Signed Session Header Injection)
+// =========================================================
+function sanitizeMediaUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/")) return trimmed;
+  if (trimmed.startsWith("data:image/")) return trimmed;
+  if (trimmed.startsWith("blob:")) return trimmed;
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+      return parsed.href;
+    }
+  } catch (e) {}
+  return "";
+}
+window.sanitizeMediaUrl = sanitizeMediaUrl;
+
+function openSafeMediaUrl(el) {
+  if (!el) return;
+  const safe = sanitizeMediaUrl(el.getAttribute("data-url") || el.getAttribute("src") || "");
+  if (safe) {
+    window.open(safe, "_blank", "noopener,noreferrer");
+  }
+}
+window.openSafeMediaUrl = openSafeMediaUrl;
+
+function openChildZoneFromDataset(el) {
+  if (!el || typeof openChildZoneOnMap !== "function") return;
+  const id = el.getAttribute("data-zone-id") || "";
+  const lat = parseFloat(el.getAttribute("data-lat") || "0");
+  const lon = parseFloat(el.getAttribute("data-lon") || "0");
+  const name = el.getAttribute("data-name") || "";
+  const rad = parseFloat(el.getAttribute("data-rad") || "100");
+  openChildZoneOnMap(id, lat, lon, name, rad);
+}
+window.openChildZoneFromDataset = openChildZoneFromDataset;
+
+function getActiveSessionToken() {
+  try {
+    if (typeof authenticatedSession !== "undefined" && authenticatedSession) {
+      const tok = authenticatedSession.token || authenticatedSession.session_token;
+      if (tok) return tok;
+    }
+  } catch (e) {}
+  try {
+    const raw = localStorage.getItem("smart_tracker_session") || sessionStorage.getItem("smart_tracker_session");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.token || parsed.session_token)) {
+        return parsed.token || parsed.session_token;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+if (typeof window !== "undefined" && typeof window.fetch === "function" && !window.__csFetchWrapped) {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    try {
+      const reqUrl = typeof input === "string" ? input : (input && input.url ? input.url : "");
+      const isTrustedApi = Boolean(
+        reqUrl && (
+          reqUrl.startsWith("/api/") ||
+          reqUrl.startsWith(PRODUCTION_BACKEND_URL + "/api/") ||
+          reqUrl.startsWith("https://child-security-site.onrender.com/api/") ||
+          (window.location && window.location.origin && window.location.origin !== "null" && reqUrl.startsWith(window.location.origin + "/api/"))
+        )
+      );
+      if (isTrustedApi) {
+        const tok = getActiveSessionToken();
+        if (tok) {
+          const nextInit = Object.assign({}, init || {});
+          const mergedHeaders = new Headers(
+            nextInit.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined)
+          );
+          if (!mergedHeaders.has("X-Session-Token")) {
+            mergedHeaders.set("X-Session-Token", tok);
+          }
+          nextInit.headers = mergedHeaders;
+          return _origFetch(input, nextInit);
+        }
+      }
+    } catch (e) {}
+    return _origFetch(input, init);
+  };
+  window.__csFetchWrapped = true;
+}
+
+// =========================================================
 // ZERO-LOSS OFFLINE QUEUE MANAGER (IndexedDB + Auto-Flush)
 // =========================================================
 const OfflineQueueManager = (function() {
@@ -944,13 +1036,27 @@ document.addEventListener("DOMContentLoaded", () => {
   initBackdropDismissListeners();
   setupTelegramBackButton();
 
-  // Support direct deep links to show route or repeated places from Telegram
+  // Support direct deep links to show route, repeated places, or emergency siren from Telegram
   const initialParams = new URLSearchParams(window.location.search);
   if (initialParams.get("show_route") === "1" || initialParams.get("route") === "1") {
     setTimeout(() => toggleRouteHistory(true), 800);
   }
   if (initialParams.get("show_repeats") === "1" || initialParams.get("repeats") === "1") {
     setTimeout(() => toggleRepeatedPlaces(true), 900);
+  }
+  if (initialParams.get("siren") === "1") {
+    setTimeout(() => {
+      if (typeof triggerIncomingSirenNotification === "function") {
+        triggerIncomingSirenNotification();
+      }
+    }, 600);
+  }
+  if (initialParams.get("permissions")) {
+    setTimeout(() => {
+      if (typeof openChildPermissionsModal === "function") {
+        openChildPermissionsModal(initialParams.get("permissions"));
+      }
+    }, 700);
   }
 });
 
@@ -986,6 +1092,30 @@ function haptic(type = "light") {
 
 // Web Audio API Sound Synthesis Engine (Zero external dependencies)
 let audioCtx = null;
+let isAudioEngineUnlocked = false;
+
+function unlockAudioEngine() {
+  try {
+    if (!audioCtx) {
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtxClass) audioCtx = new AudioCtxClass();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().then(() => {
+        isAudioEngineUnlocked = true;
+      }).catch(() => {});
+    } else if (audioCtx && audioCtx.state === "running") {
+      isAudioEngineUnlocked = true;
+    }
+  } catch (e) {}
+}
+
+if (typeof document !== "undefined") {
+  ["click", "touchstart", "touchend", "pointerdown"].forEach((evt) => {
+    document.addEventListener(evt, () => unlockAudioEngine(), { passive: true });
+  });
+}
+
 function getAudioContext() {
   try {
     if (!audioCtx) {
@@ -993,10 +1123,71 @@ function getAudioContext() {
       if (AudioCtxClass) audioCtx = new AudioCtxClass();
     }
     if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume();
+      audioCtx.resume().catch(() => {});
     }
   } catch (e) {}
   return audioCtx;
+}
+
+let sirenInterval = null;
+let activeSirenNodes = [];
+
+function stopSirenAudioNodes() {
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.stopNativeSiren === "function") {
+      window.AndroidBridge.stopNativeSiren();
+    }
+  } catch (e) {}
+  try {
+    activeSirenNodes.forEach(({ osc, gain }) => {
+      try { osc.stop(); } catch (e) {}
+      try { osc.disconnect(); } catch (e) {}
+      try { gain.disconnect(); } catch (e) {}
+    });
+  } catch (e) {}
+  activeSirenNodes = [];
+}
+
+function triggerIncomingSirenNotification() {
+  unlockAudioEngine();
+  playSirenSound();
+  haptic("heavy");
+  const modal = document.getElementById("modalIncomingSirenAlert");
+  if (modal) {
+    modal.classList.remove("hidden");
+    const modalTapUnlock = () => {
+      unlockAudioEngine();
+      if (!isAudioEngineUnlocked) {
+        playSirenSound();
+      }
+    };
+    modal.addEventListener("pointerdown", modalTapUnlock, { once: true });
+    if (window.lucide) lucide.createIcons();
+  }
+  if (sirenInterval) clearInterval(sirenInterval);
+  let repeats = 0;
+  sirenInterval = setInterval(() => {
+    repeats++;
+    if (repeats >= 8) {
+      clearInterval(sirenInterval);
+      sirenInterval = null;
+    } else {
+      playSirenSound();
+    }
+  }, 3500);
+  showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+}
+
+function dismissIncomingSirenAlert() {
+  if (sirenInterval) {
+    clearInterval(sirenInterval);
+    sirenInterval = null;
+  }
+  stopSirenAudioNodes();
+  const modal = document.getElementById("modalIncomingSirenAlert");
+  if (modal) modal.classList.add("hidden");
+  haptic("medium");
+  showToast("✅ Qidiruv signali o'chirildi");
 }
 
 function playSirenSound() {
@@ -1015,24 +1206,37 @@ function playSirenSound() {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
-    const now = ctx.currentTime;
-    
-    // Play full 10-second pulsating emergency siren sequence
-    for (let cycle = 0; cycle < 10; cycle++) {
-      const startT = now + cycle * 1.0;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(750, startT);
-      osc.frequency.linearRampToValueAtTime(1450, startT + 0.5);
-      osc.frequency.linearRampToValueAtTime(750, startT + 1.0);
-      gain.gain.setValueAtTime(0.35, startT);
-      gain.gain.setValueAtTime(0.35, startT + 0.95);
-      gain.gain.exponentialRampToValueAtTime(0.01, startT + 1.0);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(startT);
-      osc.stop(startT + 1.0);
+
+    const scheduleCycles = () => {
+      try {
+        stopSirenAudioNodes();
+        const now = ctx.currentTime;
+        // Play full 10-second pulsating emergency siren sequence
+        for (let cycle = 0; cycle < 10; cycle++) {
+          const startT = now + cycle * 1.0;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(750, startT);
+          osc.frequency.linearRampToValueAtTime(1450, startT + 0.5);
+          osc.frequency.linearRampToValueAtTime(750, startT + 1.0);
+          gain.gain.setValueAtTime(0.35, startT);
+          gain.gain.setValueAtTime(0.35, startT + 0.95);
+          gain.gain.exponentialRampToValueAtTime(0.01, startT + 1.0);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(startT);
+          osc.stop(startT + 1.0);
+          activeSirenNodes.push({ osc, gain });
+        }
+        isAudioEngineUnlocked = true;
+      } catch (e) {}
+    };
+
+    if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+      ctx.resume().then(scheduleCycles).catch(() => {});
+    } else {
+      scheduleCycles();
     }
   } catch (e) {}
 }
@@ -1255,67 +1459,8 @@ async function checkAuthenticationState() {
     }
   }
 
-  // 1.1 Direct fast-auth & owner ghost login via URL parameters (?role=parent&parent_id=... or ?child_id=...)
-  let qParentId = urlParams.get("parent_id");
-  let qChildId = urlParams.get("child_id");
-  if (!qParentId && qRole === "parent" && adminUid) qParentId = adminUid;
-  if (!qChildId && qRole === "child" && adminUid) qChildId = adminUid;
-
-  if (qParentId && (!qRole || qRole === "parent")) {
-    try {
-      const pRes = await fetch(`${getApiBase()}/api/v1/webapp/parent/${qParentId}/children`);
-      if (pRes.ok) {
-        const pData = await pRes.json();
-        if (pData && pData.status === "success" && Array.isArray(pData.children)) {
-          const sess = {
-            status: "success",
-            role: "parent",
-            user: { id: parseInt(qParentId, 10), full_name: "Ota-ona", role: "parent" },
-            children: pData.children
-          };
-          localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
-          localStorage.setItem("smart_tracker_cached_children", JSON.stringify(pData.children));
-          localStorage.setItem("smart_tracker_role", "parent");
-          dismissEntryDemoBanner();
-          hideAuthGateModal();
-          applyAuthenticatedUser(sess);
-          if (isImpersonate) {
-            showToast(`👑 Asoschi rejimi: Ota-ona (ID: ${qParentId}) hisobiga kirildi!`);
-          }
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Fast parent load note:", e);
-    }
-  }
-
-  if (qChildId && (!qRole || qRole === "child")) {
-    try {
-      const cRes = await fetch(`${getApiBase()}/api/v1/webapp/child/${qChildId}/status`);
-      if (cRes.ok) {
-        const cData = await cRes.json();
-        if (cData && cData.status === "success" && cData.child) {
-          const sess = {
-            status: "success",
-            role: "child",
-            user: cData.child
-          };
-          localStorage.setItem("smart_tracker_session", JSON.stringify(sess));
-          localStorage.setItem("smart_tracker_role", "child");
-          dismissEntryDemoBanner();
-          hideAuthGateModal();
-          applyAuthenticatedUser(sess);
-          if (isImpersonate) {
-            showToast(`👑 Asoschi rejimi: Farzand (ID: ${qChildId}) hisobiga kirildi!`);
-          }
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Fast child load note:", e);
-    }
-  }
+  // Security: Never authenticate solely from unverified ?parent_id= or ?child_id= query parameters.
+  // Owner magic links include ?code=... handled by submitAuthCode() above, returning a signed X-Session-Token.
 
   // 2. Telegram WebApp cryptographic auto-authentication (Bypassed if owner is impersonating someone else)
   const initData = window.Telegram?.WebApp?.initData;
@@ -2010,6 +2155,7 @@ function applyParentUI(data) {
 
   if (map) setTimeout(() => map.invalidateSize(), 80);
   if (window.lucide) lucide.createIcons();
+  updateLocalizedUI();
 }
 
 // =========================================================
@@ -2234,25 +2380,25 @@ function applyChildUI(user) {
   if (isDemoMode) {
     if (heroBadge) {
       heroBadge.className = "text-2xs bg-amber-500/30 text-amber-300 border border-amber-400/50 px-2 py-0.5 rounded-full font-black shrink-0 animate-pulse";
-      heroBadge.textContent = "🧪 Demo Rejim";
+      heroBadge.textContent = t("child_demo_badge");
     }
-    if (heroGreeting) heroGreeting.textContent = "⚠️ Sinov rejimi (Ota-onaga ulanmagan)";
+    if (heroGreeting) heroGreeting.textContent = t("child_demo_greeting");
   } else {
     if (heroBadge) {
       heroBadge.className = "text-2xs bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-black shrink-0";
-      heroBadge.textContent = "🛡️ Haqiqiy hisob (Jonli)";
+      heroBadge.textContent = t("child_live_badge");
     }
-    if (heroGreeting) heroGreeting.textContent = "🛡️ Xavfsizligingiz ota-onangiz nazoratida";
+    if (heroGreeting) heroGreeting.textContent = t("child_live_greeting");
   }
 
   const heroMoneyText = document.getElementById("childHeroMoneyText");
-  if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} so'm`;
+  if (heroMoneyText) heroMoneyText.textContent = `${moneyStr} ${t("currency_som")}`;
 
   const bannerName = document.getElementById("childBannerName");
-  if (bannerName) bannerName.textContent = dict.hero_adventure || "Bugungi sarguzasht";
+  if (bannerName) bannerName.textContent = dict.hero_adventure || t("hero_adventure");
 
   const bannerMoney = document.getElementById("childBannerMoney");
-  if (bannerMoney) bannerMoney.textContent = `💵 Sizda hozir ${moneyStr} so'm bor! (${coinsStr} tanga)`;
+  if (bannerMoney) bannerMoney.textContent = `💵 ${moneyStr} ${t("currency_som")} (${coinsStr} ${t("currency_coin")})`;
 
   // Child Adventure Dashboard Card updates
   const dashHeroName = document.getElementById("childDashboardHeroName");
@@ -2265,28 +2411,28 @@ function applyChildUI(user) {
   updateChildLevelAndXP(user.virtual_balance || 0, completedCount);
 
   const portalMoney = document.getElementById("childPortalMoneyText");
-  if (portalMoney) portalMoney.textContent = `${moneyStr} so'm`;
+  if (portalMoney) portalMoney.textContent = `${moneyStr} ${t("currency_som")}`;
 
   const portalCoins = document.getElementById("childPortalCoinsText");
-  if (portalCoins) portalCoins.innerHTML = `<span>🪙</span> <span>${coinsStr} tanga</span>`;
+  if (portalCoins) portalCoins.innerHTML = `<span>🪙</span> <span>${coinsStr} ${t("currency_coin")}</span>`;
 
   const portalRate = document.getElementById("childPortalRateText");
   if (portalRate) {
-    portalRate.textContent = `${(coinRateCoins/1000).toFixed(0)}k 🪙 = ${(coinRateSom/1000).toFixed(0)}k so'm`;
+    portalRate.textContent = `${(coinRateCoins/1000).toFixed(0)}k 🪙 = ${(coinRateSom/1000).toFixed(0)}k ${t("currency_som")}`;
   }
 
   // Update modal-wallet piggy bank numbers
   const wMoney = document.getElementById("childWalletMoneyText");
-  if (wMoney) wMoney.textContent = `${moneyStr} so'm`;
+  if (wMoney) wMoney.textContent = `${moneyStr} ${t("currency_som")}`;
   const wCoins = document.getElementById("childWalletCoinsText");
   if (wCoins) {
-    const rateText = `(Kurs: ${(coinRateCoins/1000).toFixed(0)}k = ${(coinRateSom/1000).toFixed(0)}k so'm)`;
-    wCoins.innerHTML = `<i data-lucide="coins" class="w-3.5 h-3.5"></i> <span>${coinsStr} tanga ${rateText}</span>`;
+    const rateText = `(${(coinRateCoins/1000).toFixed(0)}k = ${(coinRateSom/1000).toFixed(0)}k ${t("currency_som")})`;
+    wCoins.innerHTML = `<i data-lucide="coins" class="w-3.5 h-3.5"></i> <span>${coinsStr} ${t("currency_coin")} ${rateText}</span>`;
   }
 
   const sel = document.getElementById("childSelect");
   if (sel) {
-    sel.innerHTML = `<option value="${escapeHtml(String(user.id))}">${escapeHtml(user.full_name || 'Mening hisobim')}</option>`;
+    sel.innerHTML = `<option value="${escapeHtml(String(user.id))}">${escapeHtml(user.full_name || t("child_account_mine"))}</option>`;
     sel.disabled = true;
   }
 
@@ -2313,6 +2459,18 @@ function applyChildUI(user) {
     if (sosModal) {
       sosModal.classList.remove("hidden");
       startSosRecurringBroadcast();
+    }
+  }
+  updateLocalizedUI();
+
+  const targetChildId = user.id || currentChildId;
+  if (targetChildId) {
+    currentChildId = targetChildId;
+    if (typeof checkAndPromptChildPermissions === "function") {
+      checkAndPromptChildPermissions(targetChildId);
+    }
+    if (typeof initChildPermissionsAndTracking === "function") {
+      initChildPermissionsAndTracking(targetChildId);
     }
   }
 
@@ -2561,14 +2719,88 @@ const I18N_STRINGS = {
     tab_missions: "Missiyalar",
     tab_treasure: "Xazina",
 
+    btn_enter_code: "Kod kiritish",
+    role_parent_short: "Ota-ona",
+    role_child_btn: "Farzand",
+    btn_fullscreen: "To'liq ekran",
+    btn_design: "Dizayn",
+    btn_lang_short: "Til",
+    btn_school_mode: "Maktab",
+    school_badge_active: "FAOL",
+    btn_directive: "Ko'rsatma",
+    btn_screen_time: "Ekran vaqti",
+    lock_badge_active: "BLOK",
+    btn_daily_report: "Hisobot",
+    btn_coparent_full: "Hamkor ota-ona",
+    btn_coparent_short: "Hamkor",
+    btn_exit: "Chiqish",
+    btn_back: "Ortga",
+    btn_permissions_short: "Ruxsatlar",
+    btn_permissions_ok: "Ruxsatlar faol",
+    btn_permissions_need: "Ruxsat kerak",
+    btn_code_short: "Kod",
+    sound_normal: "Oddiy",
+    sound_vibrate: "Tebranish",
+    sound_silent: "Ovozsiz",
+    status_live_word: "Jonli",
+    child_account_mine: "Mening hisobim",
+    young_hero: "Yosh Qahramon",
+    child_demo_badge: "🧪 Demo Rejim",
+    child_live_badge: "🛡️ Haqiqiy hisob (Jonli)",
+    child_demo_greeting: "⚠️ Sinov rejimi (Ota-onaga ulanmagan)",
+    child_live_greeting: "🛡️ Xavfsizligingiz ota-onangiz nazoratida",
+    btn_missions: "Missiyalar",
+
+    pill_fullscreen_map: "To'liq xarita",
+    pill_show_menus: "Menyularni ko'rsatish",
+    pill_route: "Harakat yo'li",
+    pill_route_active: "Yo'l: Faol",
+    pill_repeats: "Qayta joylar",
+    pill_repeats_active: "Qayta joylar: Faol",
+    banner_apk_title: "Android Mobil Ilova",
+    banner_apk_sub: "Ekran o'chiq bo'lsa ham foniy kuzatuv",
+    btn_download: "Yuklab olish",
+    banner_walksafe_title: "Xavfsiz Yo'lda",
+    banner_lockdown_title: "Barcha Ilovalar Bloklangan",
+    banner_lockdown_unlock: "Yechish",
+
     live_tracking: "Jonli kuzatuv",
     current_address: "Joriy Manzil",
     route: "Yo'l",
+    hud_passive: "Passiv monitoring",
+    hud_passive_sub: "Sezdirmasdan",
+    hud_active: "Hozirgi joylashuvi",
+    hud_active_sub: "Faol so'rov",
+    offline_badge: "Oflayn (Internet o'chiq)",
+    offline_sms_btn: "✉️ 1-Tap SMS: GPS so'rash",
+    no_loc_title: "Farzand joylashuvi hali aniqlanmadi",
+    no_loc_wait: "Kutilmoqda",
+    no_loc_btn_ask: "Joylashuvni so'rash",
+    no_loc_btn_retry: "Qayta tekshirish",
+
     zones_title: "Kerakli Joylar (Geozonalar)",
     tasks_title: "Farzandga Topshiriq Berish",
     history_title: "Bugungi Harakat Tarixi",
     add_zone_btn: "Yangi kerakli joy qo'shish",
-    play_route_btn: "Harakatni animatsiyada ko'rish",
+    play_route_btn: "Harakatni ko'rish",
+    btn_modal_route_on: "Yo'l: Yoqish",
+    btn_modal_route_off: "Yo'l: O'chirish",
+    btn_modal_repeats_on: "Qayta joylar: Yoqish",
+    btn_modal_repeats_off: "Qayta joylar: O'chirish",
+    btn_clear_route: "Yo'lni o'chirish",
+    btn_clear_repeats: "Qayta joylarni o'chirish",
+    btn_on_map: "Xaritada",
+    btn_report: "Hisobot",
+    stat_distance: "Masofa",
+    stat_steps: "Qadamlar",
+    stat_speed: "Max tezlik",
+    stat_stops: "To'xtashlar",
+    filter_all: "Barchasi",
+    filter_morning: "🌅 Ertalab (06-12)",
+    filter_afternoon: "☀️ Tushlik (12-18)",
+    filter_evening: "🌙 Kechqurun (18-24)",
+    filter_stops: "🛑 To'xtashlar",
+    filter_offline: "📴 Oflayn GPS",
     add_task_btn: "Yangi topshiriq berish",
 
     hero_adventure: "Bugungi sarguzasht",
@@ -2576,6 +2808,7 @@ const I18N_STRINGS = {
     active_missions: "Bugungi Missiyalar & Vazifalar",
     safe_castles: "Mening Xavfsiz Makonlarim 🛡️",
     sos_button: "XAVF SIGNALINI YOQISH (SOS)",
+    sos_card_title: "Favqulodda Xavfsizlik",
     check_in: "Yetib keldim",
     go_home: "Uyga yo'l",
     call_parent: "Ota-onam",
@@ -2584,14 +2817,72 @@ const I18N_STRINGS = {
     decide_time: "Bajarish vaqti",
     send_photo: "Rasm yuborish",
     wallet_title: "Mening Hamyonim & Jamg'armam",
+    sig_school: "Maktabdaman",
+    sig_home: "Uydaman",
+    sig_pickup: "Olib keting",
+    sig_training: "Mashg'ulot",
+    sig_battery: "Zaryad kam",
+    sig_where: "Qayerdasiz?",
+    steps_title: "Kunlik Qadamlar & Faollik",
+    walksafe_title: "Xavfsiz Yo'l Taymeri",
+    btn_start: "Boshlash",
+    child_perm_banner_title: "Ruxsatlar to'liq yoqilmagan!",
+    child_perm_banner_desc: "GPS, atrof ovozi va signal ishlashi uchun barcha ruxsatlarni bering.",
+    btn_enable_shield: "Yoqish 🛡️",
+    child_prot_title: "Himoya & Ilovalar Nazorati",
+    child_prot_sub: "Tahlil va bloklash to'g'ri ishlashi uchun",
+    btn_enable_all_perms: "⚡ Ruxsatlarni yoqish",
+
+    ambient_title: "Atrof ovozi",
+    ambient_sub: "Farzandingiz atrofidagi suhbatlarni masofadan yozib olish",
+    ambient_choose_dur: "Davomiylikni tanlang va yozishni boshlang:",
+    ambient_history_title: "So'nggi yozib olingan ovozlar",
+    btn_refresh: "Yangilash",
+
+    st_title: "Ekran Vaqti va Ilovalar Nazorati",
+    st_sub: "Telefon ishlatish statistikasi va cheklovlar",
+    st_today: "Bugungi Ekran Vaqti",
+    st_master_title: "Barcha ilovalarni bloklash",
+    st_master_desc: "Yoqilganda bolaning telefonida barcha ilovalar qulflanadi (faqat qo'ng'iroq va SOS ochiq qoladi).",
+    st_net_title: "Qurilmani Offline Qilish (Internetni cheklash)",
+    st_anti_title: "Sozlamalarni o'chirishdan himoya",
+    st_apps_title: "Ilovalarni alohida bloklash",
+    st_search_ph: "Ilova nomini qidirish...",
+    st_custom_ph: "Boshqa ilovani bloklash (masalan: TikTok, PUBG)...",
+    st_btn_add: "+ Qo'shish",
+    st_tab_all: "Barchasi",
+    st_tab_blocked: "🛑 Faqat bloklangan",
+    st_tab_game: "🎮 O'yinlar",
+    st_tab_social: "📱 Ijtimoiy",
+    st_tab_chat: "💬 Muloqot",
 
     settings_title: "Dizayn va Til Sozlamalari",
+    brand_sub: "Aqlli Bolalar Xavfsizlik & Rag'bat Tizimi",
+    install_mobile_title: "Mobil ilova (Android & iOS)",
+    install_mobile_sub: "24/7 doimiy GPS va ekran o'chiq holda ishlash",
+    install_btn: "O'rnatish",
     lang_heading: "🌐 Tilni tanlash",
     theme_heading: "🎨 Dizayn Mavzulari (12 xil)",
+    styles_count: "12 ta uslub",
     theme_desc: "O'zingizga yoqqan dizaynni tanlang. U butun sayt, xarita va tugmalar ranglarini darhol o'zgartiradi:",
     theme_applied: "Dizayn muvaffaqiyatli o'zgartirildi",
     lang_applied: "Til muvaffaqiyatli o'zgartirildi",
-    close_btn: "Yopish"
+    close_btn: "Yopish",
+    hud_repeats_active: "Qayta: Yoqiq",
+    zones_modal_title: "Kerakli Joylar",
+    no_quests_title: "Hozircha topshiriqlar yo'q",
+    no_quests_sub: "Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi",
+    btn_do_task: "Bajarish",
+    no_castles_title: "Xavfsiz makonlar hali belgilanmagan",
+    no_castles_sub: "Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi",
+    view_on_map_title: "Xaritada ko'rish",
+    safe_radius_word: "Xavfsiz",
+    currency_som: "so'm",
+    currency_coin: "tanga",
+    child_task_status_pending_check: "⏳ Tekshiruvda",
+    child_task_status_done: "🏆 Bajarildi",
+    child_task_status_scheduled: "⏰ Rejalangan",
+    child_task_status_active: "⚡ Faol"
   },
   uz_cyr: {
     tab_map: "Харита",
@@ -2604,14 +2895,88 @@ const I18N_STRINGS = {
     tab_missions: "Миссиялар",
     tab_treasure: "Хазина",
 
+    btn_enter_code: "Код киритиш",
+    role_parent_short: "Ота-она",
+    role_child_btn: "Фарзанд",
+    btn_fullscreen: "Тўлиқ экран",
+    btn_design: "Дизайн",
+    btn_lang_short: "Тил",
+    btn_school_mode: "Мактаб",
+    school_badge_active: "ФАОЛ",
+    btn_directive: "Кўрсатма",
+    btn_screen_time: "Экран вақти",
+    lock_badge_active: "БЛОК",
+    btn_daily_report: "Ҳисобот",
+    btn_coparent_full: "Ҳамкор ота-она",
+    btn_coparent_short: "Ҳамкор",
+    btn_exit: "Чиқиш",
+    btn_back: "Ортга",
+    btn_permissions_short: "Рухсатлар",
+    btn_permissions_ok: "Рухсатлар фаол",
+    btn_permissions_need: "Рухсат керак",
+    btn_code_short: "Код",
+    sound_normal: "Оддий",
+    sound_vibrate: "Тебраниш",
+    sound_silent: "Овозсиз",
+    status_live_word: "Жонли",
+    child_account_mine: "Менинг ҳисобим",
+    young_hero: "Ёш Қаҳрамон",
+    child_demo_badge: "🧪 Демо Режим",
+    child_live_badge: "🛡️ Ҳақиқий ҳисоб (Жонли)",
+    child_demo_greeting: "⚠️ Синов режими (Ота-онага уланмаган)",
+    child_live_greeting: "🛡️ Хавфсизлигингиз ота-онангиз назоратида",
+    btn_missions: "Миссиялар",
+
+    pill_fullscreen_map: "Тўлиқ харита",
+    pill_show_menus: "Менюларни кўрсатиш",
+    pill_route: "Ҳаракат йўли",
+    pill_route_active: "Йўл: Фаол",
+    pill_repeats: "Қайта жойлар",
+    pill_repeats_active: "Қайта жойлар: Фаол",
+    banner_apk_title: "Android Мобил Илова",
+    banner_apk_sub: "Экран ўчиқ бўлса ҳам фоний кузатув",
+    btn_download: "Юклаб олиш",
+    banner_walksafe_title: "Хавфсиз Йўлда",
+    banner_lockdown_title: "Барча Иловалар Блокланган",
+    banner_lockdown_unlock: "Ечиш",
+
     live_tracking: "Жонли кузатув",
     current_address: "Жорий Манзил",
     route: "Йўл",
+    hud_passive: "Пассив мониторинг",
+    hud_passive_sub: "Сездирмасдан",
+    hud_active: "Ҳозирги жойлашуви",
+    hud_active_sub: "Фаол сўров",
+    offline_badge: "Офлайн (Интернет ўчиқ)",
+    offline_sms_btn: "✉️ 1-Tap SMS: GPS сўраш",
+    no_loc_title: "Фарзанд жойлашуви ҳали аниқланмади",
+    no_loc_wait: "Кутилмоқда",
+    no_loc_btn_ask: "Жойлашувни сўраш",
+    no_loc_btn_retry: "Қайта текшириш",
+
     zones_title: "Керакли Жойлар (Геозоналар)",
     tasks_title: "Фарзандга Топшириқ Бериш",
     history_title: "Бугунги Ҳаракат Тарихи",
     add_zone_btn: "Янги керакли жой қўшиш",
-    play_route_btn: "Ҳаракатни анимацияда кўриш",
+    play_route_btn: "Ҳаракатни кўриш",
+    btn_modal_route_on: "Йўл: Ёқиш",
+    btn_modal_route_off: "Йўл: Ўчириш",
+    btn_modal_repeats_on: "Қайта жойлар: Ёқиш",
+    btn_modal_repeats_off: "Қайта жойлар: Ўчириш",
+    btn_clear_route: "Йўлни ўчириш",
+    btn_clear_repeats: "Қайта жойларни ўчириш",
+    btn_on_map: "Харитада",
+    btn_report: "Ҳисобот",
+    stat_distance: "Масофа",
+    stat_steps: "Қадамлар",
+    stat_speed: "Макс тезлик",
+    stat_stops: "Тўхташлар",
+    filter_all: "Барчаси",
+    filter_morning: "🌅 Эрталаб (06-12)",
+    filter_afternoon: "☀️ Тушлик (12-18)",
+    filter_evening: "🌙 Кечқурун (18-24)",
+    filter_stops: "🛑 Тўхташлар",
+    filter_offline: "📴 Офлайн GPS",
     add_task_btn: "Янги топшириқ бериш",
 
     hero_adventure: "Бугунги саргузашт",
@@ -2619,6 +2984,7 @@ const I18N_STRINGS = {
     active_missions: "Бугунги Миссиялар & Вазифалар",
     safe_castles: "Менинг Хавфсиз Маконларим 🛡️",
     sos_button: "ХАВФ СИГНАЛИНИ ЁҚИШ (SOS)",
+    sos_card_title: "Фавқулодда Хавфсизлик",
     check_in: "Етиб келдим",
     go_home: "Уйга йўл",
     call_parent: "Ота-онам",
@@ -2627,14 +2993,72 @@ const I18N_STRINGS = {
     decide_time: "Бажариш вақти",
     send_photo: "Расм юбориш",
     wallet_title: "Менинг Ҳамёним & Жамғармам",
+    sig_school: "Мактабдаман",
+    sig_home: "Уйдаман",
+    sig_pickup: "Олиб кетинг",
+    sig_training: "Машғулот",
+    sig_battery: "Заряд кам",
+    sig_where: "Қаердасиз?",
+    steps_title: "Кунлик Қадамлар & Фаоллик",
+    walksafe_title: "Хавфсиз Йўл Таймери",
+    btn_start: "Бошлаш",
+    child_perm_banner_title: "Рухсатлар тўлиқ ёқилмаган!",
+    child_perm_banner_desc: "GPS, атроф овози ва сигнал ишлаши учун барча рухсатларни беринг.",
+    btn_enable_shield: "Ёқиш 🛡️",
+    child_prot_title: "Ҳимоя & Иловалар Назорати",
+    child_prot_sub: "Таҳлил ва блоклаш тўғри ишлаши учун",
+    btn_enable_all_perms: "⚡ Рухсатларни ёқиш",
+
+    ambient_title: "Атроф овози",
+    ambient_sub: "Фарзандингиз атрофидаги суҳбатларни масофадан ёзиб олиш",
+    ambient_choose_dur: "Давомийликни танланг ва ёзишни бошланг:",
+    ambient_history_title: "Сўнгги ёзиб олинган овозлар",
+    btn_refresh: "Янгилаш",
+
+    st_title: "Экран Вақти ва Иловалар Назорати",
+    st_sub: "Телефон ишлатиш статистикаси ва чекловлар",
+    st_today: "Бугунги Экран Вақти",
+    st_master_title: "Барча иловаларни блоклаш",
+    st_master_desc: "Ёқилганда боланинг телефонида барча иловалар қулфланади (фақат қўнғироқ ва SOS очиқ қолади).",
+    st_net_title: "Қурилмани Офлайн Қилиш (Интернетни чеклаш)",
+    st_anti_title: "Созламаларни ўчиришдан ҳимоя",
+    st_apps_title: "Иловаларни алоҳида блоклаш",
+    st_search_ph: "Илова номини қидириш...",
+    st_custom_ph: "Бошқа иловани блоклаш (масалан: TikTok, PUBG)...",
+    st_btn_add: "+ Қўшиш",
+    st_tab_all: "Барчаси",
+    st_tab_blocked: "🛑 Фақат блокланган",
+    st_tab_game: "🎮 Ўйинлар",
+    st_tab_social: "📱 Ижтимоий",
+    st_tab_chat: "💬 Мулоқот",
 
     settings_title: "Дизайн ва Тил Созламалари",
+    brand_sub: "Ақлли Болалар Хавфсизлик & Рағбат Тизими",
+    install_mobile_title: "Мобил илова (Android & iOS)",
+    install_mobile_sub: "24/7 доимий GPS ва экран ўчиқ ҳолда ишлаш",
+    install_btn: "Ўрнатиш",
     lang_heading: "🌐 Тилни танлаш",
     theme_heading: "🎨 Дизайн Мавзулари (12 хил)",
+    styles_count: "12 та услуб",
     theme_desc: "Ўзингизга ёққан дизайнни танланг. У бутун сайт, харита ва тугмалар рангларини дарҳол ўзгартиради:",
     theme_applied: "Дизайн муваффақиятли ўзгартирилди",
     lang_applied: "Тил муваффақиятли ўзгартирилди",
-    close_btn: "Ёпиш"
+    close_btn: "Ёпиш",
+    hud_repeats_active: "Қайта: Ёқиқ",
+    zones_modal_title: "Керакли Жойлар",
+    no_quests_title: "Ҳозирча топшириқлар йўқ",
+    no_quests_sub: "Ота-онангиз янги топшириқ берганда бу ерда кўринади",
+    btn_do_task: "Бажариш",
+    no_castles_title: "Хавфсиз маконлар ҳали белгиланмаган",
+    no_castles_sub: "Ота-онангиз харитада хавфсиз ҳудуд киритганда чиқади",
+    view_on_map_title: "Харитада кўриш",
+    safe_radius_word: "Хавфсиз",
+    currency_som: "сўм",
+    currency_coin: "танга",
+    child_task_status_pending_check: "⏳ Текширувда",
+    child_task_status_done: "🏆 Бажарилди",
+    child_task_status_scheduled: "⏰ Режаланган",
+    child_task_status_active: "⚡ Фаол"
   },
   ru: {
     tab_map: "Карта",
@@ -2647,14 +3071,88 @@ const I18N_STRINGS = {
     tab_missions: "Миссии",
     tab_treasure: "Копилка",
 
+    btn_enter_code: "Ввести код",
+    role_parent_short: "Родитель",
+    role_child_btn: "Ребенок",
+    btn_fullscreen: "Полный экран",
+    btn_design: "Дизайн",
+    btn_lang_short: "Язык",
+    btn_school_mode: "Школа",
+    school_badge_active: "ВКЛ",
+    btn_directive: "Сообщение",
+    btn_screen_time: "Экран. время",
+    lock_badge_active: "БЛОК",
+    btn_daily_report: "Отчет",
+    btn_coparent_full: "Второй родитель",
+    btn_coparent_short: "Супруг(а)",
+    btn_exit: "Выход",
+    btn_back: "Назад",
+    btn_permissions_short: "Доступы",
+    btn_permissions_ok: "Доступы активны",
+    btn_permissions_need: "Нужен доступ",
+    btn_code_short: "Код",
+    sound_normal: "Звук",
+    sound_vibrate: "Вибро",
+    sound_silent: "Без звука",
+    status_live_word: "Онлайн",
+    child_account_mine: "Мой аккаунт",
+    young_hero: "Юный Герой",
+    child_demo_badge: "🧪 Демо режим",
+    child_live_badge: "🛡️ Реальный аккаунт",
+    child_demo_greeting: "⚠️ Тестовый режим (не привязан)",
+    child_live_greeting: "🛡️ Вы под защитой родителей",
+    btn_missions: "Миссии",
+
+    pill_fullscreen_map: "Вся карта",
+    pill_show_menus: "Показать меню",
+    pill_route: "Маршрут",
+    pill_route_active: "Маршрут: Вкл",
+    pill_repeats: "Повторы",
+    pill_repeats_active: "Повторы: Вкл",
+    banner_apk_title: "Android Приложение",
+    banner_apk_sub: "Фоновый GPS 24/7 даже при выключенном экране",
+    btn_download: "Скачать",
+    banner_walksafe_title: "Безопасный путь",
+    banner_lockdown_title: "Все приложения заблокированы",
+    banner_lockdown_unlock: "Снять",
+
     live_tracking: "Прямой эфир",
     current_address: "Текущий адрес",
     route: "Маршрут",
+    hud_passive: "Пассивный режим",
+    hud_passive_sub: "Без уведомления",
+    hud_active: "Текущая позиция",
+    hud_active_sub: "Активный запрос",
+    offline_badge: "Оффлайн (Нет сети)",
+    offline_sms_btn: "✉️ 1-Tap SMS: Запрос GPS",
+    no_loc_title: "Местоположение ребенка еще не получено",
+    no_loc_wait: "Ожидание",
+    no_loc_btn_ask: "Запросить геолокацию",
+    no_loc_btn_retry: "Проверить снова",
+
     zones_title: "Безопасные зоны (Геозоны)",
     tasks_title: "Поручить задание ребенку",
     history_title: "История перемещений сегодня",
     add_zone_btn: "Добавить безопасную зону",
-    play_route_btn: "Анимация маршрута",
+    play_route_btn: "Смотреть маршрут",
+    btn_modal_route_on: "Маршрут: Вкл",
+    btn_modal_route_off: "Маршрут: Выкл",
+    btn_modal_repeats_on: "Повторы: Вкл",
+    btn_modal_repeats_off: "Повторы: Выкл",
+    btn_clear_route: "Очистить маршрут",
+    btn_clear_repeats: "Очистить повторы",
+    btn_on_map: "На карте",
+    btn_report: "Отчет",
+    stat_distance: "Дистанция",
+    stat_steps: "Шаги",
+    stat_speed: "Макс. скор.",
+    stat_stops: "Остановки",
+    filter_all: "Все",
+    filter_morning: "🌅 Утро (06-12)",
+    filter_afternoon: "☀️ День (12-18)",
+    filter_evening: "🌙 Вечер (18-24)",
+    filter_stops: "🛑 Остановки",
+    filter_offline: "📴 Оффлайн GPS",
     add_task_btn: "Добавить новое задание",
 
     hero_adventure: "Приключение сегодня",
@@ -2662,22 +3160,81 @@ const I18N_STRINGS = {
     active_missions: "Активные миссии и задания",
     safe_castles: "Мои Безопасные Места 🛡️",
     sos_button: "СИГНАЛ ТРЕВОГИ (SOS)",
+    sos_card_title: "Экстренная защита",
     check_in: "Я добрался",
     go_home: "Путь домой",
-    call_parent: "Позвонить родителям",
+    call_parent: "Родители",
     view_adventure_map: "Открыть карту приключений",
     seen_button: "Просмотрено",
     decide_time: "Время выполнения",
     send_photo: "Отправить фотоотчет",
     wallet_title: "Мой кошелек и копилка",
+    sig_school: "Я в школе",
+    sig_home: "Я дома",
+    sig_pickup: "Заберите меня",
+    sig_training: "На тренировке",
+    sig_battery: "Мало заряда",
+    sig_where: "Где вы?",
+    steps_title: "Шаги и активность за день",
+    walksafe_title: "Таймер безопасного пути",
+    btn_start: "Начать",
+    child_perm_banner_title: "Не все разрешения включены!",
+    child_perm_banner_desc: "Включите GPS, микрофон и звук для полной защиты.",
+    btn_enable_shield: "Включить 🛡️",
+    child_prot_title: "Защита и контроль приложений",
+    child_prot_sub: "Для корректной блокировки и статистики",
+    btn_enable_all_perms: "⚡ Включить доступы",
+
+    ambient_title: "Звук вокруг",
+    ambient_sub: "Удаленная запись обстановки вокруг ребенка",
+    ambient_choose_dur: "Выберите длительность и начните запись:",
+    ambient_history_title: "Последние аудиозаписи",
+    btn_refresh: "Обновить",
+
+    st_title: "Экранное время и блокировка",
+    st_sub: "Статистика использования телефона и ограничения",
+    st_today: "Экранное время сегодня",
+    st_master_title: "Заблокировать все приложения",
+    st_master_desc: "Блокирует все игры и соцсети на телефоне ребенка (звонки и SOS остаются доступны).",
+    st_net_title: "Отключить интернет (Firewall)",
+    st_anti_title: "Защита от удаления и сброса",
+    st_apps_title: "Блокировка отдельных приложений",
+    st_search_ph: "Поиск приложения...",
+    st_custom_ph: "Добавить приложение (TikTok, PUBG)...",
+    st_btn_add: "+ Добавить",
+    st_tab_all: "Все",
+    st_tab_blocked: "🛑 Заблокированные",
+    st_tab_game: "🎮 Игры",
+    st_tab_social: "📱 Соцсети",
+    st_tab_chat: "💬 Мессенджеры",
 
     settings_title: "Настройки Дизайна и Языка",
+    brand_sub: "Умная система безопасности и мотивации детей",
+    install_mobile_title: "Мобильное приложение (Android и iOS)",
+    install_mobile_sub: "Фоновый GPS 24/7 даже при выключенном экране",
+    install_btn: "Установить",
     lang_heading: "🌐 Выбор языка",
     theme_heading: "🎨 Темы оформления (12 тем)",
+    styles_count: "12 стилей",
     theme_desc: "Выберите оформление по душе. Оно моментально преобразит весь сайт, карту и кнопки:",
     theme_applied: "Тема успешно применена",
     lang_applied: "Язык успешно изменен",
-    close_btn: "Закрыть"
+    close_btn: "Закрыть",
+    hud_repeats_active: "Повторы: Вкл",
+    zones_modal_title: "Важные места",
+    no_quests_title: "Пока нет заданий",
+    no_quests_sub: "Когда родители добавят задание, оно появится здесь",
+    btn_do_task: "Выполнить",
+    no_castles_title: "Безопасные зоны еще не заданы",
+    no_castles_sub: "Они появятся после добавления родителем на карте",
+    view_on_map_title: "Показать на карте",
+    safe_radius_word: "Безопасно",
+    currency_som: "сум",
+    currency_coin: "монет",
+    child_task_status_pending_check: "⏳ На проверке",
+    child_task_status_done: "🏆 Выполнено",
+    child_task_status_scheduled: "⏰ Запланировано",
+    child_task_status_active: "⚡ Активно"
   },
   en: {
     tab_map: "Map",
@@ -2690,14 +3247,88 @@ const I18N_STRINGS = {
     tab_missions: "Missions",
     tab_treasure: "Treasure",
 
+    btn_enter_code: "Enter Code",
+    role_parent_short: "Parent",
+    role_child_btn: "Child",
+    btn_fullscreen: "Fullscreen",
+    btn_design: "Themes",
+    btn_lang_short: "Lang",
+    btn_school_mode: "School",
+    school_badge_active: "ON",
+    btn_directive: "Message",
+    btn_screen_time: "Screen Time",
+    lock_badge_active: "LOCKED",
+    btn_daily_report: "Report",
+    btn_coparent_full: "Co-Parent",
+    btn_coparent_short: "Co-Parent",
+    btn_exit: "Exit",
+    btn_back: "Back",
+    btn_permissions_short: "Permissions",
+    btn_permissions_ok: "Permissions OK",
+    btn_permissions_need: "Needs Perms",
+    btn_code_short: "Code",
+    sound_normal: "Normal",
+    sound_vibrate: "Vibrate",
+    sound_silent: "Silent",
+    status_live_word: "Live",
+    child_account_mine: "My Account",
+    young_hero: "Young Hero",
+    child_demo_badge: "🧪 Demo Mode",
+    child_live_badge: "🛡️ Verified (Live)",
+    child_demo_greeting: "⚠️ Test Mode (Not Linked)",
+    child_live_greeting: "🛡️ Protected by your parents",
+    btn_missions: "Missions",
+
+    pill_fullscreen_map: "Full Map",
+    pill_show_menus: "Show Menus",
+    pill_route: "Route",
+    pill_route_active: "Route: On",
+    pill_repeats: "Revisited",
+    pill_repeats_active: "Revisited: On",
+    banner_apk_title: "Android Mobile App",
+    banner_apk_sub: "24/7 background GPS even with screen off",
+    btn_download: "Download",
+    banner_walksafe_title: "Walk Safe Active",
+    banner_lockdown_title: "All Apps Locked",
+    banner_lockdown_unlock: "Unlock",
+
     live_tracking: "Live Tracking",
     current_address: "Current Address",
     route: "Route",
+    hud_passive: "Silent Monitoring",
+    hud_passive_sub: "Stealth check",
+    hud_active: "Current Location",
+    hud_active_sub: "Active ping",
+    offline_badge: "Offline (No Internet)",
+    offline_sms_btn: "✉️ 1-Tap SMS: Request GPS",
+    no_loc_title: "Child location not detected yet",
+    no_loc_wait: "Waiting",
+    no_loc_btn_ask: "Ping Location",
+    no_loc_btn_retry: "Check Again",
+
     zones_title: "Safe Places (Geofences)",
     tasks_title: "Assign Task to Child",
     history_title: "Today's Travel History",
     add_zone_btn: "Add New Safe Place",
-    play_route_btn: "Animate Travel Route",
+    play_route_btn: "Play Route",
+    btn_modal_route_on: "Route: Show",
+    btn_modal_route_off: "Route: Hide",
+    btn_modal_repeats_on: "Revisited: Show",
+    btn_modal_repeats_off: "Revisited: Hide",
+    btn_clear_route: "Clear Route",
+    btn_clear_repeats: "Clear Revisited",
+    btn_on_map: "On Map",
+    btn_report: "Report",
+    stat_distance: "Distance",
+    stat_steps: "Steps",
+    stat_speed: "Max Speed",
+    stat_stops: "Stops",
+    filter_all: "All",
+    filter_morning: "🌅 Morning (06-12)",
+    filter_afternoon: "☀️ Afternoon (12-18)",
+    filter_evening: "🌙 Evening (18-24)",
+    filter_stops: "🛑 Stops",
+    filter_offline: "📴 Offline GPS",
     add_task_btn: "Create New Task",
 
     hero_adventure: "Today's Adventure",
@@ -2705,6 +3336,7 @@ const I18N_STRINGS = {
     active_missions: "Active Missions & Quests",
     safe_castles: "My Safe Havens 🛡️",
     sos_button: "TRIGGER SOS ALARM",
+    sos_card_title: "Emergency Safety",
     check_in: "I Arrived",
     go_home: "Take Me Home",
     call_parent: "Call Parents",
@@ -2713,31 +3345,104 @@ const I18N_STRINGS = {
     decide_time: "Pick Time",
     send_photo: "Send Photo Proof",
     wallet_title: "My Wallet & Piggy Bank",
+    sig_school: "At School",
+    sig_home: "At Home",
+    sig_pickup: "Pick Me Up",
+    sig_training: "At Practice",
+    sig_battery: "Low Battery",
+    sig_where: "Where Are You?",
+    steps_title: "Daily Steps & Activity",
+    walksafe_title: "Walk Safe Timer",
+    btn_start: "Start",
+    child_perm_banner_title: "Permissions Incomplete!",
+    child_perm_banner_desc: "Grant GPS, Microphone & Sound permissions for full protection.",
+    btn_enable_shield: "Enable 🛡️",
+    child_prot_title: "Protection & App Control",
+    child_prot_sub: "Required for usage tracking & blocking",
+    btn_enable_all_perms: "⚡ Grant Permissions",
+
+    ambient_title: "Ambient Sound",
+    ambient_sub: "Listen to live surroundings on your child's phone",
+    ambient_choose_dur: "Select duration and start recording:",
+    ambient_history_title: "Recent Ambient Recordings",
+    btn_refresh: "Refresh",
+
+    st_title: "Screen Time & App Blocking",
+    st_sub: "App usage telemetry and device restrictions",
+    st_today: "Screen Time Today",
+    st_master_title: "Block All Apps",
+    st_master_desc: "Locks all apps on child's phone (calls and SOS remain accessible).",
+    st_net_title: "Restrict Device Internet (Firewall)",
+    st_anti_title: "Anti-Uninstall & Settings Guard",
+    st_apps_title: "Block Specific Apps",
+    st_search_ph: "Search apps...",
+    st_custom_ph: "Block app by name or package (TikTok, PUBG)...",
+    st_btn_add: "+ Add",
+    st_tab_all: "All",
+    st_tab_blocked: "🛑 Blocked",
+    st_tab_game: "🎮 Games",
+    st_tab_social: "📱 Social",
+    st_tab_chat: "💬 Messaging",
 
     settings_title: "Design & Language Settings",
+    brand_sub: "Smart Child Safety & Rewards System",
+    install_mobile_title: "Mobile App (Android & iOS)",
+    install_mobile_sub: "24/7 background GPS even with screen off",
+    install_btn: "Install",
     lang_heading: "🌐 Choose Language",
     theme_heading: "🎨 Design Themes (12 styles)",
+    styles_count: "12 themes",
     theme_desc: "Choose a theme you like. It instantly transforms the entire site, map and buttons:",
     theme_applied: "Theme applied successfully",
     lang_applied: "Language changed successfully",
-    close_btn: "Close"
+    close_btn: "Close",
+    hud_repeats_active: "Repeats: On",
+    zones_modal_title: "Important Places",
+    no_quests_title: "No missions yet",
+    no_quests_sub: "New missions from your parents will appear here",
+    btn_do_task: "Complete",
+    no_castles_title: "No safe zones set yet",
+    no_castles_sub: "They will appear once parents add safe zones on the map",
+    view_on_map_title: "View on map",
+    safe_radius_word: "Safe",
+    currency_som: "UZS",
+    currency_coin: "coins",
+    child_task_status_pending_check: "⏳ Pending review",
+    child_task_status_done: "🏆 Completed",
+    child_task_status_scheduled: "⏰ Scheduled",
+    child_task_status_active: "⚡ Active"
   }
 };
 
-function setGlobalLanguage(lang, showToastMsg = true) {
-  if (!I18N_STRINGS[lang]) lang = "uz_lat";
-  currentLanguage = lang;
-  localStorage.setItem("smart_tracker_lang", lang);
+function t(key, fallback = "") {
+  const dict = I18N_STRINGS[currentLanguage] || I18N_STRINGS.uz_lat;
+  return dict[key] || I18N_STRINGS.uz_lat[key] || fallback || key;
+}
+window.t = t;
 
+function updateLocalizedUI() {
+  const lang = I18N_STRINGS[currentLanguage] ? currentLanguage : "uz_lat";
   const dict = I18N_STRINGS[lang];
+
+  try {
+    document.documentElement.lang = lang === "uz_cyr" ? "uz-Cyrl" : (lang === "ru" ? "ru" : (lang === "en" ? "en" : "uz"));
+  } catch (e) {}
 
   document.querySelectorAll("[data-i18n]").forEach(el => {
     const key = el.getAttribute("data-i18n");
-    if (dict[key]) {
+    if (key && dict[key]) {
       el.textContent = dict[key];
     }
   });
 
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    if (key && dict[key]) {
+      el.setAttribute("placeholder", dict[key]);
+    }
+  });
+
+  // Update active language option button highlights cleanly
   document.querySelectorAll(".lang-option-btn").forEach(btn => {
     btn.classList.remove("ring-2", "ring-offset-2", "ring-offset-slate-900", "border-white");
     const check = btn.querySelector(".lang-check");
@@ -2750,16 +3455,77 @@ function setGlobalLanguage(lang, showToastMsg = true) {
     if (check) check.classList.remove("hidden");
   }
 
-  // Refresh active tab labels according to language & role
+  // Update quick language badge in top utility bars if present
+  const langShortMap = { uz_lat: "UZ", uz_cyr: "ЎЗ", ru: "RU", en: "EN" };
+  const langBadgeEl = document.getElementById("quickLangCodeLabel");
+  if (langBadgeEl) langBadgeEl.textContent = langShortMap[lang] || "UZ";
+
+  // Update role-specific dynamic labels without re-running native permission wizards!
+  const tab1Label = document.getElementById("tabLabel-map");
+  const tab2Label = document.getElementById("tabLabel-zones");
+  const tab3Label = document.getElementById("tabLabel-tasks");
+  const tab4Label = document.getElementById("tabLabel-history");
+  const tab5Label = document.getElementById("tabLabel-settings");
+  const zonesTitle = document.getElementById("zonesModalTitle");
+  const tasksTitle = document.getElementById("tasksModalTitle");
+
   if (currentRole === "child") {
-    applyChildUI(authenticatedSession?.user || {});
+    if (tab1Label) tab1Label.textContent = dict.tab_adventure;
+    if (tab2Label) tab2Label.textContent = dict.tab_castles;
+    if (tab3Label) tab3Label.textContent = dict.tab_missions;
+    if (tab4Label) tab4Label.textContent = `${dict.tab_treasure} 🐷`;
+    if (zonesTitle) zonesTitle.textContent = dict.safe_castles;
+    if (tasksTitle) tasksTitle.textContent = dict.active_missions;
+
+    const heroBadge = document.getElementById("childHeroLevelBadge");
+    const heroGreeting = document.getElementById("childHeroStatusText");
+    if (isDemoMode) {
+      if (heroBadge) heroBadge.textContent = dict.child_demo_badge;
+      if (heroGreeting) heroGreeting.textContent = dict.child_demo_greeting;
+    } else {
+      if (heroBadge) heroBadge.textContent = dict.child_live_badge;
+      if (heroGreeting) heroGreeting.textContent = dict.child_live_greeting;
+    }
+    const bannerName = document.getElementById("childBannerName");
+    if (bannerName) bannerName.textContent = dict.hero_adventure;
   } else {
-    applyParentUI(authenticatedSession || {});
+    if (tab1Label) tab1Label.textContent = dict.tab_map;
+    if (tab2Label) tab2Label.textContent = dict.tab_zones;
+    if (tab3Label) tab3Label.textContent = dict.tab_tasks;
+    if (tab4Label) tab4Label.textContent = dict.tab_history;
+    if (zonesTitle) zonesTitle.textContent = dict.zones_title;
+    if (tasksTitle) tasksTitle.textContent = dict.tasks_title;
   }
+  if (tab5Label) tab5Label.textContent = dict.tab_settings;
+
+  const isFullscreen = document.body.classList.contains("fullscreen-map-mode");
+  const textFloating = document.getElementById("textFloatingExpandMap");
+  if (textFloating) {
+    textFloating.textContent = isFullscreen ? dict.pill_show_menus : dict.pill_fullscreen_map;
+  }
+
+  if (typeof updateRouteButtonsState === "function") {
+    updateRouteButtonsState();
+  }
+  if (currentRole === "child") {
+    if (typeof renderChildDashboardQuests === "function") renderChildDashboardQuests();
+    if (typeof renderChildDashboardCastles === "function") renderChildDashboardCastles();
+  }
+}
+window.updateLocalizedUI = updateLocalizedUI;
+
+function setGlobalLanguage(lang, showToastMsg = true) {
+  if (!I18N_STRINGS[lang]) lang = "uz_lat";
+  currentLanguage = lang;
+  try {
+    localStorage.setItem("smart_tracker_lang", lang);
+  } catch (e) {}
+
+  updateLocalizedUI();
 
   if (showToastMsg) {
     haptic("light");
-    showToast(`🌐 ${dict.lang_applied || 'Til yangilandi'}`);
+    showToast(`🌐 ${I18N_STRINGS[lang].lang_applied}`);
   }
 }
 
@@ -3324,11 +4090,12 @@ async function selectChild(childId) {
 
   toggleSosBanner(child.is_sos_active);
 
-  // Clear previous polyline and geofence layers
-  if (routePolyline && map) {
-    try { map.removeLayer(routePolyline); } catch (e) {}
-    routePolyline = null;
-  }
+  // Clear previous child's route, repeated markers, playback HUD & cached permissions
+  if (typeof clearRouteFromMap === "function") clearRouteFromMap();
+  if (typeof clearRepeatedFromMap === "function") clearRepeatedFromMap();
+  if (typeof hideRoutePlaybackHud === "function") hideRoutePlaybackHud();
+  lastChildReportedPermissions = null;
+
   if (geofenceLayers && map) {
     geofenceLayers.forEach((layer) => {
       try { map.removeLayer(layer); } catch (e) {}
@@ -3374,6 +4141,7 @@ async function selectChild(childId) {
   await updateLiveTelemetry(currentChildId);
   await loadGeofences(currentChildId);
   await loadRouteHistory(currentChildId);
+  await fetchChildDevicePolicy(currentChildId);
   await loadTasks();
   await loadWishlist(currentChildId);
 }
@@ -3855,8 +4623,8 @@ function renderFencesToMapAndList(fences) {
         </div>
         ${
           isChild
-            ? `<button onclick="openChildZoneOnMap('${f.id}', ${f.latitude || 0}, ${f.longitude || 0}, '${escapeHtml(f.name || '').replace(/'/g, "\\'")}', ${f.radius_meters || 100})" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>Xaritada</span> 🗺️</button>`
-            : `<button onclick="deleteGeofence(${f.id})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
+            ? `<button data-zone-id="${escapeHtml(String(f.id))}" data-lat="${Number(f.latitude || 0)}" data-lon="${Number(f.longitude || 0)}" data-name="${escapeHtml(f.name || '')}" data-rad="${Number(f.radius_meters || 100)}" onclick="openChildZoneFromDataset(this)" class="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold flex items-center gap-1 active:scale-95 transition"><span>${escapeHtml(t("btn_on_map"))}</span> 🗺️</button>`
+            : `<button onclick="deleteGeofence(${Number(f.id)})" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition" title="O'chirish">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>
               </button>`
         }
@@ -4029,8 +4797,20 @@ function renderHistoryToMapAndList(points) {
     if (container) {
       container.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">Bugun uchun harakat yozuvlari yo'q.</p>`;
     }
-    if (routeLayerGroup) routeLayerGroup.clearLayers();
-    if (repeatsLayerGroup) repeatsLayerGroup.clearLayers();
+    if (routeLayerGroup) {
+      routeLayerGroup.clearLayers();
+      if (map && map.hasLayer(routeLayerGroup)) {
+        try { map.removeLayer(routeLayerGroup); } catch (e) {}
+      }
+    }
+    if (repeatsLayerGroup) {
+      repeatsLayerGroup.clearLayers();
+      if (map && map.hasLayer(repeatsLayerGroup)) {
+        try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
+      }
+    }
+    calculateRouteStats([]);
+    updateRouteButtonsState();
     return;
   }
 
@@ -4298,56 +5078,9 @@ function renderHistoryToMapAndList(points) {
     }
   });
 
-  // D. Render Stop Point Markers (To'xtash joylari - 3+ min within 30m, added to repeatsLayerGroup!)
-  const stopPoints = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    if (p1.recorded_at && p2.recorded_at) {
-      let s1 = String(p1.recorded_at).trim();
-      if (!s1.endsWith("Z") && !s1.includes("+")) s1 += "Z";
-      let s2 = String(p2.recorded_at).trim();
-      if (!s2.endsWith("Z") && !s2.includes("+")) s2 += "Z";
-      const t1 = new Date(s1).getTime();
-      const t2 = new Date(s2).getTime();
-      const durationMs = t2 - t1;
-      const dist = calculateDistanceMeters(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
-
-      if (durationMs >= 180000 && dist <= 30) {
-        const stopMinutes = Math.round(durationMs / 60000);
-        stopPoints.push({
-          lat: p1.latitude,
-          lng: p1.longitude,
-          minutes: stopMinutes,
-          timeStr: new Date(s1).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })
-        });
-      }
-    }
-  }
-
-  stopPoints.forEach((sp, sIdx) => {
-    const stopIcon = L.divIcon({
-      className: "route-stop-pin",
-      html: `
-        <div class="flex items-center gap-1 bg-purple-700 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg border border-purple-300 whitespace-nowrap transform -translate-x-1/2 -translate-y-1/2 cursor-pointer hover:scale-110 transition" title="To'xtash joyi: ${sp.minutes} daqiqa">
-          <span>🛑 ${sp.minutes} daq</span>
-        </div>
-      `,
-      iconSize: [0, 0],
-      iconAnchor: [0, 0]
-    });
-    const stopMarker = L.marker([sp.lat, sp.lng], { icon: stopIcon });
-    stopMarker.bindPopup(`
-      <div class="p-2 text-xs text-slate-900 font-sans">
-        <div class="font-black text-purple-800">🛑 To'xtash joyi #${sIdx + 1}</div>
-        <div class="mt-1">⏱ To'xtab turilgan vaqt: <b>${sp.minutes} daqiqa</b></div>
-        <div>🕒 Boshlangan vaqt: <b>${sp.timeStr}</b></div>
-      </div>
-    `);
-    stopMarker.addTo(repeatsLayerGroup);
-  });
-
   // Layer Visibility Control: Independently add or remove route line and repeated places based on user state
+  // NOTE: Stop markers (🛑 Nm) are rendered exclusively inside calculateRouteStats() on routeLayerGroup,
+  // while repeatsLayerGroup focuses cleanly on revisited clusters (2x, 3x...) to prevent duplicate overlapping markers.
   if (isRouteVisible && map && routeLayerGroup) {
     if (!map.hasLayer(routeLayerGroup)) {
       routeLayerGroup.addTo(map);
@@ -4654,6 +5387,8 @@ function showRoutePlaybackHud() {
   const hud = document.getElementById("routePlaybackHud");
   if (!hud) return;
   hud.classList.remove("hidden");
+  const bottomContainer = document.getElementById("parentBottomContainer");
+  if (bottomContainer) bottomContainer.classList.add("hidden");
   if (window.lucide) lucide.createIcons();
 
   const scrubber = document.getElementById("routeTimelineScrubber");
@@ -4668,6 +5403,8 @@ function showRoutePlaybackHud() {
 function hideRoutePlaybackHud() {
   const hud = document.getElementById("routePlaybackHud");
   if (hud) hud.classList.add("hidden");
+  const bottomContainer = document.getElementById("parentBottomContainer");
+  if (bottomContainer) bottomContainer.classList.remove("hidden");
 }
 
 function updateRoutePlaybackHud(stepIdx) {
@@ -4946,29 +5683,29 @@ function updateRouteButtonsState() {
   if (isRouteVisible) {
     if (btnRoute) {
       btnRoute.className = "text-amber-400 bg-amber-500/25 border border-amber-400/50 shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center justify-center";
-      btnRoute.title = "Bugungi harakat yo'li (Faol - O'chirish uchun bosing)";
+      btnRoute.title = t("pill_route_active");
     }
     if (pillRoute) {
-      pillRoute.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-amber-400/60 bg-amber-500/30 text-amber-200 active:scale-95";
+      pillRoute.className = "compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-amber-400/60 bg-amber-500/30 text-amber-200 active:scale-95";
     }
-    if (labelPillRoute) labelPillRoute.textContent = "Yo'l: Faol";
+    if (labelPillRoute) labelPillRoute.textContent = t("pill_route_active");
     if (modalBtnRoute) {
       modalBtnRoute.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-amber-400 bg-amber-600 text-white";
     }
-    if (labelModalRoute) labelModalRoute.textContent = "Yo'l: O'chirish";
+    if (labelModalRoute) labelModalRoute.textContent = t("btn_modal_route_off");
   } else {
     if (btnRoute) {
       btnRoute.className = "text-slate-400 hover:text-amber-400 bg-white/5 border border-white/10 active:scale-95 transition flex items-center justify-center";
-      btnRoute.title = "Bugungi harakat yo'li (O'chiq - Yoqish uchun bosing)";
+      btnRoute.title = t("pill_route");
     }
     if (pillRoute) {
-      pillRoute.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
+      pillRoute.className = "compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
     }
-    if (labelPillRoute) labelPillRoute.textContent = "Harakat yo'li";
+    if (labelPillRoute) labelPillRoute.textContent = t("pill_route");
     if (modalBtnRoute) {
       modalBtnRoute.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700";
     }
-    if (labelModalRoute) labelModalRoute.textContent = "Yo'l: Yoqish";
+    if (labelModalRoute) labelModalRoute.textContent = t("btn_modal_route_on");
   }
 
   // 2. Qayta-qayta yurilgan joylar controls (Dock, Quick pill, Modal, HUD)
@@ -4983,37 +5720,37 @@ function updateRouteButtonsState() {
   if (isRepeatedPlacesVisible) {
     if (btnRepeated) {
       btnRepeated.className = "text-rose-400 bg-rose-500/25 border border-rose-400/50 shadow-lg shadow-rose-500/20 active:scale-95 transition flex items-center justify-center";
-      btnRepeated.title = "Qayta yurilgan joylar (Faol - O'chirish uchun bosing)";
+      btnRepeated.title = t("pill_repeats_active");
     }
     if (pillRepeated) {
-      pillRepeated.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-rose-400/60 bg-rose-500/30 text-rose-200 active:scale-95";
+      pillRepeated.className = "compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-rose-400/60 bg-rose-500/30 text-rose-200 active:scale-95";
     }
-    if (labelPillRepeated) labelPillRepeated.textContent = "Qayta joylar: Faol";
+    if (labelPillRepeated) labelPillRepeated.textContent = t("pill_repeats_active");
     if (modalBtnRepeated) {
       modalBtnRepeated.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-rose-400 bg-rose-600 text-white";
     }
-    if (labelModalRepeated) labelModalRepeated.textContent = "Qayta joylar: O'chirish";
+    if (labelModalRepeated) labelModalRepeated.textContent = t("btn_modal_repeats_off");
     if (hudBtnRepeated) {
       hudBtnRepeated.className = "px-2 py-1 bg-rose-600 text-white text-xs font-bold rounded-xl border border-rose-400 shadow-md transition active:scale-95 flex items-center gap-1";
     }
-    if (labelHudRepeated) labelHudRepeated.textContent = "Qayta: Yoqiq";
+    if (labelHudRepeated) labelHudRepeated.textContent = t("hud_repeats_active");
   } else {
     if (btnRepeated) {
       btnRepeated.className = "text-slate-400 hover:text-rose-400 bg-white/5 border border-white/10 active:scale-95 transition flex items-center justify-center";
-      btnRepeated.title = "Qayta yurilgan joylar (O'chiq - Yoqish uchun bosing)";
+      btnRepeated.title = t("pill_repeats");
     }
     if (pillRepeated) {
-      pillRepeated.className = "px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
+      pillRepeated.className = "compact-pill px-2.5 py-1.5 rounded-full text-2xs font-extrabold flex items-center gap-1.5 transition shadow-lg backdrop-blur-xl border border-white/10 bg-slate-900/85 text-slate-300 hover:text-white active:scale-95";
     }
-    if (labelPillRepeated) labelPillRepeated.textContent = "Qayta joylar";
+    if (labelPillRepeated) labelPillRepeated.textContent = t("pill_repeats");
     if (modalBtnRepeated) {
       modalBtnRepeated.className = "py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-md active:scale-95 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700";
     }
-    if (labelModalRepeated) labelModalRepeated.textContent = "Qayta joylar: Yoqish";
+    if (labelModalRepeated) labelModalRepeated.textContent = t("btn_modal_repeats_on");
     if (hudBtnRepeated) {
       hudBtnRepeated.className = "px-2 py-1 bg-white/10 hover:bg-white/20 text-rose-300 text-xs font-bold rounded-xl border border-rose-400/30 transition active:scale-95 flex items-center gap-1";
     }
-    if (labelHudRepeated) labelHudRepeated.textContent = "Qayta joylar";
+    if (labelHudRepeated) labelHudRepeated.textContent = t("pill_repeats");
   }
   if (window.lucide) {
     try { lucide.createIcons(); } catch (e) {}
@@ -5037,7 +5774,7 @@ async function toggleRouteHistory(forceState) {
 
   if (isRouteVisible) {
     showToast("🗺️ Harakat yo'li xaritada ko'rsatilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0 || !routeLayerGroup || routeLayerGroup.getLayers().length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !routeLayerGroup) {
       await loadRouteHistory(currentChildId);
     } else {
       if (map && routeLayerGroup && !map.hasLayer(routeLayerGroup)) {
@@ -5098,7 +5835,7 @@ async function toggleRepeatedPlaces(forceState) {
 
   if (isRepeatedPlacesVisible) {
     showToast("🔁 Qayta yurilgan joylar tekshirilmoqda...");
-    if (!routePointsCache || routePointsCache.length === 0 || !repeatsLayerGroup || repeatsLayerGroup.getLayers().length === 0) {
+    if (!routePointsCache || routePointsCache.length === 0 || !repeatsLayerGroup) {
       await loadRouteHistory(currentChildId);
     } else {
       if (map && repeatsLayerGroup && !map.hasLayer(repeatsLayerGroup)) {
@@ -5141,15 +5878,12 @@ function clearRouteHistory() {
   haptic("medium");
   if (!confirm("Bugungi harakat yo'lini xaritadan o'chirishni xohlaysizmi?")) return;
 
-  if (routeLayerGroup && map) {
-    try { map.removeLayer(routeLayerGroup); } catch (e) {}
-  }
-  if (routePolyline && map) {
-    try { map.removeLayer(routePolyline); } catch (e) {}
-  }
+  if (typeof clearRouteFromMap === "function") clearRouteFromMap();
   isRouteVisible = false;
   routePointsCache = [];
+  routeStopsCache = [];
   window._lastRenderedRouteSig = null;
+  try { localStorage.setItem("smart_tracker_route_visible", "false"); } catch (e) {}
   hideRoutePlaybackHud();
 
   const targetId = currentChildId || 2002;
@@ -5173,10 +5907,9 @@ function clearRepeatedPlaces() {
   haptic("medium");
   if (!confirm("Qayta-qayta yurilgan joylar belgilarini xaritadan o'chirishni xohlaysizmi?")) return;
 
-  if (repeatsLayerGroup && map) {
-    try { map.removeLayer(repeatsLayerGroup); } catch (e) {}
-  }
+  if (typeof clearRepeatedFromMap === "function") clearRepeatedFromMap();
   isRepeatedPlacesVisible = false;
+  try { localStorage.setItem("smart_tracker_repeated_visible", "false"); } catch (e) {}
   updateRouteButtonsState();
   showToast("🗑 Qayta-qayta yurilgan joylar xaritadan o'chirildi");
 }
@@ -5452,7 +6185,7 @@ function toggleMapUiVisibility(forceState) {
       btnFloating.classList.add("bg-rose-500", "hover:bg-rose-400", "text-white", "border-rose-300");
     }
     if (iconFloating) iconFloating.setAttribute("data-lucide", "minimize-2");
-    if (textFloating) textFloating.textContent = "Menyularni ko'rsatish";
+    if (textFloating) textFloating.textContent = t("pill_show_menus", "Menyularni ko'rsatish");
     showToast("🗺️ Xarita to'liq kengaytirildi. Menyuni ochish uchun tugmani bosing.");
   } else {
     document.body.classList.remove("fullscreen-map-mode");
@@ -5468,7 +6201,7 @@ function toggleMapUiVisibility(forceState) {
       btnFloating.classList.remove("bg-rose-500", "hover:bg-rose-400", "text-white", "border-rose-300");
     }
     if (iconFloating) iconFloating.setAttribute("data-lucide", "maximize-2");
-    if (textFloating) textFloating.textContent = "Xaritani to'liq ko'rish";
+    if (textFloating) textFloating.textContent = t("pill_fullscreen_map", "To'liq xarita");
   }
 
   if (window.lucide) {
@@ -5560,10 +6293,10 @@ function switchTab(tabName) {
       const modalTitle = document.getElementById("zonesModalTitle");
       if (currentRole === "child") {
         if (addZoneSec) addZoneSec.classList.add("hidden");
-        if (modalTitle) modalTitle.textContent = "Mening Xavfsiz Makonlarim";
+        if (modalTitle) modalTitle.textContent = t("safe_castles", "Mening Xavfsiz Makonlarim");
       } else {
         if (addZoneSec) addZoneSec.classList.remove("hidden");
-        if (modalTitle) modalTitle.textContent = "Kerakli Joylar (Geozonalar)";
+        if (modalTitle) modalTitle.textContent = t("zones_title", "Kerakli Joylar (Geozonalar)");
       }
     }
     if (tabName === "history") {
@@ -5574,7 +6307,7 @@ function switchTab(tabName) {
     }
     if (tabName === "settings") {
       setGlobalTheme(currentTheme, false);
-      setGlobalLanguage(currentLanguage, false);
+      updateLocalizedUI();
     }
     updateTelegramBackButton();
   } else {
@@ -5612,37 +6345,41 @@ function renderChildDashboardQuests() {
     container.innerHTML = `
       <div class="p-3.5 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center">
         <span class="text-xl">🎯</span>
-        <p class="text-xs font-bold text-slate-300 mt-1">Hozircha topshiriqlar yo'q</p>
-        <p class="text-[10px] text-slate-400 mt-0.5">Ota-onangiz yangi topshiriq berganda bu yerda ko'rinadi</p>
+        <p class="text-xs font-bold text-slate-300 mt-1">${escapeHtml(t("no_quests_title"))}</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(t("no_quests_sub"))}</p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = activeTasks.map(t => {
-    const coins = t.reward_coins || 1000;
+  container.innerHTML = activeTasks.map(item => {
+    const coins = item.reward_coins || 1000;
     const moneyEquivalent = Math.round(coins * (coinRateSom / Math.max(1, coinRateCoins)));
-    const statusText = t.status === "completed_by_child" ? "⏳ Tekshiruvda" : (t.status === "approved" ? "🏆 Bajarildi" : (t.status === "scheduled" ? "⏰ Rejalangan" : "⚡ Faol"));
-    const statusClass = t.status === "completed_by_child" ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : (t.status === "approved" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30");
+    const statusText = item.status === "completed_by_child"
+      ? t("child_task_status_pending_check")
+      : (item.status === "approved"
+        ? t("child_task_status_done")
+        : (item.status === "scheduled" ? t("child_task_status_scheduled") : t("child_task_status_active")));
+    const statusClass = item.status === "completed_by_child" ? "bg-amber-500/20 text-amber-300 border-amber-500/30" : (item.status === "approved" ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" : "bg-blue-500/20 text-blue-300 border-blue-500/30");
 
     return `
       <div class="p-3 bg-slate-950/60 rounded-2xl border border-slate-800 flex items-center justify-between gap-2 hover:border-slate-700 transition">
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
-            <span class="text-xs font-bold text-white truncate">${escapeHtml(t.title) || 'Missiya'}</span>
-            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${statusClass}">${statusText}</span>
+            <span class="text-xs font-bold text-white truncate">${escapeHtml(item.title) || escapeHtml(t("tab_missions"))}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${statusClass}">${escapeHtml(statusText)}</span>
           </div>
           <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <span class="text-[10px] sm:text-[11px] text-amber-300 font-black flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-lg shadow-sm">
-              <span>🪙 +${coins.toLocaleString()} tanga</span>
+              <span>🪙 +${coins.toLocaleString()} ${escapeHtml(t("currency_coin"))}</span>
             </span>
             <span class="text-[10px] sm:text-[11px] text-emerald-300 font-black flex items-center gap-1 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-lg shadow-sm">
-              <span>💵 +${moneyEquivalent.toLocaleString()} so'm</span>
+              <span>💵 +${moneyEquivalent.toLocaleString()} ${escapeHtml(t("currency_som"))}</span>
             </span>
           </div>
         </div>
         <button onclick="switchTab('tasks')" class="px-2.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 text-white rounded-xl text-xs font-bold shrink-0 transition active:scale-95 shadow">
-          Bajarish
+          ${escapeHtml(t("btn_do_task"))}
         </button>
       </div>
     `;
@@ -5659,8 +6396,8 @@ function renderChildDashboardCastles() {
     container.innerHTML = `
       <div class="p-3 bg-slate-950/40 rounded-2xl border border-slate-800/60 text-center col-span-2">
         <span class="text-lg">🛡️</span>
-        <p class="text-xs font-bold text-slate-300 mt-0.5">Xavfsiz makonlar hali belgilanmagan</p>
-        <p class="text-[10px] text-slate-400">Ota-onangiz xaritada xavfsiz hudud kiritganda chiqadi</p>
+        <p class="text-xs font-bold text-slate-300 mt-0.5">${escapeHtml(t("no_castles_title"))}</p>
+        <p class="text-[10px] text-slate-400">${escapeHtml(t("no_castles_sub"))}</p>
       </div>
     `;
     return;
@@ -5678,19 +6415,18 @@ function renderChildDashboardCastles() {
     else if (n.includes("sport") || n.includes("zal")) icon = "🥋";
     else if (n.includes("bobo") || n.includes("buvi") || n.includes("ota")) icon = "👵";
 
-    const fenceNameEscaped = (c.name || "").replace(/'/g, "\\'");
-    const fLat = c.latitude || 0;
-    const fLon = c.longitude || 0;
-    const fRad = c.radius_meters || 100;
+    const fLat = Number(c.latitude || 0);
+    const fLon = Number(c.longitude || 0);
+    const fRad = Number(c.radius_meters || 100);
     const fId = c.id || (i + 1);
 
     return `
-      <div onclick="openChildZoneOnMap('${fId}', ${fLat}, ${fLon}, '${fenceNameEscaped}', ${fRad})" class="cursor-pointer active:scale-95 transition bg-slate-950/60 hover:bg-slate-900 p-2.5 rounded-2xl border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between gap-2 shadow-sm" title="Xaritada ko'rish">
+      <div data-zone-id="${escapeHtml(String(fId))}" data-lat="${fLat}" data-lon="${fLon}" data-name="${escapeHtml(c.name || '')}" data-rad="${fRad}" onclick="openChildZoneFromDataset(this)" class="cursor-pointer active:scale-95 transition bg-slate-950/60 hover:bg-slate-900 p-2.5 rounded-2xl border border-slate-800 hover:border-emerald-500/50 flex items-center justify-between gap-2 shadow-sm" title="${escapeHtml(t('view_on_map_title'))}">
         <div class="flex items-center gap-2 min-w-0">
           <span class="text-xl shrink-0">${icon}</span>
           <div class="min-w-0">
-            <p class="font-bold text-white text-xs truncate">${escapeHtml(c.name || 'Makon')}</p>
-            <p class="text-[10px] text-emerald-400 font-medium">Xavfsiz (${Math.round(fRad)}m)</p>
+            <p class="font-bold text-white text-xs truncate">${escapeHtml(c.name || t('tab_castles'))}</p>
+            <p class="text-[10px] text-emerald-400 font-medium">${escapeHtml(t('safe_radius_word'))} (${Math.round(fRad)}m)</p>
           </div>
         </div>
         <span class="text-slate-400 hover:text-emerald-400 text-xs shrink-0">🗺️</span>
@@ -6291,29 +7027,31 @@ function renderTasksList() {
     }
 
     let mediaHtml = "";
-    if (t.media_type === "photo" && t.media_url) {
+    const safeMediaUrl = sanitizeMediaUrl(t.media_url);
+    if (t.media_type === "photo" && safeMediaUrl) {
       mediaHtml = `
         <div class="mt-2 rounded-xl overflow-hidden border border-slate-700 max-h-40 bg-slate-950 flex items-center justify-center">
-          <img src="${t.media_url}" class="max-h-40 w-full object-cover cursor-pointer" onclick="window.open('${t.media_url}', '_blank')" />
+          <img src="${escapeHtml(safeMediaUrl)}" data-url="${escapeHtml(safeMediaUrl)}" class="max-h-40 w-full object-cover cursor-pointer" onclick="openSafeMediaUrl(this)" />
         </div>
       `;
-    } else if (t.media_type === "video" && t.media_url) {
+    } else if (t.media_type === "video" && safeMediaUrl) {
       mediaHtml = `
         <div class="mt-2 rounded-xl overflow-hidden border border-slate-700 max-h-48 bg-slate-950">
-          <video src="${t.media_url}" controls class="w-full max-h-48"></video>
+          <video src="${escapeHtml(safeMediaUrl)}" controls class="w-full max-h-48"></video>
         </div>
       `;
     }
 
     let proofHtml = "";
-    if (t.proof_photo_url) {
+    const safeProofUrl = sanitizeMediaUrl(t.proof_photo_url);
+    if (safeProofUrl) {
       proofHtml = `
         <div class="mt-2.5 p-2 bg-slate-950/60 rounded-xl border border-slate-800">
           <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 mb-1">
             <i data-lucide="camera" class="w-3.5 h-3.5"></i>
             <span>${isChild ? 'Yuborgan hisobot rasmingiz:' : 'Farzand yuborgan hisobot rasmi:'}</span>
           </div>
-          <img src="${t.proof_photo_url}" class="rounded-lg max-h-36 w-full object-cover cursor-pointer" onclick="window.open('${t.proof_photo_url}', '_blank')" />
+          <img src="${escapeHtml(safeProofUrl)}" data-url="${escapeHtml(safeProofUrl)}" class="rounded-lg max-h-36 w-full object-cover cursor-pointer" onclick="openSafeMediaUrl(this)" />
         </div>
       `;
     }
@@ -7799,33 +8537,253 @@ function navigateChildHome() {
   }
 }
 
-function triggerRemoteSiren() {
+async function ensureLocalAudioAndNotifPermission(triggerPrompt = false) {
+  unlockAudioEngine();
+  let notifState = (typeof Notification !== "undefined") ? Notification.permission : "unsupported";
+  if (triggerPrompt && typeof Notification !== "undefined" && Notification.permission === "default") {
+    try {
+      notifState = await Notification.requestPermission();
+    } catch (e) {}
+  }
+  if (triggerPrompt && window.AndroidBridge && typeof window.AndroidBridge.isNotificationGranted === "function") {
+    try {
+      if (!window.AndroidBridge.isNotificationGranted() && typeof window.AndroidBridge.requestNotificationPermission === "function") {
+        window.AndroidBridge.requestNotificationPermission();
+      }
+    } catch (e) {}
+  }
+  return notifState;
+}
+window.ensureLocalAudioAndNotifPermission = ensureLocalAudioAndNotifPermission;
+
+async function triggerRemoteSiren() {
   haptic("heavy");
+  await ensureLocalAudioAndNotifPermission(true);
+
+  const targetChildId = currentChildId || (currentRole === "child" ? authenticatedSession?.user?.id : null);
+  if (!targetChildId) {
+    showToast("⚠️ Signal chalish uchun avval farzandni tanlang!");
+    return;
+  }
+
+  // If running in local APK as child/self-test, verify notification/audio readiness first
+  if (window.AndroidBridge && typeof window.AndroidBridge.isNotificationGranted === "function") {
+    try {
+      if (!window.AndroidBridge.isNotificationGranted()) {
+        showToast("🔔 Signal bildirishnomasi ko'rinishi uchun ruxsat bering!");
+        if (typeof window.AndroidBridge.requestNotificationPermission === "function") {
+          window.AndroidBridge.requestNotificationPermission();
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Check remote child's reported permissions
+  let childPerms = lastChildReportedPermissions;
+  if (!childPerms && !isDemoMode) {
+    try {
+      const pRes = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/permissions`);
+      if (pRes.ok) {
+        const pJson = await pRes.json();
+        if (pJson && pJson.permissions) {
+          childPerms = pJson.permissions;
+          lastChildReportedPermissions = childPerms;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (childPerms && childPerms.notifications === false) {
+    const askPerm = confirm(
+      "⚠️ Farzand telefonida Signal va Bildirishnoma ruxsati o'chirilgan!\n\n" +
+      "\"OK\" bossangiz avval farzand telefoniga ruxsat yoqish so'rovi yuboriladi. \"Bekor qilish\" bossangiz shunga qaramay signal jo'natiladi."
+    );
+    if (askPerm) {
+      await sendPermissionRequestToChild("siren");
+      return;
+    }
+  }
+
   playPingNotificationSound();
-  showToast("🔔 Farzand telefoniga baland ovozli signal yuborildi!");
-  const targetChildId = currentChildId || (authenticatedSession && authenticatedSession.user && authenticatedSession.user.id) || 997185613;
-  const effParentId = getEffectiveParentId() || 6707839718;
-  const query = effParentId ? `?parent_id=${effParentId}` : "";
-  fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/siren${query}`, {
-    method: "POST"
-  }).catch(console.error);
+  showToast("⏳ Farzand telefoniga qidiruv signali yuborilmoqda...");
+
+  const effParentId = getEffectiveParentId() || authenticatedSession?.user?.id || "";
+  const query = effParentId ? `?parent_id=${encodeURIComponent(effParentId)}` : "";
+
+  try {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetChildId}/siren${query}`, {
+      method: "POST"
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.child_permissions) {
+      lastChildReportedPermissions = data.child_permissions;
+    }
+
+    if (!res.ok) {
+      showToast(`❌ Signal yuborilmadi (${res.status}): ${data.detail || "Xatolik"}`);
+      return;
+    }
+    if (data.status === "rate_limited") {
+      showToast(`⏳ ${data.message || "Signal allaqachon yuborildi, biroz kuting."}`);
+      return;
+    }
+    if (data.child_permissions && Object.keys(data.child_permissions).length === 0) {
+      showToast("🔔 Signal yuborildi! Farzand ilovasi ruxsatlarini ham tekshiring.");
+    } else if (data.delivered_telegram || data.delivered_ws) {
+      showToast("🔔 Farzand telefoniga baland ovozli signal muvaffaqiyatli yuborildi!");
+    } else {
+      showToast("🔔 Signal navbatga qo'yildi — farzand ilovasi ochilishi bilan yangraydi.");
+    }
+  } catch (err) {
+    console.error("triggerRemoteSiren error:", err);
+    showToast("❌ Tarmoq xatosi: Signal yuborilmadi. Internetni tekshiring.");
+  }
 }
 
 // ==============================================================================
 // AMBIENT SOUND MONITORING ("ЗВУК ВОКРУГ" - KILLER BENCHMARK FEATURE)
 // ==============================================================================
 
+function formatAmbientTimestamp(rec) {
+  try {
+    if (rec.created_at_iso) {
+      const dIso = new Date(rec.created_at_iso);
+      if (!isNaN(dIso.getTime())) {
+        return dIso.toLocaleString("uz-UZ", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+    }
+    const raw = String(rec.created_at || "").trim();
+    const m = raw.match(/^(\d{2})\.(\d{2})\.(\d{4}),?\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      const dParsed = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6] || 0));
+      if (!isNaN(dParsed.getTime())) {
+        return dParsed.toLocaleString("uz-UZ", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+    }
+    if (raw) {
+      const dFallback = new Date(raw);
+      if (!isNaN(dFallback.getTime())) {
+        return dFallback.toLocaleString("uz-UZ", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      }
+      return raw;
+    }
+  } catch (e) {}
+  return "Yaqinda";
+}
+
+async function getLocalMicPermissionState() {
+  if (window.AndroidBridge && typeof window.AndroidBridge.isRecordAudioGranted === "function") {
+    try {
+      return window.AndroidBridge.isRecordAudioGranted() ? "granted" : "denied";
+    } catch (e) {}
+  }
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const st = await navigator.permissions.query({ name: "microphone" });
+      return st.state; // granted | prompt | denied
+    } catch (e) {}
+  }
+  return localStorage.getItem("smart_tracker_mic_permitted") === "true" ? "granted" : "prompt";
+}
+
+async function requestAmbientLocalMicPermission() {
+  haptic("medium");
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestRecordAudioPermission === "function") {
+    window.AndroidBridge.requestRecordAudioPermission();
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      stream.getTracks().forEach(t => t.stop());
+      localStorage.setItem("smart_tracker_mic_permitted", "true");
+      showToast("✅ Mikrofon ruxsati berildi!");
+      syncChildPermissionsToServer({ record_audio: true, microphone: true });
+      renderAmbientMicPermissionBanner();
+      checkAndPromptChildPermissions(currentChildId, false);
+      return true;
+    } catch (err) {
+      showToast("⚠️ Mikrofon ruxsati berilmadi. Brauzer/telefon sozlamalaridan ruxsat bering.");
+      syncChildPermissionsToServer({ record_audio: false, microphone: false });
+      renderAmbientMicPermissionBanner();
+      return false;
+    }
+  }
+  showToast("ℹ️ Telefonda chiqqan so'rovda Mikrofon ruxsatini tasdiqlang");
+  return false;
+}
+window.requestAmbientLocalMicPermission = requestAmbientLocalMicPermission;
+
+async function renderAmbientMicPermissionBanner() {
+  const banner = document.getElementById("ambientMicPermissionBanner");
+  const textEl = document.getElementById("ambientMicPermissionText");
+  const btnEl = document.getElementById("btnAmbientMicPermissionAction");
+  if (!banner) return;
+
+  const childId = currentChildId;
+  if (childId && !isDemoMode && !lastChildReportedPermissions) {
+    try {
+      const pRes = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/permissions`);
+      if (pRes.ok) {
+        const pJson = await pRes.json();
+        if (pJson && pJson.permissions) lastChildReportedPermissions = pJson.permissions;
+      }
+    } catch (e) {}
+  }
+
+  const perms = lastChildReportedPermissions || {};
+  const remoteMicMissing = perms.record_audio === false || perms.microphone === false;
+  const remoteUnknown = !perms || Object.keys(perms).length === 0;
+  const localMicState = await getLocalMicPermissionState();
+
+  if (currentRole === "child" || (window.AndroidBridge && localMicState !== "granted")) {
+    if (localMicState !== "granted") {
+      banner.classList.remove("hidden");
+      if (textEl) textEl.textContent = "Ovoz yozib olish ishlashi uchun ushbu qurilmada Mikrofon ruxsatini yoqish shart:";
+      if (btnEl) {
+        btnEl.textContent = "🎙 Mikrofonni yoqish";
+        btnEl.onclick = requestAmbientLocalMicPermission;
+      }
+      return;
+    }
+  }
+
+  if (remoteMicMissing) {
+    banner.classList.remove("hidden");
+    if (textEl) textEl.textContent = "Farzand telefonida Mikrofon ruxsati o'chirilgan! Ovoz yozib olish uchun ruxsat so'rang:";
+    if (btnEl) {
+      btnEl.textContent = "📲 Ruxsat so'rash";
+      btnEl.onclick = () => sendPermissionRequestToChild("microphone");
+    }
+    return;
+  }
+
+  if (remoteUnknown && !isDemoMode && currentRole === "parent") {
+    banner.classList.remove("hidden");
+    if (textEl) textEl.textContent = "Farzand telefonida Mikrofon ruxsati hali tasdiqlanmagan bo'lishi mumkin:";
+    if (btnEl) {
+      btnEl.textContent = "📲 Ruxsat yuborish";
+      btnEl.onclick = () => sendPermissionRequestToChild("microphone");
+    }
+    return;
+  }
+
+  banner.classList.add("hidden");
+}
+
 function openAmbientSoundModal() {
   const modal = document.getElementById("modalAmbientSound");
   if (!modal) return;
   modal.classList.remove("hidden");
+  setTimeout(updateTelegramBackButton, 50);
   if (window.lucide) window.lucide.createIcons();
+  renderAmbientMicPermissionBanner();
   loadAmbientSoundHistory();
 }
 
 function closeAmbientSoundModal() {
   const modal = document.getElementById("modalAmbientSound");
   if (modal) modal.classList.add("hidden");
+  setTimeout(updateTelegramBackButton, 50);
 }
 
 let ambientSoundRequestInProgress = false;
@@ -7841,6 +8799,25 @@ async function requestRemoteAmbientSound(durationSeconds) {
     return;
   }
 
+  // If on native child device or testing locally without mic permission, ask permission right now!
+  if (window.AndroidBridge && typeof window.AndroidBridge.isRecordAudioGranted === "function" && !window.AndroidBridge.isRecordAudioGranted()) {
+    const ok = await requestAmbientLocalMicPermission();
+    if (!ok) return;
+  } else {
+    const remotePerms = lastChildReportedPermissions || {};
+    if (remotePerms.record_audio === false || remotePerms.microphone === false) {
+      const sendReqFirst = confirm(
+        "🎙 Farzand telefonida Mikrofon ruxsati yoqilmagan!\n\n" +
+        "\"OK\" bossangiz farzand telefoniga Mikrofon ruxsatini yoqish so'rovi yuboriladi. " +
+        "\"Bekor qilish\" bossangiz yozish buyrug'ini yuborishga urinadi."
+      );
+      if (sendReqFirst) {
+        await sendPermissionRequestToChild("microphone");
+        return;
+      }
+    }
+  }
+
   const duration = durationSeconds || 30;
   haptic("medium");
   ambientSoundRequestInProgress = true;
@@ -7848,12 +8825,10 @@ async function requestRemoteAmbientSound(durationSeconds) {
   const statusEl = document.getElementById("ambientSoundRecordingStatus");
   const statusText = document.getElementById("ambientSoundStatusText");
   if (statusEl) statusEl.classList.remove("hidden");
-  if (statusText) statusText.textContent = `Farzand telefoniga ${duration}s ovoz yozish buyrug'i yuborildi...`;
-
-  showToast(`🎙 Farzand telefonidan ${duration} soniyalik ovoz yozish buyrug'i jo'natildi!`);
+  if (statusText) statusText.textContent = `Farzand telefoniga ${duration}s ovoz yozish buyrug'i yuborilmoqda...`;
 
   try {
-    const effParentId = getEffectiveParentId() || 6707839718;
+    const effParentId = getEffectiveParentId() || authenticatedSession?.user?.id || 6707839718;
     const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -7862,13 +8837,20 @@ async function requestRemoteAmbientSound(durationSeconds) {
         parent_id: effParentId
       })
     });
-    const data = await res.json();
-    if (data.status !== "success") {
-      showToast(`⚠️ Xatolik: ${data.message || 'Buyruq yetkazilmadi'}`);
+    const data = await res.json().catch(() => ({}));
+    if (data && data.child_permissions) {
+      lastChildReportedPermissions = data.child_permissions;
+      renderAmbientMicPermissionBanner();
+    }
+    if (!res.ok || data.status !== "success") {
+      showToast(`⚠️ Xatolik: ${data.detail || data.message || "Buyruq yetkazilmadi"}`);
       if (statusEl) statusEl.classList.add("hidden");
       ambientSoundRequestInProgress = false;
       return;
     }
+
+    showToast(`🎙 Farzand telefonidan ${duration} soniyalik ovoz yozish buyrug'i jo'natildi!`);
+    if (statusText) statusText.textContent = `Farzand telefoni mikrofon orqali yozmoqda... (${duration + 5}s qoldi)`;
 
     // Countdown and check history after completion
     let remaining = duration + 5;
@@ -7882,7 +8864,7 @@ async function requestRemoteAmbientSound(durationSeconds) {
         ambientSoundRequestInProgress = false;
         if (statusEl) statusEl.classList.add("hidden");
         loadAmbientSoundHistory();
-        showToast("✅ Ovoz tayyor bo'ldi! Telegram botingizga ham ovozli xabar yetkazildi.");
+        showToast("✅ Ovoz yozish yakunlandi — ro'yxat va Telegram botingizni tekshiring!");
       }
     }, 1000);
 
@@ -7922,25 +8904,24 @@ async function loadAmbientSoundHistory() {
 
     let html = "";
     for (const rec of data.recordings) {
-      const createdStr = rec.created_at ? new Date(rec.created_at).toLocaleString("uz-UZ", {
-        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
-      }) : "Yaqinda";
+      const createdStr = formatAmbientTimestamp(rec);
       const dur = rec.duration_seconds || 20;
-      const audioUrl = rec.url.startsWith("http") ? rec.url : `${getApiBase()}${rec.url}`;
+      const rawUrl = String(rec.url || rec.file_url || "");
+      const audioUrl = rawUrl.startsWith("http") ? rawUrl : `${getApiBase()}${rawUrl}`;
 
       html += `
         <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700/60 hover:border-amber-500/40 transition flex flex-col gap-2">
           <div class="flex items-center justify-between text-xs">
             <span class="font-bold text-slate-200 flex items-center gap-1.5">
               <i data-lucide="volume-2" class="w-3.5 h-3.5 text-amber-400"></i>
-              <span>${createdStr}</span>
+              <span>${escapeHtml(createdStr)}</span>
             </span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
               ${dur} soniya
             </span>
           </div>
-          <audio controls preload="none" class="w-full h-8 rounded-lg accent-amber-500" style="outline: none;">
-            <source src="${audioUrl}">
+          <audio controls preload="none" class="w-full h-9 rounded-lg accent-amber-500" style="outline: none;">
+            <source src="${escapeHtml(audioUrl)}">
             Brauzeringiz audio pleerni qo'llab-quvvatlamaydi.
           </audio>
         </div>
@@ -7958,13 +8939,30 @@ async function loadAmbientSoundHistory() {
 // Child device ambient sound recorder (Web & Android Bridge)
 let isAmbientRecordingActive = false;
 
+function onNativeMicPermissionMissing() {
+  syncChildPermissionsToServer({ record_audio: false, microphone: false });
+  showToast("🎙 Ota-ona atrof ovozini eshitishi uchun Mikrofon ruxsatini yoqing!");
+  if (typeof openChildPermissionsModal === "function") {
+    openChildPermissionsModal("microphone");
+  }
+}
+window.onNativeMicPermissionMissing = onNativeMicPermissionMissing;
+
 async function startChildAmbientSoundRecording(durationSeconds, requestId, parentId) {
   if (isAmbientRecordingActive) return;
   const duration = (durationSeconds && durationSeconds > 0 && durationSeconds <= 60) ? durationSeconds : 20;
 
-  // 1. If Native Android Bridge exists, delegate directly to native MediaRecorder
+  // 1. If Native Android Bridge exists, verify RECORD_AUDIO permission and delegate directly
   if (window.AndroidBridge && typeof window.AndroidBridge.recordAmbientSound === "function") {
     try {
+      if (typeof window.AndroidBridge.isRecordAudioGranted === "function" && !window.AndroidBridge.isRecordAudioGranted()) {
+        syncChildPermissionsToServer({ record_audio: false, microphone: false });
+        if (typeof window.AndroidBridge.requestRecordAudioPermission === "function") {
+          window.AndroidBridge.requestRecordAudioPermission();
+        }
+        onNativeMicPermissionMissing();
+        return;
+      }
       window.AndroidBridge.recordAmbientSound(duration, requestId || "", parentId || 0);
       return;
     } catch (bridgeErr) {
@@ -7975,6 +8973,7 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
   // 2. Web MediaRecorder fallback
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     console.warn("getUserMedia is not supported on this device/browser");
+    syncChildPermissionsToServer({ record_audio: false, microphone: false });
     return;
   }
 
@@ -7984,19 +8983,22 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStorage.setItem("smart_tracker_mic_permitted", "true");
+    syncChildPermissionsToServer({ record_audio: true, microphone: true });
     const chunks = [];
-    
-    // Choose optimal mimeType
-    let mimeType = "audio/webm";
-    if (typeof MediaRecorder.isTypeSupported === "function") {
-      if (MediaRecorder.isTypeSupported("audio/mp4")) {
-        mimeType = "audio/mp4";
-      } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
-        mimeType = "audio/ogg; codecs=opus";
+
+    let mimeType = "";
+    if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+      const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+      for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported(c)) {
+          mimeType = c;
+          break;
+        }
       }
     }
 
-    mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
     mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) chunks.push(e.data);
     };
@@ -8008,12 +9010,15 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
         }
       } catch (e) {}
 
-      const blobType = mediaRecorder.mimeType || mimeType;
+      const blobType = (mediaRecorder && mediaRecorder.mimeType) || mimeType || "audio/webm";
       const audioBlob = new Blob(chunks, { type: blobType });
       const ext = blobType.includes("mp4") ? "m4a" : (blobType.includes("ogg") ? "ogg" : "webm");
 
       const childId = currentChildId;
-      if (!childId) return;
+      if (!childId || chunks.length === 0 || audioBlob.size === 0) {
+        isAmbientRecordingActive = false;
+        return;
+      }
 
       const formData = new FormData();
       formData.append("audio_file", audioBlob, `ambient_${childId}_${Date.now()}.${ext}`);
@@ -8022,10 +9027,13 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
       if (parentId) formData.append("parent_id", String(parentId));
 
       try {
-        await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/upload`, {
+        const upRes = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/ambient-sound/upload`, {
           method: "POST",
           body: formData
         });
+        if (!upRes.ok) {
+          console.error("Ambient sound upload HTTP error:", upRes.status);
+        }
       } catch (uploadErr) {
         console.error("Ambient sound upload failed:", uploadErr);
       } finally {
@@ -8035,7 +9043,6 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
 
     mediaRecorder.start();
 
-    // Auto-stop after specified duration
     setTimeout(() => {
       try {
         if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -8049,6 +9056,9 @@ async function startChildAmbientSoundRecording(durationSeconds, requestId, paren
   } catch (err) {
     console.warn("Failed to record ambient sound via web MediaRecorder:", err);
     isAmbientRecordingActive = false;
+    if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
+      onNativeMicPermissionMissing();
+    }
     if (stream) {
       try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
     }
@@ -8705,6 +9715,151 @@ function startChildWebSessionTracker(childId) {
   }, 30000);
 }
 
+async function checkAndPromptChildPermissions(childId, forceShow = false) {
+  if (currentRole !== "child") return;
+  const targetId = childId || currentChildId;
+
+  let geoGranted = false;
+  let micGranted = (localStorage.getItem("smart_tracker_mic_permitted") === "true");
+  let notifGranted = (typeof Notification !== "undefined" && Notification.permission === "granted");
+
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const geoStatus = await navigator.permissions.query({ name: "geolocation" });
+      if (geoStatus && geoStatus.state === "granted") {
+        geoGranted = true;
+        localStorage.setItem("smart_tracker_location_permitted", "true");
+      }
+    } catch (e) {
+      if (localStorage.getItem("smart_tracker_location_permitted") === "true") {
+        geoGranted = true;
+      }
+    }
+    try {
+      const micStatus = await navigator.permissions.query({ name: "microphone" });
+      if (micStatus && micStatus.state === "granted") {
+        micGranted = true;
+        localStorage.setItem("smart_tracker_mic_permitted", "true");
+      }
+    } catch (e) {}
+  } else {
+    if (localStorage.getItem("smart_tracker_location_permitted") === "true") {
+      geoGranted = true;
+    }
+  }
+
+  let nativeUsage = false;
+  let nativeOverlay = false;
+  let nativeAccess = false;
+  let nativeSms = false;
+  let nativeAllGranted = true;
+
+  if (window.AndroidBridge) {
+    try {
+      nativeUsage = (typeof window.AndroidBridge.isUsageAccessGranted === "function") ? Boolean(window.AndroidBridge.isUsageAccessGranted()) : true;
+      nativeOverlay = (typeof window.AndroidBridge.isOverlayGranted === "function") ? Boolean(window.AndroidBridge.isOverlayGranted()) : true;
+      nativeAccess = (typeof window.AndroidBridge.isAccessibilityGranted === "function") ? Boolean(window.AndroidBridge.isAccessibilityGranted()) : true;
+      nativeSms = (typeof window.AndroidBridge.isSmsPermissionGranted === "function") ? Boolean(window.AndroidBridge.isSmsPermissionGranted()) : true;
+      if (typeof window.AndroidBridge.isRecordAudioGranted === "function") {
+        micGranted = Boolean(window.AndroidBridge.isRecordAudioGranted());
+      }
+      if (typeof window.AndroidBridge.isNotificationGranted === "function") {
+        notifGranted = Boolean(window.AndroidBridge.isNotificationGranted());
+      }
+      if (!nativeUsage || !nativeOverlay || !nativeAccess) {
+        nativeAllGranted = false;
+      }
+    } catch (e) {}
+  }
+
+  // Update per-item onboarding modal badges if present
+  const setBadge = (id, ok) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = ok ? "✅ Faol" : "⚠️ Kerak";
+    el.className = ok
+      ? "px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0"
+      : "px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0";
+  };
+  setBadge("badgeOnbGeo", geoGranted);
+  setBadge("badgeOnbMic", micGranted);
+  setBadge("badgeOnbSms", window.AndroidBridge ? nativeSms : true);
+  setBadge("badgeOnbUsage", window.AndroidBridge ? nativeUsage : false);
+  setBadge("badgeOnbAccess", window.AndroidBridge ? (nativeAccess && nativeOverlay) : false);
+  setBadge("badgeOnbSignal", notifGranted || Boolean(window.AndroidBridge));
+
+  syncChildPermissionsToServer({
+    is_native: Boolean(window.AndroidBridge),
+    geolocation: geoGranted,
+    record_audio: micGranted,
+    microphone: micGranted,
+    notifications: notifGranted,
+    audio_unlocked: isAudioEngineUnlocked,
+    ...(window.AndroidBridge ? {
+      usage_access: nativeUsage,
+      overlay: nativeOverlay,
+      accessibility: nativeAccess,
+      sms_permission: nativeSms,
+    } : {}),
+  });
+
+  const allGranted = geoGranted && micGranted && notifGranted && nativeAllGranted;
+
+  // Update Status Pill
+  const pill = document.getElementById("btnChildPermissionsStatusPill");
+  const pillIcon = document.getElementById("childPermissionPillIcon");
+  const pillText = document.getElementById("childPermissionPillText");
+  const banner = document.getElementById("childPermissionAlertBanner");
+
+  if (allGranted) {
+    if (pill) {
+      pill.className = "min-h-[44px] flex items-center gap-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-2 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0";
+      pill.title = "Barcha xavfsizlik ruxsatlari faol (GPS, Ovoz, Signal)";
+    }
+    if (pillIcon) {
+      pillIcon.setAttribute("data-lucide", "shield-check");
+      pillIcon.className = "w-4 h-4 text-emerald-400";
+    }
+    if (pillText) pillText.textContent = "Ruxsatlar faol";
+    if (banner) banner.classList.add("hidden");
+  } else {
+    if (pill) {
+      pill.className = "min-h-[44px] flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-2 rounded-2xl text-[10px] sm:text-xs font-black transition active:scale-95 shadow-sm shrink-0";
+      pill.title = "Xavfsizlik ruxsatlari to'liq emas (GPS yoki Ovoz yoqilmagan)";
+    }
+    if (pillIcon) {
+      pillIcon.setAttribute("data-lucide", "shield-alert");
+      pillIcon.className = "w-4 h-4 text-amber-400 animate-pulse";
+    }
+    if (pillText) pillText.textContent = "Ruxsat kerak";
+    if (banner) banner.classList.remove("hidden");
+  }
+
+  if (window.lucide) lucide.createIcons();
+
+  const sessionDismissed = sessionStorage.getItem("smart_tracker_child_permissions_dismissed_session");
+  if (forceShow || (!allGranted && !sessionDismissed)) {
+    const modal = document.getElementById("childOnboardingModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+}
+
+function openChildPermissionsModal(scope) {
+  haptic("light");
+  if (scope === "blocking") {
+    showToast("🛡️ Ilovalarni bloklash uchun Usage Access, Overlay va Accessibility ruxsatlarini yoqing!");
+  } else if (scope === "microphone") {
+    showToast("🎙 Atrof ovozi va SOS uchun Mikrofon ruxsatini yoqing!");
+  } else if (scope === "siren") {
+    showToast("🔔 Signal yangrashi uchun Ovoz va Bildirishnoma ruxsatini yoqing!");
+  }
+  checkAndPromptChildPermissions(currentChildId, true);
+}
+window.openChildPermissionsModal = openChildPermissionsModal;
+
 function initChildPermissionsAndTracking(childId) {
   if (!childId) return;
 
@@ -8730,28 +9885,8 @@ function initChildPermissionsAndTracking(childId) {
   // ALWAYS attempt background telemetry acquisition immediately so live signal connects with 0 wait!
   trySilentBackgroundLocationTracking(childId);
 
-  // Check if permissions onboarding modal needs to be shown for first-time instructions
-  const granted = localStorage.getItem("smart_tracker_child_permissions_granted");
-  let needsPermissionPrompt = !granted;
-
-  // In Native Android APK, proactively check if Usage Access or Accessibility are missing
-  if (window.AndroidBridge && typeof window.AndroidBridge.isUsageAccessGranted === "function") {
-    try {
-      const hasUsage = window.AndroidBridge.isUsageAccessGranted();
-      const hasAccess = typeof window.AndroidBridge.isAccessibilityGranted === "function" ? window.AndroidBridge.isAccessibilityGranted() : true;
-      if (!hasUsage || !hasAccess) {
-        needsPermissionPrompt = true;
-      }
-    } catch (e) {}
-  }
-
-  if (needsPermissionPrompt) {
-    const modal = document.getElementById("childOnboardingModal");
-    if (modal) {
-      modal.classList.remove("hidden");
-      if (window.lucide) lucide.createIcons();
-    }
-  }
+  // Check live permissions and update UI/prompt modal
+  checkAndPromptChildPermissions(childId);
 }
 
 function trySilentBackgroundLocationTracking(childId) {
@@ -8836,6 +9971,7 @@ function fetchTelegramLocationSilently(childId) {
 
 async function requestChildAllPermissions() {
   haptic("medium");
+  unlockAudioEngine();
   const modal = document.getElementById("childOnboardingModal");
   const btn = document.getElementById("btnGrantChildPermissions");
   if (btn) {
@@ -8891,6 +10027,7 @@ async function requestChildAllPermissions() {
                 accuracy: loc.accuracy || 10
               };
               lastLocationFetchTime = Date.now();
+              localStorage.setItem("smart_tracker_location_permitted", "true");
               if (targetId) {
                 sendChildLiveTelemetry(targetId, {
                   latitude: loc.latitude,
@@ -8918,6 +10055,7 @@ async function requestChildAllPermissions() {
         const { latitude, longitude, accuracy } = pos.coords;
         cachedDeviceLocation = { latitude, longitude, accuracy };
         lastLocationFetchTime = Date.now();
+        localStorage.setItem("smart_tracker_location_permitted", "true");
         if (targetId) {
           sendChildLiveTelemetry(targetId, {
             latitude,
@@ -8936,42 +10074,67 @@ async function requestChildAllPermissions() {
   }
 
   // 2.5 Request Microphone for 5s audio and ambient snapshot
+  let grantedMicNow = false;
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestRecordAudioPermission === "function") {
+    try {
+      if (!window.AndroidBridge.isRecordAudioGranted()) {
+        window.AndroidBridge.requestRecordAudioPermission();
+      } else {
+        grantedMicNow = true;
+      }
+    } catch (e) {}
+  }
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     try {
       const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       micStream.getTracks().forEach((t) => t.stop());
       localStorage.setItem("smart_tracker_mic_permitted", "true");
+      grantedMicNow = true;
     } catch (micErr) {
       console.warn("Microphone permission note:", micErr);
     }
   }
 
-  // 2.6 Request Notification permission
-  if (typeof Notification !== "undefined" && Notification.permission !== "granted") {
-    try {
-      await Notification.requestPermission();
-    } catch (notifErr) {}
-  }
+  // 2.6 Request Notification & Audio unlock permission
+  await ensureLocalAudioAndNotifPermission(true);
+
+  syncChildPermissionsToServer({
+    geolocation: localStorage.getItem("smart_tracker_location_permitted") === "true",
+    record_audio: grantedMicNow,
+    microphone: grantedMicNow,
+    notifications: (typeof Notification !== "undefined" && Notification.permission === "granted") ||
+      Boolean(window.AndroidBridge && typeof window.AndroidBridge.isNotificationGranted === "function" && window.AndroidBridge.isNotificationGranted()),
+    audio_unlocked: isAudioEngineUnlocked,
+  });
 
   // 3. Start continuous background GPS telemetry
   if (targetId) {
     startChildLiveTracking(targetId);
   }
 
-  // Permanently save permission flag so it NEVER prompts again!
+  // Mark active permissions
+  sessionStorage.removeItem("smart_tracker_child_permissions_dismissed_session");
   localStorage.setItem("smart_tracker_child_permissions_granted", "true");
-  localStorage.setItem("smart_tracker_location_permitted", "true");
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4"></i><span>⚡ Barcha Ruxsatlarni Yoqish (1 martalik)</span>`;
+  }
 
   if (modal) modal.classList.add("hidden");
-  showToast("✅ Ruxsat berildi! Joylashuvingiz ota-onangizga yuborilmoqda 🛡️");
+  showToast("✅ Ruxsatnomalar jarayoni bajarildi! Qolgan tizim ruxsatlarini kartadan tekshiring 🛡️");
+  checkAndPromptChildPermissions(targetId);
+  refreshProtectionPermissionsStatus();
 }
 
 function skipChildPermissions() {
   haptic("light");
-  // Remember that user skipped so the modal NEVER pops up on entry again!
-  localStorage.setItem("smart_tracker_child_permissions_granted", "dismissed");
+  // Only dismiss for this session so child can still see warning banner & status pill
+  sessionStorage.setItem("smart_tracker_child_permissions_dismissed_session", "true");
   const modal = document.getElementById("childOnboardingModal");
   if (modal) modal.classList.add("hidden");
+  checkAndPromptChildPermissions(currentChildId);
+  showToast("⚠️ Ruxsatlar qoldirildi. Istalgan vaqt yuqoridagi qalqon orqali yoqishingiz mumkin.");
 }
 
 function startChildLiveTracking(childId) {
@@ -9401,15 +10564,30 @@ function handleIncomingWebSocketMessage(msg) {
 
   // 1.1 Remote siren signal for Child
   if (msg.type === "remote_siren" && currentRole === "child") {
-    playSirenSound();
-    haptic("heavy");
-    showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+    triggerIncomingSirenNotification();
     return;
   }
 
   // 1.12 Remote ambient sound recording for Child ("Звук вокруг")
   if (msg.type === "record_ambient_sound" && currentRole === "child") {
     startChildAmbientSoundRecording(msg.duration_seconds || 20, msg.request_id, msg.parent_id);
+    return;
+  }
+
+  // 1.13 Parent requested permissions from Child
+  if (msg.type === "request_permissions" && currentRole === "child") {
+    haptic("heavy");
+    openChildPermissionsModal(msg.scope || "all");
+    return;
+  }
+
+  // 1.14 Child permission update pushed to Parent
+  if (msg.type === "child_permissions_update" && currentRole === "parent") {
+    if (msg.child_id == currentChildId && msg.permissions) {
+      lastChildReportedPermissions = msg.permissions;
+      checkNativeAppPermissions();
+      renderAmbientMicPermissionBanner();
+    }
     return;
   }
 
@@ -9732,15 +10910,15 @@ async function checkChildPendingNotifications(childId) {
               try { window.sendLocationUpdate(); } catch(e) {}
             }
           } else if (notif.type === "remote_siren") {
-            playSirenSound();
-            haptic("heavy");
-            showToast("🔔 Ota-onangiz telefoningizga qidiruv signali yubordi!");
+            triggerIncomingSirenNotification();
           } else if (notif.type === "record_ambient_sound") {
             startChildAmbientSoundRecording(notif.duration_seconds || 20, notif.request_id, notif.parent_id);
           } else if (notif.type === "device_policy_update") {
             if (typeof fetchChildDevicePolicy === "function") {
               fetchChildDevicePolicy(currentChildId);
             }
+          } else if (notif.type === "request_permissions") {
+            openChildPermissionsModal(notif.scope || "all");
           }
         }
       }
@@ -10195,19 +11373,24 @@ async function recordAndUploadSOSAudio(childId) {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    const mimeType = (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus"))
-      ? "audio/webm;codecs=opus"
-      : (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus"))
-      ? "audio/ogg;codecs=opus"
-      : (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/mp4"))
-      ? "audio/mp4"
-      : "";
+    syncChildPermissionsToServer({ record_audio: true, microphone: true });
+    let mimeType = "";
+    if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+      for (const cand of ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]) {
+        if (MediaRecorder.isTypeSupported(cand)) { mimeType = cand; break; }
+      }
+    }
 
     const options = {
       audioBitsPerSecond: 16000 // 16kbps compression: ultra-lightweight (~10KB for 5s) for 2G/Edge
     };
     if (mimeType) options.mimeType = mimeType;
-    const mediaRecorder = new MediaRecorder(stream, options);
+    let mediaRecorder;
+    try {
+      mediaRecorder = new MediaRecorder(stream, options);
+    } catch (e) {
+      mediaRecorder = new MediaRecorder(stream);
+    }
     const chunks = [];
 
     mediaRecorder.ondataavailable = (e) => {
@@ -10267,6 +11450,10 @@ async function recordAndUploadSOSAudio(childId) {
     }, 5000);
   } catch (err) {
     console.warn("SOS ambient microphone capture skipped/denied:", err);
+    if (err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")) {
+      syncChildPermissionsToServer({ record_audio: false, microphone: false });
+      showToast("⚠️ 5s SOS ovoz snapshot uchun Mikrofon ruxsatini yoqing!");
+    }
   }
 }
 
@@ -11090,74 +12277,192 @@ function dismissAppBanner() {
   try { localStorage.setItem("hide_app_banner", "1"); } catch(e) {}
 }
 
+let lastChildReportedPermissions = null;
+let _lastPermsSyncTs = 0;
+
+async function syncChildPermissionsToServer(perms) {
+  const childId = currentChildId || authenticatedSession?.user?.id;
+  if (!childId || isDemoMode || currentRole !== "child") return;
+  const now = Date.now();
+  if (now - _lastPermsSyncTs < 2500) return;
+  _lastPermsSyncTs = now;
+  try {
+    await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(perms || {})
+    });
+  } catch (e) {}
+}
+window.syncChildPermissionsToServer = syncChildPermissionsToServer;
+
+async function sendPermissionRequestToChild(scope = "all") {
+  haptic("medium");
+  const childId = currentChildId;
+  if (!childId || isDemoMode) {
+    showToast("ℹ️ Ruxsat so'rovi faqat haqiqiy ulangan farzand qurilmasiga yuboriladi.");
+    return;
+  }
+  const effParentId = getEffectiveParentId() || authenticatedSession?.user?.id || null;
+  try {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${childId}/request-permissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parent_id: effParentId,
+        scope: scope || "all"
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showToast(`⚠️ Ruxsat so'rovi yuborilmadi: ${data.detail || res.status}`);
+      return;
+    }
+    showToast(
+      data.delivered_telegram
+        ? "📲 Farzand telefoniga va Telegram botiga ruxsat yoqish so'rovi yuborildi!"
+        : "📲 Farzand ilovasiga ruxsat yoqish so'rovi yuborildi!"
+    );
+  } catch (e) {
+    showToast("❌ Tarmoq xatosi: Ruxsat so'rovi yuborilmadi");
+  }
+}
+window.sendPermissionRequestToChild = sendPermissionRequestToChild;
+
+async function fetchChildDevicePolicy(childId) {
+  const targetId = childId || currentChildId;
+  if (!targetId || isDemoMode) return null;
+  try {
+    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${targetId}/device-policy`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && json.child_permissions) {
+      lastChildReportedPermissions = json.child_permissions;
+    }
+    if (json && json.policy) {
+      updateDevicePolicyUI(json.policy);
+      updateSchoolModeUI(json.policy);
+      if (typeof updateChildLockScreenOverlay === "function") {
+        updateChildLockScreenOverlay(json.policy);
+      }
+      return json.policy;
+    }
+  } catch (e) {}
+  return null;
+}
+window.fetchChildDevicePolicy = fetchChildDevicePolicy;
+
+function triggerMicPermissionRequest() {
+  requestAmbientLocalMicPermission();
+}
+window.triggerMicPermissionRequest = triggerMicPermissionRequest;
+
+async function triggerNotificationSignalPermissionRequest() {
+  haptic("medium");
+  const st = await ensureLocalAudioAndNotifPermission(true);
+  playPingNotificationSound();
+  showToast(
+    st === "granted" || isAudioEngineUnlocked
+      ? "✅ Signal va ovoz ruxsati faol!"
+      : "🔔 Bildirishnoma va ovoz ruxsatini tasdiqlang"
+  );
+  refreshProtectionPermissionsStatus();
+}
+window.triggerNotificationSignalPermissionRequest = triggerNotificationSignalPermissionRequest;
+
+function triggerVpnPermissionRequest() {
+  haptic("medium");
+  if (window.AndroidBridge && typeof window.AndroidBridge.requestVpnPermission === "function") {
+    window.AndroidBridge.requestVpnPermission();
+  } else {
+    openInstallAppModal();
+    showToast("ℹ️ VPN xavfsizlik devori faqat Android APK ilovasida ishlaydi");
+  }
+}
+window.triggerVpnPermissionRequest = triggerVpnPermissionRequest;
+
 // =========================================================
 // CHILD PROTECTION & SPECIAL PERMISSIONS CONTROLLER
 // =========================================================
-function refreshProtectionPermissionsStatus() {
+async function refreshProtectionPermissionsStatus() {
   const card = document.getElementById("childProtectionPermissionsCard");
   if (!card) return;
 
-  if (!window.AndroidBridge) {
+  const isNative = Boolean(window.AndroidBridge);
+  let status = {
+    is_native: isNative,
+    usage_access: false,
+    overlay: false,
+    accessibility: false,
+    record_audio: false,
+    notifications: (typeof Notification !== "undefined" && Notification.permission === "granted"),
+    vpn_prepared: false,
+  };
+
+  if (isNative) {
+    try {
+      if (typeof window.AndroidBridge.getProtectionPermissionsStatus === "function") {
+        const raw = window.AndroidBridge.getProtectionPermissionsStatus();
+        status = { ...status, ...(JSON.parse(raw || "{}") || {}), is_native: true };
+      } else {
+        status.usage_access = (typeof window.AndroidBridge.isUsageAccessGranted === "function") && window.AndroidBridge.isUsageAccessGranted();
+        status.overlay = (typeof window.AndroidBridge.isOverlayGranted === "function") && window.AndroidBridge.isOverlayGranted();
+        status.accessibility = (typeof window.AndroidBridge.isAccessibilityGranted === "function") && window.AndroidBridge.isAccessibilityGranted();
+      }
+      if (typeof window.AndroidBridge.isRecordAudioGranted === "function") {
+        status.record_audio = window.AndroidBridge.isRecordAudioGranted();
+      }
+      if (typeof window.AndroidBridge.isNotificationGranted === "function") {
+        status.notifications = window.AndroidBridge.isNotificationGranted();
+      }
+      if (typeof window.AndroidBridge.isVpnPrepared === "function") {
+        status.vpn_prepared = window.AndroidBridge.isVpnPrepared();
+      }
+    } catch (e) {
+      console.error("Error reading native permissions:", e);
+    }
+  } else {
+    const micState = await getLocalMicPermissionState();
+    status.record_audio = (micState === "granted");
     const btnWizard = card.querySelector("button[onclick='requestAllProtectionWizard()']");
     if (btnWizard) {
-      btnWizard.textContent = "📥 APK Ko'chirish";
-      btnWizard.setAttribute("onclick", "openInstallAppModal()");
+      btnWizard.textContent = "📲 Ruxsatlarni yoqish";
+      btnWizard.setAttribute("onclick", "openChildPermissionsModal('all')");
     }
-    return;
   }
 
-  try {
-    let status = {};
-    if (typeof window.AndroidBridge.getProtectionPermissionsStatus === "function") {
-      const raw = window.AndroidBridge.getProtectionPermissionsStatus();
-      status = JSON.parse(raw || "{}");
+  const renderBadgeOrBtn = (id, granted, onClickFnName, label = "Yoqish") => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (granted) {
+      el.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
     } else {
-      status = {
-        usage_access: (typeof window.AndroidBridge.isUsageAccessGranted === "function") && window.AndroidBridge.isUsageAccessGranted(),
-        overlay: (typeof window.AndroidBridge.isOverlayGranted === "function") && window.AndroidBridge.isOverlayGranted(),
-        accessibility: (typeof window.AndroidBridge.isAccessibilityGranted === "function") && window.AndroidBridge.isAccessibilityGranted()
-      };
+      el.innerHTML = `<button onclick="${onClickFnName}()" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">${label}</button>`;
     }
+  };
 
-    const bUsage = document.getElementById("badgePermUsageAccess");
-    if (bUsage) {
-      if (status.usage_access) {
-        bUsage.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
-      } else {
-        bUsage.innerHTML = '<button onclick="triggerUsageAccessRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
-      }
-    }
+  renderBadgeOrBtn("badgePermUsageAccess", isNative && status.usage_access, isNative ? "triggerUsageAccessRequest" : "openInstallAppModal", isNative ? "Yoqish" : "APK");
+  renderBadgeOrBtn("badgePermOverlay", isNative && status.overlay, isNative ? "triggerOverlayRequest" : "openInstallAppModal", isNative ? "Yoqish" : "APK");
+  renderBadgeOrBtn("badgePermAccessibility", isNative && status.accessibility, isNative ? "triggerAccessibilityRequest" : "openInstallAppModal", isNative ? "Yoqish" : "APK");
+  renderBadgeOrBtn("badgePermMic", status.record_audio, "triggerMicPermissionRequest", "Yoqish");
+  renderBadgeOrBtn("badgePermSignal", status.notifications || (isNative && status.notifications), "triggerNotificationSignalPermissionRequest", "Yoqish");
+  renderBadgeOrBtn("badgePermVpn", isNative && status.vpn_prepared, isNative ? "triggerVpnPermissionRequest" : "openInstallAppModal", isNative ? "Yoqish" : "APK");
 
-    const bOverlay = document.getElementById("badgePermOverlay");
-    if (bOverlay) {
-      if (status.overlay) {
-        bOverlay.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
-      } else {
-        bOverlay.innerHTML = '<button onclick="triggerOverlayRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
-      }
-    }
+  syncChildPermissionsToServer({
+    ...status,
+    microphone: status.record_audio,
+    audio_unlocked: isAudioEngineUnlocked,
+  });
 
-    const bAccess = document.getElementById("badgePermAccessibility");
-    if (bAccess) {
-      if (status.accessibility) {
-        bAccess.innerHTML = '<span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1">✅ Faol</span>';
-      } else {
-        bAccess.innerHTML = '<button onclick="triggerAccessibilityRequest()" class="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold active:scale-95 transition">Yoqish</button>';
-      }
+  const btnWizard = card.querySelector("button[onclick='requestAllProtectionWizard()']");
+  if (btnWizard && isNative) {
+    if (status.usage_access && status.overlay && status.accessibility && status.record_audio && status.notifications) {
+      btnWizard.className = "px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl text-[10px] font-black";
+      btnWizard.innerHTML = "✅ To'liq himoyalangan";
+    } else {
+      btnWizard.className = "px-2.5 py-1 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 text-white rounded-xl text-[10px] font-black active:scale-95 shadow transition";
+      btnWizard.innerHTML = "⚡ Ruxsatlarni yoqish";
     }
-
-    const btnWizard = card.querySelector("button[onclick='requestAllProtectionWizard()']");
-    if (btnWizard) {
-      if (status.usage_access && status.overlay && status.accessibility) {
-        btnWizard.className = "px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-xl text-[10px] font-black";
-        btnWizard.innerHTML = "✅ To'liq himoyalangan";
-      } else {
-        btnWizard.className = "px-2.5 py-1 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 text-white rounded-xl text-[10px] font-black active:scale-95 shadow transition";
-        btnWizard.innerHTML = "⚡ Ruxsatlarni yoqish";
-      }
-    }
-  } catch (e) {
-    console.error("Error refreshing protection permissions:", e);
   }
 }
 
@@ -11545,24 +12850,98 @@ function renderScreenTimeChildSelector() {
   }).join("");
 }
 
+function getMissingNativeBlockingPermissions() {
+  if (!window.AndroidBridge) return [];
+  const missing = [];
+  if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
+    missing.push({ key: "accessibility", label: "Maxsus imkoniyatlar (Accessibility)" });
+  }
+  if (typeof window.AndroidBridge.isOverlayGranted === "function" && !window.AndroidBridge.isOverlayGranted()) {
+    missing.push({ key: "overlay", label: "Ilovalar ustida ko'rinish (Overlay)" });
+  }
+  if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
+    missing.push({ key: "usage_access", label: "Ekran vaqti tahlili (Usage Access)" });
+  }
+  return missing;
+}
+
 function checkNativeAppPermissions() {
   const banner = document.getElementById("stNativePermissionBanner");
   const text = document.getElementById("stNativePermissionText");
   const btn = document.getElementById("btnGrantNativePermission");
   if (!banner) return;
 
-  if (window.AndroidBridge) {
-    let missing = [];
-    if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
-      missing.push("Maxsus imkoniyatlar (Accessibility)");
-    }
-    if (typeof window.AndroidBridge.isUsageAccessGranted === "function" && !window.AndroidBridge.isUsageAccessGranted()) {
-      missing.push("Ekran vaqti telemetriyasi (Usage Access)");
-    }
+  if (window.AndroidBridge && currentRole === "child") {
+    const missing = getMissingNativeBlockingPermissions();
     if (missing.length > 0) {
       banner.classList.remove("hidden");
-      if (text) text.textContent = `Ilovalarni bloklash to'liq ishlashi uchun telefonda ${missing.join(" va ")} ruxsatini yoqing:`;
-      if (btn) btn.textContent = "Ruxsat berish";
+      if (text) text.textContent = `Ilovalarni bloklash ishlashi uchun ushbu telefonda ${missing.map(m => m.label).join(", ")} ruxsatini yoqing:`;
+      if (btn) {
+        btn.textContent = "Ruxsat berish";
+        btn.onclick = requestNeededNativePermission;
+      }
+      return;
+    }
+    banner.classList.add("hidden");
+    return;
+  }
+
+  // Parent Web/Telegram or Parent APK controlling a Child phone remotely OR testing locally
+  if (window.AndroidBridge && currentRole === "parent") {
+    // Only check remote child's reported permissions when controlling child, OR if self-device also lacks permissions note it clearly
+    const perms = lastChildReportedPermissions;
+    const remoteMissing = [];
+    if (perms && perms.is_native !== false) {
+      if (perms.accessibility === false) remoteMissing.push("Accessibility");
+      if (perms.overlay === false) remoteMissing.push("Overlay");
+      if (perms.usage_access === false) remoteMissing.push("Usage Access");
+    }
+    if (remoteMissing.length > 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = `Farzand telefonida bloklash ruxsatlari yoqilmagan (${remoteMissing.join(", ")}). Bloklash ishlashi uchun so'rov yuboring:`;
+      if (btn) {
+        btn.textContent = "📲 Ruxsat so'rash";
+        btn.onclick = () => sendPermissionRequestToChild("blocking");
+      }
+      return;
+    }
+    const localMissing = getMissingNativeBlockingPermissions();
+    if (!perms && localMissing.length > 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = `Ilovalarni bloklash to'liq ishlashi uchun ${localMissing.map(m => m.label).join(", ")} ruxsati kerak:`;
+      if (btn) {
+        btn.textContent = "Ruxsat berish";
+        btn.onclick = requestNeededNativePermission;
+      }
+      return;
+    }
+    banner.classList.add("hidden");
+    return;
+  }
+
+  // Browser / Telegram Mini App without AndroidBridge
+  if (!isDemoMode && currentRole === "parent") {
+    const perms = lastChildReportedPermissions;
+    const missingRemote = [];
+    if (!perms || Object.keys(perms).length === 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = "Diqqat: Farzand telefonida Android himoya ruxsatlari (Accessibility, Overlay, Usage Access) hali tasdiqlanmagan:";
+      if (btn) {
+        btn.textContent = "📲 Ruxsat so'rash";
+        btn.onclick = () => sendPermissionRequestToChild("blocking");
+      }
+      return;
+    }
+    if (perms.accessibility === false) missingRemote.push("Accessibility");
+    if (perms.overlay === false) missingRemote.push("Overlay");
+    if (perms.usage_access === false) missingRemote.push("Usage Access");
+    if (missingRemote.length > 0) {
+      banner.classList.remove("hidden");
+      if (text) text.textContent = `Farzand telefonida bloklash ruxsatlari o'chiq: ${missingRemote.join(", ")}. Bloklash ishlashi uchun ruxsat so'rang:`;
+      if (btn) {
+        btn.textContent = "📲 Ruxsat so'rash";
+        btn.onclick = () => sendPermissionRequestToChild("blocking");
+      }
       return;
     }
   }
@@ -11571,10 +12950,19 @@ function checkNativeAppPermissions() {
 
 function requestNeededNativePermission() {
   haptic("medium");
-  if (!window.AndroidBridge) return;
+  if (!window.AndroidBridge) {
+    sendPermissionRequestToChild("blocking");
+    return;
+  }
   if (typeof window.AndroidBridge.isAccessibilityGranted === "function" && !window.AndroidBridge.isAccessibilityGranted()) {
     if (typeof window.AndroidBridge.requestAccessibility === "function") {
       window.AndroidBridge.requestAccessibility();
+      return;
+    }
+  }
+  if (typeof window.AndroidBridge.isOverlayGranted === "function" && !window.AndroidBridge.isOverlayGranted()) {
+    if (typeof window.AndroidBridge.requestOverlayPermission === "function") {
+      window.AndroidBridge.requestOverlayPermission();
       return;
     }
   }
@@ -11659,9 +13047,25 @@ async function loadScreenTimeAndPolicy() {
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/screen-time`);
+    const [res, polRes] = await Promise.all([
+      fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/screen-time`),
+      fetch(`${getApiBase()}/api/v1/webapp/child/${currentChildId}/device-policy`).catch(() => null)
+    ]);
+    if (polRes && polRes.ok) {
+      const pJson = await polRes.json().catch(() => null);
+      if (pJson && pJson.child_permissions) {
+        lastChildReportedPermissions = pJson.child_permissions;
+      }
+      if (pJson && pJson.policy) {
+        currentDevicePolicy = { ...currentDevicePolicy, ...pJson.policy };
+      }
+    }
     if (res.ok) {
       const json = await res.json();
+      if (json.child_permissions) {
+        lastChildReportedPermissions = json.child_permissions;
+      }
+      checkNativeAppPermissions();
       if (json.status === "success" && json.report) {
         renderScreenTimeData(json.report);
         return;
@@ -11670,6 +13074,7 @@ async function loadScreenTimeAndPolicy() {
   } catch (e) {
     console.warn("Screen time fetch error:", e);
   }
+  checkNativeAppPermissions();
 
   // Fallback initial state if child has not uploaded usage yet
   renderScreenTimeData({
@@ -11886,7 +13291,7 @@ function renderAppsList(apps, filterText = "", categoryFilter = "all") {
         </div>
 
         <label class="relative inline-flex items-center cursor-pointer shrink-0 ml-2" title="${isIndividuallyBlocked ? 'Blokdan chiqarish' : 'Bloklash'}">
-          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} onchange="toggleAppBlock('${safePkgAttr}', this.checked)" class="sr-only peer">
+          <input type="checkbox" ${isIndividuallyBlocked ? 'checked' : ''} data-pkg="${safePkgAttr}" onchange="toggleAppBlock(this.dataset.pkg, this.checked)" class="sr-only peer">
           <div class="w-10 h-5.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-rose-600 shadow-sm"></div>
         </label>
       </div>
@@ -11962,8 +13367,72 @@ function addCustomAppToBlock() {
   showToast(`🛑 «${raw}» bloklandi!`);
 }
 
+async function ensureBlockingPermissionsBeforeToggle(purpose = "app") {
+  if (window.AndroidBridge) {
+    if (purpose === "vpn") {
+      if (typeof window.AndroidBridge.isVpnPrepared === "function" && !window.AndroidBridge.isVpnPrepared()) {
+        showToast("📴 Internetni cheklash uchun VPN xavfsizlik devoriga ruxsat bering!");
+        if (typeof window.AndroidBridge.requestVpnPermission === "function") {
+          window.AndroidBridge.requestVpnPermission();
+        }
+        return false;
+      }
+      return true;
+    }
+    const missing = getMissingNativeBlockingPermissions().filter(m => m.key === "accessibility" || m.key === "overlay");
+    if (missing.length > 0 && currentRole === "child") {
+      showToast(`🛡️ Avval ruxsatlarni yoqing: ${missing.map(m => m.label).join(", ")}`);
+      requestNeededNativePermission();
+      return false;
+    }
+    if (missing.length > 0 && currentRole === "parent" && !lastChildReportedPermissions) {
+      const askSelf = confirm(
+        `🛡️ Ushbu qurilmada ilovalarni bloklash ruxsatlari (${missing.map(m => m.label).join(", ")}) yoqilmagan!\n\n` +
+        "Agar shu telefonda ilovalarni bloklashni sinayotgan bo'lsangiz — \"OK\" bosib ruxsatni yoqing.\n" +
+        "Boshqa farzand telefonini boshqarayotgan bo'lsangiz — \"Bekor qilish\" bosing."
+      );
+      if (askSelf) {
+        requestNeededNativePermission();
+        return false;
+      }
+    }
+  }
+
+  // Remote child permission warning check for Parent
+  if (!isDemoMode && currentRole === "parent" && currentChildId && lastChildReportedPermissions) {
+    const p = lastChildReportedPermissions;
+    const missingRemote = [];
+    if (purpose === "vpn") {
+      if (p.vpn_prepared === false) missingRemote.push("VPN Xavfsizlik devori");
+    } else {
+      if (p.accessibility === false) missingRemote.push("Accessibility");
+      if (p.overlay === false) missingRemote.push("Overlay");
+      if (p.usage_access === false) missingRemote.push("Usage Access");
+    }
+    if (missingRemote.length > 0) {
+      const sendReq = confirm(
+        `⚠️ Farzand telefonida ${missingRemote.join(", ")} ruxsati hali yoqilmagan!\n\n` +
+        "\"OK\" bossangiz bloklash siyosati saqlanadi VA farzand telefoniga darhol ruxsat yoqish so'rovi yuboriladi."
+      );
+      if (sendReq) {
+        sendPermissionRequestToChild("blocking");
+      }
+    }
+  }
+  return true;
+}
+
 async function handleMasterLockToggle(isChecked) {
   haptic("heavy");
+  if (isChecked) {
+    const canProceed = await ensureBlockingPermissionsBeforeToggle("app");
+    if (!canProceed) {
+      const chk = document.getElementById("toggleLockAllApps");
+      if (chk) chk.checked = false;
+      return;
+    }
+  }
+
   currentDevicePolicy.is_all_apps_blocked = isChecked;
   updateDevicePolicyUI(currentDevicePolicy);
 
@@ -12002,7 +13471,7 @@ async function handleMasterLockToggle(isChecked) {
       })
     });
     if (!res.ok) {
-      console.warn("Master lock save returned status:", res.status);
+      showToast("⚠️ Siyosatni saqlashda xatolik yuz berdi");
     }
   } catch (e) {
     console.warn("Master lock save error:", e);
@@ -12032,6 +13501,14 @@ async function setLockdownReason(reason) {
 
 async function toggleAppBlock(pkg, isBlocked) {
   haptic("medium");
+  if (isBlocked) {
+    const canProceed = await ensureBlockingPermissionsBeforeToggle("app");
+    if (!canProceed) {
+      renderAppsList(currentMergedAppsList, currentAppFilterQuery, currentAppCategoryFilter);
+      return;
+    }
+  }
+
   let blocked = [...(currentDevicePolicy.blocked_packages || [])];
   if (isBlocked) {
     if (!blocked.includes(pkg)) blocked.push(pkg);
@@ -12071,7 +13548,7 @@ async function toggleAppBlock(pkg, isBlocked) {
       })
     });
     if (!res.ok) {
-      console.warn("App block save returned status:", res.status);
+      showToast("⚠️ Ilova bloklash saqlanmadi");
     }
   } catch (e) {
     console.warn("App block save error:", e);
@@ -12084,7 +13561,12 @@ async function handleAntiUninstallToggle(isChecked) {
   updateDevicePolicyUI(currentDevicePolicy);
 
   if (isChecked) {
-    showToast("🛡️ Sozlamalar himoyasi yoqildi (PIN-kod talab qilinadi)");
+    if (window.AndroidBridge && typeof window.AndroidBridge.isDeviceAdminGranted === "function" && !window.AndroidBridge.isDeviceAdminGranted()) {
+      if (typeof window.AndroidBridge.requestDeviceAdmin === "function") {
+        window.AndroidBridge.requestDeviceAdmin();
+      }
+    }
+    showToast("🛡️ Sozlamalar himoyasi yoqildi (PIN-kod va Admin ruxsati)");
   } else {
     showToast("⚠️ Sozlamalar himoyasi o'chirildi");
   }
@@ -12106,6 +13588,15 @@ async function handleAntiUninstallToggle(isChecked) {
 
 async function handleNetworkRestrictedToggle(isChecked) {
   haptic("heavy");
+  if (isChecked) {
+    const canProceed = await ensureBlockingPermissionsBeforeToggle("vpn");
+    if (!canProceed) {
+      const chk = document.getElementById("toggleNetworkRestricted");
+      if (chk) chk.checked = false;
+      return;
+    }
+  }
+
   currentDevicePolicy.is_network_restricted = isChecked;
   updateDevicePolicyUI(currentDevicePolicy);
 

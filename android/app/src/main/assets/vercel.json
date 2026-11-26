@@ -1,116 +1,239 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/downloads/ChildSecurity.mobileconfig",
-      "destination": "/downloads/ChildSecurity.mobileconfig"
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
     {
-      "source": "/download/ios-profile",
-      "destination": "/downloads/ChildSecurity.mobileconfig"
-    },
-    {
-      "source": "/download/ios-app",
-      "destination": "/downloads/ChildSecurity.mobileconfig"
-    },
-    {
-      "source": "/download/ios",
-      "destination": "/downloads/ChildSecurity.mobileconfig"
-    },
-    {
-      "source": "/download/desktop-webloc",
-      "destination": "/downloads/Child Security.webloc"
-    },
-    {
-      "source": "/download/mac-shortcut",
-      "destination": "/downloads/Child Security.webloc"
-    },
-    {
-      "source": "/download/desktop-mac",
-      "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
-    },
-    {
-      "source": "/download/mac",
-      "destination": "/downloads/ChildSecurity_Mac_Setup.zip"
-    },
-    {
-      "source": "/download/desktop-linux",
-      "destination": "/downloads/ChildSecurity_Linux_Setup.zip"
-    },
-    {
-      "source": "/download/linux",
-      "destination": "/downloads/ChildSecurity_Linux_Setup.zip"
-    },
-    {
-      "source": "/download/desktop-windows-zip",
-      "destination": "/downloads/ChildSecurity_Windows_Setup.zip"
-    },
-    {
-      "source": "/download/windows-zip",
-      "destination": "/downloads/ChildSecurity_Windows_Setup.zip"
-    },
-    {
-      "source": "/download/desktop-url",
-      "destination": "/downloads/Child Security.url"
-    },
-    {
-      "source": "/download/desktop-shortcut",
-      "destination": "/downloads/Child Security.url"
-    },
-    {
-      "source": "/download/desktop-windows",
-      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
-    },
-    {
-      "source": "/download/windows",
-      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
-    },
-    {
-      "source": "/download/desktop",
-      "destination": "/downloads/ChildSecurity_Desktop_Setup.bat"
-    },
-    {
-      "source": "/download/parent-apk",
-      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk"
-    },
-    {
-      "source": "/download/child-apk",
-      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
-    },
-    {
-      "source": "/download/apk",
-      "destination": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "https://child-security-site.onrender.com/api/$1"
-    },
-    {
-      "source": "/uploads/(.*)",
-      "destination": "https://child-security-site.onrender.com/uploads/$1"
+      "src": "webapp/**",
+      "use": "@vercel/static"
     }
   ],
-  "headers": [
+  "routes": [
     {
-      "source": "/(.*)\\.mobileconfig",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/x-apple-aspen-config"
-        },
-        {
-          "key": "Content-Disposition",
-          "value": "attachment; filename=\"ChildSecurity.mobileconfig\""
-        }
-      ]
+      "src": "/downloads/ChildSecurity.mobileconfig",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
     },
     {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
+      "src": "/download/ios-profile",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/ios-app",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/download/ios",
+      "dest": "/webapp/downloads/ChildSecurity.mobileconfig",
+      "headers": {
+        "content-type": "application/x-apple-aspen-config",
+        "content-disposition": "attachment; filename=\"ChildSecurity.mobileconfig\""
+      }
+    },
+    {
+      "src": "/downloads/Child%20Security.url",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
+      "src": "/download/desktop-url",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
+      "src": "/download/desktop-shortcut",
+      "dest": "/webapp/downloads/Child Security.url",
+      "headers": {
+        "content-type": "application/internet-shortcut",
+        "content-disposition": "attachment; filename=\"Child Security.url\""
+      }
+    },
+    {
+      "src": "/downloads/Child%20Security.webloc",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
+      "src": "/download/desktop-webloc",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
+      "src": "/download/mac-shortcut",
+      "dest": "/webapp/downloads/Child Security.webloc",
+      "headers": {
+        "content-type": "application/xml",
+        "content-disposition": "attachment; filename=\"Child Security.webloc\""
+      }
+    },
+    {
+      "src": "/download/desktop-mac",
+      "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Mac_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/mac",
+      "dest": "/webapp/downloads/ChildSecurity_Mac_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Mac_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/desktop-linux",
+      "dest": "/webapp/downloads/ChildSecurity_Linux_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Linux_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/linux",
+      "dest": "/webapp/downloads/ChildSecurity_Linux_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Linux_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/desktop-windows-zip",
+      "dest": "/webapp/downloads/ChildSecurity_Windows_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Windows_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/windows-zip",
+      "dest": "/webapp/downloads/ChildSecurity_Windows_Setup.zip",
+      "headers": {
+        "content-type": "application/zip",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Windows_Setup.zip\""
+      }
+    },
+    {
+      "src": "/download/desktop-windows",
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
+    },
+    {
+      "src": "/download/windows",
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
+    },
+    {
+      "src": "/download/desktop",
+      "dest": "/webapp/downloads/ChildSecurity_Desktop_Setup.bat",
+      "headers": {
+        "content-type": "application/x-bat",
+        "content-disposition": "attachment; filename=\"ChildSecurity_Desktop_Setup.bat\""
+      }
+    },
+    {
+      "src": "/download/parent-apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Parent.apk",
+      "status": 302
+    },
+    {
+      "src": "/download/child-apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
+      "status": 302
+    },
+    {
+      "src": "/download/apk",
+      "dest": "https://github.com/f-1331/child-security-bot/releases/download/v1.0.0-apk/ChildSecurity_Child.apk",
+      "status": 302
+    },
+    {
+      "src": "/health",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/api/(.*)",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "SAMEORIGIN",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Content-Security-Policy": "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app https://*.tgcloud.ai;"
+      },
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), microphone=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), autoplay=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\")",
+        "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app https://*.tgcloud.ai;"
+      },
+      "dest": "/webapp/$1"
     }
-  ]
+  ],
+  "schedules": {
+    "hourly-location": {
+      "schedule": "55 * * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/hourly",
+      "requestMethod": "POST"
+    },
+    "nightly-report": {
+      "schedule": "55 23 * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/nightly",
+      "requestMethod": "POST"
+    },
+    "walksafe-check": {
+      "schedule": "*/15 * * * *",
+      "timezone": "Asia/Tashkent",
+      "path": "/api/cron/walksafe",
+      "requestMethod": "POST"
+    }
+  }
 }

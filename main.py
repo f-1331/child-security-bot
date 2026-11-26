@@ -169,9 +169,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app https://*.tgcloud.ai;"
         )
         response.headers["Permissions-Policy"] = (
-            "camera=(self \"https://child-security-bot.vercel.app\" \"https://app8899084854.tgcloud.ai\"), "
-            "geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\"), "
-            "microphone=(self \"https://child-security-bot.vercel.app\" \"https://app8899084854.tgcloud.ai\")"
+            "camera=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), "
+            "geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), "
+            "microphone=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), "
+            "autoplay=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\")"
         )
         if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -191,13 +192,17 @@ app.add_middleware(
         "https://child-security-bot.vercel.app",
         "https://app8899084854.tgcloud.ai",
         "https://child-security-site.onrender.com",
+        "https://web.telegram.org",
+        "http://localhost",
+        "https://localhost",
+        "capacitor://localhost",
         "http://localhost:8000",
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:8000",
         "http://127.0.0.1:5500",
     ],
-    allow_origin_regex=r"^(https?://.*|file://.*|null)$",
+    allow_origin_regex=r"^(https://([a-zA-Z0-9-]+\.)*(vercel\.app|tgcloud\.ai|telegram\.org|t\.me)|http://(localhost|127\.0\.0\.1)(:\d+)?|file://.*|capacitor://.*|null)$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
@@ -241,8 +246,14 @@ async def trigger_sentry_debug_error():
 
 
 @app.api_route("/api/admin/seed-sync", methods=["GET", "POST"], tags=["Admin"])
-async def app_trigger_seed_sync_endpoint():
-    """Top-level endpoint for instant remote DB seed sync."""
+async def app_trigger_seed_sync_endpoint(
+    request: Request,
+    admin_key: Optional[str] = Query(None)
+):
+    """Top-level endpoint for instant remote DB seed sync (Strictly authenticated)."""
+    from api.webapp_api import is_request_admin_authorized
+    if not is_request_admin_authorized(request, admin_key_query=admin_key):
+        raise HTTPException(status_code=403, detail="Ruxsat berilmagan: Administrator tasdig'i talab qilinadi")
     from db.database import AsyncSessionLocal
     from db.seeds import ensure_core_seeds
     async with AsyncSessionLocal() as session:
@@ -351,6 +362,36 @@ if webapp_path.exists():
 # Mount Uploads directory for task photos and videos (use /tmp on read-only Vercel serverless)
 uploads_path = Path("/tmp/uploads") if os.environ.get("VERCEL") else (Path(__file__).resolve().parent / "uploads")
 uploads_path.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/uploads/ambient_sounds/{filename}", include_in_schema=False)
+async def serve_ambient_sound_upload(filename: str):
+    """Serve ambient audio from local disk or PostgreSQL fallback (serverless-safe)."""
+    from fastapi.responses import FileResponse
+    import mimetypes
+    import db.crud as crud
+
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or ".." in safe_name:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    disk_file = uploads_path / "ambient_sounds" / safe_name
+    guessed_mime, _ = mimetypes.guess_type(safe_name)
+    media_type = guessed_mime or ("audio/mp4" if safe_name.endswith(".m4a") else "audio/webm")
+    if disk_file.exists() and disk_file.is_file():
+        return FileResponse(str(disk_file), media_type=media_type)
+
+    blob_res = await crud.get_ambient_audio_blob(safe_name)
+    if blob_res:
+        raw_bytes, stored_mime = blob_res
+        return Response(
+            content=raw_bytes,
+            media_type=stored_mime or media_type,
+            headers={"Cache-Control": "public, max-age=3600", "Accept-Ranges": "bytes"},
+        )
+    raise HTTPException(status_code=404, detail="Audio recording not found")
+
+
 app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 

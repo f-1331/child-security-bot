@@ -208,10 +208,9 @@
       "headers": {
         "cache-control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "SAMEORIGIN",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(self 'https://child-security-bot.vercel.app' 'https://app8899084854.tgcloud.ai'), geolocation=(self 'https://child-security-bot.vercel.app' 'https://web.telegram.org' 'https://app8899084854.tgcloud.ai'), microphone=(self 'https://child-security-bot.vercel.app' 'https://app8899084854.tgcloud.ai')",
+        "Permissions-Policy": "camera=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), geolocation=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), microphone=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\"), autoplay=(self \"https://child-security-bot.vercel.app\" \"https://web.telegram.org\" \"https://app8899084854.tgcloud.ai\" \"https://child-security-site.onrender.com\")",
         "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://child-security-bot.vercel.app https://*.tgcloud.ai;"
       },
       "dest": "/webapp/$1"

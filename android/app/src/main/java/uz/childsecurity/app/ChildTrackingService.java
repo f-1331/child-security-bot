@@ -1,5 +1,6 @@
 package uz.childsecurity.app;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -9,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
 import android.location.LocationListener;
@@ -23,6 +25,7 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 
 import org.json.JSONObject;
 
@@ -862,6 +865,10 @@ public class ChildTrackingService extends Service implements LocationListener {
     }
 
     private synchronized void recordAndUploadAmbientSound(final int durationSeconds, final String requestId, final long parentId) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Ambient sound recording skipped: RECORD_AUDIO permission not granted");
+            return;
+        }
         new Thread(() -> {
             java.io.File audioFile = null;
             android.media.MediaRecorder recorder = null;

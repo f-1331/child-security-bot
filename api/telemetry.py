@@ -325,8 +325,8 @@ async def receive_telemetry(payload: TelemetryPayload, session: AsyncSession = D
         "has_parent_pin": bool(policy.parent_pin_hash),
     }
 
-    from api.webapp_api import pending_child_notifications
-    pending_cmds = pending_child_notifications.pop(payload.child_id, [])
+    from api.webapp_api import pop_all_child_commands
+    pending_cmds = await pop_all_child_commands(payload.child_id, session=session)
 
     return {
         "status": "success",

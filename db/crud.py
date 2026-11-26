@@ -2167,3 +2167,250 @@ async def get_and_clear_active_sos_messages(child_id: int, session: Optional[Asy
         finally:
             if should_close:
                 await session.close()
+
+
+_cmd_queue_lock = asyncio.Lock()
+
+
+async def enqueue_child_command(child_id: int, cmd: dict, session: Optional[AsyncSession] = None) -> None:
+    """Persistently enqueue a real-time command for child device across serverless instances."""
+    db_key = f"cmd_q_{child_id}"
+    async with _cmd_queue_lock:
+        should_close = False
+        if session is None:
+            from db.database import async_session_maker
+            session = async_session_maker()
+            should_close = True
+        try:
+            setting = await session.get(SystemSetting, db_key)
+            now_ts = _time.time()
+            items = []
+            if setting and setting.value:
+                try:
+                    raw_items = json.loads(setting.value)
+                    items = [it for it in raw_items if isinstance(it, dict) and (now_ts - float(it.get("_ts", now_ts))) < 900]
+                except Exception:
+                    items = []
+            item = dict(cmd)
+            item.setdefault("_id", secrets.token_hex(6))
+            item.setdefault("_ts", now_ts)
+            items.append(item)
+            items = items[-25:]
+            val_str = json.dumps(items)
+            if not setting:
+                session.add(SystemSetting(key=db_key, value=val_str))
+            else:
+                setting.value = val_str
+            await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to enqueue child command for {child_id}: {e}")
+        finally:
+            if should_close:
+                await session.close()
+
+
+async def pop_child_commands(child_id: int, session: Optional[AsyncSession] = None) -> list[dict]:
+    """Retrieve and clear persisted commands for a child device."""
+    db_key = f"cmd_q_{child_id}"
+    async with _cmd_queue_lock:
+        should_close = False
+        if session is None:
+            from db.database import async_session_maker
+            session = async_session_maker()
+            should_close = True
+        try:
+            setting = await session.get(SystemSetting, db_key)
+            if not setting or not setting.value:
+                return []
+            now_ts = _time.time()
+            try:
+                raw_items = json.loads(setting.value)
+                items = [it for it in raw_items if isinstance(it, dict) and (now_ts - float(it.get("_ts", now_ts))) < 900]
+            except Exception:
+                items = []
+            await session.delete(setting)
+            await session.commit()
+            return items
+        except Exception as e:
+            logger.error(f"Failed to pop child commands for {child_id}: {e}")
+            return []
+        finally:
+            if should_close:
+                await session.close()
+
+
+async def set_child_permissions_status(child_id: int, perms: dict, session: Optional[AsyncSession] = None) -> dict:
+    """Persist child's reported hardware/OS permission statuses in SystemSetting."""
+    db_key = f"child_perms_{child_id}"
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, db_key)
+        existing = {}
+        if setting and setting.value:
+            try:
+                existing = json.loads(setting.value) or {}
+            except Exception:
+                existing = {}
+        existing.update({k: v for k, v in perms.items() if v is not None})
+        existing["updated_at"] = datetime.now(timezone.utc).isoformat()
+        val_str = json.dumps(existing)
+        if not setting:
+            session.add(SystemSetting(key=db_key, value=val_str))
+        else:
+            setting.value = val_str
+        await session.commit()
+        return existing
+    except Exception as e:
+        logger.error(f"Failed to save child permissions for {child_id}: {e}")
+        return dict(perms)
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def get_child_permissions_status(child_id: int, session: Optional[AsyncSession] = None) -> dict:
+    """Load child's last reported permission statuses from SystemSetting."""
+    db_key = f"child_perms_{child_id}"
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, db_key)
+        if not setting or not setting.value:
+            return {}
+        data = json.loads(setting.value)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+    finally:
+        if should_close:
+            await session.close()
+
+
+def _ambient_bin_key(filename: str) -> str:
+    return f"aud_bin_{hashlib.sha1(filename.encode('utf-8')).hexdigest()[:24]}"
+
+
+async def save_ambient_audio_blob(
+    child_id: int,
+    filename: str,
+    raw_bytes: bytes,
+    content_type: str,
+    duration_seconds: int,
+    created_iso: str,
+    created_human: str,
+    session: Optional[AsyncSession] = None,
+) -> None:
+    """Store ambient audio metadata and small audio payload (<= 1.4MB) in DB for serverless durability."""
+    import base64
+    meta_key = f"aud_meta_{child_id}"
+    bin_key = _ambient_bin_key(filename)
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, meta_key)
+        items = []
+        if setting and setting.value:
+            try:
+                items = json.loads(setting.value) or []
+            except Exception:
+                items = []
+
+        entry = {
+            "filename": filename,
+            "file_url": f"/uploads/ambient_sounds/{filename}",
+            "url": f"/uploads/ambient_sounds/{filename}",
+            "duration_seconds": duration_seconds,
+            "child_id": child_id,
+            "size_kb": round(len(raw_bytes) / 1024, 1),
+            "created_at": created_human,
+            "created_at_iso": created_iso,
+            "bin_key": bin_key if len(raw_bytes) <= 1_400_000 else None,
+        }
+        items = [it for it in items if it.get("filename") != filename]
+        items.insert(0, entry)
+        pruned = items[12:]
+        items = items[:12]
+
+        for old_it in pruned:
+            old_bk = old_it.get("bin_key")
+            if old_bk:
+                old_row = await session.get(SystemSetting, old_bk)
+                if old_row:
+                    await session.delete(old_row)
+
+        if len(raw_bytes) <= 1_400_000:
+            encoded = json.dumps({
+                "mime": content_type,
+                "b64": base64.b64encode(raw_bytes).decode("ascii"),
+            })
+            bin_row = await session.get(SystemSetting, bin_key)
+            if not bin_row:
+                session.add(SystemSetting(key=bin_key, value=encoded))
+            else:
+                bin_row.value = encoded
+
+        meta_str = json.dumps(items)
+        if not setting:
+            session.add(SystemSetting(key=meta_key, value=meta_str))
+        else:
+            setting.value = meta_str
+        await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to persist ambient audio blob for {child_id}: {e}")
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def get_ambient_audio_history(child_id: int, limit: int = 15, session: Optional[AsyncSession] = None) -> list[dict]:
+    """Retrieve persisted ambient audio history metadata for a child."""
+    meta_key = f"aud_meta_{child_id}"
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        setting = await session.get(SystemSetting, meta_key)
+        if not setting or not setting.value:
+            return []
+        items = json.loads(setting.value)
+        return items[:limit] if isinstance(items, list) else []
+    except Exception:
+        return []
+    finally:
+        if should_close:
+            await session.close()
+
+
+async def get_ambient_audio_blob(filename: str, session: Optional[AsyncSession] = None) -> Optional[Tuple[bytes, str]]:
+    """Retrieve persisted ambient audio raw bytes and mime type by filename."""
+    import base64
+    bin_key = _ambient_bin_key(filename)
+    should_close = False
+    if session is None:
+        from db.database import async_session_maker
+        session = async_session_maker()
+        should_close = True
+    try:
+        row = await session.get(SystemSetting, bin_key)
+        if not row or not row.value:
+            return None
+        payload = json.loads(row.value)
+        raw = base64.b64decode(payload["b64"])
+        return raw, str(payload.get("mime") or "audio/webm")
+    except Exception:
+        return None
+    finally:
+        if should_close:
+            await session.close()

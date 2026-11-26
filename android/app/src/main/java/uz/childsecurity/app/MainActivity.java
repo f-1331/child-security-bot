@@ -8,6 +8,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.net.VpnService;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -42,12 +43,18 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final int PERMISSION_REQUEST_CODE = 2001;
+    private static final int VPN_PERMISSION_REQUEST_CODE = 2010;
     public static final String BACKEND_API_URL = "https://child-security-site.onrender.com";
     private String appRole = "parent";
     private String currentProductionUrl = "https://child-security-bot.vercel.app?role=parent&source=parent_apk";
     private String currentOfflineUrl = "file:///android_asset/index.html?role=parent&source=parent_apk";
 
     private WebView webView;
+    private PermissionRequest pendingWebPermissionRequest;
+    private android.media.Ringtone activeSirenRingtone;
+    private boolean permissionWizardActive = false;
+    private String permissionWizardLastStep = "";
+    private boolean pendingNetworkLockdownAfterVpn = false;
 
     private void detectRole() {
         // 0. Try SharedPreferences saved role
@@ -154,7 +161,22 @@ public class MainActivity extends AppCompatActivity {
             public void onPermissionRequest(final PermissionRequest request) {
                 runOnUiThread(() -> {
                     try {
-                        request.grant(request.getResources());
+                        String[] resources = request.getResources();
+                        boolean needsAudio = false;
+                        if (resources != null) {
+                            for (String res : resources) {
+                                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) {
+                                    needsAudio = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (needsAudio && ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                            pendingWebPermissionRequest = request;
+                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, PERMISSION_REQUEST_CODE + 3);
+                            return;
+                        }
+                        request.grant(resources);
                     } catch (Exception e) {
                         Log.e(TAG, "onPermissionRequest error: " + e.getMessage());
                     }
@@ -266,19 +288,87 @@ public class MainActivity extends AppCompatActivity {
 
     public void requestAllChildProtectionPermissions() {
         runOnUiThread(() -> {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-                checkAndRequestPermissions();
-            } else if (!UsageStatsHelper.hasUsageAccessPermission(this)) {
-                checkUsageAccessPermission();
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                checkOverlayPermission();
-            } else if (!isAccessibilityServiceEnabled()) {
-                checkAccessibilityPermission();
-            } else {
-                Toast.makeText(this, "✅ Barcha himoya, SMS va bloklash ruxsatlari to'liq yoqilgan!", Toast.LENGTH_SHORT).show();
-            }
+            permissionWizardActive = true;
+            permissionWizardLastStep = "";
+            advancePermissionWizard(false);
         });
+    }
+
+    private void advancePermissionWizard(boolean fromResume) {
+        if (!permissionWizardActive) return;
+
+        boolean missingRuntime =
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED);
+
+        if (missingRuntime && !"runtime".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "runtime";
+            checkAndRequestPermissions();
+            return;
+        }
+
+        boolean missingBgLoc = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED;
+        if (missingBgLoc && !"bg_loc".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "bg_loc";
+            checkBackgroundLocationPermission();
+            return;
+        }
+
+        if (!UsageStatsHelper.hasUsageAccessPermission(this) && !"usage".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "usage";
+            checkUsageAccessPermission();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this) && !"overlay".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "overlay";
+            checkOverlayPermission();
+            return;
+        }
+
+        if (!isAccessibilityServiceEnabled() && !"accessibility".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "accessibility";
+            checkAccessibilityPermission();
+            return;
+        }
+
+        android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager) getSystemService(Context.DEVICE_POLICY_SERVICE);
+        android.content.ComponentName comp = new android.content.ComponentName(this, ChildDeviceAdminReceiver.class);
+        boolean hasAdmin = (dpm != null && dpm.isAdminActive(comp));
+        if (!hasAdmin && !"device_admin".equals(permissionWizardLastStep)) {
+            permissionWizardLastStep = "device_admin";
+            try {
+                Intent intent = new Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, comp);
+                intent.putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Child Security o'chirishdan himoyalanishi uchun administrator ruxsati zarur.");
+                startActivity(intent);
+                return;
+            } catch (Exception ignored) {}
+        }
+
+        permissionWizardActive = false;
+        permissionWizardLastStep = "";
+
+        boolean allGrantedNow =
+                UsageStatsHelper.hasUsageAccessPermission(this) &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)) &&
+                isAccessibilityServiceEnabled() &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+
+        if (!fromResume || allGrantedNow) {
+            Toast.makeText(
+                this,
+                allGrantedNow
+                    ? "✅ Barcha himoya, bloklash, mikrofon va signal ruxsatlari to'liq yoqilgan!"
+                    : "⚠️ Ba'zi himoya ruxsatlari yoqilmadi — kerak bo'lganda kartadan qayta yoqishingiz mumkin.",
+                Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
     private void checkAndRequestPermissions() {
@@ -327,7 +417,8 @@ public class MainActivity extends AppCompatActivity {
                         })
                         .setNegativeButton("Keyinroq", (dialog, which) -> {
                             dialog.dismiss();
-                            checkUsageAccessPermission();
+                            if (permissionWizardActive) advancePermissionWizard(false);
+                            else checkUsageAccessPermission();
                         })
                         .setCancelable(false)
                         .show();
@@ -350,7 +441,8 @@ public class MainActivity extends AppCompatActivity {
                     })
                     .setNegativeButton("Keyinroq", (dialog, which) -> {
                         dialog.dismiss();
-                        checkOverlayPermission();
+                        if (permissionWizardActive) advancePermissionWizard(false);
+                        else checkOverlayPermission();
                     })
                     .setCancelable(false)
                     .show();
@@ -378,7 +470,8 @@ public class MainActivity extends AppCompatActivity {
                         })
                         .setNegativeButton("Keyinroq", (dialog, which) -> {
                             dialog.dismiss();
-                            checkAccessibilityPermission();
+                            if (permissionWizardActive) advancePermissionWizard(false);
+                            else checkAccessibilityPermission();
                         })
                         .setCancelable(false)
                         .show();
@@ -427,7 +520,10 @@ public class MainActivity extends AppCompatActivity {
                             startActivity(intent);
                         } catch (Exception ignored) {}
                     })
-                    .setNegativeButton("Tushundim", (dialog, which) -> dialog.dismiss())
+                    .setNegativeButton("Tushundim", (dialog, which) -> {
+                        dialog.dismiss();
+                        if (permissionWizardActive) advancePermissionWizard(false);
+                    })
                     .setCancelable(false)
                     .show();
         }
@@ -437,9 +533,17 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            checkBackgroundLocationPermission();
+            if (permissionWizardActive) {
+                advancePermissionWizard(false);
+            } else {
+                checkBackgroundLocationPermission();
+            }
         } else if (requestCode == PERMISSION_REQUEST_CODE + 1) {
-            checkUsageAccessPermission();
+            if (permissionWizardActive) {
+                advancePermissionWizard(false);
+            } else {
+                checkUsageAccessPermission();
+            }
         } else if (requestCode == PERMISSION_REQUEST_CODE + 2) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (granted) {
@@ -461,6 +565,40 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception ignored) {}
             }
             runOnUiThread(() -> webView.evaluateJavascript("if (typeof onSmsPermissionResult === 'function') onSmsPermissionResult(" + granted + ");", null));
+        } else if (requestCode == PERMISSION_REQUEST_CODE + 3) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (pendingWebPermissionRequest != null) {
+                try {
+                    if (granted) {
+                        pendingWebPermissionRequest.grant(pendingWebPermissionRequest.getResources());
+                    } else {
+                        pendingWebPermissionRequest.deny();
+                    }
+                } catch (Exception ignored) {}
+                pendingWebPermissionRequest = null;
+            }
+            if (webView != null) {
+                webView.evaluateJavascript("if (typeof refreshProtectionPermissionsStatus === 'function') { refreshProtectionPermissionsStatus(); }", null);
+            }
+        } else if (requestCode == PERMISSION_REQUEST_CODE + 4) {
+            if (webView != null) {
+                webView.evaluateJavascript("if (typeof refreshProtectionPermissionsStatus === 'function') { refreshProtectionPermissionsStatus(); }", null);
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VPN_PERMISSION_REQUEST_CODE) {
+            boolean granted = (resultCode == RESULT_OK);
+            if (granted && pendingNetworkLockdownAfterVpn) {
+                LocalVpnService.startLockdown(this);
+            }
+            pendingNetworkLockdownAfterVpn = false;
+            if (webView != null) {
+                webView.evaluateJavascript("if (typeof refreshProtectionPermissionsStatus === 'function') { refreshProtectionPermissionsStatus(); }", null);
+            }
         }
     }
 
@@ -509,6 +647,9 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         if (webView != null) {
             webView.evaluateJavascript("if (typeof refreshProtectionPermissionsStatus === 'function') { refreshProtectionPermissionsStatus(); }", null);
+        }
+        if (permissionWizardActive) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> advancePermissionWizard(true), 350);
         }
     }
 
@@ -688,6 +829,12 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void playNativeSiren() {
             try {
+                if (activeSirenRingtone != null && activeSirenRingtone.isPlaying()) {
+                    activeSirenRingtone.stop();
+                }
+            } catch (Exception ignored) {}
+
+            try {
                 // Boost alarm stream to maximum volume so it sounds even on silent
                 android.media.AudioManager am = (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                 if (am != null) {
@@ -720,6 +867,7 @@ public class MainActivity extends AppCompatActivity {
                                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                                 .build());
                     }
+                    activeSirenRingtone = r;
                     r.play();
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                         try {
@@ -731,12 +879,32 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void stopNativeSiren() {
+            try {
+                if (activeSirenRingtone != null && activeSirenRingtone.isPlaying()) {
+                    activeSirenRingtone.stop();
+                }
+                activeSirenRingtone = null;
+            } catch (Exception ignored) {}
+        }
+
+        @JavascriptInterface
         public void recordAmbientSound(final int durationSeconds, final String requestId) {
             recordAmbientSound(durationSeconds, requestId, 0);
         }
 
         @JavascriptInterface
         public void recordAmbientSound(final int durationSeconds, final String requestId, final long parentId) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                runOnUiThread(() -> {
+                    Toast.makeText(context, "🎙 Atrof ovozi uchun Mikrofon ruxsatini bering!", Toast.LENGTH_SHORT).show();
+                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, PERMISSION_REQUEST_CODE + 3);
+                    if (webView != null) {
+                        webView.evaluateJavascript("if (typeof onNativeMicPermissionMissing === 'function') onNativeMicPermissionMissing();", null);
+                    }
+                });
+                return;
+            }
             try {
                 Intent serviceIntent = new Intent(context, ChildTrackingService.class);
                 serviceIntent.setAction("ACTION_RECORD_AMBIENT_SOUND");
@@ -851,10 +1019,61 @@ public class MainActivity extends AppCompatActivity {
                     bgLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED;
                 }
                 obj.put("background_location", bgLoc);
+                obj.put("geolocation", ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED);
+                obj.put("record_audio", ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
+                boolean notif = true;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    notif = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+                }
+                obj.put("notifications", notif);
+                obj.put("device_admin", isDeviceAdminGranted());
+                obj.put("vpn_prepared", VpnService.prepare(context) == null);
                 return obj.toString();
             } catch (Exception e) {
                 return "{}";
             }
+        }
+
+        @JavascriptInterface
+        public boolean isRecordAudioGranted() {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        @JavascriptInterface
+        public void requestRecordAudioPermission() {
+            runOnUiThread(() -> ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, PERMISSION_REQUEST_CODE + 3));
+        }
+
+        @JavascriptInterface
+        public boolean isNotificationGranted() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                return ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+            }
+            return true;
+        }
+
+        @JavascriptInterface
+        public void requestNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                runOnUiThread(() -> ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERMISSION_REQUEST_CODE + 4));
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isVpnPrepared() {
+            return VpnService.prepare(context) == null;
+        }
+
+        @JavascriptInterface
+        public void requestVpnPermission() {
+            runOnUiThread(() -> {
+                try {
+                    Intent vpnIntent = VpnService.prepare(MainActivity.this);
+                    if (vpnIntent != null) {
+                        startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE);
+                    }
+                } catch (Exception ignored) {}
+            });
         }
 
         @JavascriptInterface
@@ -918,6 +1137,16 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void setNetworkLockdown(boolean active) {
             if (active) {
+                Intent vpnIntent = VpnService.prepare(context);
+                if (vpnIntent != null) {
+                    runOnUiThread(() -> {
+                        pendingNetworkLockdownAfterVpn = true;
+                        try {
+                            startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE);
+                        } catch (Exception ignored) {}
+                    });
+                    return;
+                }
                 LocalVpnService.startLockdown(context);
             } else {
                 LocalVpnService.stopLockdown(context);
@@ -1121,7 +1350,15 @@ public class MainActivity extends AppCompatActivity {
                     boolean netRestricted = obj.getBoolean("is_network_restricted");
                     ed.putBoolean("is_network_restricted", netRestricted);
                     if (netRestricted) {
-                        LocalVpnService.startLockdown(context);
+                        Intent vpnIntent = VpnService.prepare(context);
+                        if (vpnIntent != null) {
+                            runOnUiThread(() -> {
+                                pendingNetworkLockdownAfterVpn = true;
+                                try { startActivityForResult(vpnIntent, VPN_PERMISSION_REQUEST_CODE); } catch (Exception ignored) {}
+                            });
+                        } else {
+                            LocalVpnService.startLockdown(context);
+                        }
                     } else {
                         LocalVpnService.stopLockdown(context);
                     }
